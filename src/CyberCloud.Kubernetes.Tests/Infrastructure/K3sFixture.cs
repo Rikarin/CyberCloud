@@ -43,13 +43,16 @@ public sealed class K3sFixture : IAsyncLifetime {
     ///     The kubelet drop-in that lets 1.35 start on a cgroup v1 host — a Docker Desktop on
     ///     Windows whose WSL2 kernel boots cgroup v1 is one, and this machine was one until
     ///     2026-09-15 (<c>cgroup_no_v1=all</c> in <c>.wslconfig</c>; docs/plan/23 § The lane that
-    ///     needs a kubelet). Kept for the next machine in that state. The same two lines as
+    ///     needs a kubelet). Kept for the next machine in that state. The same lines as
     ///     <c>ClusterInfrastructure.KubeletDropIn</c> in <c>test/CyberCloud.Cluster.Conformance</c>,
-    ///     whose remarks say why the flag form is refused and why the suffix must be <c>.conf</c>;
-    ///     that assembly cannot be referenced from here.
+    ///     whose remarks say why the flag form is refused, why the suffix must be <c>.conf</c>, and
+    ///     why the disk thresholds are 1% (#30 measured the Docker VM's disk at 96% and the node at
+    ///     <c>DiskPressure</c> with the kubelet's defaults); that assembly cannot be referenced from here.
     /// </summary>
     const string KubeletDropIn =
-        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n";
+        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n"
+        + "evictionHard:\n  memory.available: \"100Mi\"\n  nodefs.available: \"1%\"\n  nodefs.inodesFree: \"5%\"\n"
+        + "  imagefs.available: \"1%\"\nimageGCHighThresholdPercent: 99\nimageGCLowThresholdPercent: 98\n";
 
     /// <summary>
     ///     The same wrapper entrypoint as <c>ClusterInfrastructure.SharedVarRunScript</c>: a
@@ -61,25 +64,24 @@ public sealed class K3sFixture : IAsyncLifetime {
     const string SharedVarRunScript = "mount --make-rshared /var/run && exec /bin/k3s \"$@\"";
 
     /// <summary>
-    ///     Hard-eviction thresholds low enough that the node doesn't taint itself
-    ///     <c>disk-pressure</c> over a nearly full Docker host — the same lines as
-    ///     <c>ClusterInfrastructure.KubeletEvictionDropIn</c>, whose remarks carry the measurement.
-    ///     ⚠ <c>PreconditionAndLogTests</c>' pod stayed Pending for three minutes without it.
+    ///     The k3s component switched off beside the module's own <c>--disable=traefik</c> — the
+    ///     same flag as <c>ClusterInfrastructure.DisableMetricsServer</c>, whose remarks say why.
     /// </summary>
-    const string KubeletEvictionDropIn =
-        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nevictionHard:\n"
-        + "  memory.available: \"100Mi\"\n  nodefs.available: \"1%\"\n  nodefs.inodesFree: \"1%\"\n"
-        + "  imagefs.available: \"1%\"\n  imagefs.inodesFree: \"1%\"\n";
+    /// <remarks>
+    ///     ⚠ <b>It matters here for one test and it matters exactly.</b>
+    ///     <c>NamespaceDiscoveryRefusalTests</c> registers an <c>APIService</c> nobody serves and
+    ///     asserts the refusal names <i>its</i> group. With metrics-server installed, a young cluster
+    ///     has a second unanswering group, and whichever of the two discovery reached first would
+    ///     be the one named.
+    /// </remarks>
+    public const string DisableMetricsServer = "--disable=metrics-server";
 
     readonly K3sContainer container = new K3sBuilder(Image)
         .WithEntrypoint("/bin/sh", "-c", SharedVarRunScript, "k3s")
+        .WithCommand(DisableMetricsServer)
         .WithResourceMapping(
             Encoding.UTF8.GetBytes(KubeletDropIn),
             "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf"
-        )
-        .WithResourceMapping(
-            Encoding.UTF8.GetBytes(KubeletEvictionDropIn),
-            "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/98-cybercloud-eviction.conf"
         )
         .Build();
 

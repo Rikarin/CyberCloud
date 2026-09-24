@@ -246,6 +246,37 @@ retrieval latency in the object's metadata**, so an application can decide rathe
 > own blade" below has only the vault's side, `listRecoveryPoints`, and nothing on the server's
 > (`backup-status-is-not-on-the-servers-blade`); and `storage.backup.gb_month` is declared and not
 > emitted (`backup-storage-is-not-metered`).
+>
+> ⚠ **Corrected 2026-09-24 (#30, end to end): the store is wired, a restore is a resource, and
+> retention has a pass of its own.** Three sentences above stopped being true:
+>
+> * *"No PostgreSQL server with backups on can be created on a real cluster today."* A server's
+>   reconciler now gives it a bucket of its own GUID (`pg-{id}`) on the **platform's** object store —
+>   the SeaweedFS behind `CyberCloud:ObjectStorage`, not a tenant's `CyberCloud.Storage/accounts` —
+>   and a key scoped to that one bucket, issued by the store's IAM API and minted into the vault
+>   (`IObjectStoreGrants`, `ObjectStoreCredentials`), rendered into the `{name}-backup-s3` Secret the
+>   `Cluster`'s `barmanObjectStore.s3Credentials` names. An empty `backup.destinationPath` means that
+>   store; a named one is refused at its pointer, because no property of 2026-08-01 could carry its
+>   credentials. The in-tree `barmanObjectStore` rather than the Barman Cloud plugin, because the
+>   pinned CloudNativePG 1.30.0 serves it and the plugin needs a component the bundle does not
+>   install (`charts/managed/postgres/conformance.yaml § owed`, `the-in-tree-archiver-goes-in-1-31`).
+> * *"`recover` bootstraps a new cluster"* — it creates a new **server resource**:
+>   `/properties/restore/recoveryPoint` on `CyberCloud.DBforPostgreSQL/servers` bootstraps the
+>   `Cluster` from the point, and the vault's handler creates the server through
+>   `ActionContext.Creator`, which the manager runs as the caller's own `PUT`
+>   ([08](08-resource-manager.md) § The cross-resource seam, "An action may create, as its caller").
+>   The copy archives to a bucket of its own, so "cannot archive over the source's WAL" holds by
+>   construction rather than by leaving the backup section off.
+> * *"The scheduled pass it needs is the manager-started pass 08 records as owed"* — it exists:
+>   the vault declares `PassEvery(1h)` ([08](08-resource-manager.md) § The manager-started pass), so
+>   retention is enforced with nobody writing to the vault. The monthly test restore still is not
+>   built; its remaining decision is a platform principal to create the scratch copy as.
+>
+> `backupNow` takes an on-demand point. The CloudNativePG lane — `RecoveryVaultAgainstCloudNativePg`,
+> a real operator from `install.sh` and a real SeaweedFS beside k3s — writes a row, protects the
+> server, completes a `backupNow` point into the server's bucket, `recover`s it into a new server
+> and reads the row back. One copy, one store, one failure domain: the off-site second copy is
+> `the-store-is-the-servers`, rewritten to say so.
 
 Not a storage type; a *policy* resource that binds protected resources to schedules and retention.
 

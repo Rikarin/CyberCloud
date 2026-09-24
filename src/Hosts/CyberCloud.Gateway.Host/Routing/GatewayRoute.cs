@@ -137,6 +137,88 @@ enum RouteKind {
     /// </remarks>
     ResourceGraphQuery,
 
+    /// <summary>
+    ///     An address under <c>/tenants/{t}/providers/CyberCloud.Identity/</c> — the invitations of
+    ///     issue #43 and the members, applications and own sessions of issue #41.
+    ///     docs/plan/11 § The object model.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The resource graph's arrangement under a namespace of its own
+    ///     (<c>IdentityAddress.ProviderNamespace</c>): one grammar, asked before the scope and
+    ///     resource grammars and the <c>POST</c> branch, a <c>400</c> listing the addresses for
+    ///     anything else under it. Dispatched by <c>IdentityDispatch</c>: a <c>POST</c> on the
+    ///     invitations collection to <c>IInvitationManager</c>, everything else to
+    ///     <c>IIdentityAdministration</c>, and both own their checks. <c>IdentityRoutingTests</c>
+    ///     pins the shapes and the verbs.
+    /// </remarks>
+    Identity,
+
+    /// <summary>
+    ///     The cost query — <c>POST {scope}/providers/CyberCloud.CostManagement/query</c> on a
+    ///     subscription or a resource group. docs/plan/22 § Cost visibility, issue #38.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A kind of its own, and the second <c>POST</c> that is not an action</b> — arranged
+    ///     exactly as <see cref="ResourceGraphQuery" /> is, under its own reserved namespace
+    ///     (<c>CostQueryAddress.ProviderNamespace</c>): asked before the scope, resource and action
+    ///     grammars, one grammar under the namespace and a <c>400</c> naming it for anything else.
+    ///     On a resource group the address is also a nine-segment resource collection path, so the
+    ///     order against <see cref="Collection" /> is not free here and the namespace test is what
+    ///     decides it. <c>CostQueryRoutingTests</c> pins the shapes, the verb and the precedence.
+    ///     <para>
+    ///         ⚠ <b>Dispatched to <c>ICostQuery</c></b>, one grain call; the ReBAC filter is inside the
+    ///         grain, behind the one seam.
+    ///     </para>
+    /// </remarks>
+    CostQuery,
+
+    /// <summary>
+    ///     A tenant's finalized invoices, or one by number —
+    ///     <c>GET /tenants/{t}/providers/CyberCloud.CostManagement/invoices[/{number}]</c>. docs/plan/22
+    ///     § What is owed, <c>billing-http-surface</c>, issue #41.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Under the cost query's reserved namespace, asked before the cost query's grammar</b>, so
+    ///     that the cost query keeps the namespace's catch-all refusal. The two are disjoint by scope —
+    ///     an invoice address is on a tenant, which the cost query refuses — so the order decides only
+    ///     which grammar a malformed path is refused by. <c>InvoiceRoutingTests</c> pins the shapes and
+    ///     the verb. Dispatched to <c>IInvoiceReader</c>, whose grain holds the <c>read</c> check on the
+    ///     tenant.
+    /// </remarks>
+    Invoice,
+
+    /// <summary>
+    ///     A policy definition or assignment —
+    ///     <c>{scope}/providers/CyberCloud.Policy/{policyDefinitions|policyAssignments}/{name}</c>.
+    ///     <c>GET</c>, <c>PUT</c> and <c>DELETE</c>. docs/plan/08 § Policy, issue #46.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Under the fourth reserved namespace, and asked before the scope and resource grammars
+    ///     for the role assignment's reason.</b> On a resource group an assignment's address is a
+    ///     well-formed ten-segment resource path; tried after <see cref="Resource" /> it would reach
+    ///     the resource manager as a type no provider serves. Under the namespace only
+    ///     <c>PolicyAddress.ParsePath</c>'s answer counts. <c>PolicyRoutingTests</c> pins the shapes,
+    ///     the precedence and the <c>400</c>s.
+    ///     <para>
+    ///         ⚠ <b>Separate from <see cref="Resource" /> because the dispatch target differs</b>: a
+    ///         policy object goes to <c>IPolicyManager</c>, which owns the <c>assignRole</c> check and
+    ///         the catalog write. What <i>enforces</i> a policy is step 5 of a resource write, and
+    ///         that is <see cref="Resource" />'s route, not this one.
+    ///     </para>
+    /// </remarks>
+    Policy,
+
+    /// <summary>
+    ///     A collection of policy objects on a scope — definitions, assignments, or the compliance
+    ///     states of the resources beneath it (<c>policyStates</c>). <c>GET</c> only.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Separate from <see cref="Policy" /> for the reason <see cref="Collection" /> is
+    ///     separate from <see cref="Resource" /></b>: which one a path is, is decided by the path —
+    ///     a type with no name after it — and never by the method.
+    /// </remarks>
+    PolicyCollection,
+
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
@@ -256,6 +338,23 @@ enum RouteKind {
 ///     The query address, for <see cref="RouteKind.ResourceGraphQuery" />. ⚠ Its tenant is the
 ///     <i>token's</i> too — the address carries nothing but a tenant, and that one is rebuilt.
 /// </param>
+/// <param name="Identity">
+///     The identity address, for <see cref="RouteKind.Identity" />. ⚠ The token's tenant, rebuilt,
+///     as for <paramref name="ResourceGraph" />.
+/// </param>
+/// <param name="CostQuery">
+///     The cost query's address, for <see cref="RouteKind.CostQuery" />. ⚠ Its tenant is the
+///     <i>token's</i> too — <c>CostQueryAddress.WithTenant</c> rebuilds it.
+/// </param>
+/// <param name="Invoice">
+///     The invoices' address, for <see cref="RouteKind.Invoice" />. ⚠ Its tenant is the
+///     <i>token's</i> too — <c>InvoiceAddress.WithTenant</c> rebuilds it.
+/// </param>
+/// <param name="Policy">
+///     The policy address, for <see cref="RouteKind.Policy" /> and
+///     <see cref="RouteKind.PolicyCollection" />. ⚠ Its tenant is the <i>token's</i> too —
+///     <c>PolicyAddress.WithTenant</c> rebuilds its scope.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
@@ -267,7 +366,11 @@ readonly record struct GatewayRoute(
     RoleAssignmentId RoleAssignment = default,
     RoleAssignmentCollectionId RoleAssignments = default,
     ScopeCollectionId Scopes = default,
-    ResourceGraphAddress ResourceGraph = default
+    ResourceGraphAddress ResourceGraph = default,
+    IdentityAddress Identity = default,
+    CostQueryAddress CostQuery = default,
+    InvoiceAddress Invoice = default,
+    PolicyAddress Policy = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -284,6 +387,7 @@ readonly record struct GatewayRoute(
             RouteKind.Resource or RouteKind.Action => Resource.Path,
             RouteKind.Scope => Scope.Path,
             RouteKind.RoleAssignment => RoleAssignment.Path,
+            RouteKind.Policy => Policy.Path,
             _ => ""
         };
 
@@ -300,6 +404,8 @@ readonly record struct GatewayRoute(
             RouteKind.ScopeCollection => Scopes.Path,
             // The query answers a collection envelope and pages with a nextLink built from this.
             RouteKind.ResourceGraphQuery => ResourceGraph.Path,
+            RouteKind.Identity => Identity.Path,
+            RouteKind.PolicyCollection => Policy.Path,
             _ => ""
         };
 }
@@ -482,6 +588,32 @@ static class GatewayRouter {
             );
         }
 
+        // ── The identity addresses, under the third reserved namespace (#43, #41). ─────────────
+        //
+        // ⚠ THE RESOURCE GRAPH'S ARRANGEMENT, BELOW: one grammar, a 400 listing the addresses for any
+        // other path under the namespace, and before the POST branch so ResolveAction never reads
+        // `…/resend` or `…/rotateSecret` as an action on a resource. A verb an address doesn't take
+        // is a 405 that names the ones it does, answered by dispatch where the Allow header is
+        // written. ⚠ The tenant is the token's, rebuilt, as for every tenant-scoped address here.
+        if (IdentityAddress.IsUnderNamespace(path)) {
+            var identity = IdentityAddress.ParsePath(path);
+
+            if (identity.TryGetError(out var identityError)) {
+                return Result<GatewayRoute>.Failure(identityError);
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    RouteKind.Identity,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    Identity: identity.GetValueOrThrow() with { TenantId = tenantId }
+                )
+            );
+        }
+
         // ── The resource graph's query, under the second reserved namespace (#54). ──────────────
         //
         // ⚠ THE SAME ARRANGEMENT AS THE ROLE ASSIGNMENT'S, ONE GRAMMAR INSTEAD OF TWO. Under
@@ -514,6 +646,94 @@ static class GatewayRouter {
                     "",
                     // NAMED, for the reason the other optional address kinds are; the token's tenant.
                     ResourceGraph: new(tenantId)
+                )
+            );
+        }
+
+        // ── Policy, under its own reserved namespace (#46). ─────────────────────────────────
+        //
+        // ⚠ THE ROLE ASSIGNMENT'S ARRANGEMENT, FOR THE ROLE ASSIGNMENT'S REASON. An assignment on a
+        // resource group is a well-formed ten-segment resource path, so this is asked before the scope
+        // and resource grammars, and under /providers/CyberCloud.Policy/ only PolicyAddress.ParsePath
+        // counts: a malformed policy path is a 400 that names the grammar, never a fall-through to the
+        // canonical 404 of a type no provider serves. The order against the two namespaces above is
+        // free — a path names one namespace or it names none.
+        //
+        // ⚠ AN ITEM OR A COLLECTION, DECIDED BY THE PATH. A collection is read with GET only, and a
+        // write to one is a 400 that names the item address, as for role assignments — a PUT that lost
+        // its name segment most needs to be told where the name goes.
+        if (PolicyAddress.IsUnderNamespace(path)) {
+            var policy = PolicyAddress.ParsePath(path);
+
+            if (policy.TryGetError(out var policyError)) {
+                return Result<GatewayRoute>.Failure(policyError);
+            }
+
+            var address = policy.GetValueOrThrow().WithTenant(tenantId);
+
+            if (address.IsCollection && !HttpMethods.IsGet(method)) {
+                return Result<GatewayRoute>.Failure(
+                    ErrorCode.InvalidResourceId,
+                    $"'{path}' is a policy collection, which is read with GET only. A definition or an "
+                    + "assignment is written with PUT and deleted with DELETE at "
+                    + "'{scope}/providers/CyberCloud.Policy/{policyDefinitions|policyAssignments}/{name}', and "
+                    + "the compliance states are only ever read — docs/plan/08 § Policy."
+                );
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    address.IsCollection ? RouteKind.PolicyCollection : RouteKind.Policy,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // NAMED, for the reason every other optional address kind is; the token's tenant.
+                    Policy: address
+                )
+            );
+        }
+
+        // ── The cost query, under its own reserved namespace (#38). ───────────────────────────
+        //
+        // ⚠ THE RESOURCE GRAPH'S ARRANGEMENT, AND HERE THE ORDER AGAINST THE GRAMMARS BELOW IS NOT
+        // FREE. On a resource group, {rg}/providers/CyberCloud.CostManagement/query is a well-formed
+        // nine-segment resource collection path, so asked after ResolveResource it would be a listing
+        // of a type no provider serves. The namespace test decides it, ProviderRegistry.Build refuses
+        // a provider that claims the namespace, and CostQueryAddressTests sweeps the other direction.
+        // POST only; a GET is the 405 dispatch answers, for the reason the graph's is.
+        if (CostQueryAddress.IsUnderNamespace(path)) {
+            // ⚠ The invoices first (#41): on a tenant, which the cost query's grammar refuses, so the
+            // order changes only which refusal a malformed path gets — and the cost query's names both.
+            if (InvoiceAddress.TryParsePath(path, out var invoices)) {
+                return Result<GatewayRoute>.Success(
+                    new(
+                        RouteKind.Invoice,
+                        default,
+                        "",
+                        Guid.Empty,
+                        "",
+                        // NAMED, for the reason every other optional address kind is; the token's tenant.
+                        Invoice: invoices.WithTenant(tenantId)
+                    )
+                );
+            }
+
+            var costs = CostQueryAddress.ParsePath(path);
+
+            if (costs.TryGetError(out var costsError)) {
+                return Result<GatewayRoute>.Failure(costsError);
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    RouteKind.CostQuery,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // NAMED, for the reason every other optional address kind is; the token's tenant.
+                    CostQuery: costs.GetValueOrThrow().WithTenant(tenantId)
                 )
             );
         }
@@ -755,7 +975,9 @@ static class GatewayRouter {
         // ⚠ A resource graph query is a POST and a read. Counted as a write it would spend the
         // subscription-write bucket — the smaller one, sized for creates — on a portal's list page.
         // A suffix test, for the reason the two above are prefix tests: no registry on this path.
-        if (path.EndsWith(ResourceGraphAddress.Suffix, StringComparison.OrdinalIgnoreCase)) {
+        if (path.EndsWith(ResourceGraphAddress.Suffix, StringComparison.OrdinalIgnoreCase)
+            // The cost query is a POST and a read for the same reason.
+            || path.EndsWith(CostQueryAddress.Suffix, StringComparison.OrdinalIgnoreCase)) {
             return RequestClass.Read;
         }
 

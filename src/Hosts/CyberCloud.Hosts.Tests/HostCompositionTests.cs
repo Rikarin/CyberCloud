@@ -1,6 +1,7 @@
 using CyberCloud.Core.Resources;
 using CyberCloud.Gateway.Host;
 using CyberCloud.Gateway.Host.Principals;
+using CyberCloud.Identity.Seams;
 using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Registry.Feeds.Host;
@@ -10,6 +11,7 @@ using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Grains;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ServiceDefaults;
+using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Silo.Host;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -47,7 +49,7 @@ namespace CyberCloud.Hosts.Tests;
 /// </remarks>
 public sealed class HostCompositionTests {
     /// <summary>
-    ///     The twenty provider namespaces both hosts must serve, spelled out rather than counted.
+    ///     The twenty-three provider namespaces both hosts must serve, spelled out rather than counted.
     /// </summary>
     /// <remarks>
     ///     ⚠
@@ -55,10 +57,12 @@ public sealed class HostCompositionTests {
     ///         The prose said "twelve" over a list of fourteen until <c>CyberCloud.Mail</c> made it
     ///         fifteen, <c>CyberCloud.Communication</c> made it sixteen, <c>CyberCloud.RecoveryServices</c>
     ///         seventeen, and <c>CyberCloud.Dashboard</c> eighteen — from seventeen modules, because
-    ///         the Monitor module registers two. It then said "seventeen" over nineteen, once
-    ///         <c>CyberCloud.Terminal</c> and <c>CyberCloud.Compute</c> had landed beside it, until
-    ///         <c>CyberCloud.ContainerInstance</c> made the list twenty — from nineteen modules — and
-    ///         the count was re-derived from the list rather than incremented.
+    ///         the Monitor module registers two. The summary then said "seventeen" over nineteen until
+    ///         <c>CyberCloud.KeyVault</c> (#30) and <c>CyberCloud.Resources</c> (#39) made it twenty-one,
+    ///         from twenty modules — and that was one behind too, because <c>CyberCloud.Billing</c> (#38)
+    ///         had landed beside them. <c>CyberCloud.ContainerInstance</c> (#28) makes the list
+    ///         twenty-three, from twenty-two modules, counted off the list and the silo's
+    ///         <c>[DependsOn]</c> lines when #28's review merged it rather than incremented.
     ///     </b> The list is what the test reads and the list was right; the number beside it
     ///     was three behind, which is the ordinary fate of a count written next to the thing it
     ///     counts. It is corrected rather than deleted because a reader who sees a number can tell at
@@ -72,6 +76,8 @@ public sealed class HostCompositionTests {
     /// </remarks>
     static readonly string[] EveryProviderNamespace = [
         "CyberCloud.Analytics",
+        // #38, CyberCloud.Billing/budgets — the twentieth namespace from the nineteenth module.
+        "CyberCloud.Billing",
         "CyberCloud.Cache",
         "CyberCloud.Communication",
         "CyberCloud.Compute",
@@ -86,11 +92,14 @@ public sealed class HostCompositionTests {
         // the two DBfor… rows, because the comparison is ordinal and `B` sorts before `a`.
         "CyberCloud.Dashboard",
         "CyberCloud.DocumentDB",
+        "CyberCloud.KeyVault",
         "CyberCloud.Mail",
         "CyberCloud.Messaging",
         "CyberCloud.Monitor",
         "CyberCloud.Network",
         "CyberCloud.RecoveryServices",
+        // #39: deployments. It renders nothing, and is the one provider the reserved namespace admits.
+        "CyberCloud.Resources",
         "CyberCloud.Sample",
         "CyberCloud.Search",
         "CyberCloud.Storage",
@@ -183,6 +192,82 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
+    ///     ⚠ Both hosts hold the three billing seams, and the silo holds what the billing grains take.
+    /// </summary>
+    /// <remarks>
+    ///     The gateway dispatches the cost query to <c>ICostQuery</c>, the invoices to <c>IInvoiceReader</c>
+    ///     (#41), and builds the budget reconciler in
+    ///     its registry's container; the silo activates the grains behind both, which take the rating
+    ///     path, the tax service and the sending module. A host that lost
+    ///     <c>AddCyberCloudBillingClient</c> or <c>AddCyberCloudBilling</c> would fail on the first
+    ///     request rather than at start, which is what this file exists to prevent.
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsResolveTheBillingSeamsAndTheSiloWhatTheGrainsTake() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        foreach (var host in new[] { gateway.Services, silo.Services }) {
+            host.GetService<CyberCloud.Billing.Contracts.ICostQuery>().ShouldNotBeNull("a host with no ICostQuery cannot answer a cost query");
+            host.GetService<CyberCloud.Billing.Contracts.IInvoiceReader>().ShouldNotBeNull("a host with no IInvoiceReader cannot list invoices");
+            host.GetService<CyberCloud.Billing.Contracts.IBudgetControlPlane>()
+                .ShouldNotBeNull("a host with no IBudgetControlPlane cannot construct the budget reconciler");
+        }
+
+        silo.Services.GetService<CyberCloud.Billing.Pricing.UsagePricing>().ShouldNotBeNull();
+        silo.Services.GetService<CyberCloud.Billing.Contracts.ITaxService>().ShouldBeOfType<CyberCloud.Billing.Tax.EuVatTaxService>();
+        silo.Services.GetRequiredService<CyberCloud.Billing.BillingOptions>()
+            .HasIssuer.ShouldBeFalse("no issuer is configured here, and a silo without one refuses to finalize rather than inventing one");
+    }
+
+    /// <summary>
+    ///     ⚠ The billing grains — and the metering grains they rate — are in the silo's manifest.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The metering half was never true before #38.</b> The usage ledger shipped in M1 with a
+    ///     <c>TestCluster</c> behind every test and no line in this host, so no production silo could
+    ///     activate one; billing rates the ledger, and that is how it was found.
+    /// </remarks>
+    [Fact]
+    public async Task TheBillingAndMeteringGrainsAreInTheSilosManifest() {
+        await using var silo = await BuildSiloAsync();
+
+        var classes = silo.Services.GetRequiredService<IOptions<GrainTypeOptions>>().Value.Classes;
+
+        foreach (var grain in new[] {
+                     typeof(CyberCloud.Billing.Grains.BillingAccountGrain),
+                     typeof(CyberCloud.Billing.Grains.InvoiceNumberingGrain),
+                     typeof(CyberCloud.Billing.Grains.BudgetGrain),
+                     typeof(CyberCloud.Billing.Grains.CostQueryGrain),
+                     typeof(CyberCloud.Billing.Grains.InvoiceQueryGrain),
+                     typeof(CyberCloud.Metering.Grains.UsageLedgerGrain),
+                     typeof(CyberCloud.Metering.Grains.UsageRollupGrain)
+                 }) {
+            classes.ShouldContain(grain, $"{grain.Name} is not in the silo's grain manifest");
+        }
+    }
+
+    /// <summary>
+    ///     ⚠ Both hosts hold the accountID ledger: the silo's workspace reconciler claims through it,
+    ///     and the gateway's metrics handlers check it (#41's review).
+    /// </summary>
+    /// <remarks>
+    ///     A host that lacked it would fail to build the reconciler or the handlers on their first use
+    ///     rather than at start, which is why presence is asserted here. The grain-backed one, because a
+    ///     ledger per process would let each host answer "free" for an account the other had claimed.
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsResolveTheGrainBackedAccountLedger() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        foreach (var host in new[] { gateway.Services, silo.Services }) {
+            host.GetService<CyberCloud.Providers.Monitor.Contracts.IMonitorAccounts>()
+                .ShouldBeOfType<CyberCloud.Providers.Monitor.Accounts.GrainMonitorAccounts>();
+        }
+    }
+
+    /// <summary>
     ///     ⚠ The gateway routes from a registry with the same namespaces in it.
     /// </summary>
     [Fact]
@@ -199,6 +284,63 @@ public sealed class HostCompositionTests {
                 "Stage 6 resolves a request path against this registry. A namespace missing here is "
                 + "every path under it answering the canonical 404, which is the same answer a caller "
                 + "gets for a type that does not exist."
+            );
+    }
+
+    /// <summary>
+    ///     ⚠ Every permission the gateway's registry checks is one <c>CyberCloudSchema</c> declares
+    ///     on <c>resource</c>, except the five owed ones, which are pinned by name.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A permission the schema does not declare can only evaluate false, and the
+    ///         enforcement seam turns a false into the canonical 404</b> — to every caller, the owner
+    ///         included. That is how <c>purge</c> shipped broken (docs/plan/07 § Azure RBAC, expressed
+    ///         in it). A provider spells its permissions without referencing the schema, so nothing
+    ///         in the compiler sees the drift. This host is where every provider and the schema meet.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The five names below are a known defect, pinned rather than fixed.</b>
+    ///         <c>listKeys</c>, <c>listCredentials</c>, <c>listInstallCommand</c>, the cloud console's
+    ///         <c>connect</c> and Grafana's <c>url</c> are checked by other types' actions and declared
+    ///         nowhere, so every one of those actions answers 404 on a real silo. Declaring them is a
+    ///         <c>SchemaVersion</c> bump and a decision about which role holds each, which is not
+    ///         #30's. docs/plan/07 records it as owed row <c>action-permissions-are-undeclared</c>. The
+    ///         list is exact in both directions: a sixth undeclared name fails here, and so does
+    ///         declaring one of the five without removing it from this list.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed() {
+        await using var gateway = await BuildGatewayAsync();
+
+        var registry = gateway.Services.GetRequiredService<IProviderRegistry>();
+        var resource = CyberCloud.Authorization.CyberCloudSchema.Instance.Type(CyberCloud.Authorization.Contracts.ObjectTypes.Resource)
+            .ShouldNotBeNull();
+
+        var checkedBy = registry.Types
+            .SelectMany(static type => new[] {
+                        (type.ReadPermission, $"{type.Type} read"), (type.WritePermission, $"{type.Type} write"),
+                        (type.DeletePermission, $"{type.Type} delete"), (type.PurgePermission, $"{type.Type} purge")
+                    }
+                    .Concat(type.Actions.Select(action => (action.Permission, $"{type.Type}/{action.Name}")))
+            )
+            .Where(static x => x.Item1.Length > 0)
+            .ToList();
+
+        checkedBy.Count.ShouldBeGreaterThan(100, "the registry lost its providers, so this test would pass vacuously");
+
+        var undeclared = checkedBy
+            .Where(x => resource.Member(x.Item1) is not { IsPermission: true })
+            .GroupBy(static x => x.Item1, StringComparer.Ordinal)
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
+            .ToList();
+
+        undeclared.Select(static x => x.Key)
+            .ShouldBe(
+                ["connect", "listCredentials", "listInstallCommand", "listKeys", "url"],
+                "undeclared, and so answering 404 to everybody: "
+                + string.Join("; ", undeclared.Select(static x => $"{x.Key} ← {string.Join(", ", x.Select(static y => y.Item2))}"))
             );
     }
 
@@ -512,6 +654,43 @@ public sealed class HostCompositionTests {
             .ShouldBeOfType<UnavailablePrincipalDirectory>(
                 "a silo never serves a grant and must keep the manager's refusing default; the real "
                 + "directory resolving here means it became the default for every host"
+            );
+    }
+
+    /// <summary>
+    ///     ⚠ The mirror image of the directory above: the silo, which runs deployments, asks the identity
+    ///     grains whether a child's recorded creator may still act, and the gateway, which never writes a
+    ///     child, keeps the refusal.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>AddCyberCloudIdentity</c> <c>Replace</c>s <see cref="UnavailablePrincipalStanding" />,
+    ///     and the silo calls it before <c>AddCyberCloudResourceManager</c> — the order in which a
+    ///     <c>TryAdd</c> would also have won. So this is the assertion that holds when somebody moves the
+    ///     lines: with the refusal left in place every deployment on the silo fails at its first child,
+    ///     and nothing below the composed host would notice, because every harness registers its own.
+    /// </remarks>
+    [Fact]
+    public async Task TheSiloWiresPrincipalStandingAndTheGatewayKeepsTheRefusal() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        silo.Services
+            .GetRequiredService<IPrincipalStanding>()
+            .ShouldBeOfType<GrainPrincipalStanding>(
+                "the composed silo must ask the identity grains whether a deployment's creator may still "
+                + "act; the refusing default here fails every deployment at its first child"
+            );
+
+        silo.Services
+            .GetServices<IPrincipalStanding>()
+            .Count()
+            .ShouldBe(1, "the silo should hold one IPrincipalStanding, not the real one stacked on the refusal");
+
+        gateway.Services
+            .GetRequiredService<IPrincipalStanding>()
+            .ShouldBeOfType<UnavailablePrincipalStanding>(
+                "the gateway never writes a child, and the real standing resolving here means it became "
+                + "the manager's default for every host"
             );
     }
 
@@ -1008,6 +1187,82 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
+    ///     ⚠ The silo wires the OpenBao writer and resolver when <c>CyberCloud:Vault</c> is
+    ///     configured, as the gateway does, and both keep the refusing seams when it is not.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The silo half is the half that was missing, and the #30 review found it.
+    ///         </b> Only the gateway called <c>AddOpenBaoSecretResolver</c>. But
+    ///         <c>ReconcileDriver</c> hands every reconciler the <i>silo's</i> <c>ISecretWriter</c>,
+    ///         and <c>KeyVaultGrain</c> resolves its root through the <i>silo's</i>
+    ///         <c>ISecretResolver</c>. So no configuration could have let a deployed silo mint a
+    ///         vault's root, a Valkey password or a mail domain's key. Every green key-vault run
+    ///         registered the OpenBao pair inside its own <c>TestCluster</c>.
+    ///     </para>
+    ///     <para>
+    ///         By type name, as the object-store test above does. Nothing connects to the address,
+    ///         because composition builds the client and does not call it.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsThatReachOpenBaoWireItOnlyWhenTheVaultIsConfigured() {
+        await using var bareSilo = await BuildSiloAsync();
+        await using var bareGateway = await BuildGatewayAsync();
+
+        bareSilo.Services.GetRequiredService<ISecretWriter>().ShouldBeOfType<UnavailableSecretWriter>();
+        bareSilo.Services.GetRequiredService<ISecretResolver>().ShouldBeOfType<UnavailableSecretResolver>();
+        bareGateway.Services.GetRequiredService<ISecretResolver>().ShouldBeOfType<UnavailableSecretResolver>();
+
+        await using var silo = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                .. VaultArguments
+            ]
+        );
+
+        await using var gateway = await GatewayComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                IssuerArgument,
+                .. VaultArguments
+            ]
+        );
+
+        silo.Services.GetRequiredService<ISecretWriter>()
+            .GetType()
+            .Name.ShouldBe(
+                "OpenBaoSecretWriter",
+                "a silo with CyberCloud:Vault configured must mint through OpenBao — every reconciler's "
+                + "ReconcileContext.SecretWriter is this registration"
+            );
+
+        silo.Services.GetRequiredService<ISecretResolver>()
+            .GetType()
+            .Name.ShouldBe(
+                "OpenBaoSecretResolver",
+                "a silo with CyberCloud:Vault configured must resolve through OpenBao — KeyVaultGrain "
+                + "unseals under this registration"
+            );
+
+        gateway.Services.GetRequiredService<ISecretResolver>().GetType().Name.ShouldBe("OpenBaoSecretResolver");
+    }
+
+    /// <summary>A vault section both hosts accept: an address, a role, and plaintext allowed for a test.</summary>
+    static readonly string[] VaultArguments = [
+        "--CyberCloud:Vault:Address=http://127.0.0.1:1",
+        "--CyberCloud:Vault:Role=cc-silo",
+        "--CyberCloud:Vault:AllowInsecureTransport=true"
+    ];
+
+    /// <summary>
     ///     ⚠ The silo wires the email carrier — and, in Development, routes the platform's own codes
     ///     through it — when <c>CyberCloud:Communication:Smtp</c> names a relay, and keeps the
     ///     refusing seam and the console-only OTP seam when it does not (#93).
@@ -1059,6 +1314,25 @@ public sealed class HostCompositionTests {
             .ShouldBeOfType<CyberCloud.Identity.Seams.DevelopmentOtpDelivery>()
             .AlsoMails.ShouldBeTrue("the code goes to Mailpit's inbox as well as the console");
 
+        // #43: invitation mail goes the same way once the page its link opens is named — and not
+        // before, because a link to nowhere is worse than a refusal that names the setting.
+        withRelay.Services.GetRequiredService<CyberCloud.Identity.Contracts.IInvitationDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableInvitationDelivery>("no page is named yet");
+
+        await using var withRelayAndPage = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                $"--{SiloIdentityComposition.InvitationPageKey}=http://localhost:4201",
+                .. SmtpRelayArguments
+            ]
+        );
+
+        withRelayAndPage.Services.GetRequiredService<CyberCloud.Identity.Contracts.IInvitationDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.CommunicationInvitationDelivery>();
+
         await using var staging = await SiloComposition.BuildAsync(
             [
                 "--environment", "Staging",
@@ -1078,6 +1352,13 @@ public sealed class HostCompositionTests {
         staging.Services.GetRequiredService<CyberCloud.Identity.Contracts.IOtpDeliverySeam>()
             .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableOtpDelivery>(
                 "a relay is not a route — CyberCloud:Identity:OtpDelivery is the operator's to set"
+            );
+
+        bare.Services.GetRequiredService<CyberCloud.Identity.Contracts.IInvitationDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableInvitationDelivery>("no relay, no invitation mail");
+        staging.Services.GetRequiredService<CyberCloud.Identity.Contracts.IInvitationDeliverySeam>()
+            .ShouldBeOfType<CyberCloud.Identity.Seams.UnavailableInvitationDelivery>(
+                "the codes' rule: a relay is not a route outside Development"
             );
     }
 

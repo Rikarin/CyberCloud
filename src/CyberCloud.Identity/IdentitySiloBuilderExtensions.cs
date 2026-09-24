@@ -68,6 +68,7 @@ public static class IdentitySiloBuilderExtensions {
         builder.Services.TryAddSingleton(otpCodes);
         builder.Services.TryAddSingleton<ILockoutCounter, InMemoryLockoutCounter>();
         builder.Services.TryAddSingleton<IOtpDeliverySeam, UnavailableOtpDelivery>();
+        builder.Services.TryAddSingleton<IInvitationDeliverySeam, UnavailableInvitationDelivery>();
         builder.Services.TryAddSingleton<ITotpSecretSeam, UnavailableTotpSecrets>();
 
         // ⚠ Managed identity — docs/plan/11 § Managed identity, "the feature that removes stored
@@ -91,6 +92,15 @@ public static class IdentitySiloBuilderExtensions {
         builder.Services.TryAddSingleton<ITokenExchange, GrainTokenExchange>();
         builder.Services.TryAddSingleton(static _ => SignInOptions.Default);
         builder.Services.TryAddSingleton<SignInService>();
+
+        // ⚠ Whether a deployment's recorded creator may still act, for the resource manager's child
+        // writes (IPrincipalStanding's remarks). Replace rather than TryAdd, because the manager
+        // TryAdds a refusing default and a silo may compose the two modules in either order — a
+        // TryAdd here would lose to it whenever the manager came first, and every deployment on
+        // that silo would fail at its first child.
+        builder.Services.Replace(
+            ServiceDescriptor.Singleton<Tenancy.Contracts.IPrincipalStanding, GrainPrincipalStanding>()
+        );
 
         return builder;
     }
@@ -171,6 +181,43 @@ public static class IdentitySiloBuilderExtensions {
 
         builder.Services.Replace(
             ServiceDescriptor.Singleton<IOtpDeliverySeam>(services => new CommunicationOtpDelivery(
+                    services.GetRequiredService<IMessageSender>(),
+                    route
+                )
+            )
+        );
+
+        return builder;
+    }
+
+    /// <summary>
+    ///     Routes invitation mail — <see cref="IInvitationDeliverySeam" /> — through a communication
+    ///     service, with links to the identity app's invitation page. Issue #43, step 7.
+    /// </summary>
+    /// <param name="builder">The silo being composed.</param>
+    /// <param name="tenantId">The tenant that owns the service — the platform's, as for the codes.</param>
+    /// <param name="serviceId">The service to send through.</param>
+    /// <param name="pageBaseUri">The identity app's base address, which the link is built on.</param>
+    /// <returns>The same builder, for chaining.</returns>
+    /// <remarks>
+    ///     ⚠ <c>Replace</c>, for the reason <see cref="AddCommunicationOtpDelivery" /> gives. Unlike
+    ///     the codes there is no development branch that logs instead of mailing: an invitation's
+    ///     link is a credential that makes a member, and a silo console is not somewhere to print one.
+    ///     With no relay the default refusal stands, and it names this call.
+    /// </remarks>
+    public static ISiloBuilder AddCommunicationInvitationDelivery(
+        this ISiloBuilder builder,
+        Guid tenantId,
+        Guid serviceId,
+        Uri pageBaseUri
+    ) {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(pageBaseUri);
+
+        var route = new InvitationDeliveryRoute { TenantId = tenantId, ServiceId = serviceId, PageBaseUri = pageBaseUri };
+
+        builder.Services.Replace(
+            ServiceDescriptor.Singleton<IInvitationDeliverySeam>(services => new CommunicationInvitationDelivery(
                     services.GetRequiredService<IMessageSender>(),
                     route
                 )

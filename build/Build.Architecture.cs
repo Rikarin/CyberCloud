@@ -678,7 +678,7 @@ partial class Build {
     /// <summary>
     ///     The types rule 8 forbids a provider to name, all in the two contracts assemblies a
     ///     provider legitimately references: every grain the manager owns, the two scope grains
-    ///     whose steps in the write path are the manager's, the quota grain, the manager's three
+    ///     whose steps in the write path are the manager's, the quota grain, the manager's four
     ///     entry points, the two authorization seams docs/plan/07 § The enforcement seam says a
     ///     provider never calls, and every other seam <c>AddCyberCloudResourceManager</c> registers
     ///     that <c>ReconcileContext</c> does not hand a pass.
@@ -722,6 +722,9 @@ partial class Build {
         "CyberCloud.ResourceManager.Contracts.IResourceManager",
         "CyberCloud.ResourceManager.Contracts.IScopeManager",
         "CyberCloud.ResourceManager.Contracts.IRoleAssignmentManager",
+        // The deployment entry point (#39): it reads as a recorded caller, which is the one thing
+        // a provider acting as the platform must never be able to borrow.
+        "CyberCloud.ResourceManager.Contracts.IDeploymentManager",
         "CyberCloud.ResourceManager.Contracts.IResourceAuthorizer",
         "CyberCloud.ResourceManager.Contracts.IScopeAuthorizer",
         "CyberCloud.ResourceManager.Contracts.IResourceRelationWriter",

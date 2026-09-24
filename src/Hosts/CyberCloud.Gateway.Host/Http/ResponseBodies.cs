@@ -186,14 +186,14 @@ static class ResponseBodies {
 
     /// <summary>
     ///     A role assignment, in Azure's envelope: <c>id</c>, <c>name</c>, <c>type</c> and a
-    ///     <c>properties</c> object carrying <c>scope</c>, <c>principalId</c>, <c>principalType</c>
-    ///     and <c>roleDefinitionId</c>.
+    ///     <c>properties</c> object carrying <c>scope</c>, <c>principalId</c>, <c>principalType</c>,
+    ///     <c>roleDefinitionId</c> and <c>expiresOn</c>.
     /// </summary>
     /// <param name="assignment">The assignment as the manager rendered it.</param>
     /// <remarks>
-    ///     ⚠ The property names are <c>RoleAssignmentBodyProperties</c>' — the same three a
+    ///     ⚠ The property names are <c>RoleAssignmentBodyProperties</c>' — the same four a
     ///     <c>PUT</c> body may carry — so a client can read a <c>GET</c> back and send it as a
-    ///     <c>PUT</c> unchanged. <c>roleDefinitionId</c> is a role <i>name</i>; there are no role
+    ///     <c>PUT</c> unchanged, a just-in-time grant's end included. <c>roleDefinitionId</c> is a role <i>name</i>; there are no role
     ///     definitions to address, and that class's remarks say why.
     /// </remarks>
     public static string RoleAssignment(RoleAssignmentSnapshot assignment) {
@@ -248,6 +248,86 @@ static class ResponseBodies {
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
+    /// <summary>
+    ///     Renders a policy definition or assignment — <c>{ "id", "name", "type", "properties" }</c>,
+    ///     Azure's shape for both. docs/plan/08 § Policy.
+    /// </summary>
+    /// <param name="snapshot">The object the policy manager returned.</param>
+    public static string PolicyObject(PolicyObjectSnapshot snapshot) {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(1024);
+
+        using (var writer = new Utf8JsonWriter(buffer)) {
+            WritePolicyObject(writer, snapshot);
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <summary>
+    ///     Renders a page of policy definitions, assignments or compliance states in the collection
+    ///     shape every listing of this API has.
+    /// </summary>
+    /// <param name="page">The page the policy manager built.</param>
+    /// <param name="nextLink">The absolute next-page URL, or empty when there is no next page.</param>
+    /// <remarks>
+    ///     ⚠ A state row is Azure's <c>policyStates</c> shape cut to what this platform records:
+    ///     <c>resourceId</c>, <c>resourceType</c>, <c>policyAssignmentId</c>,
+    ///     <c>policyDefinitionId</c>, <c>complianceState</c> and <c>timestamp</c> — the time the verdict
+    ///     last <i>changed</i>, which <c>PolicyStateRecord.Since</c> explains.
+    /// </remarks>
+    public static string PolicyPage(PolicyListPage page, string nextLink) {
+        ArgumentNullException.ThrowIfNull(page);
+        ArgumentNullException.ThrowIfNull(nextLink);
+
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>(1024);
+
+        using (var writer = new Utf8JsonWriter(buffer)) {
+            writer.WriteStartObject();
+            writer.WritePropertyName("value");
+            writer.WriteStartArray();
+
+            foreach (var snapshot in page.Objects) {
+                WritePolicyObject(writer, snapshot);
+            }
+
+            foreach (var state in page.States) {
+                writer.WriteStartObject();
+                writer.WriteString("resourceId", state.ResourcePath);
+                writer.WriteString("resourceType", state.ResourceType);
+                writer.WriteString("policyAssignmentId", state.AssignmentPath);
+                writer.WriteString("policyDefinitionId", state.DefinitionPath);
+                writer.WriteString("complianceState", state.State.ToString());
+                writer.WriteString("timestamp", state.Since);
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndArray();
+
+            if (nextLink.Length > 0) {
+                writer.WriteString("nextLink", nextLink);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    static void WritePolicyObject(Utf8JsonWriter writer, PolicyObjectSnapshot snapshot) {
+        writer.WriteStartObject();
+        writer.WriteString("id", snapshot.Path);
+        writer.WriteString("name", snapshot.Name);
+        writer.WriteString("type", snapshot.Type);
+        writer.WritePropertyName("properties");
+
+        // The manager rendered the properties object from the stored record; it is written through
+        // verbatim rather than re-parsed member by member, so this file cannot drift from it.
+        writer.WriteRawValue(snapshot.Properties.Length == 0 ? "{}" : snapshot.Properties);
+        writer.WriteEndObject();
+    }
+
     /// <summary>The one role assignment object, written into whichever document is being built.</summary>
     /// <remarks>
     ///     ⚠ <c>inherited</c> is written on every row, <c>false</c> included, so a generated client
@@ -267,6 +347,16 @@ static class ResponseBodies {
         writer.WriteString(RoleAssignmentBodyProperties.PrincipalType, assignment.PrincipalType);
         writer.WriteString(RoleAssignmentBodyProperties.RoleDefinitionId, assignment.RoleDefinitionId);
         writer.WriteBoolean("inherited", assignment.Inherited);
+
+        // Written on every row, null included, for the reason `inherited` is: one shape for a
+        // generated client. UTC and round-trippable, so a GET sent back as a PUT sets the same
+        // instant — issue #49.
+        if (assignment.ExpiresOn is { } expiresOn) {
+            writer.WriteString(RoleAssignmentBodyProperties.ExpiresOn, expiresOn.ToUniversalTime());
+        } else {
+            writer.WriteNull(RoleAssignmentBodyProperties.ExpiresOn);
+        }
+
         writer.WriteEndObject();
         writer.WriteEndObject();
     }

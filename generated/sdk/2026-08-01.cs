@@ -14,6 +14,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -312,6 +313,278 @@ public sealed partial class ClickHouseClusterCollection {
 
     /// <summary>The ClickHouse clusters in this group, paged.</summary>
     public partial AsyncPageable<ClickHouseClusterResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/notification/channel accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum BudgetChannel {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>sms</summary>
+    [JsonStringEnumMemberName("sms")]
+    Sms = 1,
+
+    /// <summary>whatsapp</summary>
+    [JsonStringEnumMemberName("whatsapp")]
+    Whatsapp = 2,
+
+    /// <summary>email</summary>
+    [JsonStringEnumMemberName("email")]
+    Email = 3,
+
+    /// <summary>push</summary>
+    [JsonStringEnumMemberName("push")]
+    Push = 4,
+
+    /// <summary>voice</summary>
+    [JsonStringEnumMemberName("voice")]
+    Voice = 5
+}
+
+/// <summary>The values /properties/period accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum BudgetPeriod {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>monthly</summary>
+    [JsonStringEnumMemberName("monthly")]
+    Monthly = 1,
+
+    /// <summary>quarterly</summary>
+    [JsonStringEnumMemberName("quarterly")]
+    Quarterly = 2,
+
+    /// <summary>annually</summary>
+    [JsonStringEnumMemberName("annually")]
+    Annually = 3
+}
+
+/// <summary>The values /properties/scope accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum BudgetScope {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>resourceGroup</summary>
+    [JsonStringEnumMemberName("resourceGroup")]
+    ResourceGroup = 1,
+
+    /// <summary>subscription</summary>
+    [JsonStringEnumMemberName("subscription")]
+    Subscription = 2
+}
+
+/// <summary>The body of a CyberCloud.Billing/budgets.</summary>
+/// <remarks>A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service.</remarks>
+public sealed partial class BudgetData {
+
+    /// <summary>The region the budget is evaluated in.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The budget's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The budget's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The amount for one period, in the billing account's currency.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("amount")]
+        public required double Amount { get; set; }
+
+        /// <summary>Whether the budget is evaluated. Off keeps its history and stops the clock.</summary>
+        /// <remarks>Defaults to true when left unset.</remarks>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>Who is told, and how.</summary>
+        [JsonPropertyName("notification")]
+        public NotificationData? Notification { get; set; }
+
+        /// <summary>How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year.</summary>
+        /// <remarks>Defaults to "monthly" when left unset.</remarks>
+        [JsonPropertyName("period")]
+        public BudgetPeriod? Period { get; set; }
+
+        /// <summary>What the figure covers: this resource group, or the whole subscription. A resource group's usage is priced on its own, as if it were the subscription's only usage, so that its figure says nothing about the other groups' use of a tiered price. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. Its figures are the subscription's spend, so showStatus shows them only to a caller who may read the subscription.</summary>
+        /// <remarks>Defaults to "resourceGroup" when left unset.</remarks>
+        [JsonPropertyName("scope")]
+        public BudgetScope? Scope { get; set; }
+
+        /// <summary>Percentages of the amount that alert, each at most once per period.</summary>
+        [JsonPropertyName("thresholds")]
+        public ThresholdsData? Thresholds { get; set; }
+
+        /// <summary>Who is told, and how.</summary>
+        public sealed partial class NotificationData {
+
+            /// <summary>Which of that service's channels carries it. The service must have the channel configured and enabled, or every alert is refused by name.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("channel")]
+            public required BudgetChannel Channel { get; set; }
+
+            /// <summary>Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("recipients")]
+            public IList<string> Recipients { get; set; } = new List<string>();
+
+            /// <summary>The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group.</summary>
+            /// <remarks>Required on a create.</remarks>
+            [JsonPropertyName("service")]
+            public required string Service { get; set; }
+        }
+
+        /// <summary>Percentages of the amount that alert, each at most once per period.</summary>
+        public sealed partial class ThresholdsData {
+
+            /// <summary>Percentages of the amount the period's cost so far is compared with — 50, 80 and 100 is the usual set. At least one threshold across both lists and at most 10; a body outside that is refused when the budget is reconciled.</summary>
+            [JsonPropertyName("actual")]
+            public IList<double> Actual { get; set; } = new List<double>();
+
+            /// <summary>Percentages of the amount the forecast is compared with. The forecast is linear on the trailing seven days, and an alert on it says it is an estimate.</summary>
+            [JsonPropertyName("forecast")]
+            public IList<double> Forecast { get; set; } = new List<double>();
+        }
+    }
+}
+
+/// <summary>One Budget, as the API returns it, and the operations on it.</summary>
+public sealed partial class BudgetResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required BudgetData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<BudgetResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<BudgetResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        BudgetData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What showStatus returns.</summary>
+    public sealed partial class ShowStatusResult {
+
+        /// <summary>What the period has cost so far, rounded to the currency, as of the last evaluation.</summary>
+        [JsonPropertyName("actual")]
+        public required double Actual { get; set; }
+
+        /// <summary>Every alert the budget has fired, oldest first, one line each: '{firedAt} {actual|forecast} {percent}% at {figure}: {notification}'.</summary>
+        [JsonPropertyName("alerts")]
+        public IList<string> Alerts { get; set; } = new List<string>();
+
+        /// <summary>The amount for one period, from the budget's body.</summary>
+        [JsonPropertyName("amount")]
+        public required double Amount { get; set; }
+
+        /// <summary>The currency the figures are in. Empty until evaluated.</summary>
+        [JsonPropertyName("currency")]
+        public required string Currency { get; set; }
+
+        /// <summary>Whether the budget has been evaluated in its current period. False until the first hourly evaluation, and for a disabled budget.</summary>
+        [JsonPropertyName("evaluated")]
+        public required bool Evaluated { get; set; }
+
+        /// <summary>The thresholds on the actual cost that have fired this period, as percentages.</summary>
+        [JsonPropertyName("firedActual")]
+        public IList<double> FiredActual { get; set; } = new List<double>();
+
+        /// <summary>The thresholds on the forecast that have fired this period, as percentages.</summary>
+        [JsonPropertyName("firedForecast")]
+        public IList<double> FiredForecast { get; set; } = new List<double>();
+
+        /// <summary>What the period will cost at the trailing seven days' rate, rounded. An estimate.</summary>
+        [JsonPropertyName("forecast")]
+        public required double Forecast { get; set; }
+
+        /// <summary>Why the last evaluation could not run, or empty. A subscription budget not yet granted reader on its subscription says so here.</summary>
+        [JsonPropertyName("lastError")]
+        public required string LastError { get; set; }
+
+        /// <summary>When the figures were computed. Absent until evaluated.</summary>
+        [JsonPropertyName("lastEvaluatedAt")]
+        public DateTimeOffset? LastEvaluatedAt { get; set; }
+
+        /// <summary>The first instant of the next period. Absent until evaluated.</summary>
+        [JsonPropertyName("periodEnd")]
+        public DateTimeOffset? PeriodEnd { get; set; }
+
+        /// <summary>The first instant of the period the figures are for. Absent until evaluated.</summary>
+        [JsonPropertyName("periodStart")]
+        public DateTimeOffset? PeriodStart { get; set; }
+    }
+
+    /// <summary>ShowStatus. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ShowStatusResult>> ShowStatusAsync(
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Budgets in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class BudgetCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Billing/budgets";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Billing/budgets/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Billing/budgets";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Budget.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<BudgetResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        BudgetData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Budget by name.</summary>
+    public partial Task<Response<BudgetResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Budgets in this group, paged.</summary>
+    public partial AsyncPageable<BudgetResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>The values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else.</summary>
@@ -4282,6 +4555,10 @@ public sealed partial class PostgreSQLServerData {
         [JsonPropertyName("replicas")]
         public required long Replicas { get; set; }
 
+        /// <summary>Where the server's data comes from when it is created from a recovery point rather than empty.</summary>
+        [JsonPropertyName("restore")]
+        public RestoreData? Restore { get; set; }
+
         /// <summary>CPU and memory, either by preset or explicitly.</summary>
         [JsonPropertyName("sizing")]
         public SizingData? Sizing { get; set; }
@@ -4303,7 +4580,7 @@ public sealed partial class PostgreSQLServerData {
         /// <summary>Backup to the tenant's object store, using CloudNativePG's barman-cloud.</summary>
         public sealed partial class BackupData {
 
-            /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.</summary>
+            /// <summary>Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.</summary>
             /// <remarks>Defaults to "" when left unset.</remarks>
             [JsonPropertyName("destinationPath")]
             public string? DestinationPath { get; set; }
@@ -4359,6 +4636,15 @@ public sealed partial class PostgreSQLServerData {
             /// <remarks>Defaults to "transaction" when left unset.</remarks>
             [JsonPropertyName("mode")]
             public PostgreSQLServerMode? Mode { get; set; }
+        }
+
+        /// <summary>Where the server's data comes from when it is created from a recovery point rather than empty.</summary>
+        public sealed partial class RestoreData {
+
+            /// <summary>The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("recoveryPoint")]
+            public string? RecoveryPoint { get; set; }
         }
 
         /// <summary>CPU and memory, either by preset or explicitly.</summary>
@@ -4973,6 +5259,1603 @@ public sealed partial class DocumentDatabaseAccountCollection {
     public partial AsyncPageable<DocumentDatabaseAccountResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>The body of a CyberCloud.KeyVault/vaults.</summary>
+/// <remarks>Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.</remarks>
+public sealed partial class KeyVaultData {
+
+    /// <summary>The region the vault is billed in and served from.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The vault's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The vault's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>What the vault is for, shown in the portal beside its name.</summary>
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        /// <summary>Whether a deleted vault, secret or key may be purged before its seven-day recovery window ends. Once true it stays true: a write that sets it false is refused, and so is every purge until the window is out.</summary>
+        /// <remarks>Defaults to false when left unset.</remarks>
+        [JsonPropertyName("enablePurgeProtection")]
+        public bool? EnablePurgeProtection { get; set; }
+    }
+}
+
+/// <summary>One Key vault, as the API returns it, and the operations on it.</summary>
+public sealed partial class KeyVaultResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required KeyVaultData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<KeyVaultResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<KeyVaultResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        KeyVaultData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Recoverable for 7 day(s): the resource keeps its quota and its data, and its name is held. Purge to end that window early — a separate permission, 'purge'.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /curve accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum CreateKeyContentCurve {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>P-256</summary>
+        [JsonStringEnumMemberName("P-256")]
+        P256 = 1,
+
+        /// <summary>P-384</summary>
+        [JsonStringEnumMemberName("P-384")]
+        P384 = 2,
+
+        /// <summary>P-521</summary>
+        [JsonStringEnumMemberName("P-521")]
+        P521 = 3
+    }
+
+    /// <summary>The values /keyOps accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum CreateKeyContentKeyOps {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>encrypt</summary>
+        [JsonStringEnumMemberName("encrypt")]
+        Encrypt = 1,
+
+        /// <summary>decrypt</summary>
+        [JsonStringEnumMemberName("decrypt")]
+        Decrypt = 2,
+
+        /// <summary>sign</summary>
+        [JsonStringEnumMemberName("sign")]
+        Sign = 3,
+
+        /// <summary>verify</summary>
+        [JsonStringEnumMemberName("verify")]
+        Verify = 4,
+
+        /// <summary>wrapKey</summary>
+        [JsonStringEnumMemberName("wrapKey")]
+        WrapKey = 5,
+
+        /// <summary>unwrapKey</summary>
+        [JsonStringEnumMemberName("unwrapKey")]
+        UnwrapKey = 6
+    }
+
+    /// <summary>The values /kty accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum CreateKeyContentKty {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>RSA</summary>
+        [JsonStringEnumMemberName("RSA")]
+        RSA = 1,
+
+        /// <summary>EC</summary>
+        [JsonStringEnumMemberName("EC")]
+        EC = 2
+    }
+
+    /// <summary>The parameters of createKey.</summary>
+    public sealed partial class CreateKeyContent {
+
+        /// <summary>An EC key's curve. P-256 when omitted; refused on an RSA key.</summary>
+        [JsonPropertyName("curve")]
+        public CreateKeyContentCurve? Curve { get; set; }
+
+        /// <summary>Whether the version may be used. A disabled version is refused, not hidden.</summary>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>The version is refused from this time on.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.</summary>
+        [JsonPropertyName("keyOps")]
+        public IList<CreateKeyContentKeyOps> KeyOps { get; set; } = new List<CreateKeyContentKeyOps>();
+
+        /// <summary>An RSA key's modulus in bits: 2048, 3072 or 4096. 2048 when omitted; refused on an EC key.</summary>
+        [JsonPropertyName("keySize")]
+        public long? KeySize { get; set; }
+
+        /// <summary>RSA or EC.</summary>
+        [JsonPropertyName("kty")]
+        public required CreateKeyContentKty Kty { get; set; }
+
+        /// <summary>The version is refused before this time.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+    }
+
+    /// <summary>What createKey returns.</summary>
+    public sealed partial class CreateKeyResult {
+
+        /// <summary>When the version was created.</summary>
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; set; }
+
+        /// <summary>An EC key's curve.</summary>
+        [JsonPropertyName("crv")]
+        public string? Crv { get; set; }
+
+        /// <summary>An RSA key's public exponent, base64url.</summary>
+        [JsonPropertyName("e")]
+        public string? E { get; set; }
+
+        /// <summary>Whether the version may be used.</summary>
+        [JsonPropertyName("enabled")]
+        public required bool Enabled { get; set; }
+
+        /// <summary>Refused from this time on. Absent when unset.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>Whether the key was imported rather than generated here.</summary>
+        [JsonPropertyName("imported")]
+        public required bool Imported { get; set; }
+
+        /// <summary>The operations the key permits.</summary>
+        [JsonPropertyName("keyOps")]
+        public IList<string> KeyOps { get; set; } = new List<string>();
+
+        /// <summary>An RSA key's modulus in bits.</summary>
+        [JsonPropertyName("keySize")]
+        public long? KeySize { get; set; }
+
+        /// <summary>RSA or EC.</summary>
+        [JsonPropertyName("kty")]
+        public required string Kty { get; set; }
+
+        /// <summary>An RSA key's modulus, base64url.</summary>
+        [JsonPropertyName("n")]
+        public string? N { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Refused before this time. Absent when unset.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>When the version's attributes last changed.</summary>
+        [JsonPropertyName("updated")]
+        public required DateTimeOffset Updated { get; set; }
+
+        /// <summary>The version this response is about.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+
+        /// <summary>An EC key's x coordinate, base64url.</summary>
+        [JsonPropertyName("x")]
+        public string? X { get; set; }
+
+        /// <summary>An EC key's y coordinate, base64url.</summary>
+        [JsonPropertyName("y")]
+        public string? Y { get; set; }
+    }
+
+    /// <summary>CreateKey. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<CreateKeyResult>> CreateKeyAsync(
+        CreateKeyContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /alg accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DecryptContentAlg {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>RSA-OAEP</summary>
+        [JsonStringEnumMemberName("RSA-OAEP")]
+        RSAOAEP = 1,
+
+        /// <summary>RSA-OAEP-256</summary>
+        [JsonStringEnumMemberName("RSA-OAEP-256")]
+        RSAOAEP256 = 2
+    }
+
+    /// <summary>The parameters of decrypt.</summary>
+    public sealed partial class DecryptContent {
+
+        /// <summary>RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).</summary>
+        [JsonPropertyName("alg")]
+        public required DecryptContentAlg Alg { get; set; }
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>The ciphertext or wrapped key, base64url without padding.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What decrypt returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class DecryptResult {
+
+        /// <summary>The algorithm used.</summary>
+        [JsonPropertyName("alg")]
+        public required string Alg { get; set; }
+
+        /// <summary>The key that did the work.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>The plaintext, base64url.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>The key version that did the work.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>Decrypt. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<DecryptResult>> DecryptAsync(
+        DecryptContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of deleteKey.</summary>
+    public sealed partial class DeleteKeyContent {
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+    }
+
+    /// <summary>What deleteKey returns.</summary>
+    public sealed partial class DeleteKeyResult {
+
+        /// <summary>When the item was deleted.</summary>
+        [JsonPropertyName("deletedOn")]
+        public required DateTimeOffset DeletedOn { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>When the item is purged unless it is recovered first.</summary>
+        [JsonPropertyName("scheduledPurgeDate")]
+        public required DateTimeOffset ScheduledPurgeDate { get; set; }
+    }
+
+    /// <summary>DeleteKey. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<DeleteKeyResult>> DeleteKeyAsync(
+        DeleteKeyContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of deleteSecret.</summary>
+    public sealed partial class DeleteSecretContent {
+
+        /// <summary>The secret's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("secretName")]
+        public required string SecretName { get; set; }
+    }
+
+    /// <summary>What deleteSecret returns.</summary>
+    public sealed partial class DeleteSecretResult {
+
+        /// <summary>When the item was deleted.</summary>
+        [JsonPropertyName("deletedOn")]
+        public required DateTimeOffset DeletedOn { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>When the item is purged unless it is recovered first.</summary>
+        [JsonPropertyName("scheduledPurgeDate")]
+        public required DateTimeOffset ScheduledPurgeDate { get; set; }
+    }
+
+    /// <summary>DeleteSecret. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<DeleteSecretResult>> DeleteSecretAsync(
+        DeleteSecretContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /alg accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum EncryptContentAlg {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>RSA-OAEP</summary>
+        [JsonStringEnumMemberName("RSA-OAEP")]
+        RSAOAEP = 1,
+
+        /// <summary>RSA-OAEP-256</summary>
+        [JsonStringEnumMemberName("RSA-OAEP-256")]
+        RSAOAEP256 = 2
+    }
+
+    /// <summary>The parameters of encrypt.</summary>
+    public sealed partial class EncryptContent {
+
+        /// <summary>RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).</summary>
+        [JsonPropertyName("alg")]
+        public required EncryptContentAlg Alg { get; set; }
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>The plaintext to encrypt or the key to wrap, base64url without padding.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What encrypt returns.</summary>
+    public sealed partial class EncryptResult {
+
+        /// <summary>The algorithm used.</summary>
+        [JsonPropertyName("alg")]
+        public required string Alg { get; set; }
+
+        /// <summary>The key that did the work.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>The result, base64url.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>The key version that did the work.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>Encrypt. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<EncryptResult>> EncryptAsync(
+        EncryptContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of getKey.</summary>
+    public sealed partial class GetKeyContent {
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What getKey returns.</summary>
+    public sealed partial class GetKeyResult {
+
+        /// <summary>When the version was created.</summary>
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; set; }
+
+        /// <summary>An EC key's curve.</summary>
+        [JsonPropertyName("crv")]
+        public string? Crv { get; set; }
+
+        /// <summary>An RSA key's public exponent, base64url.</summary>
+        [JsonPropertyName("e")]
+        public string? E { get; set; }
+
+        /// <summary>Whether the version may be used.</summary>
+        [JsonPropertyName("enabled")]
+        public required bool Enabled { get; set; }
+
+        /// <summary>Refused from this time on. Absent when unset.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>Whether the key was imported rather than generated here.</summary>
+        [JsonPropertyName("imported")]
+        public required bool Imported { get; set; }
+
+        /// <summary>The operations the key permits.</summary>
+        [JsonPropertyName("keyOps")]
+        public IList<string> KeyOps { get; set; } = new List<string>();
+
+        /// <summary>An RSA key's modulus in bits.</summary>
+        [JsonPropertyName("keySize")]
+        public long? KeySize { get; set; }
+
+        /// <summary>RSA or EC.</summary>
+        [JsonPropertyName("kty")]
+        public required string Kty { get; set; }
+
+        /// <summary>An RSA key's modulus, base64url.</summary>
+        [JsonPropertyName("n")]
+        public string? N { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Refused before this time. Absent when unset.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>When the version's attributes last changed.</summary>
+        [JsonPropertyName("updated")]
+        public required DateTimeOffset Updated { get; set; }
+
+        /// <summary>The version this response is about.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+
+        /// <summary>An EC key's x coordinate, base64url.</summary>
+        [JsonPropertyName("x")]
+        public string? X { get; set; }
+
+        /// <summary>An EC key's y coordinate, base64url.</summary>
+        [JsonPropertyName("y")]
+        public string? Y { get; set; }
+    }
+
+    /// <summary>GetKey. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<GetKeyResult>> GetKeyAsync(
+        GetKeyContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of getSecret.</summary>
+    public sealed partial class GetSecretContent {
+
+        /// <summary>The secret's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("secretName")]
+        public required string SecretName { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What getSecret returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class GetSecretResult {
+
+        /// <summary>What the value is. Absent when unset.</summary>
+        [JsonPropertyName("contentType")]
+        public string? ContentType { get; set; }
+
+        /// <summary>When the version was created.</summary>
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; set; }
+
+        /// <summary>Whether the version may be used.</summary>
+        [JsonPropertyName("enabled")]
+        public required bool Enabled { get; set; }
+
+        /// <summary>Refused from this time on. Absent when unset.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Refused before this time. Absent when unset.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>When the version's attributes last changed.</summary>
+        [JsonPropertyName("updated")]
+        public required DateTimeOffset Updated { get; set; }
+
+        /// <summary>The secret's value.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>The version this response is about.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>GetSecret. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<GetSecretResult>> GetSecretAsync(
+        GetSecretContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /keyOps accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum ImportKeyContentKeyOps {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>encrypt</summary>
+        [JsonStringEnumMemberName("encrypt")]
+        Encrypt = 1,
+
+        /// <summary>decrypt</summary>
+        [JsonStringEnumMemberName("decrypt")]
+        Decrypt = 2,
+
+        /// <summary>sign</summary>
+        [JsonStringEnumMemberName("sign")]
+        Sign = 3,
+
+        /// <summary>verify</summary>
+        [JsonStringEnumMemberName("verify")]
+        Verify = 4,
+
+        /// <summary>wrapKey</summary>
+        [JsonStringEnumMemberName("wrapKey")]
+        WrapKey = 5,
+
+        /// <summary>unwrapKey</summary>
+        [JsonStringEnumMemberName("unwrapKey")]
+        UnwrapKey = 6
+    }
+
+    /// <summary>The parameters of importKey.</summary>
+    public sealed partial class ImportKeyContent {
+
+        /// <summary>Whether the version may be used. A disabled version is refused, not hidden.</summary>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>The version is refused from this time on.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.</summary>
+        [JsonPropertyName("keyOps")]
+        public IList<ImportKeyContentKeyOps> KeyOps { get; set; } = new List<ImportKeyContentKeyOps>();
+
+        /// <summary>The version is refused before this time.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>The private key as unencrypted PKCS#8 DER, in standard base64. RSA of 2048, 3072 or 4096 bits, or EC on P-256, P-384 or P-521. Sealed on arrival and never returned.</summary>
+        [JsonPropertyName("pkcs8")]
+        public required string Pkcs8 { get; set; }
+    }
+
+    /// <summary>What importKey returns.</summary>
+    public sealed partial class ImportKeyResult {
+
+        /// <summary>When the version was created.</summary>
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; set; }
+
+        /// <summary>An EC key's curve.</summary>
+        [JsonPropertyName("crv")]
+        public string? Crv { get; set; }
+
+        /// <summary>An RSA key's public exponent, base64url.</summary>
+        [JsonPropertyName("e")]
+        public string? E { get; set; }
+
+        /// <summary>Whether the version may be used.</summary>
+        [JsonPropertyName("enabled")]
+        public required bool Enabled { get; set; }
+
+        /// <summary>Refused from this time on. Absent when unset.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>Whether the key was imported rather than generated here.</summary>
+        [JsonPropertyName("imported")]
+        public required bool Imported { get; set; }
+
+        /// <summary>The operations the key permits.</summary>
+        [JsonPropertyName("keyOps")]
+        public IList<string> KeyOps { get; set; } = new List<string>();
+
+        /// <summary>An RSA key's modulus in bits.</summary>
+        [JsonPropertyName("keySize")]
+        public long? KeySize { get; set; }
+
+        /// <summary>RSA or EC.</summary>
+        [JsonPropertyName("kty")]
+        public required string Kty { get; set; }
+
+        /// <summary>An RSA key's modulus, base64url.</summary>
+        [JsonPropertyName("n")]
+        public string? N { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Refused before this time. Absent when unset.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>When the version's attributes last changed.</summary>
+        [JsonPropertyName("updated")]
+        public required DateTimeOffset Updated { get; set; }
+
+        /// <summary>The version this response is about.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+
+        /// <summary>An EC key's x coordinate, base64url.</summary>
+        [JsonPropertyName("x")]
+        public string? X { get; set; }
+
+        /// <summary>An EC key's y coordinate, base64url.</summary>
+        [JsonPropertyName("y")]
+        public string? Y { get; set; }
+    }
+
+    /// <summary>ImportKey. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ImportKeyResult>> ImportKeyAsync(
+        ImportKeyContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listDeletedKeys returns.</summary>
+    public sealed partial class ListDeletedKeysResult {
+
+        /// <summary>How many lines follow.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.</summary>
+        [JsonPropertyName("items")]
+        public IList<string> Items { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListDeletedKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListDeletedKeysResult>> ListDeletedKeysAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listDeletedSecrets returns.</summary>
+    public sealed partial class ListDeletedSecretsResult {
+
+        /// <summary>How many lines follow.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.</summary>
+        [JsonPropertyName("items")]
+        public IList<string> Items { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListDeletedSecrets. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListDeletedSecretsResult>> ListDeletedSecretsAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of listKeyVersions.</summary>
+    public sealed partial class ListKeyVersionsContent {
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+    }
+
+    /// <summary>What listKeyVersions returns.</summary>
+    public sealed partial class ListKeyVersionsResult {
+
+        /// <summary>How many lines follow.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.</summary>
+        [JsonPropertyName("items")]
+        public IList<string> Items { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListKeyVersions. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListKeyVersionsResult>> ListKeyVersionsAsync(
+        ListKeyVersionsContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listKeys returns.</summary>
+    public sealed partial class ListKeysResult {
+
+        /// <summary>How many lines follow.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.</summary>
+        [JsonPropertyName("items")]
+        public IList<string> Items { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListKeys. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListKeysResult>> ListKeysAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of listSecretVersions.</summary>
+    public sealed partial class ListSecretVersionsContent {
+
+        /// <summary>The secret's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("secretName")]
+        public required string SecretName { get; set; }
+    }
+
+    /// <summary>What listSecretVersions returns.</summary>
+    public sealed partial class ListSecretVersionsResult {
+
+        /// <summary>How many lines follow.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.</summary>
+        [JsonPropertyName("items")]
+        public IList<string> Items { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListSecretVersions. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListSecretVersionsResult>> ListSecretVersionsAsync(
+        ListSecretVersionsContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>What listSecrets returns.</summary>
+    public sealed partial class ListSecretsResult {
+
+        /// <summary>How many lines follow.</summary>
+        [JsonPropertyName("count")]
+        public required long Count { get; set; }
+
+        /// <summary>One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.</summary>
+        [JsonPropertyName("items")]
+        public IList<string> Items { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListSecrets. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListSecretsResult>> ListSecretsAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Purge. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> PurgeAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of purgeDeletedKey.</summary>
+    public sealed partial class PurgeDeletedKeyContent {
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+    }
+
+    /// <summary>What purgeDeletedKey returns.</summary>
+    public sealed partial class PurgeDeletedKeyResult {
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>True: the item and every version of it are gone.</summary>
+        [JsonPropertyName("purged")]
+        public required bool Purged { get; set; }
+    }
+
+    /// <summary>PurgeDeletedKey. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<PurgeDeletedKeyResult>> PurgeDeletedKeyAsync(
+        PurgeDeletedKeyContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of purgeDeletedSecret.</summary>
+    public sealed partial class PurgeDeletedSecretContent {
+
+        /// <summary>The secret's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("secretName")]
+        public required string SecretName { get; set; }
+    }
+
+    /// <summary>What purgeDeletedSecret returns.</summary>
+    public sealed partial class PurgeDeletedSecretResult {
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>True: the item and every version of it are gone.</summary>
+        [JsonPropertyName("purged")]
+        public required bool Purged { get; set; }
+    }
+
+    /// <summary>PurgeDeletedSecret. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<PurgeDeletedSecretResult>> PurgeDeletedSecretAsync(
+        PurgeDeletedSecretContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of recoverDeletedKey.</summary>
+    public sealed partial class RecoverDeletedKeyContent {
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+    }
+
+    /// <summary>What recoverDeletedKey returns.</summary>
+    public sealed partial class RecoverDeletedKeyResult {
+
+        /// <summary>When the version was created.</summary>
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; set; }
+
+        /// <summary>An EC key's curve.</summary>
+        [JsonPropertyName("crv")]
+        public string? Crv { get; set; }
+
+        /// <summary>An RSA key's public exponent, base64url.</summary>
+        [JsonPropertyName("e")]
+        public string? E { get; set; }
+
+        /// <summary>Whether the version may be used.</summary>
+        [JsonPropertyName("enabled")]
+        public required bool Enabled { get; set; }
+
+        /// <summary>Refused from this time on. Absent when unset.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>Whether the key was imported rather than generated here.</summary>
+        [JsonPropertyName("imported")]
+        public required bool Imported { get; set; }
+
+        /// <summary>The operations the key permits.</summary>
+        [JsonPropertyName("keyOps")]
+        public IList<string> KeyOps { get; set; } = new List<string>();
+
+        /// <summary>An RSA key's modulus in bits.</summary>
+        [JsonPropertyName("keySize")]
+        public long? KeySize { get; set; }
+
+        /// <summary>RSA or EC.</summary>
+        [JsonPropertyName("kty")]
+        public required string Kty { get; set; }
+
+        /// <summary>An RSA key's modulus, base64url.</summary>
+        [JsonPropertyName("n")]
+        public string? N { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Refused before this time. Absent when unset.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>When the version's attributes last changed.</summary>
+        [JsonPropertyName("updated")]
+        public required DateTimeOffset Updated { get; set; }
+
+        /// <summary>The version this response is about.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+
+        /// <summary>An EC key's x coordinate, base64url.</summary>
+        [JsonPropertyName("x")]
+        public string? X { get; set; }
+
+        /// <summary>An EC key's y coordinate, base64url.</summary>
+        [JsonPropertyName("y")]
+        public string? Y { get; set; }
+    }
+
+    /// <summary>RecoverDeletedKey. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<RecoverDeletedKeyResult>> RecoverDeletedKeyAsync(
+        RecoverDeletedKeyContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of recoverDeletedSecret.</summary>
+    public sealed partial class RecoverDeletedSecretContent {
+
+        /// <summary>The secret's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("secretName")]
+        public required string SecretName { get; set; }
+    }
+
+    /// <summary>What recoverDeletedSecret returns.</summary>
+    public sealed partial class RecoverDeletedSecretResult {
+
+        /// <summary>What the value is. Absent when unset.</summary>
+        [JsonPropertyName("contentType")]
+        public string? ContentType { get; set; }
+
+        /// <summary>When the version was created.</summary>
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; set; }
+
+        /// <summary>Whether the version may be used.</summary>
+        [JsonPropertyName("enabled")]
+        public required bool Enabled { get; set; }
+
+        /// <summary>Refused from this time on. Absent when unset.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Refused before this time. Absent when unset.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>When the version's attributes last changed.</summary>
+        [JsonPropertyName("updated")]
+        public required DateTimeOffset Updated { get; set; }
+
+        /// <summary>The version this response is about.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>RecoverDeletedSecret. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<RecoverDeletedSecretResult>> RecoverDeletedSecretAsync(
+        RecoverDeletedSecretContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Restore. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Operation<System.Text.Json.JsonElement>> RestoreAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of setSecret.</summary>
+    public sealed partial class SetSecretContent {
+
+        /// <summary>What the value is, for the consumer — for example text/plain. Not interpreted.</summary>
+        [JsonPropertyName("contentType")]
+        public string? ContentType { get; set; }
+
+        /// <summary>Whether the version may be used. A disabled version is refused, not hidden.</summary>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>The version is refused from this time on.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>The version is refused before this time.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>The secret's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("secretName")]
+        public required string SecretName { get; set; }
+
+        /// <summary>The secret's value. Sealed under the vault's root before it is stored.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+    }
+
+    /// <summary>What setSecret returns.</summary>
+    public sealed partial class SetSecretResult {
+
+        /// <summary>What the value is. Absent when unset.</summary>
+        [JsonPropertyName("contentType")]
+        public string? ContentType { get; set; }
+
+        /// <summary>When the version was created.</summary>
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; set; }
+
+        /// <summary>Whether the version may be used.</summary>
+        [JsonPropertyName("enabled")]
+        public required bool Enabled { get; set; }
+
+        /// <summary>Refused from this time on. Absent when unset.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Refused before this time. Absent when unset.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>When the version's attributes last changed.</summary>
+        [JsonPropertyName("updated")]
+        public required DateTimeOffset Updated { get; set; }
+
+        /// <summary>The version this response is about.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>SetSecret. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<SetSecretResult>> SetSecretAsync(
+        SetSecretContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /alg accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum SignContentAlg {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>RS256</summary>
+        [JsonStringEnumMemberName("RS256")]
+        RS256 = 1,
+
+        /// <summary>RS384</summary>
+        [JsonStringEnumMemberName("RS384")]
+        RS384 = 2,
+
+        /// <summary>RS512</summary>
+        [JsonStringEnumMemberName("RS512")]
+        RS512 = 3,
+
+        /// <summary>PS256</summary>
+        [JsonStringEnumMemberName("PS256")]
+        PS256 = 4,
+
+        /// <summary>PS384</summary>
+        [JsonStringEnumMemberName("PS384")]
+        PS384 = 5,
+
+        /// <summary>PS512</summary>
+        [JsonStringEnumMemberName("PS512")]
+        PS512 = 6,
+
+        /// <summary>ES256</summary>
+        [JsonStringEnumMemberName("ES256")]
+        ES256 = 7,
+
+        /// <summary>ES384</summary>
+        [JsonStringEnumMemberName("ES384")]
+        ES384 = 8,
+
+        /// <summary>ES512</summary>
+        [JsonStringEnumMemberName("ES512")]
+        ES512 = 9
+    }
+
+    /// <summary>The parameters of sign.</summary>
+    public sealed partial class SignContent {
+
+        /// <summary>A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.</summary>
+        [JsonPropertyName("alg")]
+        public required SignContentAlg Alg { get; set; }
+
+        /// <summary>The digest to sign, base64url. Its length must be the algorithm's hash length.</summary>
+        [JsonPropertyName("digest")]
+        public required string Digest { get; set; }
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What sign returns.</summary>
+    public sealed partial class SignResult {
+
+        /// <summary>The algorithm used.</summary>
+        [JsonPropertyName("alg")]
+        public required string Alg { get; set; }
+
+        /// <summary>The key that did the work.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>The result, base64url.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>The key version that did the work.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>Sign. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<SignResult>> SignAsync(
+        SignContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /alg accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum UnwrapKeyContentAlg {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>RSA-OAEP</summary>
+        [JsonStringEnumMemberName("RSA-OAEP")]
+        RSAOAEP = 1,
+
+        /// <summary>RSA-OAEP-256</summary>
+        [JsonStringEnumMemberName("RSA-OAEP-256")]
+        RSAOAEP256 = 2
+    }
+
+    /// <summary>The parameters of unwrapKey.</summary>
+    public sealed partial class UnwrapKeyContent {
+
+        /// <summary>RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).</summary>
+        [JsonPropertyName("alg")]
+        public required UnwrapKeyContentAlg Alg { get; set; }
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>The ciphertext or wrapped key, base64url without padding.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What unwrapKey returns. ⚠ Secret material: never log or cache this.</summary>
+    public sealed partial class UnwrapKeyResult {
+
+        /// <summary>The algorithm used.</summary>
+        [JsonPropertyName("alg")]
+        public required string Alg { get; set; }
+
+        /// <summary>The key that did the work.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>The plaintext, base64url.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>The key version that did the work.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>UnwrapKey. ⚠ An action never creates — a POST to a name that does not exist is a 404. ⚠ The response carries secret material and is always audited.</summary>
+    public partial Task<Response<UnwrapKeyResult>> UnwrapKeyAsync(
+        UnwrapKeyContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /keyOps accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum UpdateKeyContentKeyOps {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>encrypt</summary>
+        [JsonStringEnumMemberName("encrypt")]
+        Encrypt = 1,
+
+        /// <summary>decrypt</summary>
+        [JsonStringEnumMemberName("decrypt")]
+        Decrypt = 2,
+
+        /// <summary>sign</summary>
+        [JsonStringEnumMemberName("sign")]
+        Sign = 3,
+
+        /// <summary>verify</summary>
+        [JsonStringEnumMemberName("verify")]
+        Verify = 4,
+
+        /// <summary>wrapKey</summary>
+        [JsonStringEnumMemberName("wrapKey")]
+        WrapKey = 5,
+
+        /// <summary>unwrapKey</summary>
+        [JsonStringEnumMemberName("unwrapKey")]
+        UnwrapKey = 6
+    }
+
+    /// <summary>The parameters of updateKey.</summary>
+    public sealed partial class UpdateKeyContent {
+
+        /// <summary>Whether the version may be used. A disabled version is refused, not hidden.</summary>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>The version is refused from this time on.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.</summary>
+        [JsonPropertyName("keyOps")]
+        public IList<UpdateKeyContentKeyOps> KeyOps { get; set; } = new List<UpdateKeyContentKeyOps>();
+
+        /// <summary>The version is refused before this time.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What updateKey returns.</summary>
+    public sealed partial class UpdateKeyResult {
+
+        /// <summary>When the version was created.</summary>
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; set; }
+
+        /// <summary>An EC key's curve.</summary>
+        [JsonPropertyName("crv")]
+        public string? Crv { get; set; }
+
+        /// <summary>An RSA key's public exponent, base64url.</summary>
+        [JsonPropertyName("e")]
+        public string? E { get; set; }
+
+        /// <summary>Whether the version may be used.</summary>
+        [JsonPropertyName("enabled")]
+        public required bool Enabled { get; set; }
+
+        /// <summary>Refused from this time on. Absent when unset.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>Whether the key was imported rather than generated here.</summary>
+        [JsonPropertyName("imported")]
+        public required bool Imported { get; set; }
+
+        /// <summary>The operations the key permits.</summary>
+        [JsonPropertyName("keyOps")]
+        public IList<string> KeyOps { get; set; } = new List<string>();
+
+        /// <summary>An RSA key's modulus in bits.</summary>
+        [JsonPropertyName("keySize")]
+        public long? KeySize { get; set; }
+
+        /// <summary>RSA or EC.</summary>
+        [JsonPropertyName("kty")]
+        public required string Kty { get; set; }
+
+        /// <summary>An RSA key's modulus, base64url.</summary>
+        [JsonPropertyName("n")]
+        public string? N { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Refused before this time. Absent when unset.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>When the version's attributes last changed.</summary>
+        [JsonPropertyName("updated")]
+        public required DateTimeOffset Updated { get; set; }
+
+        /// <summary>The version this response is about.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+
+        /// <summary>An EC key's x coordinate, base64url.</summary>
+        [JsonPropertyName("x")]
+        public string? X { get; set; }
+
+        /// <summary>An EC key's y coordinate, base64url.</summary>
+        [JsonPropertyName("y")]
+        public string? Y { get; set; }
+    }
+
+    /// <summary>UpdateKey. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<UpdateKeyResult>> UpdateKeyAsync(
+        UpdateKeyContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of updateSecret.</summary>
+    public sealed partial class UpdateSecretContent {
+
+        /// <summary>What the value is, for the consumer — for example text/plain. Not interpreted.</summary>
+        [JsonPropertyName("contentType")]
+        public string? ContentType { get; set; }
+
+        /// <summary>Whether the version may be used. A disabled version is refused, not hidden.</summary>
+        [JsonPropertyName("enabled")]
+        public bool? Enabled { get; set; }
+
+        /// <summary>The version is refused from this time on.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>The version is refused before this time.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>The secret's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("secretName")]
+        public required string SecretName { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What updateSecret returns.</summary>
+    public sealed partial class UpdateSecretResult {
+
+        /// <summary>What the value is. Absent when unset.</summary>
+        [JsonPropertyName("contentType")]
+        public string? ContentType { get; set; }
+
+        /// <summary>When the version was created.</summary>
+        [JsonPropertyName("created")]
+        public required DateTimeOffset Created { get; set; }
+
+        /// <summary>Whether the version may be used.</summary>
+        [JsonPropertyName("enabled")]
+        public required bool Enabled { get; set; }
+
+        /// <summary>Refused from this time on. Absent when unset.</summary>
+        [JsonPropertyName("expiresOn")]
+        public DateTimeOffset? ExpiresOn { get; set; }
+
+        /// <summary>The secret's or key's name.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Refused before this time. Absent when unset.</summary>
+        [JsonPropertyName("notBefore")]
+        public DateTimeOffset? NotBefore { get; set; }
+
+        /// <summary>When the version's attributes last changed.</summary>
+        [JsonPropertyName("updated")]
+        public required DateTimeOffset Updated { get; set; }
+
+        /// <summary>The version this response is about.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>UpdateSecret. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<UpdateSecretResult>> UpdateSecretAsync(
+        UpdateSecretContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /alg accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyContentAlg {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>RS256</summary>
+        [JsonStringEnumMemberName("RS256")]
+        RS256 = 1,
+
+        /// <summary>RS384</summary>
+        [JsonStringEnumMemberName("RS384")]
+        RS384 = 2,
+
+        /// <summary>RS512</summary>
+        [JsonStringEnumMemberName("RS512")]
+        RS512 = 3,
+
+        /// <summary>PS256</summary>
+        [JsonStringEnumMemberName("PS256")]
+        PS256 = 4,
+
+        /// <summary>PS384</summary>
+        [JsonStringEnumMemberName("PS384")]
+        PS384 = 5,
+
+        /// <summary>PS512</summary>
+        [JsonStringEnumMemberName("PS512")]
+        PS512 = 6,
+
+        /// <summary>ES256</summary>
+        [JsonStringEnumMemberName("ES256")]
+        ES256 = 7,
+
+        /// <summary>ES384</summary>
+        [JsonStringEnumMemberName("ES384")]
+        ES384 = 8,
+
+        /// <summary>ES512</summary>
+        [JsonStringEnumMemberName("ES512")]
+        ES512 = 9
+    }
+
+    /// <summary>The parameters of verify.</summary>
+    public sealed partial class VerifyContent {
+
+        /// <summary>A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.</summary>
+        [JsonPropertyName("alg")]
+        public required VerifyContentAlg Alg { get; set; }
+
+        /// <summary>The digest to sign, base64url. Its length must be the algorithm's hash length.</summary>
+        [JsonPropertyName("digest")]
+        public required string Digest { get; set; }
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>The signature, base64url. An EC signature is r‖s, as JWS spells it.</summary>
+        [JsonPropertyName("signature")]
+        public required string Signature { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What verify returns.</summary>
+    public sealed partial class VerifyResult {
+
+        /// <summary>The algorithm used.</summary>
+        [JsonPropertyName("alg")]
+        public required string Alg { get; set; }
+
+        /// <summary>The key that did the work.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>Whether the signature is valid.</summary>
+        [JsonPropertyName("value")]
+        public required bool Value { get; set; }
+
+        /// <summary>The key version that did the work.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>Verify. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<VerifyResult>> VerifyAsync(
+        VerifyContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /alg accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum WrapKeyContentAlg {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>RSA-OAEP</summary>
+        [JsonStringEnumMemberName("RSA-OAEP")]
+        RSAOAEP = 1,
+
+        /// <summary>RSA-OAEP-256</summary>
+        [JsonStringEnumMemberName("RSA-OAEP-256")]
+        RSAOAEP256 = 2
+    }
+
+    /// <summary>The parameters of wrapKey.</summary>
+    public sealed partial class WrapKeyContent {
+
+        /// <summary>RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).</summary>
+        [JsonPropertyName("alg")]
+        public required WrapKeyContentAlg Alg { get; set; }
+
+        /// <summary>The key's name: 1–127 letters, digits and dashes.</summary>
+        [JsonPropertyName("keyName")]
+        public required string KeyName { get; set; }
+
+        /// <summary>The plaintext to encrypt or the key to wrap, base64url without padding.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>A version, as 32 hex digits. Omit it for the newest.</summary>
+        [JsonPropertyName("version")]
+        public string? Version { get; set; }
+    }
+
+    /// <summary>What wrapKey returns.</summary>
+    public sealed partial class WrapKeyResult {
+
+        /// <summary>The algorithm used.</summary>
+        [JsonPropertyName("alg")]
+        public required string Alg { get; set; }
+
+        /// <summary>The key that did the work.</summary>
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+
+        /// <summary>The result, base64url.</summary>
+        [JsonPropertyName("value")]
+        public required string Value { get; set; }
+
+        /// <summary>The key version that did the work.</summary>
+        [JsonPropertyName("version")]
+        public required string Version { get; set; }
+    }
+
+    /// <summary>WrapKey. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<WrapKeyResult>> WrapKeyAsync(
+        WrapKeyContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Key vaults in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class KeyVaultCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.KeyVault/vaults";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Key vault.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<KeyVaultResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        KeyVaultData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Key vault by name.</summary>
+    public partial Task<Response<KeyVaultResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Key vaults in this group, paged.</summary>
+    public partial AsyncPageable<KeyVaultResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
 public enum MailDomainPreset {
     /// <summary>Never assigned. Not a value the API accepts.</summary>
@@ -5171,6 +7054,914 @@ public sealed partial class MailDomainResource {
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
+
+    /// <summary>The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsDkimType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsDmarcType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsMtaStsType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsMtaStsHostType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsMxType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsSpfType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsTlsRptType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>What dnsRecords returns.</summary>
+    public sealed partial class DnsRecordsResult {
+
+        /// <summary>The mail domain the records are for.</summary>
+        [JsonPropertyName("domain")]
+        public required string Domain { get; set; }
+
+        /// <summary>The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.</summary>
+        [JsonPropertyName("mtaStsPolicy")]
+        public required string MtaStsPolicy { get; set; }
+
+        /// <summary>One member per record the domain must publish.</summary>
+        [JsonPropertyName("records")]
+        public required RecordsData Records { get; set; }
+
+        /// <summary>Every record as a zone-file line, ready to paste into a zone.</summary>
+        [JsonPropertyName("zoneFile")]
+        public required string ZoneFile { get; set; }
+
+        /// <summary>One member per record the domain must publish.</summary>
+        public sealed partial class RecordsData {
+
+            /// <summary>The DKIM public key. Gates sending.</summary>
+            [JsonPropertyName("dkim")]
+            public required DkimData Dkim { get; set; }
+
+            /// <summary>The DMARC policy. Gates sending.</summary>
+            [JsonPropertyName("dmarc")]
+            public required DmarcData Dmarc { get; set; }
+
+            /// <summary>The MTA-STS policy announcement.</summary>
+            [JsonPropertyName("mtaSts")]
+            public required MtaStsData MtaSts { get; set; }
+
+            /// <summary>The MTA-STS policy host.</summary>
+            [JsonPropertyName("mtaStsHost")]
+            public required MtaStsHostData MtaStsHost { get; set; }
+
+            /// <summary>The MX record — where mail for the domain is delivered.</summary>
+            [JsonPropertyName("mx")]
+            public required MxData Mx { get; set; }
+
+            /// <summary>The SPF record. Gates sending.</summary>
+            [JsonPropertyName("spf")]
+            public required SpfData Spf { get; set; }
+
+            /// <summary>The TLS-RPT reporting address.</summary>
+            [JsonPropertyName("tlsRpt")]
+            public required TlsRptData TlsRpt { get; set; }
+
+            /// <summary>The DKIM public key. Gates sending.</summary>
+            public sealed partial class DkimData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsDkimType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The DMARC policy. Gates sending.</summary>
+            public sealed partial class DmarcData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsDmarcType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MTA-STS policy announcement.</summary>
+            public sealed partial class MtaStsData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsMtaStsType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MTA-STS policy host.</summary>
+            public sealed partial class MtaStsHostData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsMtaStsHostType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MX record — where mail for the domain is delivered.</summary>
+            public sealed partial class MxData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsMxType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The SPF record. Gates sending.</summary>
+            public sealed partial class SpfData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsSpfType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The TLS-RPT reporting address.</summary>
+            public sealed partial class TlsRptData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsTlsRptType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+        }
+    }
+
+    /// <summary>DnsRecords. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<DnsRecordsResult>> DnsRecordsAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /records/dkim/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsDkimStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsDkimType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/dmarc/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsDmarcStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsDmarcType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mtaSts/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMtaStsStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMtaStsType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mtaStsHost/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMtaStsHostStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMtaStsHostType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mx/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMxStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMxType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/spf/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsSpfStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsSpfType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/tlsRpt/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsTlsRptStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsTlsRptType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /sending accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultSending {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>held</summary>
+        [JsonStringEnumMemberName("held")]
+        Held = 1,
+
+        /// <summary>open</summary>
+        [JsonStringEnumMemberName("open")]
+        Open = 2,
+
+        /// <summary>suspended</summary>
+        [JsonStringEnumMemberName("suspended")]
+        Suspended = 3
+    }
+
+    /// <summary>What verify returns.</summary>
+    public sealed partial class VerifyResult {
+
+        /// <summary>The mail domain the records are for.</summary>
+        [JsonPropertyName("domain")]
+        public required string Domain { get; set; }
+
+        /// <summary>The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.</summary>
+        [JsonPropertyName("mtaStsPolicy")]
+        public required string MtaStsPolicy { get; set; }
+
+        /// <summary>One member per record the domain must publish.</summary>
+        [JsonPropertyName("records")]
+        public required RecordsData Records { get; set; }
+
+        /// <summary>held, open or suspended — why sendingEnabled is what it is.</summary>
+        [JsonPropertyName("sending")]
+        public required VerifyResultSending Sending { get; set; }
+
+        /// <summary>Whether mail may leave the domain: SPF, DKIM and DMARC verify and the platform has not suspended it. Held mail is refused at RCPT TO, not queued.</summary>
+        [JsonPropertyName("sendingEnabled")]
+        public required bool SendingEnabled { get; set; }
+
+        /// <summary>Every record as a zone-file line, ready to paste into a zone.</summary>
+        [JsonPropertyName("zoneFile")]
+        public required string ZoneFile { get; set; }
+
+        /// <summary>One member per record the domain must publish.</summary>
+        public sealed partial class RecordsData {
+
+            /// <summary>The DKIM public key. Gates sending.</summary>
+            [JsonPropertyName("dkim")]
+            public required DkimData Dkim { get; set; }
+
+            /// <summary>The DMARC policy. Gates sending.</summary>
+            [JsonPropertyName("dmarc")]
+            public required DmarcData Dmarc { get; set; }
+
+            /// <summary>The MTA-STS policy announcement.</summary>
+            [JsonPropertyName("mtaSts")]
+            public required MtaStsData MtaSts { get; set; }
+
+            /// <summary>The MTA-STS policy host.</summary>
+            [JsonPropertyName("mtaStsHost")]
+            public required MtaStsHostData MtaStsHost { get; set; }
+
+            /// <summary>The MX record — where mail for the domain is delivered.</summary>
+            [JsonPropertyName("mx")]
+            public required MxData Mx { get; set; }
+
+            /// <summary>The SPF record. Gates sending.</summary>
+            [JsonPropertyName("spf")]
+            public required SpfData Spf { get; set; }
+
+            /// <summary>The TLS-RPT reporting address.</summary>
+            [JsonPropertyName("tlsRpt")]
+            public required TlsRptData TlsRpt { get; set; }
+
+            /// <summary>The DKIM public key. Gates sending.</summary>
+            public sealed partial class DkimData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsDkimStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsDkimType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The DMARC policy. Gates sending.</summary>
+            public sealed partial class DmarcData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsDmarcStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsDmarcType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MTA-STS policy announcement.</summary>
+            public sealed partial class MtaStsData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsMtaStsStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsMtaStsType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MTA-STS policy host.</summary>
+            public sealed partial class MtaStsHostData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsMtaStsHostStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsMtaStsHostType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MX record — where mail for the domain is delivered.</summary>
+            public sealed partial class MxData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsMxStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsMxType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The SPF record. Gates sending.</summary>
+            public sealed partial class SpfData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsSpfStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsSpfType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The TLS-RPT reporting address.</summary>
+            public sealed partial class TlsRptData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsTlsRptStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsTlsRptType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+        }
+    }
+
+    /// <summary>Verify. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<VerifyResult>> VerifyAsync(
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>The Mail domains in one resource group.</summary>
@@ -5208,6 +7999,144 @@ public sealed partial class MailDomainCollection {
 
     /// <summary>The Mail domains in this group, paged.</summary>
     public partial AsyncPageable<MailDomainResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The body of a CyberCloud.Mail/domains/mailboxes.</summary>
+/// <remarks>One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.</remarks>
+public sealed partial class MailboxData {
+
+    /// <summary>The region the mailbox is billed in. The domain's.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The mailbox's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The mailbox's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("aliases")]
+        public IList<string> Aliases { get; set; } = new List<string>();
+
+        /// <summary>The cluster the domain's back end runs in. Must be the domain's.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("forwardTo")]
+        public IList<string> ForwardTo { get; set; } = new List<string>();
+
+        /// <summary>With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.</summary>
+        /// <remarks>Defaults to true when left unset.</remarks>
+        [JsonPropertyName("keepCopy")]
+        public bool? KeepCopy { get; set; }
+
+        /// <summary>The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "postmaster" when left unset.</remarks>
+        [JsonPropertyName("localPart")]
+        public required string LocalPart { get; set; }
+
+        /// <summary>A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/&lt;tenantId&gt;/. Empty means the mailbox receives mail and nobody can sign in to it.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("passwordRef")]
+        public string? PasswordRef { get; set; }
+
+        /// <summary>The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("quota")]
+        public string? Quota { get; set; }
+    }
+}
+
+/// <summary>One Mailbox, as the API returns it, and the operations on it.</summary>
+public sealed partial class MailboxResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required MailboxData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<MailboxResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<MailboxResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        MailboxData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Mailboxes in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class MailboxCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Mail/domains/mailboxes";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{domainsName}/mailboxes/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{domainsName}/mailboxes";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Mailbox.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<MailboxResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string domainsName, string name,
+        MailboxData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Mailbox by name.</summary>
+    public partial Task<Response<MailboxResource>> GetAsync(string domainsName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Mailboxes in one parent, paged.</summary>
+    public partial AsyncPageable<MailboxResource> GetAllAsync(string domainsName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>
@@ -6408,14 +9337,159 @@ public sealed partial class MonitorWorkspaceResource {
     public partial Task<Response<ListKeysResult>> ListKeysAsync(
         CancellationToken cancellationToken = default);
 
+    /// <summary>The parameters of listMetricLabels.</summary>
+    public sealed partial class ListMetricLabelsContent {
+
+        /// <summary>The window's end. Defaults to now.</summary>
+        [JsonPropertyName("end")]
+        public DateTimeOffset? End { get; set; }
+
+        /// <summary>The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead.</summary>
+        [JsonPropertyName("label")]
+        public string? Label { get; set; }
+
+        /// <summary>A series selector the answer is narrowed to, for example http_requests_total.</summary>
+        [JsonPropertyName("match")]
+        public string? Match { get; set; }
+
+        /// <summary>The window's start. Defaults to a day before end.</summary>
+        [JsonPropertyName("start")]
+        public DateTimeOffset? Start { get; set; }
+    }
+
+    /// <summary>What listMetricLabels returns.</summary>
+    public sealed partial class ListMetricLabelsResult {
+
+        /// <summary>Whether more than 10000 matched and the rest were left out.</summary>
+        [JsonPropertyName("truncated")]
+        public required bool Truncated { get; set; }
+
+        /// <summary>The label values, or the label names when no label was named, sorted.</summary>
+        [JsonPropertyName("values")]
+        public IList<string> Values { get; set; } = new List<string>();
+    }
+
+    /// <summary>ListMetricLabels. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListMetricLabelsResult>> ListMetricLabelsAsync(
+        ListMetricLabelsContent content,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Purge. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
     public partial Task<Operation<System.Text.Json.JsonElement>> PurgeAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
 
+    /// <summary>The parameters of queryMetrics.</summary>
+    public sealed partial class QueryMetricsContent {
+
+        /// <summary>Where a range query ends. Give it with start.</summary>
+        [JsonPropertyName("end")]
+        public DateTimeOffset? End { get; set; }
+
+        /// <summary>A PromQL or MetricsQL expression, run under this workspace's metrics tenancy.</summary>
+        [JsonPropertyName("query")]
+        public required string Query { get; set; }
+
+        /// <summary>Where a range query starts. Give it with end, or neither for an instant query.</summary>
+        [JsonPropertyName("start")]
+        public DateTimeOffset? Start { get; set; }
+
+        /// <summary>A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000.</summary>
+        [JsonPropertyName("stepSeconds")]
+        public long? StepSeconds { get; set; }
+
+        /// <summary>The instant an instant query is evaluated at. Defaults to now.</summary>
+        [JsonPropertyName("time")]
+        public DateTimeOffset? Time { get; set; }
+    }
+
+    /// <summary>QueryMetrics. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<System.Text.Json.JsonElement>> QueryMetricsAsync(
+        QueryMetricsContent content,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Restore. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
     public partial Task<Operation<System.Text.Json.JsonElement>> RestoreAsync(
         WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /severities accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum SearchLogsContentSeverities {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>trace</summary>
+        [JsonStringEnumMemberName("trace")]
+        Trace = 1,
+
+        /// <summary>debug</summary>
+        [JsonStringEnumMemberName("debug")]
+        Debug = 2,
+
+        /// <summary>info</summary>
+        [JsonStringEnumMemberName("info")]
+        Info = 3,
+
+        /// <summary>warn</summary>
+        [JsonStringEnumMemberName("warn")]
+        Warn = 4,
+
+        /// <summary>error</summary>
+        [JsonStringEnumMemberName("error")]
+        Error = 5,
+
+        /// <summary>fatal</summary>
+        [JsonStringEnumMemberName("fatal")]
+        Fatal = 6
+    }
+
+    /// <summary>The parameters of searchLogs.</summary>
+    public sealed partial class SearchLogsContent {
+
+        /// <summary>Up to 10 key=value filters, each matched against the record's own attributes and its resource's.</summary>
+        [JsonPropertyName("attributes")]
+        public IList<string> Attributes { get; set; } = new List<string>();
+
+        /// <summary>The histogram's bucket width. Defaults to the window cut into 60.</summary>
+        [JsonPropertyName("bucketSeconds")]
+        public long? BucketSeconds { get; set; }
+
+        /// <summary>Answer how many rows the search would read, and run nothing else.</summary>
+        [JsonPropertyName("estimate")]
+        public bool? Estimate { get; set; }
+
+        /// <summary>The window's start, inclusive.</summary>
+        [JsonPropertyName("from")]
+        public required DateTimeOffset From { get; set; }
+
+        /// <summary>The service.name the record must come from.</summary>
+        [JsonPropertyName("service")]
+        public string? Service { get; set; }
+
+        /// <summary>The severity classes to keep. Leave it out for every record, including those with no severity.</summary>
+        [JsonPropertyName("severities")]
+        public IList<SearchLogsContentSeverities> Severities { get; set; } = new List<SearchLogsContentSeverities>();
+
+        /// <summary>Text the log body must contain, compared without regard to case.</summary>
+        [JsonPropertyName("text")]
+        public string? Text { get; set; }
+
+        /// <summary>The window's end, exclusive. At most 90 days after from.</summary>
+        [JsonPropertyName("to")]
+        public required DateTimeOffset To { get; set; }
+
+        /// <summary>How many records to return, newest first. Defaults to 100.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+
+        /// <summary>The trace the record must belong to, 32 hex digits.</summary>
+        [JsonPropertyName("traceId")]
+        public string? TraceId { get; set; }
+    }
+
+    /// <summary>SearchLogs. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<System.Text.Json.JsonElement>> SearchLogsAsync(
+        SearchLogsContent content,
         CancellationToken cancellationToken = default);
 }
 
@@ -6948,6 +10022,517 @@ public sealed partial class OpenTelemetryCollectorCollection {
 
     /// <summary>The OpenTelemetry collectors in one parent, paged.</summary>
     public partial AsyncPageable<OpenTelemetryCollectorResource> GetAllAsync(string workspacesName, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /properties/protocol accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ApplicationComponentProtocol {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>grpc</summary>
+    [JsonStringEnumMemberName("grpc")]
+    Grpc = 1,
+
+    /// <summary>http/protobuf</summary>
+    [JsonStringEnumMemberName("http/protobuf")]
+    HttpProtobuf = 2
+}
+
+/// <summary>The body of a CyberCloud.Monitor/workspaces/components.</summary>
+/// <remarks>An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.</remarks>
+public sealed partial class ApplicationComponentData {
+
+    /// <summary>The region the component is billed in — its workspace's.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The component's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The component's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.</summary>
+        /// <remarks>Required on a create. Defaults to "gateway" when left unset.</remarks>
+        [JsonPropertyName("collector")]
+        public required string Collector { get; set; }
+
+        /// <summary>Which OTLP protocol the connection string names. The collector must have that receiver on.</summary>
+        /// <remarks>Defaults to "http/protobuf" when left unset.</remarks>
+        [JsonPropertyName("protocol")]
+        public ApplicationComponentProtocol? Protocol { get; set; }
+    }
+}
+
+/// <summary>One Application component, as the API returns it, and the operations on it.</summary>
+public sealed partial class ApplicationComponentResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required ApplicationComponentData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ApplicationComponentResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ApplicationComponentResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ApplicationComponentData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of applicationMap.</summary>
+    public sealed partial class ApplicationMapContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The most rows to return, busiest first.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+    }
+
+    /// <summary>What applicationMap returns.</summary>
+    public sealed partial class ApplicationMapResult {
+
+        /// <summary>Per edge: spans in the target whose parent span is in the source, in the window.</summary>
+        [JsonPropertyName("edgeCalls")]
+        public IList<long> EdgeCalls { get; set; } = new List<long>();
+
+        /// <summary>Per edge: those whose status is Error.</summary>
+        [JsonPropertyName("edgeFailures")]
+        public IList<long> EdgeFailures { get; set; } = new List<long>();
+
+        /// <summary>Per edge: the target span's 95th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("edgeP95Ms")]
+        public IList<double> EdgeP95Ms { get; set; } = new List<double>();
+
+        /// <summary>Per edge: the calling service.</summary>
+        [JsonPropertyName("edgeSources")]
+        public IList<string> EdgeSources { get; set; } = new List<string>();
+
+        /// <summary>Per edge: the called service.</summary>
+        [JsonPropertyName("edgeTargets")]
+        public IList<string> EdgeTargets { get; set; } = new List<string>();
+
+        /// <summary>Per node: requests it failed.</summary>
+        [JsonPropertyName("nodeFailures")]
+        public IList<long> NodeFailures { get; set; } = new List<long>();
+
+        /// <summary>Per node: requests it served in the window.</summary>
+        [JsonPropertyName("nodeRequests")]
+        public IList<long> NodeRequests { get; set; } = new List<long>();
+
+        /// <summary>Per node: a service in the component.</summary>
+        [JsonPropertyName("nodes")]
+        public IList<string> Nodes { get; set; } = new List<string>();
+
+        /// <summary>The window the view read, in minutes, ending when it was asked.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public required long TimespanMinutes { get; set; }
+    }
+
+    /// <summary>ApplicationMap. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ApplicationMapResult>> ApplicationMapAsync(
+        ApplicationMapContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of dependencies.</summary>
+    public sealed partial class DependenciesContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The most rows to return, busiest first.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+    }
+
+    /// <summary>What dependencies returns.</summary>
+    public sealed partial class DependenciesResult {
+
+        /// <summary>Per row: calls in the window.</summary>
+        [JsonPropertyName("counts")]
+        public IList<long> Counts { get; set; } = new List<long>();
+
+        /// <summary>How many of them failed.</summary>
+        [JsonPropertyName("failed")]
+        public required long Failed { get; set; }
+
+        /// <summary>Per row: failures over calls, 0 to 1.</summary>
+        [JsonPropertyName("failureRate")]
+        public IList<double> FailureRate { get; set; } = new List<double>();
+
+        /// <summary>Per row: failed calls.</summary>
+        [JsonPropertyName("failures")]
+        public IList<long> Failures { get; set; } = new List<long>();
+
+        /// <summary>Per row: the client span's name.</summary>
+        [JsonPropertyName("names")]
+        public IList<string> Names { get; set; } = new List<string>();
+
+        /// <summary>Per row: the median duration, in milliseconds.</summary>
+        [JsonPropertyName("p50Ms")]
+        public IList<double> P50Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the 95th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("p95Ms")]
+        public IList<double> P95Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the 99th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("p99Ms")]
+        public IList<double> P99Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the service that made the call.</summary>
+        [JsonPropertyName("services")]
+        public IList<string> Services { get; set; } = new List<string>();
+
+        /// <summary>Per row: what was called — peer.service, else server.address, else the database or messaging system; empty when the span names none.</summary>
+        [JsonPropertyName("targets")]
+        public IList<string> Targets { get; set; } = new List<string>();
+
+        /// <summary>The window the view read, in minutes, ending when it was asked.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public required long TimespanMinutes { get; set; }
+
+        /// <summary>Every outgoing call in the window, not only the rows below.</summary>
+        [JsonPropertyName("total")]
+        public required long Total { get; set; }
+
+        /// <summary>Per row: db, http, messaging, rpc or other, from the span's attributes.</summary>
+        [JsonPropertyName("types")]
+        public IList<string> Types { get; set; } = new List<string>();
+    }
+
+    /// <summary>Dependencies. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<DependenciesResult>> DependenciesAsync(
+        DependenciesContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of exceptions.</summary>
+    public sealed partial class ExceptionsContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The most rows to return, busiest first.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+    }
+
+    /// <summary>What exceptions returns.</summary>
+    public sealed partial class ExceptionsResult {
+
+        /// <summary>Per row: occurrences in the window.</summary>
+        [JsonPropertyName("counts")]
+        public IList<long> Counts { get; set; } = new List<long>();
+
+        /// <summary>Per row: how many were an `exception` event on a span; the rest were log records carrying exception.type.</summary>
+        [JsonPropertyName("fromSpans")]
+        public IList<long> FromSpans { get; set; } = new List<long>();
+
+        /// <summary>Per row: the latest occurrence.</summary>
+        [JsonPropertyName("lastSeen")]
+        public IList<DateTimeOffset> LastSeen { get; set; } = new List<DateTimeOffset>();
+
+        /// <summary>Per row: the most recent exception.message of that type.</summary>
+        [JsonPropertyName("messages")]
+        public IList<string> Messages { get; set; } = new List<string>();
+
+        /// <summary>Per row: the service that raised it.</summary>
+        [JsonPropertyName("services")]
+        public IList<string> Services { get; set; } = new List<string>();
+
+        /// <summary>The window the view read, in minutes, ending when it was asked.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public required long TimespanMinutes { get; set; }
+
+        /// <summary>Every exception in the window, from spans and from logs, not only the rows below.</summary>
+        [JsonPropertyName("total")]
+        public required long Total { get; set; }
+
+        /// <summary>Per row: exception.type.</summary>
+        [JsonPropertyName("types")]
+        public IList<string> Types { get; set; } = new List<string>();
+    }
+
+    /// <summary>Exceptions. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ExceptionsResult>> ExceptionsAsync(
+        ExceptionsContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /otlpProtocol accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum ListConnectionStringResultOtlpProtocol {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>grpc</summary>
+        [JsonStringEnumMemberName("grpc")]
+        Grpc = 1,
+
+        /// <summary>http/protobuf</summary>
+        [JsonStringEnumMemberName("http/protobuf")]
+        HttpProtobuf = 2
+    }
+
+    /// <summary>What listConnectionString returns.</summary>
+    public sealed partial class ListConnectionStringResult {
+
+        /// <summary>The ConfigMap in the component's namespace carrying the three variables, for a pod's envFrom.</summary>
+        [JsonPropertyName("configMap")]
+        public required string ConfigMap { get; set; }
+
+        /// <summary>The three variables as one Key=Value;… line, for a configuration that takes a single string.</summary>
+        [JsonPropertyName("connectionString")]
+        public required string ConnectionString { get; set; }
+
+        /// <summary>OTEL_EXPORTER_OTLP_ENDPOINT: the collector's in-cluster URL.</summary>
+        [JsonPropertyName("otlpEndpoint")]
+        public required string OtlpEndpoint { get; set; }
+
+        /// <summary>OTEL_EXPORTER_OTLP_PROTOCOL.</summary>
+        [JsonPropertyName("otlpProtocol")]
+        public required ListConnectionStringResultOtlpProtocol OtlpProtocol { get; set; }
+
+        /// <summary>OTEL_RESOURCE_ATTRIBUTES: the service.namespace the views filter on.</summary>
+        [JsonPropertyName("resourceAttributes")]
+        public required string ResourceAttributes { get; set; }
+    }
+
+    /// <summary>ListConnectionString. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListConnectionStringResult>> ListConnectionStringAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of requests.</summary>
+    public sealed partial class RequestsContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The most rows to return, busiest first.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+    }
+
+    /// <summary>What requests returns.</summary>
+    public sealed partial class RequestsResult {
+
+        /// <summary>Per row: requests in the window.</summary>
+        [JsonPropertyName("counts")]
+        public IList<long> Counts { get; set; } = new List<long>();
+
+        /// <summary>How many of them failed — a span whose status is Error.</summary>
+        [JsonPropertyName("failed")]
+        public required long Failed { get; set; }
+
+        /// <summary>Per row: failures over requests, 0 to 1.</summary>
+        [JsonPropertyName("failureRate")]
+        public IList<double> FailureRate { get; set; } = new List<double>();
+
+        /// <summary>Per row: failed requests.</summary>
+        [JsonPropertyName("failures")]
+        public IList<long> Failures { get; set; } = new List<long>();
+
+        /// <summary>Per row: the operation — the server span's name.</summary>
+        [JsonPropertyName("operations")]
+        public IList<string> Operations { get; set; } = new List<string>();
+
+        /// <summary>Per row: the median duration, in milliseconds.</summary>
+        [JsonPropertyName("p50Ms")]
+        public IList<double> P50Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the 95th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("p95Ms")]
+        public IList<double> P95Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the 99th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("p99Ms")]
+        public IList<double> P99Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: requests per minute over the window.</summary>
+        [JsonPropertyName("ratePerMinute")]
+        public IList<double> RatePerMinute { get; set; } = new List<double>();
+
+        /// <summary>Per row: the service that served the operation.</summary>
+        [JsonPropertyName("services")]
+        public IList<string> Services { get; set; } = new List<string>();
+
+        /// <summary>The window the view read, in minutes, ending when it was asked.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public required long TimespanMinutes { get; set; }
+
+        /// <summary>Every request in the window, across every operation, not only the rows below.</summary>
+        [JsonPropertyName("total")]
+        public required long Total { get; set; }
+    }
+
+    /// <summary>Requests. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<RequestsResult>> RequestsAsync(
+        RequestsContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of transaction.</summary>
+    public sealed partial class TransactionContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it.</summary>
+        [JsonPropertyName("traceId")]
+        public required string TraceId { get; set; }
+    }
+
+    /// <summary>What transaction returns.</summary>
+    public sealed partial class TransactionResult {
+
+        /// <summary>Per span: how long it took, in milliseconds.</summary>
+        [JsonPropertyName("durationsMs")]
+        public IList<double> DurationsMs { get; set; } = new List<double>();
+
+        /// <summary>Per span: Server, Client, Internal, Producer or Consumer.</summary>
+        [JsonPropertyName("kinds")]
+        public IList<string> Kinds { get; set; } = new List<string>();
+
+        /// <summary>Per log record: its body, cut at 2048 characters.</summary>
+        [JsonPropertyName("logBodies")]
+        public IList<string> LogBodies { get; set; } = new List<string>();
+
+        /// <summary>How many log records of the trace are returned.</summary>
+        [JsonPropertyName("logCount")]
+        public required long LogCount { get; set; }
+
+        /// <summary>Per log record: its severity text.</summary>
+        [JsonPropertyName("logSeverities")]
+        public IList<string> LogSeverities { get; set; } = new List<string>();
+
+        /// <summary>Per log record: the span it was written under.</summary>
+        [JsonPropertyName("logSpanIds")]
+        public IList<string> LogSpanIds { get; set; } = new List<string>();
+
+        /// <summary>Per log record: when, oldest first.</summary>
+        [JsonPropertyName("logTimes")]
+        public IList<DateTimeOffset> LogTimes { get; set; } = new List<DateTimeOffset>();
+
+        /// <summary>Per span: its name.</summary>
+        [JsonPropertyName("names")]
+        public IList<string> Names { get; set; } = new List<string>();
+
+        /// <summary>Per span: its parent's id, empty for the root.</summary>
+        [JsonPropertyName("parentSpanIds")]
+        public IList<string> ParentSpanIds { get; set; } = new List<string>();
+
+        /// <summary>Per span: the service that recorded it.</summary>
+        [JsonPropertyName("services")]
+        public IList<string> Services { get; set; } = new List<string>();
+
+        /// <summary>How many spans are returned.</summary>
+        [JsonPropertyName("spanCount")]
+        public required long SpanCount { get; set; }
+
+        /// <summary>Per span: its id.</summary>
+        [JsonPropertyName("spanIds")]
+        public IList<string> SpanIds { get; set; } = new List<string>();
+
+        /// <summary>Per span: when it started, oldest first.</summary>
+        [JsonPropertyName("starts")]
+        public IList<DateTimeOffset> Starts { get; set; } = new List<DateTimeOffset>();
+
+        /// <summary>Per span: Unset, Ok or Error.</summary>
+        [JsonPropertyName("statuses")]
+        public IList<string> Statuses { get; set; } = new List<string>();
+
+        /// <summary>The trace that was read.</summary>
+        [JsonPropertyName("traceId")]
+        public required string TraceId { get; set; }
+
+        /// <summary>Whether the trace has more spans or log records than a transaction returns.</summary>
+        [JsonPropertyName("truncated")]
+        public required bool Truncated { get; set; }
+    }
+
+    /// <summary>Transaction. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<TransactionResult>> TransactionAsync(
+        TransactionContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Application components in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class ApplicationComponentCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Monitor/workspaces/components";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Application component.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ApplicationComponentResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string workspacesName, string name,
+        ApplicationComponentData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Application component by name.</summary>
+    public partial Task<Response<ApplicationComponentResource>> GetAsync(string workspacesName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Application components in one parent, paged.</summary>
+    public partial AsyncPageable<ApplicationComponentResource> GetAllAsync(string workspacesName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The body of a CyberCloud.Network/publicIpAddresses.</summary>
@@ -8354,6 +11939,31 @@ public sealed partial class BackupVaultResource {
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
 
+    /// <summary>The parameters of backupNow.</summary>
+    public sealed partial class BackupNowContent {
+
+        /// <summary>The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items.</summary>
+        [JsonPropertyName("item")]
+        public required string Item { get; set; }
+    }
+
+    /// <summary>What backupNow returns.</summary>
+    public sealed partial class BackupNowResult {
+
+        /// <summary>The protected server the recovery point is being taken of.</summary>
+        [JsonPropertyName("item")]
+        public required string Item { get; set; }
+
+        /// <summary>The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`.</summary>
+        [JsonPropertyName("recoveryPoint")]
+        public required string RecoveryPoint { get; set; }
+    }
+
+    /// <summary>BackupNow. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<BackupNowResult>> BackupNowAsync(
+        BackupNowContent content,
+        CancellationToken cancellationToken = default);
+
     /// <summary>What listRecoveryPoints returns.</summary>
     public sealed partial class ListRecoveryPointsResult {
 
@@ -8381,7 +11991,7 @@ public sealed partial class BackupVaultResource {
         [JsonPropertyName("recoveryPoint")]
         public required string RecoveryPoint { get; set; }
 
-        /// <summary>The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.</summary>
+        /// <summary>The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites.</summary>
         [JsonPropertyName("targetName")]
         public required string TargetName { get; set; }
     }
@@ -8389,11 +11999,11 @@ public sealed partial class BackupVaultResource {
     /// <summary>What recover returns.</summary>
     public sealed partial class RecoverResult {
 
-        /// <summary>What was created. Always `Cluster` — a CloudNativePG cluster object.</summary>
+        /// <summary>What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers.</summary>
         [JsonPropertyName("kind")]
         public required string Kind { get; set; }
 
-        /// <summary>The restored cluster's name, as asked for.</summary>
+        /// <summary>The restored server's name, as asked for.</summary>
         [JsonPropertyName("name")]
         public required string Name { get; set; }
 
@@ -8401,9 +12011,17 @@ public sealed partial class BackupVaultResource {
         [JsonPropertyName("namespace")]
         public required string Namespace { get; set; }
 
+        /// <summary>The create's operation, to poll for the restore's progress.</summary>
+        [JsonPropertyName("operationId")]
+        public Guid? OperationId { get; set; }
+
         /// <summary>The recovery point it was bootstrapped from.</summary>
         [JsonPropertyName("recoveryPoint")]
         public required string RecoveryPoint { get; set; }
+
+        /// <summary>The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged.</summary>
+        [JsonPropertyName("resourceId")]
+        public string? ResourceId { get; set; }
 
         /// <summary>The protected item the recovery point was taken of, as its resource id path.</summary>
         [JsonPropertyName("source")]
@@ -8451,6 +12069,170 @@ public sealed partial class BackupVaultCollection {
 
     /// <summary>The Backup vaults in this group, paged.</summary>
     public partial AsyncPageable<BackupVaultResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The body of a CyberCloud.Resources/deployments.</summary>
+/// <remarks>A template of resources deployed in dependency order, each through the write path as its creator.</remarks>
+public sealed partial class DeploymentData {
+
+    /// <summary>The template, its parameters, and the record of the last run.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>The template, its parameters, and the record of the last run.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Why the last run failed, naming the resource that stopped it. Empty when it did not.</summary>
+        /// <remarks>⚠ The server owns this: a body that sets it is refused rather than ignored.</remarks>
+        [JsonPropertyName("error")]
+        public string? Error { get; set; }
+
+        /// <summary>Every resource the last run created or updated, in the order it did.</summary>
+        /// <remarks>⚠ The server owns this: a body that sets it is refused rather than ignored.</remarks>
+        [JsonPropertyName("outputResources")]
+        public IList<string> OutputResources { get; set; } = new List<string>();
+
+        /// <summary>The parameter values, as JSON text: { "name": { "value": … } }.</summary>
+        [JsonPropertyName("parameters")]
+        public string? Parameters { get; set; }
+
+        /// <summary>What a rollback would remove. Rollback is recorded and never performed.</summary>
+        /// <remarks>⚠ The server owns this: a body that sets it is refused rather than ignored.</remarks>
+        [JsonPropertyName("rollback")]
+        public string? Rollback { get; set; }
+
+        /// <summary>One line per template resource, in dependency order: its state, its id and the operation that drove it.</summary>
+        /// <remarks>⚠ The server owns this: a body that sets it is refused rather than ignored.</remarks>
+        [JsonPropertyName("steps")]
+        public IList<string> Steps { get; set; } = new List<string>();
+
+        /// <summary>The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("template")]
+        public required string Template { get; set; }
+    }
+}
+
+/// <summary>One Deployment, as the API returns it, and the operations on it.</summary>
+public sealed partial class DeploymentResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required DeploymentData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<DeploymentResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<DeploymentResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        DeploymentData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of whatIf.</summary>
+    public sealed partial class WhatIfContent {
+
+        /// <summary>The template to evaluate and its parameters.</summary>
+        [JsonPropertyName("properties")]
+        public required PropertiesData Properties { get; set; }
+
+        /// <summary>The template to evaluate and its parameters.</summary>
+        public sealed partial class PropertiesData {
+
+            /// <summary>The parameter values, as JSON text.</summary>
+            [JsonPropertyName("parameters")]
+            public string? Parameters { get; set; }
+
+            /// <summary>The template, as JSON text — the same shape a PUT takes.</summary>
+            [JsonPropertyName("template")]
+            public required string Template { get; set; }
+        }
+    }
+
+    /// <summary>What whatIf returns.</summary>
+    public sealed partial class WhatIfResult {
+
+        /// <summary>The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.</summary>
+        [JsonPropertyName("creates")]
+        public IList<string> Creates { get; set; } = new List<string>();
+
+        /// <summary>The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.</summary>
+        [JsonPropertyName("modifies")]
+        public IList<string> Modifies { get; set; } = new List<string>();
+
+        /// <summary>The resources a deployment would leave as they are, in deployment order.</summary>
+        [JsonPropertyName("noChanges")]
+        public IList<string> NoChanges { get; set; } = new List<string>();
+
+        /// <summary>Succeeded: the template evaluated and every resource was compared.</summary>
+        [JsonPropertyName("status")]
+        public required string Status { get; set; }
+    }
+
+    /// <summary>WhatIf. ⚠ An action never creates. This one runs as the caller and answers for a name that does not exist yet.</summary>
+    public partial Task<Response<WhatIfResult>> WhatIfAsync(
+        WhatIfContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Deployments in one resource group.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.</remarks>
+public sealed partial class DeploymentCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Resources/deployments";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Deployment.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<DeploymentResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string name,
+        DeploymentData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Deployment by name.</summary>
+    public partial Task<Response<DeploymentResource>> GetAsync(string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Deployments in this group, paged.</summary>
+    public partial AsyncPageable<DeploymentResource> GetAllAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.</summary>
@@ -9968,5 +13750,441 @@ public sealed partial class ScopeClient {
         string subscriptionId,
         string resourceGroupName,
         ResourceGroupCreateContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The values /type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PolicyAssignmentType {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>CyberCloud.Policy/policyAssignments</summary>
+    [JsonStringEnumMemberName("CyberCloud.Policy/policyAssignments")]
+    CyberCloudPolicyPolicyAssignments = 1
+}
+
+/// <summary>Policy assignment, as the API renders it. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.</summary>
+public sealed partial class PolicyAssignment {
+
+    /// <summary>The assignment's own address.</summary>
+    [JsonPropertyName("id")]
+    public required string Id { get; set; }
+
+    /// <summary>The last segment of the address.</summary>
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    /// <summary>What the assignment applies, and where it doesn't.</summary>
+    [JsonPropertyName("properties")]
+    public required PropertiesData Properties { get; set; }
+
+    /// <summary>The Azure-shaped type string.</summary>
+    [JsonPropertyName("type")]
+    public required PolicyAssignmentType Type { get; set; }
+
+    /// <summary>What the assignment applies, and where it doesn't.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>What a person reads.</summary>
+        [JsonPropertyName("displayName")]
+        public required string DisplayName { get; set; }
+
+        /// <summary>Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.</summary>
+        [JsonPropertyName("notScopes")]
+        public IList<string> NotScopes { get; set; } = new List<string>();
+
+        /// <summary>The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.</summary>
+        [JsonPropertyName("policyDefinitionId")]
+        public required string PolicyDefinitionId { get; set; }
+
+        /// <summary>The scope the assignment sits on.</summary>
+        [JsonPropertyName("scope")]
+        public required string Scope { get; set; }
+    }
+}
+
+/// <summary>The body of a PUT that writes a policy assignment.</summary>
+public sealed partial class PolicyAssignmentContent {
+
+    /// <summary>What the assignment applies, and where it doesn't.</summary>
+    /// <remarks>Required on a create.</remarks>
+    [JsonPropertyName("properties")]
+    public required PropertiesData Properties { get; set; }
+
+    /// <summary>What the assignment applies, and where it doesn't.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>What a person reads.</summary>
+        [JsonPropertyName("displayName")]
+        public string? DisplayName { get; set; }
+
+        /// <summary>Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.</summary>
+        [JsonPropertyName("notScopes")]
+        public IList<string> NotScopes { get; set; } = new List<string>();
+
+        /// <summary>The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("policyDefinitionId")]
+        public required string PolicyDefinitionId { get; set; }
+    }
+}
+
+/// <summary>The values /type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PolicyDefinitionType {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>CyberCloud.Policy/policyDefinitions</summary>
+    [JsonStringEnumMemberName("CyberCloud.Policy/policyDefinitions")]
+    CyberCloudPolicyPolicyDefinitions = 1
+}
+
+/// <summary>Policy definition, as the API renders it. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.</summary>
+public sealed partial class PolicyDefinition {
+
+    /// <summary>The definition's own address. An assignment names its definition by this.</summary>
+    [JsonPropertyName("id")]
+    public required string Id { get; set; }
+
+    /// <summary>The last segment of the address.</summary>
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    /// <summary>The definition's rule and its names.</summary>
+    [JsonPropertyName("properties")]
+    public required PropertiesData Properties { get; set; }
+
+    /// <summary>The Azure-shaped type string.</summary>
+    [JsonPropertyName("type")]
+    public required PolicyDefinitionType Type { get; set; }
+
+    /// <summary>The definition's rule and its names.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The longer explanation.</summary>
+        [JsonPropertyName("description")]
+        public required string Description { get; set; }
+
+        /// <summary>What a person reads.</summary>
+        [JsonPropertyName("displayName")]
+        public required string DisplayName { get; set; }
+
+        /// <summary>The rule — { "if": &lt;condition&gt;, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.</summary>
+        [JsonPropertyName("policyRule")]
+        public required JsonNode PolicyRule { get; set; }
+    }
+}
+
+/// <summary>The body of a PUT that writes a policy definition.</summary>
+public sealed partial class PolicyDefinitionContent {
+
+    /// <summary>The definition's rule and its names.</summary>
+    /// <remarks>Required on a create.</remarks>
+    [JsonPropertyName("properties")]
+    public required PropertiesData Properties { get; set; }
+
+    /// <summary>The definition's rule and its names.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The longer explanation.</summary>
+        [JsonPropertyName("description")]
+        public string? Description { get; set; }
+
+        /// <summary>What a person reads.</summary>
+        [JsonPropertyName("displayName")]
+        public string? DisplayName { get; set; }
+
+        /// <summary>The rule — { "if": &lt;condition&gt;, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.</summary>
+        /// <remarks>Required on a create.</remarks>
+        [JsonPropertyName("policyRule")]
+        public required JsonNode PolicyRule { get; set; }
+    }
+}
+
+/// <summary>The values /complianceState accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum PolicyStateComplianceState {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>Compliant</summary>
+    [JsonStringEnumMemberName("Compliant")]
+    Compliant = 1,
+
+    /// <summary>NonCompliant</summary>
+    [JsonStringEnumMemberName("NonCompliant")]
+    NonCompliant = 2
+}
+
+/// <summary>Policy state, as the API renders it. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.</summary>
+public sealed partial class PolicyState {
+
+    /// <summary>Whether the audit rule matched.</summary>
+    [JsonPropertyName("complianceState")]
+    public required PolicyStateComplianceState ComplianceState { get; set; }
+
+    /// <summary>The audit assignment.</summary>
+    [JsonPropertyName("policyAssignmentId")]
+    public required string PolicyAssignmentId { get; set; }
+
+    /// <summary>Its definition.</summary>
+    [JsonPropertyName("policyDefinitionId")]
+    public required string PolicyDefinitionId { get; set; }
+
+    /// <summary>The resource's canonical path.</summary>
+    [JsonPropertyName("resourceId")]
+    public required string ResourceId { get; set; }
+
+    /// <summary>The resource's type.</summary>
+    [JsonPropertyName("resourceType")]
+    public required string ResourceType { get; set; }
+
+    /// <summary>When the verdict last changed.</summary>
+    [JsonPropertyName("timestamp")]
+    public required DateTimeOffset Timestamp { get; set; }
+}
+
+/// <summary>The objects under CyberCloud.Policy, on every scope that takes them — docs/plan/08 § Policy.</summary>
+/// <remarks>⚠ No WaitUntil and no Operation&lt;T&gt;: a write converges before the call
+/// returns — 201 the first time and 200 after on a PUT, 204 on a DELETE.</remarks>
+public sealed partial class PolicyClient {
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>The collection URL template ListPolicyAssignmentsAtManagementGroupAsync pages.</summary>
+    public const string PolicyAssignmentsAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments";
+
+    /// <summary>The policy assignments on a management group, paged. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyAssignment> ListPolicyAssignmentsAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy assignment on a management group is addressed at.</summary>
+    public const string PolicyAssignmentAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}";
+
+    /// <summary>Reads one policy assignment on a management group.</summary>
+    public partial Task<Response<PolicyAssignment>> GetPolicyAssignmentAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy assignment on a management group, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyAssignment>> CreateOrUpdatePolicyAssignmentAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyAssignmentName,
+        PolicyAssignmentContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy assignment on a management group. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyAssignmentAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyDefinitionsAtManagementGroupAsync pages.</summary>
+    public const string PolicyDefinitionsAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions";
+
+    /// <summary>The policy definitions on a management group, paged. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyDefinition> ListPolicyDefinitionsAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy definition on a management group is addressed at.</summary>
+    public const string PolicyDefinitionAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}";
+
+    /// <summary>Reads one policy definition on a management group.</summary>
+    public partial Task<Response<PolicyDefinition>> GetPolicyDefinitionAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy definition on a management group, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyDefinition>> CreateOrUpdatePolicyDefinitionAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyDefinitionName,
+        PolicyDefinitionContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy definition on a management group. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyDefinitionAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyStatesAtManagementGroupAsync pages.</summary>
+    public const string PolicyStatesAtManagementGroupPathTemplate = "/tenants/{tenantId}/managementGroups/{managementGroupName}/providers/CyberCloud.Policy/policyStates";
+
+    /// <summary>The policy states on a management group, paged. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyState> ListPolicyStatesAtManagementGroupAsync(
+        string tenantId,
+        string managementGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyDefinitionsAtTenantAsync pages.</summary>
+    public const string PolicyDefinitionsAtTenantPathTemplate = "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions";
+
+    /// <summary>The policy definitions on a tenant, paged. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyDefinition> ListPolicyDefinitionsAtTenantAsync(
+        string tenantId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy definition on a tenant is addressed at.</summary>
+    public const string PolicyDefinitionAtTenantPathTemplate = "/tenants/{tenantId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}";
+
+    /// <summary>Reads one policy definition on a tenant.</summary>
+    public partial Task<Response<PolicyDefinition>> GetPolicyDefinitionAtTenantAsync(
+        string tenantId,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy definition on a tenant, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyDefinition>> CreateOrUpdatePolicyDefinitionAtTenantAsync(
+        string tenantId,
+        string policyDefinitionName,
+        PolicyDefinitionContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy definition on a tenant. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyDefinitionAtTenantAsync(
+        string tenantId,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyAssignmentsAtSubscriptionAsync pages.</summary>
+    public const string PolicyAssignmentsAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments";
+
+    /// <summary>The policy assignments on a subscription, paged. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyAssignment> ListPolicyAssignmentsAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy assignment on a subscription is addressed at.</summary>
+    public const string PolicyAssignmentAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}";
+
+    /// <summary>Reads one policy assignment on a subscription.</summary>
+    public partial Task<Response<PolicyAssignment>> GetPolicyAssignmentAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy assignment on a subscription, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyAssignment>> CreateOrUpdatePolicyAssignmentAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyAssignmentName,
+        PolicyAssignmentContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy assignment on a subscription. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyAssignmentAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyDefinitionsAtSubscriptionAsync pages.</summary>
+    public const string PolicyDefinitionsAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions";
+
+    /// <summary>The policy definitions on a subscription, paged. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyDefinition> ListPolicyDefinitionsAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy definition on a subscription is addressed at.</summary>
+    public const string PolicyDefinitionAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyDefinitions/{policyDefinitionName}";
+
+    /// <summary>Reads one policy definition on a subscription.</summary>
+    public partial Task<Response<PolicyDefinition>> GetPolicyDefinitionAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy definition on a subscription, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyDefinition>> CreateOrUpdatePolicyDefinitionAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyDefinitionName,
+        PolicyDefinitionContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy definition on a subscription. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyDefinitionAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        string policyDefinitionName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyStatesAtSubscriptionAsync pages.</summary>
+    public const string PolicyStatesAtSubscriptionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/providers/CyberCloud.Policy/policyStates";
+
+    /// <summary>The policy states on a subscription, paged. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyState> ListPolicyStatesAtSubscriptionAsync(
+        string tenantId,
+        string subscriptionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyAssignmentsAtResourceGroupAsync pages.</summary>
+    public const string PolicyAssignmentsAtResourceGroupPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments";
+
+    /// <summary>The policy assignments on a resource group, paged. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyAssignment> ListPolicyAssignmentsAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The URL template one policy assignment on a resource group is addressed at.</summary>
+    public const string PolicyAssignmentAtResourceGroupPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyAssignments/{policyAssignmentName}";
+
+    /// <summary>Reads one policy assignment on a resource group.</summary>
+    public partial Task<Response<PolicyAssignment>> GetPolicyAssignmentAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Creates or replaces one policy assignment on a resource group, written whole.</summary>
+    /// <remarks>⚠ No WaitUntil: 201 the first time and 200 after, and nothing to poll.</remarks>
+    public partial Task<Response<PolicyAssignment>> CreateOrUpdatePolicyAssignmentAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        string policyAssignmentName,
+        PolicyAssignmentContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes one policy assignment on a resource group. An object already gone is a success.</summary>
+    public partial Task<Response> DeletePolicyAssignmentAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
+        string policyAssignmentName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The collection URL template ListPolicyStatesAtResourceGroupAsync pages.</summary>
+    public const string PolicyStatesAtResourceGroupPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Policy/policyStates";
+
+    /// <summary>The policy states on a resource group, paged. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.</summary>
+    public partial AsyncPageable<PolicyState> ListPolicyStatesAtResourceGroupAsync(
+        string tenantId,
+        string subscriptionId,
+        string resourceGroupName,
         CancellationToken cancellationToken = default);
 }

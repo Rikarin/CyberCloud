@@ -39,6 +39,9 @@ import { NeedsTenant, PageStatus, activeTenantId, load, pageState } from '../sha
           <a xuiButton variant="outline" size="sm" [routerLink]="accessLink()" i18n="@@subscriptionBlade.access"
             >Access</a
           >
+          <a xuiButton variant="outline" size="sm" [routerLink]="costLink()" i18n="@@subscriptionBlade.cost"
+            >Cost analysis</a
+          >
           <a xuiButton color="primary" size="sm" [routerLink]="groupsLink()" i18n="@@subscriptionBlade.groups"
             >Resource groups</a
           >
@@ -76,6 +79,7 @@ export class SubscriptionBlade {
 
   protected readonly groupsLink = computed(() => links.resourceGroups(this.subscriptionId()));
   protected readonly accessLink = computed(() => links.subscriptionAccess(this.subscriptionId()));
+  protected readonly costLink = computed(() => links.cost(this.subscriptionId()));
   protected readonly backLink = links.subscriptions();
   protected readonly overviewTitle = $localize`:@@subscriptionBlade.overview:Overview`;
   protected readonly labels = {

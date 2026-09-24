@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the implementation assembly of CyberCloud.Resources, and the thinnest
+      one in the tree on purpose.
+
+      ⚠ IT DESCRIBES CyberCloud.Resources/deployments AND DOES NOTHING ELSE, BECAUSE A DEPLOYMENT IS NOT
+      A PROVIDER'S TO RUN. Its operation writes other resources through the write path as the
+      deployment's creator (docs/plan/08 § Long-running operations, "Nested operations"), and a
+      provider acts as the platform, never as a tenant against this API — so the work lives in
+      CyberCloud.ResourceManager (OperationGrain, DeploymentDriver, DeploymentTemplate) and the
+      declaration lives in CyberCloud.ResourceManager.Contracts (Deployments.Describe), where both the
+      manager and this assembly can reach it. What this project adds is the one thing only a project
+      under src/Providers can: Build.Generate reads provider assemblies from here and nowhere else, so
+      a type declared anywhere else is a type no document, SDK, CLI or form ever hears of.
+
+      ⚠ NO .Contracts SIBLING, NO RECONCILER, NO CHART, NO CONFORMANCE SUITE. The constants a
+      .Contracts would hold are the manager's (it cannot reference a provider), there is nothing to
+      reconcile, nothing renders into a cluster, and the shared conformance suite's case is "a PUT
+      converges to objects carrying seven labels" — a deployment converges to other resources, each of
+      which is its own type's conformance case. The deployment's lifecycle is pinned against real grains
+      in CyberCloud.ResourceManager.Tests.DeploymentTests.
+
+      ⚠ ITS ENTIRE REFERENCE SET IS CyberCloud.ResourceManager.Contracts, which is the reference set
+      docs/plan/03 § The .Contracts split allows a provider.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

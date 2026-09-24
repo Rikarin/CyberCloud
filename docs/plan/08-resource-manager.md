@@ -21,7 +21,9 @@ PUT /tenants/{t}/subscriptions/{s}/resourceGroups/{rg}
     2. validate body against the type's JSON Schema for that api-version
     3. ReBAC Check(resource | parent rg, "write", caller)      → 404 if not readable
     4. locks: CanNotDelete / ReadOnly inherited from rg, sub, mg
-    5. policy evaluation (M3) — deny / modify / audit
+    5. policy — IPolicyCatalogGrain.EvaluateAsync: modify, then deny, then audit   → 403 PolicyViolation
+         → every write kind: PUT, PATCH, DELETE, action — § Policy
+         → a modify rewrites the body and it is validated again; the trace records what it wrote
     6. quota: IQuotaGrain.TryReserveAsync                      → 429 with which meter
     7. IResourceIndexGrain.TryClaim(path)                      → 409 if taken
    7b. IResourceGroupGrain.BeginCreateAsync(address)           → 404 if the group does not exist
@@ -40,6 +42,19 @@ PUT /tenants/{t}/subscriptions/{s}/resourceGroups/{rg}
 
 Steps 3–7 are the entire reason this is one component rather than a shared library each provider calls.
 A provider that could skip step 3 is a provider that eventually will.
+
+**Step 2 has a second half for one type, and the path has a second door that runs all twelve steps.**
+A deployment's body is a template — a program the schema vocabulary cannot describe — so once the schema
+passes, `IResourceBodyValidator` evaluates it, and a template that does not deploy is a `400` at the
+same step as any schema failure. And the twelve steps are also entered through
+`IResourceManager.WriteChildAsync`, by a deployment's parent operation writing one of its resources as
+the deployment's creator. All twelve steps run on that door, and it differs in three ways: before
+step 1 it asks again what the gateway's stages would have refused a direct request — the tenant's
+status, the principal's own status, impersonation — and refuses a child carrying a secret property;
+step 3 runs `FullyConsistent`; and step 10's operation records its parent. ⚠ This sentence used to say
+"nothing is skipped on that door, and the one difference is" the last of those, and both halves were
+false: the gateway's stages *were* skipped, which is the review of #39's finding, and step 3's mode was
+already a second difference. § Long-running operations, *Nested operations*, has all of it.
 
 **Step 1 checks two things the caller supplied and does it before anything else.** The tenant in the
 path must be the caller's, and the subscription must be one that tenant has. Both refuse with `404`
@@ -187,6 +202,205 @@ appears only for actions on an existing resource (`/restart`, `/rotateKeys`, `/l
 creation. This is Azure's grammar and it is copied because it makes retry-safety a property of the
 verb rather than of each provider's care.
 
+## Policy
+
+Step 5 had a seam from the first day — `IPolicyEvaluator`, answered by a stub that said no engine ran
+— precisely so that the day an engine existed the step would not have to move. Issue #46 is that day,
+and the step did not move: `CatalogPolicyEvaluator` replaced `NotSupportedPolicyEvaluator` as the
+default `AddCyberCloudResourceManager` registers, and `WriteTrace.Canonical` is the same closed twelve.
+
+**The objects.** A *definition* is a rule; an *assignment* applies a definition at a scope; a *state*
+is one resource's compliance with one audit assignment. They are addressed as extensions on a scope,
+the shape role assignments already have:
+
+```
+{scope}/providers/CyberCloud.Policy/policyDefinitions/{name}    scope: tenant, management group, subscription
+{scope}/providers/CyberCloud.Policy/policyAssignments/{name}    scope: management group, subscription, resource group
+{scope}/providers/CyberCloud.Policy/policyStates                scope: management group, subscription, resource group — GET only
+```
+
+⚠ **Not a type in the registry, which is where [01](01-azure-parity-catalogue.md) put
+`CyberCloud.Policy/policyDefinitions`, and the reason is two facts rather than a preference.** An
+assignment sits on a management group or a subscription, and `ResourceId.ParsePath` has no shape above a
+resource group. And a definition's rule is a recursive tree, which `ResourceSchema` deliberately cannot
+express — its schema is a flat pointer list whose arrays hold scalars, so the condition would have been a
+string of JSON inside the body, validated by nobody at step 2 and opaque to every generated client. So
+the three are served by `IPolicyManager` beside `IRoleAssignmentManager`, under a fourth reserved
+namespace that `ProviderRegistry.Build` refuses to a provider and the gateway routes before the scope and
+resource grammars (`PolicyAddress`). The cost was the one [24](24-roadmap.md)'s resource-graph row records
+for its own address — no generated surface knew them — and the review of #46 paid it: § Policy on every
+generated surface, below.
+
+**The rule.** `{ "if": <condition>, "then": { "effect": "deny" | "audit" | "modify", "operations": […] } }`.
+A condition is `allOf`, `anyOf`, `not`, or a `field` with exactly one of `equals`, `in`, `like`,
+`exists` — Azure Policy's vocabulary, JSON-Logic's shape. A field is one of four facts — `type`,
+`name`, `operation` (`create`, `update`, `delete`, `action`), `action` — or an RFC 6901 pointer into the
+body, `/properties/sku`, `/tags/env`: the spelling the registry and every error target already use, so
+there is no alias table to drift from the schema. Strings compare ignoring case and an absent field
+equals nothing, as in Azure. A modify's operations are `add` (only where the body has no value — a
+default the caller can override) and `replace` (whatever the caller sent). ⚠ **Every set is closed and
+a word outside it is refused by name** — `'contains' is not an operator`, with the list and the offending
+member as the error's target — because a rule that silently ignored an operator would deny nothing and say
+nothing. ⚠ **The cost is bounded at parse time**: sixteen levels, 256 nodes, 64 branches, 256 values in an
+`in`, sixteen operations, and `like` is a glob with one metacharacter rather than a regular expression. A
+rule runs on every write beneath its scope, and one that could be made expensive would be a way for one
+owner to slow everybody else's writes.
+
+**Evaluation, in the write path, for every write kind.** A `PUT`, a `PATCH`, a `DELETE` and an action
+all enter step 5 (`PolicyEnforcementTests.EveryWriteKindEntersStepFiveAndADenyStopsEachOne` drives the
+five shapes through real grains), and so does a deployment's child, which is a `PUT` replayed as the
+deployment's caller (`ADeploymentsChildWriteEntersStepFive`). No provider is reached before it: a reconciler runs from the operation
+step 10 starts, and a synchronous action's handler runs after the fork step 5 precedes. Within the step:
+
+- **Modify, then deny, then audit** — Azure's order. A deny judges the body the write will store, so a
+  modify that fixes a violation is not refused for it; an audit records the state the resource is left in.
+- **The body judged is the one the write leaves**: a `PUT`'s body; a `PATCH` merged onto the stored
+  superset exactly as the resource grain will merge it (judging the patch alone would let a patch that
+  does not repeat a field past every rule about it); the stored body for a `DELETE` or an action. ⚠ With
+  the type's secret properties removed — an audit's verdict is readable by anyone who can read the scope,
+  and a rule over a password would be an oracle for it. Every api-version's secrets, not the request's:
+  the stored superset holds what every version wrote, so a secret only another version declares is in it
+  (`PolicyEnforcementTests.ASecretOnlyAnotherApiVersionDeclaresIsNotVisibleToAConditionEither`; the
+  third review found it, latent while the one type with a body secret declares it in both versions).
+- ⚠ **"The one the write leaves" includes the tag bag, and it didn't at first.** The resource grain keeps
+  the bag beside the body and replaces it with the one it is sent, and a `PATCH` sent the bag of the patch
+  alone — empty for a patch that left `tags` out. So step 5 judged the stored tags and step 9 stripped
+  them: "deny when `/tags/env` doesn't exist" refused a `PUT` without the tag and let that `PATCH`
+  through. The write now sends the merged body's bag — a `PATCH` merges `tags` as RFC 7386 merges any
+  object, which is also what `TagRules.MaxTags` said it did — and the stored bag, not the copy a `PATCH`
+  leaves in the superset, is the one a condition reads. Step 2 refuses a `null` inside the bag as it
+  refuses one anywhere, so a tag is removed by a `PUT`. Found by the review
+  (`PolicyEnforcementTests.APatchThatLeavesOutTheTagsKeepsTheTagsTheRuleWasJudgedOn`). ⚠ And a `PATCH`
+  is conditional on the copy step 5 read, whether or not the caller sent `If-Match`: a write that landed
+  between that read and step 9 would otherwise lose its tags to the merged bag and leave a body stored
+  under a judgement of one that's gone. The caller who set no precondition gets `409 Conflict` and a
+  retry, not a `412` naming one they never sent
+  (`PolicyEnforcementTests.APatchIsNotStoredOverAWriteThatLandedAfterItWasJudged`, third review).
+- ⚠ **A modify can't write a secret property**, and one that tries refuses the write naming the assignment
+  and the property. The catalog rewrites the document with the secrets taken out and the write path the
+  real one, so over a secret they disagree: an `add` the trace recorded did nothing over a password the
+  caller sent, and a `replace` overwrote it with a constant anyone who can read the definition can read.
+- ⚠ **A rule about a resource's shape applies to creates and updates only.** Only a deny rule whose
+  condition reads `operation` or `action` reaches a `DELETE` or an action — "deny delete where `/tags/env`
+  is `prod`", "deny `rotateKeys`". The alternative is "deny sku premium" making every existing premium
+  resource undeletable, which is the one thing the author of that rule wants to be able to do.
+- ⚠ **So a test that can't hold where its effect runs is refused, not stored.** An audit or a modify that
+  names `delete` or `action`, or reads the `action` fact (empty on every create and update), and a test of
+  `operation` against a word outside the four, would each be accepted and never match — the rule that
+  "denies nothing and says nothing" one level above the operator set. Each is a `400` targeting the leaf;
+  whether a leaf can hold is decided by evaluating it on each of the four operations, so case-insensitive
+  `equals` and a glob are read exactly as they run. Found by the third review, which stored
+  `{ "field": "action", "equals": "restart" }` as a deny no action reached, because only a rule reading
+  `operation` went past creates
+  (`PolicyEnforcementTests.ADenyThatReadsOnlyTheActionFactStopsThatActionAndNoOther`,
+  `PolicyRuleTests.ATestThatCantHoldWhereItsEffectRunsIsRefusedRatherThanStored`).
+- **A modify rewrites the document the request sends** and the result is validated against the schema
+  again before anything below step 5 reads it; everything below — quota amounts, tags, location, cluster,
+  desired state — reads the rewritten body. `WriteTrace.Policy` records, inside step 5's span, every
+  assignment that applied and every rewrite it made (`replace /properties/label = "enforced"`). ⚠ An
+  in-process caller of `IResourceManager` reads it off the `WriteAccepted` it gets back; an HTTP caller
+  doesn't, because the gateway renders no part of `WriteTrace` — until it does (owed, below), what a modify
+  made is found by reading the resource back.
+- **A deny is `403 PolicyViolation`**, naming the assignment and the definition in the message and again
+  as two details, with the rule's first body pointer as the target. ⚠ Those paths can name a scope the
+  caller can't read — a management group above a subscription where they hold only a resource group —
+  which departs from the 404-and-nothing rule for unreadable scopes. Deliberately, and as Azure does: a
+  refusal that won't say which rule refused is one nobody can act on, and it gives away the names, never
+  the rule.
+- **An audit's verdict is recorded after step 9 succeeds**, never at step 5 — a verdict for a body that
+  step 6 or 7 then refused would describe a resource that is not so. It is not allowed to fail the write.
+  A verdict records when it last *changed*, so re-applying the same body writes nothing durable. A delete
+  forgets the resource's verdicts when it is accepted; a replaced assignment and a changed rule drop the
+  verdicts they no longer vouch for, and a verdict evaluated before either and recorded after it is dropped
+  on arrival — each verdict carries the assignment's and the definition's versions it was judged under.
+
+**Inheritance and exclusion.** A write is judged by the assignments on its resource group, its
+subscription and every management group above the subscription, top down — so where two modify rules
+replace one field, the one nearest the resource writes last. A deny cannot be refined away: every deny
+that matches refuses. `notScopes` excludes a scope or a resource beneath the assignment; beneath a
+management group that is decided by the tree, not by the path's spelling, and the evaluation checks the
+chain it walked. A definition is usable only at its own scope and beneath it — a subscription owner cannot
+assign another subscription's rules, and a definition at the tenant is usable everywhere.
+
+**Cost and isolation — one grain per tenant.** `IPolicyCatalogGrain` (`policy/{tenantId:N}`) holds the
+tenant's definitions, assignments and verdicts, and evaluates. Step 5 is one grain call whatever the depth:
+the catalog caches each scope's assignments with their rules already parsed, drops a scope's entry when an
+assignment there is written and every entry naming a definition when that definition is, and walks the
+management groups — one `IManagementGroupGrain` read per level, at most six — only when the tenant has an
+assignment at one. The evaluation is `[ReadOnly]`, so evaluations interleave with each other; they queue
+behind the catalog's non-read-only turns — a policy write, the verdicts recorded after every write an audit
+reached, and the forget every accepted `DELETE` sends, which runs in every tenant, including one with no
+policy at all (it writes nothing when there's nothing to forget, and the turn is still a turn). The tenant
+boundary is the grain key's qualification: tenant A's assignments are not in the activation tenant B's
+writes reach, even at an identical path
+(`PolicyEnforcementTests.TenantAsAssignmentNeverAppliesToTenantBEvenAtTheSamePath`). ⚠ **It fails
+closed**: a catalog that cannot answer is a refusal, not an allow, and so is a management group in the walk
+that fails to answer, and a `PATCH` or an action whose stored body can't be read. Two absences don't refuse,
+because each is a record that is gone rather than a store that failed: a management group deleted under a
+subscription ends the walk, since the groups above it can't be named, and a `DELETE` of a resource with no
+record judges an empty body, since there are no fields left to protect.
+
+**A deleted scope takes its policy with it.** The catalog keys everything by path, and a management group's
+path is its name, so a group re-created under a deleted one's name used to find the old owner's rules in
+force — undeletable over the API, which answers 404 for a scope that doesn't exist. Deleting a management
+group or a resource group now forgets, beside #39's tuple sweep, the definitions and assignments on it,
+every assignment elsewhere that names one of its definitions (logged: a definition at a group can be
+assigned at a subscription that later moved out), and the verdicts beneath it; a re-driven `DELETE` forgets
+again. `ManagementGroupTests.ADeletedGroupRecreatedUnderTheSameNameCarriesNoneOfItsOldPolicy` drives it
+through the real scope manager.
+
+**Who may write it.** `assignRole` on the scope, which `CyberCloudSchema` defines as
+`Rel(owner) & !Rel(suspended)` — Azure keeps `policyAssignments/write` out of Contributor for the reason it
+keeps role assignments out of it, and a contributor who could assign a deny could stop every other
+contributor's writes. Reading is `read` on the scope. 404, never 403, for a caller who cannot read the scope
+(`PolicyIsolationTests`, through the real schema).
+
+**Policy on every generated surface — the third non-registry source.** The review of #46 found the
+addresses served and generated nowhere, #63's question a fifth time, and answered it the way #63 did: the
+document declares them, and every surface reads them out of the document. `OpenApiEmitter` emits the
+fifteen paths — an item and a collection per definition and assignment scope, a collection per state scope,
+the scopes read off `PolicyAddress.AllowsScope` so the document can't declare a pair the router refuses —
+with `Policy.Definition`, `Policy.Assignment`, `Policy.State`, their write bodies and their pages, and the
+rule language as `Policy.Rule` and `Policy.Condition` built from `CyberCloud.Core.Policy`'s closed sets.
+Each path item carries `x-cybercloud-scope-object` (the type), `x-cybercloud-scope-object-scope` and, on a
+collection, `x-cybercloud-scope-object-collection`: a third discriminator beside the resource type's and
+the scope's, so `DocumentReader.ScopeObjectsOf` finds them and neither older reader mistakes one for its
+own. From there `cyc policy {scope}-{definitions|assignments|states}` with `show`, `create`, `delete` and
+`list`; `PolicyClient` in the .NET, Python and Go SDKs and the `…At{Scope}` methods on the portal's
+`CyberCloudApi`, none of them long-running. ⚠ **The rule is a JSON value on every surface.** The member
+keeps its `$ref` to `Policy.Rule` so the document describes it exactly, and carries `x-cybercloud-json`,
+which every emitter reads first: a `JsonNode`, a Python `Any`, a Go `json.RawMessage`, a TypeScript
+`unknown`, and a `cyc` flag of type `json` that takes one JSON value — a rule in a file is
+`--policy-rule "$(cat rule.json)"`, because `System.CommandLine` already owns `@` for response files.
+Without the marker an untyped object reads as the tag bag's string map. `PolicySurfaceTests` holds the
+document to the router's grammar in both directions, `ServedShapesMatchTheDocumentTests` validates what the
+gateway serves at the addresses, rule included, against it, and
+`PolicyEnforcementTests.TheManagersRenderingIsTheDocumentsSchema` holds the real manager's member sets to
+the schema. ⚠ **No portal form:** the portal has no policy page yet, and a condition tree is not a form a
+generated field can hold.
+
+⚠ **Owed, recorded here rather than implied:**
+
+- **The gateway doesn't render `WriteTrace.Policy`**, so an HTTP caller learns what a modify rewrote only by
+  reading the resource back. Azure answers with the stored body; ours is the `202`'s operation.
+- **No compliance scan.** A verdict is produced by a write; an assignment made today says nothing about the
+  resources that already exist until each is written again. Azure re-evaluates on a cycle; the reminder
+  that would do it, walking a scope's membership, is not built.
+- **Scope writes are not policed.** Creating a resource group or a subscription runs `IScopeManager`'s four
+  steps, which have no step 5.
+- **Restore and purge are not policed**, deliberately for now: a restore brings back what existed, and a deny
+  written during the recovery window refusing it would turn the window into a deletion; a purge is the end
+  of a delete that step 5 already judged. Both deserve a decision rather than a default.
+- **The verdicts live in the catalog's state**, one row per resource per audit assignment. A tenant with a
+  hundred thousand audited resources holds that many rows in one activation; past that size they belong
+  beside the resource-graph projection.
+- **No `enforcementMode`, no parameters, no exemptions.** A definition is one rule with its values written
+  in; Azure's parameterised definitions and `DoNotEnforce` are the next vocabulary to add, and each is a
+  change to the closed sets above.
+- **Conditional access (#48) shares the language, not yet the call.** `CyberCloud.Core.Policy` holds the
+  condition parser and evaluator as pure functions over a JSON document, deliberately in the one assembly
+  the identity module can reference; the subject and the facts are #48's to define.
+
 ## The reconcile loop
 
 The resource grain never provisions inline. It records intent and returns; a reminder drives
@@ -235,6 +449,70 @@ surfaces the two things nothing else would find: **orphans** (labelled objects w
 gone — deleted and billed for) and **strays** (resources whose objects vanished — someone `kubectl
 delete`d production).
 
+### The manager-started pass
+
+Built 2026-09-24 for #30. A converged resource has no operation and no reminder, so until now a pass
+ran only when something started one — a `PUT`, a restore, an action. That is right for a type whose
+desired state is a pure function of its body, and wrong for one with a clock in it: a backup vault's
+`retentionDays` becomes true of a recovery point with nobody writing to the vault.
+
+- **Declared, per type.** `IResourceTypeBuilder.PassEvery(period)` records
+  `ResourceTypeRegistration.PassPeriod`, at least a minute (Orleans' reminder floor; a shorter period is
+  refused rather than silently stretched). `CyberCloud.RecoveryServices/vaults` declares an hour and is
+  the only type that does.
+- **A reminder per resource, on the resource grain.** `ResourceGrain.CompleteAsync(Succeeded)` registers
+  `periodic-pass` when `GetReminder` answers nothing (the #83 lesson — re-registering on every write
+  would push the tick out for ever), due first at `PeriodicPass.FirstDue`: the second half of the period,
+  chosen by the resource's GUID, so a thousand resources created by one script do not tick in the same
+  minute and a re-arm does not move a resource's slot. `BeginDeleteAsync` removes it — at the *start*
+  of the delete, so a parked resource wakes nothing for seven days — and a restore's converged write
+  arms it again.
+- ⚠ **And a silo-start backfill arms what no write did (#30's review).** Arming on a converged write
+  covers only resources written after the pass shipped: every vault converged before it, and any whose
+  row went with a restored reminder table, had no pass until somebody wrote to it — while the vault's
+  retention row promised "at most one period late". `PeriodicPassBackfill` walks tenants,
+  subscriptions and groups once per silo start (the `ExpirySweeperBackfill` walk and price) and calls
+  `IResourceGrain.ArmPeriodicPassAsync` on every `Succeeded` member of a periodic type; it asks
+  nothing on a silo whose registry declares no period.
+- **The tick starts an operation; it does not reconcile.** `RunPeriodicPassAsync` (the reminder's body,
+  and what a test drives) starts an `OperationKind.Refresh` and returns, so the grain still never
+  provisions inline. It starts nothing when the resource is not `Succeeded`, when a write's operation
+  owns it, or when the previous refresh has not said it ended. ⚠ It decides that from its own state:
+  the refresh calls the resource grain mid-pass, so a tick that awaited the refresh's `GetAsync` was a
+  cycle of two non-reentrant grains, broken only by Orleans' response timeout (#30's review). The
+  refresh reports its end (`EndPeriodicPassAsync`, from `OperationGrain`'s terminal step), and a pass
+  older than an operation's sixty-minute ceiling counts as ended.
+- ⚠ **One driver per resource, and the write is the one that wins (#30's review).** The at-rest check
+  below runs once, when the refresh's pass starts; nothing stopped a `PUT` or `DELETE` from beginning
+  while a refresh that had already read the old body was applying it — which could re-apply the stale
+  body after the write converged, or re-create what a delete's teardown had read back as gone. So a
+  write's pass reads `ReconcileInput.PassOperationId` and, before it applies anything, cancels that
+  refresh and drives it to its end: a cancelled refresh tears nothing down, and because neither
+  operation grain is reentrant, the cancel returning means the refresh's in-flight pass has finished.
+  The write's operation is a third grain that nothing in the refresh calls, so the wait cannot close a
+  cycle; a refresh that does not answer within Orleans' timeout leaves the write `InProgress` for the
+  next reminder.
+- **A refresh is not a write.** The driver runs the ordinary `ReconcileAsync` over the stored body — and
+  converges without running it if the resource stopped being at rest after the pass was started. The
+  operation reserves and commits no quota, never moves the provisioning state, bumps no etag, emits no
+  `resource-changed`, and on cancel tears nothing down. A pass that fails fails *the operation*: the
+  resource stays `Succeeded`, because a converged resource reported `Failed` over a transient fault in a
+  pass nobody asked for is a false alarm, and because a write that began meanwhile owns the state.
+
+`ManagerStartedPassTests` pins the arm (read out of the silo's own `IReminderTable`), the pass, the
+one-at-a-time rule, the failure that leaves the resource alone, the disarm on delete, a write and a
+delete that each stop a running pass before applying anything, and the backfill arming a converged
+resource whose row was removed; the vault's CloudNativePG lane reads the row out of the real Redis
+table.
+
+**Owed.** (1) A failing periodic pass is visible only on its operation — nothing on the resource or a
+portal blade says "the last pass failed", which for a vault means retention can stop silently
+(`charts/managed/recovery-vault/conformance.yaml § owed`, `retention-is-enforced-on-passes`). (2) A
+`resource-changed` delivery still starts nothing: `NotifyChangedAsync` records the event for the next
+pass, and starting a `Refresh` from it is what turns "tell me when X changes" into "run me when X
+changes". (3) The drift scan's own per-cluster reminder is a separate owed item and this does not
+replace it: a periodic pass re-applies what a type renders, it does not find orphans.
+
 ## Long-running operations
 
 ```csharp
@@ -262,24 +540,185 @@ dispute waiting to happen, so cancellation *completes* rather than abandoning.
 **Nested operations.** Deleting a resource group is one operation with N child operations, ordered by
 the dependency graph. The parent's progress is the children's. Deployments ([01](01-azure-parity-catalogue.md) § A, M2) use the same machinery.
 
-⚠ **Nested operations are not built, and that is why `CyberCloud.Resources/deployments` did not land
-with #39 — recorded here so the next reader of that issue does not re-derive it.** A resource group's
-delete refuses while the group holds anything rather than cascading (`IScopeManager.DeleteAsync`), so
-no operation has ever had a child. A deployment is exactly the thing that needs one: a template of
-resources with `dependsOn`, evaluated into an ordered set of `PUT`s through *this* write path, each of
-which is itself a `202` and an operation to wait on, as one parent operation with a step per resource,
-a what-if that is the same evaluation with no write, and rollback on a failed step recorded rather than
-performed. Two things stand in front of it. First, the machinery above: a durable parent that holds the
-template, the caller and a step cursor, re-registers its reminder after a silo loss and drives child
-operations to a terminal state in dependency order — an `IDeploymentGrain` with the shape
-`IOperationGrain` has, and the first grain of its kind. Second, **the write path needs a caller and a
-reconcile pass carries none**: `ReconcileContext` and `ActionContext` have no `CallerContext`, because
-a provider acts as the platform against the cluster and never as a tenant against this API, so a
-deployment cannot be an ordinary provider whose reconciler issues `PUT`s — it would have nothing to put
-in step 3's check. The deployment is therefore a fourth entry point beside `IScopeManager` and
-`IRoleAssignmentManager` (their remarks carry the "beside, not inside" argument), driven by a grain that
-persists the creator's identity, and that is the shape to build — not a provider, and not a stub of
-one. It stays at M2 in [24](24-roadmap.md)'s `Platform` row, priced there.
+⚠ **Nested operations are built, for deployments (#39, 2026-09-23), and a resource group's delete is
+not yet their second user.** Until then no operation had ever had a child — the group's delete refuses
+while the group holds anything (`IScopeManager.DeleteAsync`) rather than cascading — and this paragraph
+recorded why `CyberCloud.Resources/deployments` could not land without them. What exists now, and the
+places the paragraph it replaces said otherwise:
+
+- **The parent is the deployment's own operation grain, not an `IDeploymentGrain`.** The paragraph
+  asked for "a durable parent that holds the template, the caller and a step cursor, re-registers its
+  reminder after a silo loss and drives child operations to a terminal state in dependency order — an
+  `IDeploymentGrain` with the shape `IOperationGrain` has". `IOperationGrain` *is* that shape and
+  already had the slots (`OperationSpec.ParentOperationId`, `OperationStatus.Children`, both on the wire
+  and empty since they were published). A deployment is an ordinary resource created by an ordinary
+  `PUT` through the twelve steps; its operation's `Desired` is the template and its `Caller` the
+  creator, and `OperationGrainState.Deployment` is the cursor. A second grain would have been a second
+  resume path, reminder, cancel flag and id to poll, each able to disagree with the first — and
+  `/operations/{id}` polls the parent with no change to the gateway. The grain-key count is unchanged.
+- **Its pass is `DeploymentDriver`, not a reconciler.** `OperationGrain.DriveAsync` branches for a
+  deployment's create or update and hands back the same `ReconcilePass` a reconciler produces, so every
+  ending — quota, member stamp, change event, reminder — is the ordinary one. The branch sits *after*
+  `ConfirmClaimAsync`, so batch 3's ghost-resource fix (issue #44) holds for the parent:
+  `DeploymentTests.ADeploymentWhoseOwnClaimIsGoneCancelsBeforeWritingAnyChild` pins it, and each child
+  is an ordinary create that runs the same confirmation on its own first pass. A deployment's delete
+  falls through to the ordinary driver and converges at once — deleting a deployment deletes its
+  record, not what it deployed, which is Azure's rule.
+- **One child at a time, in dependency order.** The plan is Kahn's order with the template's own order
+  breaking ties; a child is written only when every step before it has succeeded. Status rolls up —
+  finished steps count whole, the step in flight counts for its child's percentage — and a child that
+  ends tells its parent through `IOperationGrain.NotifyChildTerminalAsync`, which is **one-way** because
+  the parent's pass calls the child and a child awaiting its parent would be two non-reentrant grains
+  waiting on each other. The ceiling is per step: a child carries sixty minutes from its own start and
+  fails through it; the parent times only a step the write path never accepts.
+- **A child's failure is the parent's, named.** A child that fails, or is cancelled by its own
+  confirmation, fails the deployment with `ProvisioningFailed` whose message carries the child's path,
+  its operation id and its own reason, and whose `target` is the child's path; a child the write path
+  refuses — `400`, `403`, `404`, `429`, or a `409` other than `OperationInProgress` — does the same with
+  the refusal's code. Nothing after it is written. ⚠ `OperationInProgress` is the one refusal that
+  doesn't: another operation is driving that resource (somebody's update, or this deployment's own
+  child from a pass whose record a silo loss took), so the step waits for it and the `PUT` is retried.
+  This bullet named every `409` as fatal until the review of #39.
+  `DeploymentTests.AChildsFailureIsVisibleOnTheParentAndWhatWasCreatedBeforeItIsLeftAndRecorded`.
+- **Cancellation reaches the child in flight and stops there.** `CancelAsync` on the parent tells the
+  running child at once and again on the next pass; the child's cancellation completes rather than
+  abandons, as a single resource's does; nothing further starts; the parent reports `Canceled` only
+  once nothing is running. Steps already finished are not torn down — that would be a rollback.
+- **Rollback is recorded, not performed.** Deleting what a failed deployment created would be a second
+  set of writes made as the caller after the caller's deployment failed, each able to fail in turn. The
+  deployment's body says what was left and that nobody removed it (`/properties/rollback`), and a rerun
+  of the same deployment leaves every child that already matches unchanged — a no-op write, recorded as
+  `no change`.
+
+**The caller-bearing entry point is `IResourceManager.WriteChildAsync`, and its argument is on the
+interface.** A child is written long after the request that asked for it has returned, from a
+reminder, with no token anywhere; what the parent carries is the `CallerContext` the gateway built
+when the deployment's own `PUT` passed step 3, persisted in `OperationSpec.Caller` and never
+re-derived. Writing as that caller is safe for four reasons that are properties of the method. The
+first is that **what the gateway would have refused before step 3 is asked again, before step 1**:
+a direct request meets `ResolveTenantStage`, which refuses a suspended tenant's writes, and needs a
+token, which a suspended user can't renew once `IUserGrain.SetStatusAsync` has revoked their sessions;
+a child meets neither, so a tenant suspended by billing, or an
+account an administrator suspended, went on creating a running template's remaining resources as
+itself — the review of #39 found this argument covering ReBAC alone. Each child now reads the tenant's
+status from `ITenantDirectoryGrain` (the record `ResolveTenantStage` reads a mirror of) and is refused
+`TenantSuspended` unless it is `Active` or `Warned`; asks `IPrincipalStanding` whether the principal may
+still act — an active user, an enabled service principal, a bound managed identity, read from their own
+grains by identity's `GrainPrincipalStanding`, because a suspension leaves the role tuples and step 3
+alone still allows them; and is refused outright under impersonation, whose sixty-minute box
+([06 § Platform administration](06-tenancy-and-resource-model.md)) is the operator's grant and not in
+any spec (`DeploymentTests.ATenantSuspendedBetweenTwoChildrenStopsTheDeploymentAtTheSecond`,
+`DeploymentTests.AnImpersonatedDeploymentWritesNoChild`,
+`DeploymentAuthorizationTests.ACreatorSuspendedBetweenTwoChildrenIsRefusedAtTheSecond`). The rate
+limiter is the one stage not repeated, and the owed list says why. The second: every
+child runs the whole write path, so step 3 checks that subject *at the child's own address, at the
+moment it is written, against the durable rows* — a deployment grants nothing its creator lacks at each
+child, and a revocation between two children is honoured at the second. ⚠ The last clause was written
+before it was true: every other write's step 3 is `MinimizeLatency`, which `CheckGrain` answers from any
+cached entry with no TTL, and the deployment's own `PUT` has just cached an allow for its creator at the
+group — so the review of #39 revoked a contributor after the first child and watched the second created
+as them. A child's step 3 is `FullyConsistent` ([07 § Consistency](07-rebac-authorization.md): "anything
+where a stale allow is a real incident"; a recorded identity replayed from a reminder with no token is
+that), one durable walk per child
+(`DeploymentAuthorizationTests.ARightRevokedBetweenTwoChildrenIsHonouredAtTheSecond`); the platform has no system principal to fall back to
+and the method refuses an empty subject rather than letting step 3 deny it as a `404`; and the gateway
+cannot reach it — `GatewayIsolationTests.NoGatewaySourceFileWritesAsARecordedCaller` reads the
+gateway's source for it. `test/CyberCloud.Isolation`'s `DeploymentAuthorizationTests` drives the
+refusal through the real engine: a contributor on one group deploys a template whose second resource
+names a group of the same subscription where they hold nothing, the first child is created as them, the
+second is refused with the engine's `404`, and the deployment fails naming it.
+
+**The deployment type.** `CyberCloud.Resources/deployments`, declared in
+`CyberCloud.ResourceManager.Contracts` (`Deployments.Describe`) so the manager can reach it and
+published through the thinnest provider family in the tree, `CyberCloud.Providers.Resources`, because
+`Build.Generate` reads `src/Providers` and nowhere else. Its template and parameters are JSON *text* —
+`SchemaKind` has no free-form object and refuses an array of objects — checked at step 2 by
+`IResourceBodyValidator`, the one validator a type's schema cannot express, so a template that does not
+evaluate is a `400` naming what and where. The template's resources carry `type`, `name`, `apiVersion`,
+`location`, `tags`, `properties` and `dependsOn`, and may name another resource group of the same
+subscription (`resourceGroup`); the expression set is closed — `parameters()`, `variables()`,
+`resourceId()` and `concat()`, whole-string only — and anything else is refused with that list. A
+cycle is refused with the cycle walked. `whatIf` answers per resource `Create`, `Modify` or `NoChange`
+with a property diff against the resource read *as the caller* — so a resource they cannot read is a
+`Create`, which says nothing about it — and is served by `IDeploymentManager`, the entry point the
+registry names on the action (`ActionRegistration.EntryPoint`), because it answers for a deployment
+that need not exist and runs as the caller, neither of which an action handler can. The published
+document says so (`x-cybercloud-entry-point`, and no "a `POST` to a name that does not exist is a
+`404`" on this action), and the answer is typed: Azure's `changes` is an array of objects, which
+`SchemaKind` cannot declare, so the verdict is repeated as three arrays of resource ids — `creates`,
+`modifies`, `noChanges` — in an open response schema that admits `changes` beside them. The history is the
+body: the parent writes `outputResources`, `steps`, `error` and `rollback` into the resource's
+read-only properties as it ends (`IResourceGrain.RecordReadOnlyAsync`), and the group's deployments are
+its deployment history. `CyberCloud.Resources` was a reserved provider namespace; it now admits a
+provider whose every type renders nothing, which keeps the property the reservation protected
+(`ProviderRegistryTests.TheReservedNamespaceAdmitsATypeThatRendersNothingAndStillRefusesOneThatCould`).
+`cyc deployment create --template-file` and `cyc deployment what-if` read the files; the generated
+`cyc resources deployments` takes the same body as flags.
+
+⚠ **Owed, and recorded here rather than only in a commit message.**
+
+- **A resource group's delete still refuses rather than cascading.** The machinery the cascade needs now
+  exists; the cascade is a per-resource delete with each resource's own lock, authorization,
+  soft-delete window and failable teardown, ordered by children before parents, and it is not built.
+- **ARM's shape beyond the closed set**: `outputs`, `condition`, `copy`, user functions, `reference()`,
+  secure parameters (refused — the template and its parameters are the body, in plain text), nested
+  deployments (refused at evaluation and again by `WriteChildAsync`), and `Complete` mode, which would
+  delete what the template no longer names.
+- ⚠ **A deployment may not set a child's secret property, however the value is spelled.** Refusing
+  `securestring` covered one spelling; a literal, or a plain `string` parameter feeding the property,
+  was stored in the deployment's `template` or `parameters` and read back by anyone who can read the
+  deployment, though the child's own `GET` withholds it (the review of #39). `DeploymentSecrets` checks
+  the raw template structurally at step 2 (no parameters needed, so a partial `PATCH` too), the
+  evaluated plan whenever step 2 has one, and every child at `WriteChildAsync`
+  (`DeploymentTemplateTests.ATemplateThatSetsASecretPropertyIsRefusedAtStepTwoWhereverItsValueComesFrom`,
+  `DeploymentTests.ASecretStepTwoCouldNotSeeIsRefusedAtTheChildsDoor`). Owed: the one case that is
+  refused only at the child — a partial `PATCH` whose template names the child's type or api-version by
+  expression — still stores the template, because evaluating it at step 2 would take stored parameters
+  before step 3 has authorized the caller to read them.
+- **Children aren't charged to the rate limiter.** It charged the deployment's own `PUT`; a child can't
+  multiply that without bound — `DeploymentLimits.MaxResources` is a hundred, children are written one
+  at a time and each waits for its predecessor's operation — and quota, the budget for what a child
+  creates, is step 6 of every child. Charging them is owed: the counters are
+  `CyberCloud.ServiceDefaults`', which `module-layering.txt` gives this module no edge to.
+- ⚠ **Every update of a deployment is a run, a `PATCH` included — a tags-only merge patch too**
+  (`OperationGrain.IsDeploymentRun`). It re-runs the merged template as the `PATCH`'s caller and
+  replaces the run record, so a caller who may write the deployment but not its resources turns a tags
+  edit into a failed deployment, though every child the run can write is a no-op. It's the rule because
+  nothing can tell which edits leave the plan alone, and ARM has no `PATCH` on a deployment; a patch
+  that changes only the envelope skipping the run is owed.
+- **A performed rollback** — Azure's `onErrorDeployment` — and **parallel children** for independent
+  resources; both change what "stopped at the first failure" means and neither is started.
+- **The what-if does not compare secret properties.** A read withholds them, so the current side never
+  has them; they are left out on both sides rather than reported as a change on every run.
+- ⚠ **An ordinary `PUT` retried after a grant can meet a cached refusal — found by
+  `DeploymentAuthorizationTests`.** Step 3 checks `MinimizeLatency` for every write that is not a child,
+  which `CheckGrain` answers from any cached entry with no TTL ([07 § Consistency](07-rebac-authorization.md));
+  a refusal caches a deny, and a grant written after it does not reach the retry's check. For a
+  deployment's children this is closed — their check is `FullyConsistent`, and the test's "grant the
+  right and rerun" control now passes — but the class stands for a direct `PUT`.
+- **A pass yields between children after `ReconcileDriver.PassBudget`** (`DeploymentDriver.Budget`), so a
+  rerun of a hundred no-op children is several passes rather than one grain turn of a hundred writes;
+  a single child's write is never interrupted
+  (`DeploymentDriverBudgetTests.APassThatHasUsedItsBudgetYieldsBetweenStepsAndTheNextResumesAtTheCursor`).
+- **What a template's expressions produce is capped** at `DeploymentLimits.MaxEvaluatedLength`
+  (4 MB, Azure's cap on an expanded template), charged per call as it is made. The input caps did not
+  bound it: variables are evaluated once and referenced any number of times, so `concat()` over them
+  doubles per link, and a 1.6 KB template described sixteen million characters in the gateway's
+  process at twenty links
+  (`DeploymentTemplateTests.AnOutputThatDoublesThroughItsVariablesIsRefusedBeforeItIsBuilt`).
+- **The first pass waits for the reminder**, as every operation's does (the timer the class remarks on
+  `OperationGrain` owe), and a child's end moves its parent through the one-way notification; a
+  twenty-resource deployment is therefore bounded by its children's reminders, not by its parent's.
+- ⚠ **Across the real hosts it is one story, not a sweep.** `CyberCloud.AppHost.Tests.DeploymentOverHttpTests`
+  runs it through the nine stages against two silo processes, Redis reminders and the AppHost's k3s:
+  the owner deploys a two-widget template with a `dependsOn`, a what-if of it answers `NoChange` twice,
+  and a contributor on one group deploys a template whose second widget names a group they hold
+  nothing on, and it fails naming that widget — nothing drives an operation but the reminders and the
+  one-way notification, which is what makes the new wire members (`OperationStatus.ParentOperationId`
+  at 14, `OperationGrainState.Deployment` at 16) and `NotifyChildTerminalAsync` cross a process the way
+  `17313ed`'s confirmation did. The branches — cancellation, a child's own failure, the lost claim, the
+  re-drive — are in-process only (`CyberCloud.ResourceManager.Tests.DeploymentTests`), and a silo killed
+  mid-deployment is the chaos suite's to add.
 
 ### Deleting a parent resource that has children
 
@@ -381,7 +820,11 @@ purge-protection pointer. Two declines stand and are decisions rather than omiss
 and a window would charge a tenant for a recovery nobody asked for; and
 `CyberCloud.ContainerService/managedClusters`, whose own refusal reads *"a soft-deleted cluster whose
 worker VMs are gone is not a cluster anybody can be handed back."* `CyberCloud.KeyVault/vaults` is
-the strongest case in the catalogue and does not exist yet.
+the strongest case in the catalogue, and ⚠ **it exists now (2026-09-23) and declares the window with a
+purge-protection pointer** — the sixth type, and the first clusterless one. It is also the first
+whose data plane is a grain rather than a cluster, which cost the driver one fact: a soft delete and a
+purge both run `DeleteAsync`, and `ReconcileContext.Parking` is what lets the reconciler seal on the
+first and destroy on the second ([18 § What landed, and what is owed](18-security-vault-and-malware-scan.md)).
 
 **Decided: a soft-deleted resource stops resolving at its address. It does not move to a new one,
 because this platform has no address for it to move to.**
@@ -900,6 +1343,25 @@ is torn down and its `PersistentVolumeClaim`s are what a restore restores from**
 delete during a window turns every restore in that group into a lie — and the tenant is *told* it came
 back, which § Deleting a parent resource that has children already names as worse than not restoring.
 
+**Decided (#96): the reclaim looks at the namespace and nothing else — a cluster-scoped object is not
+its business.** Kube-OVN's `Vpc`, `Subnet`, `SecurityGroup`, `OvnEip` and `OvnSnatRule` belong to
+resources in a group and are in no namespace, so the occupant listing never holds them, and the
+question was whether the reclaim should learn to see them by their ADR-013 labels. It should not,
+because seeing them protects nothing: a namespace delete removes namespaced objects only, and the
+garbage collector treats a namespaced owner on a cluster-scoped dependent as unresolvable and never
+collects it — the recursive delete the verdict authorizes cannot reach a `Vpc`. What protects a live
+resource of *any* scope is the member half of the evidence, which the seal refuses over; what removes
+a cluster-scoped object is its own resource's teardown; and one that outlives its resource is an orphan
+for the drift scan to find, which refusing the namespace would not remove — it would only keep an empty
+namespace for ever beside the leak. ⚠ **Nothing finds that orphan today.** The drift scan's diff exists,
+but the shipped `IClusterObjectInventory` refuses rather than reporting an empty cluster
+(`DriftScanner`'s remarks), so a cluster-scoped leak stays unseen until the informer-backed inventory of
+docs/plan/09 § Observing lands; `src/Providers/README.md` carries it as owed. `ClusterConformanceTests.ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt`
+asserts it per family from the scope of what the family renders: the namespaced objects are in the
+listing and refuse a reclaim on their own, the cluster-scoped ones are in the cluster and nowhere in
+the namespace, the live resource is a member either way, and after the teardown nothing of it is left
+on either side.
+
 ⚠ **The volume claims carried none of ADR-013's seven labels, and the half of that which is now closed
 does not move the design.** `KubeCommandBuilder` injected the labels into an object's own
 `metadata.labels` and did not descend into a `volumeClaimTemplate`, so the claims the StatefulSet
@@ -917,6 +1379,10 @@ delete at all — it is to record the namespace as reclaimable and let an operat
 work**: it requires every occupant to be unmanaged, which was true only while the claims were
 unlabelled. **Making the purge remove the disks it kept is what would turn that back into a delete**,
 and it is the same owed item, reached from the other end.
+
+⚠ **The next paragraph and its list are spent** — `ResourceGroupReclaimer` is the caller, membership is
+recorded, and `INamespaceInventory` has a real implementation; `src/Providers/README.md` § Closed: a
+resource group's delete removes its namespaces carries what landed. They are kept for the reasoning.
 
 **What exists: the rule, the seam and the gate. What does not: a caller.** `NamespaceReclaim.Decide`
 weighs the group's members against a listing of everything in the namespace;
@@ -1099,7 +1565,13 @@ rather than description.** What landed is `CyberCloud.ResourceGraph`, one module
   direction (given a subject, which objects); filling one row from it would mean running it for
   every subject in the tenant. `ProjectionRoundTripTests.ACreatedEventBecomesTheRowWithItsColumnsAndItsReaders`
   writes the three tuples a real create leaves and reads back an inherited owner and a direct
-  userset, and not the user who was granted nothing.
+  userset, and not the user who was granted nothing. ⚠ **A time-bounded assignment (#49) is left
+  out of the column**, because the column has no clock and is recomputed on a resource change and on
+  nothing else: an expiring grant written into it would keep the resource in its holder's graph query
+  long after every check had started denying. The miss is the safe direction, and carrying the expiry
+  into the row is owed ([07 § Time-bounded relations](07-rebac-authorization.md));
+  `ProjectionRoundTripTests.AJustInTimeReaderIsLeftOutOfTheAccessColumnBecauseTheColumnHasNoClock`
+  pins it.
 - **The configuration is `CyberCloud:ResourceGraph`, and Aspire's `ConnectionStrings:nats` fills
   the NATS half.** A gateway with a NATS URL publishes; a silo with a NATS URL and a ClickHouse
   endpoint projects; either without stays on `LoggingResourceChangedSink`, which is the shape every
@@ -1315,7 +1787,7 @@ Rules that make this useful rather than decorative:
 | Rate limit | Gateway | Per-request work must not touch a grain |
 | Emit metrics/logs for tenants | Providers → `CyberCloud.Telemetry` | Volume |
 | Decide *where* a resource goes | The subscription's default cluster, or the explicit `clusterId` | Placement policy is M3 and would be a scheduler; the manager just carries the id |
-| Let one provider *write* another's resource | Nowhere — see below | A write needs a caller, and a reconciler has none |
+| Let one provider *write* another's resource | Nowhere — see below. An *action* may create one, as its caller | A write needs a caller; a reconciler has none and an action does |
 
 ### The cross-resource seam: what one provider may see of another, and why it is read-only
 
@@ -1326,6 +1798,15 @@ another — and the first two types that could not were a backup vault
 and a customer-managed key ([18](18-security-vault-and-malware-scan.md)), which every provider that
 persists has to resolve. Nothing in `ReconcileContext` let a reconciler see a resource it did not
 own. The choice was between a seam above the provider and a hole in the rule.
+
+⚠ **The second of those two is only half served by this seam, measured when the key's home was
+built (2026-09-23).** `CyberCloud.KeyVault/vaults` exists now, and a consumer can *read* a vault
+through the view — but using a key is `wrapKey`/`unwrapKey`, which are actions, and the view has no
+member that could invoke one (the read-only property below is deliberate). A customer-managed key
+therefore needs a second, narrower seam beside the view — wrap and unwrap only, bound to the pass's
+resource and checked with the gateway's authorizer against the `useKeys` permission a
+`keyVaultCryptoUser` grant to `resource:{consumer}` carries.
+[18 § What customer-managed keys still need](18-security-vault-and-malware-scan.md) records it.
 
 **The seam.** `ReconcileContext` carries two new members, both bound by `ReconcileDriver` to the
 resource the pass is for and rebindable by nothing a reconciler can call:
@@ -1368,6 +1849,33 @@ keeps it that way. A provider that needs another resource to *change* asks the t
 publishes an action on its own type — which is what a vault does: it writes snapshots *beside* the
 protected resource, under its own id, never into it.
 
+**An action may create, as its caller.** Added 2026-09-24 for #30. The argument above is about a
+reconciler, and an action is the other case: the person who `POST`ed it is authenticated and their
+request is open. So `ActionContext.Creator` — `IResourceCreator.CreateAsync(type, name, apiVersion,
+body)` — lets a handler create *one new resource in the action's own subscription and group*, and
+`ResourceManagerService.CreateForActionAsync` turns it into a `PUT` through every step of § The write
+path, with the action's caller as the caller: authorised for the created type's write permission,
+locked, reserved against quota, indexed, recorded as that caller's create. An existing name is refused
+with `ResourceAlreadyExists` rather than replaced (the check precedes the write and does not hold the
+name, so two racing creates of one name can both pass it and the second becomes an update of the same
+body — recorded, not closed). The creator is built per request by `CompleteActionAsync` and registered
+in no container, so a handler cannot obtain one without a caller. The vault's `recover` is the first
+user: a restore is a `CyberCloud.DBforPostgreSQL/servers` resource with `/properties/restore/recoveryPoint`,
+not an object under the vault's labels. `ActionCreatesAsTheCallerTests` pins the caller, the refusal of a
+caller who may act and not write, the permission asked on the *created* type rather than the action's,
+and the refusal of a taken name.
+
+⚠ **And a property only an action may set is the other half of the seam (#30's review).** The restore
+property was an ordinary one, so a caller's own `PUT` of a server could name any `Backup` in the group's
+namespace and skip `recover` — its permission on the vault, its check that the point is the vault's, its
+check that the point completed. `IResourceTypeBuilder.SetOnlyByAnAction(pointer)` records the pointer on
+the registration (it must be declared, immutable, in every api-version), and step 2 of § The write path
+refuses a caller's own write that sets it to anything but the stored value (the schema default on a
+create) with `InvalidRequestBody` at the pointer; `CreateForActionAsync` is the one route that may. The
+property stays in the published schema, so a client can read a restored server and send it back.
+`ActionCreatesAsTheCallerTests.APropertyOnlyAnActionMaySetIsRefusedOnACallersOwnWrite` pins both
+directions.
+
 **Implementation over contracts, enforced.** The view returns `ResourceSnapshot` and Kubernetes
 `ObjectRef` — the other provider's public *contract* (its schema) and nothing from its assembly. Rule
 2 still forbids the assembly reference, and a new rule 8 in the Assembly graph gate fails a provider
@@ -1406,13 +1914,13 @@ for the registration call and nothing else, because the view is safe exactly as 
 - The view sees the target's *current* snapshot; a target mid-update reports `Updating`, and a
   reconciler that must act on a settled shape checks the state before it does.
 
-**What is owed, precisely.** Delivery is durable and the pass that runs next sees it. What does not
-exist is the pass itself: a converged resource has no operation and no reminder, so a delivered change
-waits for the next pass something else starts — a `PUT`, a restore, or the drift scan of § The
-reconcile loop, which is itself owed its reminder. The hook for a manager-started pass is
-`IResourceGrain.NotifyChangedAsync`, and the kind it would start is a seventh `OperationKind` that
-converges without a body change and tears nothing down on cancel; when it lands, "tell me when X
-changes" becomes "run me when X changes" without a change to the provider seam. The vault and the key
+**What is owed, precisely.** Delivery is durable and the pass that runs next sees it. ⚠ *Corrected
+2026-09-24:* the pass exists now for a type that declares one — § The manager-started pass, the seventh
+`OperationKind` (`Refresh`) this paragraph predicted, converging without a body change and tearing
+nothing down on cancel. What remains is the pass a *delivery* starts: `IResourceGrain.NotifyChangedAsync`
+records the event and wakes nothing, so a watcher with no period still waits for a `PUT`, a restore, or
+the drift scan of § The reconcile loop, which is itself owed its reminder. Starting a `Refresh` there is
+what turns "tell me when X changes" into "run me when X changes", without a change to the provider seam. The vault and the key
 themselves remain owed at `charts/managed/seaweedfs/conformance.yaml § owed` — what this decision
 removed is the sentence that said the seam was the blocker.
 
@@ -1430,7 +1938,9 @@ removed is the sentence that said the seam was the blocker.
 > the tenant reads at `/properties/protectedItems/{i}`, naming `resource:{vault}` and the role to
 > grant. The key remains owed where the sentence above says; the manager-started pass is what the
 > vault's retention now waits on (`charts/managed/recovery-vault/conformance.yaml § owed`,
-> `retention-is-enforced-on-passes`).
+> `retention-is-enforced-on-passes`) — and, *2026-09-24*, what it has: the vault declares
+> `PassEvery(1h)` (§ The manager-started pass), and its `recover` creates a server through
+> `ActionContext.Creator` rather than writing a `Cluster` itself.
 
 ## Effort
 

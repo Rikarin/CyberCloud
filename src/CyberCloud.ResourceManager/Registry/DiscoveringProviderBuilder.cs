@@ -81,7 +81,9 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
         ResourceSchema? request = null,
         ResourceSchema? response = null,
         bool longRunning = false,
-        Type? handler = null
+        Type? handler = null,
+        string entryPoint = "",
+        bool fullyConsistent = false
     ) {
         if (handler is not null && !Handlers.Contains(handler)) {
             Handlers.Add(handler);
@@ -109,4 +111,10 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
 
     /// <inheritdoc />
     public IResourceTypeBuilder RequiresCluster(string clusterIdPointer = ClusterPlacement.DefaultPointer) => this;
+
+    /// <inheritdoc />
+    public IResourceTypeBuilder PassEvery(TimeSpan period) => this;
+
+    /// <inheritdoc />
+    public IResourceTypeBuilder SetOnlyByAnAction(string propertyPointer) => this;
 }

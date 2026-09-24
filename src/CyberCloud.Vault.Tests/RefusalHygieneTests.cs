@@ -51,6 +51,10 @@ public sealed class RefusalHygieneTests {
         new() {
             { nameof(VaultFailures.EmptyHandle), VaultFailures.EmptyHandle(new() { Path = Handle.Path }) },
             {
+                nameof(VaultFailures.NonCanonicalPath),
+                VaultFailures.NonCanonicalPath(Handle with { Path = Handle.Path + "/../../other/main" })
+            },
+            {
                 nameof(VaultFailures.AuthenticationFailed),
                 VaultFailures.AuthenticationFailed(
                     $"OpenBao at {Address} refused the login as role '{Role}' with HTTP 403"

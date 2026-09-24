@@ -64,11 +64,15 @@ public static class SignatureV4 {
         string PayloadHash
     );
 
-    /// <summary>The credential scope — <c>{yyyyMMdd}/{region}/s3/aws4_request</c>.</summary>
+    /// <summary>The credential scope — <c>{yyyyMMdd}/{region}/{service}/aws4_request</c>.</summary>
     /// <param name="date">The request's date, UTC.</param>
     /// <param name="region">The region.</param>
-    public static string Scope(DateTimeOffset date, string region) =>
-        $"{date.UtcDateTime.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}/{region}/{Service}/aws4_request";
+    /// <param name="service">
+    ///     The signing service — <c>s3</c> for the object API, <c>iam</c> for the IAM API that issues a
+    ///     workload its keys. ⚠ Part of the key derivation, so a request signed for the wrong one is a 403.
+    /// </param>
+    public static string Scope(DateTimeOffset date, string region, string service = Service) =>
+        $"{date.UtcDateTime.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}/{region}/{service}/aws4_request";
 
     /// <summary>The <c>x-amz-date</c> value — <c>yyyyMMddTHHmmssZ</c>.</summary>
     /// <param name="date">The request's date, UTC.</param>
@@ -113,20 +117,22 @@ public static class SignatureV4 {
     /// <param name="canonicalRequest">What <see cref="CanonicalRequest" /> produced.</param>
     /// <param name="date">The request's date.</param>
     /// <param name="region">The region.</param>
-    public static string StringToSign(string canonicalRequest, DateTimeOffset date, string region) =>
-        $"{Algorithm}\n{AmzDate(date)}\n{Scope(date, region)}\n{Hex(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalRequest)))}";
+    /// <param name="service">The signing service — see <see cref="Scope" />.</param>
+    public static string StringToSign(string canonicalRequest, DateTimeOffset date, string region, string service = Service) =>
+        $"{Algorithm}\n{AmzDate(date)}\n{Scope(date, region, service)}\n{Hex(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalRequest)))}";
 
     /// <summary>The signing key — four HMACs deep, from the secret through the scope's parts.</summary>
     /// <param name="secretAccessKey">The secret half of the credential.</param>
     /// <param name="date">The request's date.</param>
     /// <param name="region">The region.</param>
-    public static byte[] SigningKey(string secretAccessKey, DateTimeOffset date, string region) {
+    /// <param name="service">The signing service — see <see cref="Scope" />.</param>
+    public static byte[] SigningKey(string secretAccessKey, DateTimeOffset date, string region, string service = Service) {
         var kDate = HMACSHA256.HashData(
             Encoding.UTF8.GetBytes("AWS4" + secretAccessKey),
             Encoding.UTF8.GetBytes(date.UtcDateTime.ToString("yyyyMMdd", CultureInfo.InvariantCulture))
         );
         var kRegion = HMACSHA256.HashData(kDate, Encoding.UTF8.GetBytes(region));
-        var kService = HMACSHA256.HashData(kRegion, Encoding.UTF8.GetBytes(Service));
+        var kService = HMACSHA256.HashData(kRegion, Encoding.UTF8.GetBytes(service));
 
         return HMACSHA256.HashData(kService, Encoding.UTF8.GetBytes("aws4_request"));
     }
@@ -136,11 +142,12 @@ public static class SignatureV4 {
     /// <param name="date">The request's date.</param>
     /// <param name="region">The region.</param>
     /// <param name="secretAccessKey">The secret half of the credential.</param>
-    public static string Sign(Request request, DateTimeOffset date, string region, string secretAccessKey) =>
+    /// <param name="service">The signing service — see <see cref="Scope" />.</param>
+    public static string Sign(Request request, DateTimeOffset date, string region, string secretAccessKey, string service = Service) =>
         Hex(
             HMACSHA256.HashData(
-                SigningKey(secretAccessKey, date, region),
-                Encoding.UTF8.GetBytes(StringToSign(CanonicalRequest(request), date, region))
+                SigningKey(secretAccessKey, date, region, service),
+                Encoding.UTF8.GetBytes(StringToSign(CanonicalRequest(request), date, region, service))
             )
         );
 
@@ -150,18 +157,20 @@ public static class SignatureV4 {
     /// <param name="region">The region.</param>
     /// <param name="accessKeyId">The public half of the credential.</param>
     /// <param name="secretAccessKey">The secret half.</param>
+    /// <param name="service">The signing service — see <see cref="Scope" />.</param>
     public static string Authorization(
         Request request,
         DateTimeOffset date,
         string region,
         string accessKeyId,
-        string secretAccessKey
+        string secretAccessKey,
+        string service = Service
     ) {
         ArgumentNullException.ThrowIfNull(request);
 
-        return $"{Algorithm} Credential={accessKeyId}/{Scope(date, region)}, "
+        return $"{Algorithm} Credential={accessKeyId}/{Scope(date, region, service)}, "
             + $"SignedHeaders={SignedHeaders(request.Headers)}, "
-            + $"Signature={Sign(request, date, region, secretAccessKey)}";
+            + $"Signature={Sign(request, date, region, secretAccessKey, service)}";
     }
 
     /// <summary>Lower-case hex of a digest.</summary>

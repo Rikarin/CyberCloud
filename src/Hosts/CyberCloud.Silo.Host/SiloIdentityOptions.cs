@@ -82,6 +82,12 @@ public sealed class SiloIdentityOptions {
 /// <summary>Composes the identity module onto this silo.</summary>
 public static class SiloIdentityComposition {
     /// <summary>
+    ///     <c>CyberCloud:Identity:Invitations:PageBaseUri</c> — the identity app's address, which an
+    ///     invitation mail's link is built on (#43).
+    /// </summary>
+    public const string InvitationPageKey = "CyberCloud:Identity:Invitations:PageBaseUri";
+
+    /// <summary>
     ///     Adds the identity grains' services and, when configured, points
     ///     <c>IOtpDeliverySeam</c> at <c>CyberCloud.Communication</c>.
     /// </summary>
@@ -162,6 +168,29 @@ public static class SiloIdentityComposition {
             silo.AddCommunicationOtpDelivery(options.TenantId, options.ServiceId, options.TemplateName);
         } else {
             silo.AddDevelopmentOtpDelivery(environment, hasRelay ? PlatformCommunicationService.OtpRoute : null);
+        }
+
+        // ── Invitation mail (#43) ──────────────────────────────────────────────────────────────
+        //
+        // ⚠ Through the service the codes go through — the configured one, or, in Development, the
+        // platform's own when a relay made the bootstrap write it (the codes' rule: a relay is not
+        // a route anywhere else) — and only when the page the link opens is named. Anything
+        // missing leaves UnavailableInvitationDelivery, whose refusal names what to set, so an
+        // invite on a silo that cannot mail is an error the sender reads, never a silent drop. No
+        // development branch logs the link instead: it makes a member, and a console is not
+        // somewhere to print one.
+        var page = silo.Configuration[InvitationPageKey];
+
+        if (Uri.TryCreate(page, UriKind.Absolute, out var pageBaseUri)) {
+            if (options.IsConfigured) {
+                silo.AddCommunicationInvitationDelivery(options.TenantId, options.ServiceId, pageBaseUri);
+            } else if (hasRelay && environment.IsDevelopment()) {
+                silo.AddCommunicationInvitationDelivery(
+                    PlatformCommunicationService.OtpRoute.TenantId,
+                    PlatformCommunicationService.OtpRoute.ServiceId,
+                    pageBaseUri
+                );
+            }
         }
 
         return silo;

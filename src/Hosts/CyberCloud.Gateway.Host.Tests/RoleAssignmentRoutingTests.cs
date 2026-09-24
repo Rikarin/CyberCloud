@@ -122,6 +122,43 @@ public sealed class RoleAssignmentRoutingTests {
             "\"" + RoleAssignmentBodyProperties.PrincipalId + "\":\"7f3c2a1e0b4d4f6a8c9d1e2f3a4b5c6d\""
         );
         response.Body.ShouldContain("\"scope\":\"" + GatewayHarness.GroupPath(GatewayHarness.TenantA) + "\"");
+
+        // A permanent grant still carries the property, as null — one shape for every row.
+        response.Body.ShouldContain("\"" + RoleAssignmentBodyProperties.ExpiresOn + "\":null");
+    }
+
+    [Fact]
+    public async Task AJustInTimeGrantRendersItsExpiryInUtcAndAGetSentBackReachesTheManagerAsItWasRendered() {
+        // Issue #49. The instant is rendered in UTC whatever offset the manager's value carries. The
+        // manager here is a stand-in, so this holds the gateway's half of the round trip: the
+        // envelope goes out with the end in it and comes back in unchanged. Whether the manager
+        // reads that end is RoleAssignmentTests.AGetSentBackAsAPutKeepsTheEndItRendered's question.
+        var gateway = new GatewayHarness();
+        var expiresOn = new DateTimeOffset(2026, 9, 24, 11, 0, 0, TimeSpan.FromHours(2));
+
+        gateway.Roles.OnRead = request => Result<RoleAssignmentSnapshot>.Success(
+            new() { Path = request.Path, Name = Name, RoleDefinitionId = "reader", ExpiresOn = expiresOn }
+        );
+
+        var response = await gateway.SendAsync(
+            "GET",
+            OnGroup(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA)
+        );
+
+        response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
+        response.Body.ShouldContain(
+            "\"" + RoleAssignmentBodyProperties.ExpiresOn + "\":\"2026-09-24T09:00:00+00:00\""
+        );
+
+        await gateway.SendAsync(
+            "PUT",
+            OnGroup(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA),
+            body: response.Body
+        );
+
+        gateway.Roles.Bodies.ShouldContain(response.Body);
     }
 
     [Fact]

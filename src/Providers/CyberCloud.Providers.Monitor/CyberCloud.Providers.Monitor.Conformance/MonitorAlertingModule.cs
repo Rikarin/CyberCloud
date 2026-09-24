@@ -4,6 +4,7 @@ using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.Providers.Monitor.Contracts;
+using CyberCloud.Providers.Monitor.Query;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 
@@ -56,7 +57,7 @@ public sealed class MonitorAlertingModule : IConvergedModule {
 
     /// <inheritdoc />
     public void ConfigureSilo(ISiloBuilder silo) {
-        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting());
+        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting().AddCyberCloudMonitorQuery(new()));
         silo.AddCyberCloudCommunication();
     }
 
@@ -64,7 +65,7 @@ public sealed class MonitorAlertingModule : IConvergedModule {
     public void ConfigureHandlers(IServiceCollection services, IGrainFactory grains) {
         // What the gateway registers for this family's one grain-reaching handler.
         services.AddSingleton(grains);
-        services.AddCyberCloudMonitorAlerting();
+        services.AddCyberCloudMonitorAlerting().AddCyberCloudMonitorQuery(new());
     }
 
     /// <inheritdoc />

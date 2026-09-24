@@ -1,4 +1,5 @@
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Core.Time;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
 using System.Collections.Frozen;
@@ -89,6 +90,20 @@ namespace CyberCloud.ResourceManager;
 ///         ⚠ <b>Every grain reference goes through <c>ForTenant</c>.</b> Held by the gateway, which
 ///         is an Orleans <i>client</i>; <c>CC1006</c> keeps that true after the next edit.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             A just-in-time role is an assignment with an <c>expiresOn</c>, and nothing more is
+///             built (issue #49).
+///         </b> The expiry rides on the tuple, the engine stops honouring it at that instant with no
+///         write, and the store's sweep removes it and audits the end — docs/plan/07
+///         § Time-bounded relations. Azure's PIM has more around it: an <i>eligible</i> assignment
+///         that a principal <i>activates</i> for a bounded time, with a justification, a maximum
+///         duration, and an approval. docs/plan/01's catalogue row calls the tuple with an expiry
+///         "the whole feature" and describes none of that, so the eligible-to-active flow is
+///         recorded as owed in the same section rather than invented here. What a tenant has
+///         today is an owner granting a role that ends on its own.
+///     </para>
 /// </remarks>
 public sealed class RoleAssignmentService(
     IScopeAuthorizer scopes,
@@ -96,23 +111,36 @@ public sealed class RoleAssignmentService(
     IRoleAssignmentStore store,
     IPrincipalDirectory directory,
     IGrainFactory grains,
+    IClock clock,
     ILogger<RoleAssignmentService> logger
 )
     : IRoleAssignmentManager {
     /// <summary>
-    ///     The three relations a tenant may grant — docs/plan/07 § Azure RBAC, expressed in it's
-    ///     <c>Owner</c>, <c>Contributor</c> and <c>Reader</c>.
+    ///     The seven relations a tenant may grant — docs/plan/07 § Azure RBAC, expressed in it's
+    ///     <c>Owner</c>, <c>Contributor</c> and <c>Reader</c>, and the four key-vault data-plane
+    ///     roles of docs/plan/18 § <c>CyberCloud.KeyVault/vaults</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A closed set here, over and above the schema's own check.</b> <c>TupleStoreGrain</c>
-    ///     refuses a relation the type does not declare, but it accepts every relation it does —
-    ///     <c>parent</c>, <c>suspended</c>, <c>member</c> — and each of those written through this
-    ///     path would be something other than a role assignment wearing its address. A deny
-    ///     assignment is Azure's <c>denyAssignments</c>, a different resource type, and it is not
-    ///     built; a parent edge is the scope path's and nobody else's.
+    ///     <para>
+    ///         ⚠ <b>A closed set here, over and above the schema's own check.</b> <c>TupleStoreGrain</c>
+    ///         refuses a relation the type does not declare, but it accepts every relation it does —
+    ///         <c>parent</c>, <c>suspended</c>, <c>member</c> — and each of those written through this
+    ///         path would be something other than a role assignment wearing its address. A deny
+    ///         assignment is Azure's <c>denyAssignments</c>, a different resource type, and it is not
+    ///         built; a parent edge is the scope path's and nobody else's.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The four data-plane roles are grantable at every scope, as Azure's are</b> — a
+    ///         Secrets User on a resource group reads every vault in it — and granting one needs
+    ///         <c>assignRole</c> like any other, so a vault's owner is the person who decides who
+    ///         reads its secrets without being, by that fact, one of them.
+    ///     </para>
     /// </remarks>
     public static FrozenSet<string> GrantableRoles { get; } =
-        new[] { Relations.Owner, Relations.Contributor, Relations.Reader }.ToFrozenSet(StringComparer.Ordinal);
+        new[] {
+            Relations.Owner, Relations.Contributor, Relations.Reader, Relations.KeyVaultSecretsOfficer,
+            Relations.KeyVaultSecretsUser, Relations.KeyVaultCryptoOfficer, Relations.KeyVaultCryptoUser
+        }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
     ///     The principal types an assignment may name: the three subject types, <c>group</c>, which
@@ -158,10 +186,12 @@ public sealed class RoleAssignmentService(
 
         var assignment = resolved.GetValueOrThrow();
 
-        var agreed = BodyAgrees(request.Body, assignment);
+        var agreed = BodyAgrees(request.Body, assignment, clock.UtcNow);
         if (agreed.TryGetError(out var bodyError)) {
             return Result<RoleAssignmentSnapshot>.Failure(bodyError);
         }
+
+        var expiresOn = agreed.GetValueOrThrow().ExpiresOn;
 
         var permitted = await AuthorizeAsync(
             assignment,
@@ -208,26 +238,40 @@ public sealed class RoleAssignmentService(
             );
         }
 
-        var existed = await store.IsGrantedAsync(assignment, cancellationToken);
+        var existed = await store.FindAsync(assignment, cancellationToken);
         if (existed.TryGetError(out var readError)) {
             return Result<RoleAssignmentSnapshot>.Failure(readError);
         }
 
-        var granted = await store.GrantAsync(assignment, cancellationToken);
+        var granted = await store.GrantAsync(assignment, expiresOn, cancellationToken);
         if (granted.TryGetError(out var grantError)) {
             return Result<RoleAssignmentSnapshot>.Failure(grantError);
         }
 
-        logger.LogInformation(
-            "{Caller} granted '{Role}' on '{Scope}' to {PrincipalType}:{PrincipalId}.",
-            request.Caller,
-            assignment.Name.Role,
-            assignment.ScopePath,
-            assignment.Name.PrincipalType,
-            assignment.Name.PrincipalId
-        );
+        if (expiresOn is { } until) {
+            logger.LogInformation(
+                "{Caller} granted '{Role}' on '{Scope}' to {PrincipalType}:{PrincipalId} until {ExpiresOn:O}.",
+                request.Caller,
+                assignment.Name.Role,
+                assignment.ScopePath,
+                assignment.Name.PrincipalType,
+                assignment.Name.PrincipalId,
+                until
+            );
+        } else {
+            logger.LogInformation(
+                "{Caller} granted '{Role}' on '{Scope}' to {PrincipalType}:{PrincipalId}.",
+                request.Caller,
+                assignment.Name.Role,
+                assignment.ScopePath,
+                assignment.Name.PrincipalType,
+                assignment.Name.PrincipalId
+            );
+        }
 
-        return Result<RoleAssignmentSnapshot>.Success(Snapshot(assignment, !existed.GetValueOrThrow()));
+        return Result<RoleAssignmentSnapshot>.Success(
+            Snapshot(assignment, !existed.GetValueOrThrow().Granted, expiresOn)
+        );
     }
 
     /// <inheritdoc />
@@ -249,13 +293,15 @@ public sealed class RoleAssignmentService(
             return Result<RoleAssignmentSnapshot>.Failure(denied);
         }
 
-        var granted = await store.IsGrantedAsync(assignment, cancellationToken);
-        if (granted.TryGetError(out var readError)) {
+        var found = await store.FindAsync(assignment, cancellationToken);
+        if (found.TryGetError(out var readError)) {
             return Result<RoleAssignmentSnapshot>.Failure(readError);
         }
 
-        return granted.GetValueOrThrow()
-            ? Result<RoleAssignmentSnapshot>.Success(Snapshot(assignment, false))
+        var grant = found.GetValueOrThrow();
+
+        return grant.Granted
+            ? Result<RoleAssignmentSnapshot>.Success(Snapshot(assignment, false, grant.ExpiresOn))
             : NotFound<RoleAssignmentSnapshot>(assignment.Path);
     }
 
@@ -335,9 +381,12 @@ public sealed class RoleAssignmentService(
         // API pages by (ListRequest.Continuation). The addresses are distinct — one tuple, one
         // address — so "the first row after the token" is well defined, and a grant or a revoke
         // between two pages moves only its own row.
+        // ⚠ The resume filter was lost in the 2026-09-18 reformat, which turned it into a second
+        // OrderBy — every page after the first repeated the first, and
+        // RoleAssignmentTests.TheCollectionIsPagedByAddressAndAPageIsNeverSilentlyShort went red on it.
         var rows = listed.GetValueOrThrow()
             .OrderBy(static x => x.Path, StringComparer.Ordinal)
-            .OrderBy(x => x.Path, StringComparer.Ordinal)
+            .Where(x => request.Continuation.Length == 0 || string.CompareOrdinal(x.Path, request.Continuation) > 0)
             .Take(request.PageSize + 1)
             .ToList();
 
@@ -575,13 +624,21 @@ public sealed class RoleAssignmentService(
     ///     Whether the body, when it says anything, says what the address says.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Every property is optional and a present one must agree — see
-    ///     <see cref="RoleAssignmentBodyProperties" />. The comparison is ordinal on all three,
-    ///     because all three are matched ordinally by the tuple store, and a body that said
-    ///     <c>Reader</c> for an address that said <c>reader</c> is a client that has two spellings
-    ///     of one thing and is about to have a worse day elsewhere.
+    ///     <para>
+    ///         ⚠ Every property is optional and a present one must agree — see
+    ///         <see cref="RoleAssignmentBodyProperties" />. The comparison is ordinal on all three,
+    ///         because all three are matched ordinally by the tuple store, and a body that said
+    ///         <c>Reader</c> for an address that said <c>reader</c> is a client that has two
+    ///         spellings of one thing and is about to have a worse day elsewhere.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The envelope's <c>id</c> and <c>scope</c> must agree too.</b> They name the address
+    ///         the <c>GET</c> went to, so without them a <c>GET</c> from one scope, sent as a
+    ///         <c>PUT</c> to another, would grant at the second without a word. Both are ordinal,
+    ///         because scope names are: two resource groups can differ only in case.
+    ///     </para>
     /// </remarks>
-    static Result BodyAgrees(string body, RoleAssignmentId assignment) {
+    static Result<AssignmentBody> BodyAgrees(string body, RoleAssignmentId assignment, DateTimeOffset now) {
         JsonDocument document;
 
         try {
@@ -589,7 +646,7 @@ public sealed class RoleAssignmentService(
         } catch (JsonException exception) {
             // The parser's message describes the caller's own input, not our stack —
             // docs/plan/08 § Errors bans exception detail, and this is not any.
-            return Result.Failure(
+            return Result<AssignmentBody>.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"The request body is not valid JSON: {exception.Message}"
             );
@@ -597,7 +654,7 @@ public sealed class RoleAssignmentService(
 
         using (document) {
             if (document.RootElement.ValueKind != JsonValueKind.Object) {
-                return Result.Failure(
+                return Result<AssignmentBody>.Failure(
                     ErrorCode.InvalidRequestBody,
                     $"The request body is a JSON {document.RootElement.ValueKind.ToString().ToLowerInvariant()}. "
                     + "A role assignment body is a JSON object, and '{}' is a complete one — the "
@@ -605,16 +662,149 @@ public sealed class RoleAssignmentService(
                 );
             }
 
+            var properties = Properties(document.RootElement);
+
+            if (properties.TryGetError(out var shapeError)) {
+                return Result<AssignmentBody>.Failure(shapeError);
+            }
+
+            var read = properties.GetValueOrThrow();
             var name = assignment.Name;
 
-            return Agree(document.RootElement, RoleAssignmentBodyProperties.RoleDefinitionId, name.Role)
-                ?? Agree(document.RootElement, RoleAssignmentBodyProperties.PrincipalType, name.PrincipalType)
-                ?? Agree(document.RootElement, RoleAssignmentBodyProperties.PrincipalId, name.PrincipalId)
-                ?? Result.Success;
+            var disagreement = Agree(read, RoleAssignmentBodyProperties.RoleDefinitionId, name.Role, NameAgrees)
+                ?? Agree(read, RoleAssignmentBodyProperties.PrincipalType, name.PrincipalType, NameAgrees)
+                ?? Agree(read, RoleAssignmentBodyProperties.PrincipalId, name.PrincipalId, NameAgrees)
+                ?? Agree(document.RootElement, "id", assignment.Path, AddressAgrees)
+                ?? Agree(read, "scope", assignment.ScopePath, AddressAgrees);
+
+            if (disagreement is { } refused) {
+                return Result<AssignmentBody>.Failure(refused.Error!);
+            }
+
+            return ExpiresOn(read, now);
         }
     }
 
-    static Result? Agree(JsonElement body, string property, string expected) {
+    /// <summary>
+    ///     Where the body's four properties are: under <c>properties</c> when the body is the
+    ///     envelope a <c>GET</c> renders, at the top level otherwise.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Both shapes, because a <c>GET</c> sent back as a <c>PUT</c> is the envelope.</b> Read
+    ///     at the top level alone, the envelope's <c>properties.expiresOn</c> goes unseen and the
+    ///     <c>PUT</c> makes a just-in-time grant permanent, the opposite of what it sent. A body with
+    ///     the four in both places is refused, because either reading would ignore half of what the
+    ///     caller wrote.
+    /// </remarks>
+    static Result<JsonElement> Properties(JsonElement body) {
+        if (!body.TryGetProperty("properties", out var properties)) {
+            return Result<JsonElement>.Success(body);
+        }
+
+        if (properties.ValueKind != JsonValueKind.Object) {
+            return Result<JsonElement>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The body's 'properties' is a JSON {properties.ValueKind.ToString().ToLowerInvariant()}. "
+                + "It is the object a GET renders the assignment's properties in; leave it out and put "
+                + "them at the top level, or send it as an object."
+            );
+        }
+
+        string[] four = [
+            RoleAssignmentBodyProperties.RoleDefinitionId,
+            RoleAssignmentBodyProperties.PrincipalType,
+            RoleAssignmentBodyProperties.PrincipalId,
+            RoleAssignmentBodyProperties.ExpiresOn
+        ];
+
+        var twice = four.FirstOrDefault(x => body.TryGetProperty(x, out _));
+
+        return twice is null
+            ? Result<JsonElement>.Success(properties)
+            : Result<JsonElement>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The body carries '{twice}' at the top level and a 'properties' object as well. Send "
+                + "the assignment's properties in one of the two places."
+            );
+    }
+
+    /// <summary>
+    ///     The body's <c>expiresOn</c>: absent or <c>null</c> for a permanent grant, otherwise an ISO
+    ///     8601 instant with an explicit offset that is later than now.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The offset is required, not assumed.</b> <c>System.Text.Json</c> reads a timestamp
+    ///     with no offset as the parsing host's local time, so <c>2026-09-24T09:00:00</c> would end
+    ///     a grant at an instant that depends on which gateway replica took the request. Refusing it
+    ///     costs a client one character; accepting it costs an owner a grant that ends an hour early
+    ///     or late with nothing in the response to say so. The stored instant is UTC, which is what
+    ///     every read renders.
+    /// </remarks>
+    static Result<AssignmentBody> ExpiresOn(JsonElement body, DateTimeOffset now) {
+        if (!body.TryGetProperty(RoleAssignmentBodyProperties.ExpiresOn, out var value)
+            || value.ValueKind == JsonValueKind.Null) {
+            return Result<AssignmentBody>.Success(new(null));
+        }
+
+        var text = value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
+
+        if (value.ValueKind != JsonValueKind.String
+            || !value.TryGetDateTimeOffset(out var parsed)
+            || !HasExplicitOffset(text)) {
+            return Result<AssignmentBody>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The body's '{RoleAssignmentBodyProperties.ExpiresOn}' is "
+                + $"'{(value.ValueKind == JsonValueKind.String ? text : value.ValueKind.ToString().ToLowerInvariant())}', "
+                + "which is not an ISO 8601 instant with an offset — for example '2026-09-24T09:00:00Z'. "
+                + "It is when the grant ends, and it needs the offset so that the instant does not "
+                + "depend on where it was parsed. Leave it out, or send null, for a permanent grant."
+            );
+        }
+
+        var expiresOn = parsed.ToUniversalTime();
+
+        if (expiresOn <= now) {
+            return Result<AssignmentBody>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"The body's '{RoleAssignmentBodyProperties.ExpiresOn}' is {expiresOn:O}, which is not later "
+                + $"than now ({now.ToUniversalTime():O}). A grant that has already ended grants nothing — "
+                + "docs/plan/07 § Time-bounded relations. To end a grant now, DELETE it."
+            );
+        }
+
+        return Result<AssignmentBody>.Success(new(expiresOn));
+    }
+
+    static bool HasExplicitOffset(string text) {
+        // The shapes ISO 8601 allows for an offset: 'Z', or ±hh:mm / ±hhmm / ±hh after the time.
+        var time = text.IndexOf('T', StringComparison.OrdinalIgnoreCase);
+        if (time < 0) {
+            return false;
+        }
+
+        if (text.EndsWith('Z') || text.EndsWith('z')) {
+            return true;
+        }
+
+        var tail = text[(time + 1)..];
+        return tail.Contains('+', StringComparison.Ordinal) || tail.Contains('-', StringComparison.Ordinal);
+    }
+
+    /// <summary>What a <c>PUT</c> body says beyond what the address already does.</summary>
+    /// <param name="ExpiresOn">When the grant ends, in UTC, or <see langword="null" /> for a permanent grant.</param>
+    readonly record struct AssignmentBody(DateTimeOffset? ExpiresOn);
+
+    const string NameAgrees =
+        "The address is the assignment — '{role}-{principalType}-{principalId}' — so a body property is "
+        + "optional and, when present, must agree with it; trusting either one silently would grant "
+        + "something the caller did not spell.";
+
+    const string AddressAgrees =
+        "It names the address a GET was sent to, and this PUT is to another one; granting here on a body "
+        + "read from there would grant somewhere the caller did not spell. Leave it out, or send the PUT "
+        + "to the address it names.";
+
+    static Result? Agree(JsonElement body, string property, string expected, string why) {
         if (!body.TryGetProperty(property, out var value)) {
             return null;
         }
@@ -626,14 +816,12 @@ public sealed class RoleAssignmentService(
             : Result.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"The body's '{property}' is '{actual ?? value.ValueKind.ToString().ToLowerInvariant()}' and "
-                + $"the address says '{expected}'. The address is the assignment — "
-                + "'{role}-{principalType}-{principalId}' — so a body property is optional and, when "
-                + "present, must agree with it; trusting either one silently would grant something "
-                + "the caller did not spell."
+                + $"the address says '{expected}'. "
+                + why
             );
     }
 
-    static RoleAssignmentSnapshot Snapshot(RoleAssignmentId assignment, bool created) =>
+    static RoleAssignmentSnapshot Snapshot(RoleAssignmentId assignment, bool created, DateTimeOffset? expiresOn) =>
         new() {
             Path = assignment.Path,
             Name = assignment.Name.Render(),
@@ -641,7 +829,8 @@ public sealed class RoleAssignmentService(
             RoleDefinitionId = assignment.Name.Role,
             PrincipalType = assignment.Name.PrincipalType,
             PrincipalId = assignment.Name.PrincipalId,
-            Created = created
+            Created = created,
+            ExpiresOn = expiresOn
         };
 
     static Result<T> NotFound<T>(string path) where T : notnull =>

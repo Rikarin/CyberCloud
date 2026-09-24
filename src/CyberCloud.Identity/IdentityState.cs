@@ -117,6 +117,13 @@ public sealed class UserGrainState {
     /// </remarks>
     [Id(11)]
     public List<DateTimeOffset> OtpIssuedAt { get; set; } = [];
+
+    /// <summary>
+    ///     The account in another tenant this member signs in through, or <see langword="null" />.
+    ///     <see cref="HomeAccount" />'s remarks; issue #43.
+    /// </summary>
+    [Id(12)]
+    public HomeAccount? HomeAccount { get; set; }
 }
 
 /// <summary>
@@ -226,6 +233,20 @@ public sealed class ApplicationGrainState {
     /// </remarks>
     [Id(1)]
     public bool ClientIdConfirmed { get; set; }
+
+    /// <summary>
+    ///     The SHA-256 of the secret the platform issued this client, as lower-case hexadecimal, or
+    ///     empty. Issue #41.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A digest and not a slow hash, which is a decision about the input rather than a
+    ///     shortcut: the secret is 256 bits from <c>RandomNumberGenerator</c>, so there is no
+    ///     dictionary to slow down, and a slow hash would put an Argon2 cost on every code and
+    ///     refresh exchange a confidential client makes. A password is the opposite case and gets
+    ///     Argon2id.
+    /// </remarks>
+    [Id(2)]
+    public string ClientSecretDigest { get; set; } = string.Empty;
 }
 
 /// <summary><c>ServicePrincipalGrain</c>'s durable state.</summary>
@@ -509,4 +530,121 @@ public sealed class ConsentGrainState {
     /// <summary>Whether a grant is on record — false before the first grant and after a revocation.</summary>
     [Id(5)]
     public bool Granted { get; set; }
+}
+
+/// <summary>
+///     <c>DeviceAuthorizationGrain</c>'s hot-tier state — one RFC 8628 device authorization, from
+///     the device's request to the device collecting its tokens. docs/plan/11 § Protocol.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Never the device secret and never the user code.</b> The secret is kept as its SHA-256,
+///     as <see cref="SessionGrainState" /> keeps a refresh handle; the user code is the key's digest
+///     and is not stored at all. What a reader of the hot tier learns is that some device asked for
+///     some scopes and who answered — not how to collect the answer.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.DeviceAuthorizationGrainState")]
+public sealed class DeviceAuthorizationGrainState {
+    /// <summary>The SHA-256 of the device secret. Empty before <c>BeginAsync</c>.</summary>
+    [Id(0)]
+    public string SecretDigest { get; set; } = string.Empty;
+
+    /// <summary>The client that asked.</summary>
+    [Id(1)]
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>The scopes it asked for.</summary>
+    [Id(2)]
+    public List<string> Scopes { get; set; } = [];
+
+    /// <summary>When the codes stop working.</summary>
+    [Id(3)]
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>The interval now in force — five seconds longer after every <c>slow_down</c>.</summary>
+    [Id(4)]
+    public TimeSpan Interval { get; set; }
+
+    /// <summary>When the device last polled, or <see langword="null" /> before its first poll.</summary>
+    [Id(5)]
+    public DateTimeOffset? LastPolledAt { get; set; }
+
+    /// <summary>Where the authorization stands.</summary>
+    [Id(6)]
+    public DeviceAuthorizationStatus Status { get; set; }
+
+    /// <summary>Who approved, once somebody has.</summary>
+    [Id(7)]
+    public DeviceApproval? Approval { get; set; }
+
+    /// <summary>The token session the redemption recorded. <see cref="Guid.Empty" /> until then.</summary>
+    [Id(8)]
+    public Guid TokenSessionId { get; set; }
+}
+
+/// <summary>
+///     <c>InvitationGrain</c>'s durable state — one invitation of an address into a tenant.
+///     docs/plan/11 § Sign-up and tenant creation, the invited path.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Never the link's secret.</b> Its SHA-256 only, for the reason
+///     <see cref="DeviceAuthorizationGrainState" /> keeps a device secret's digest: the durable tier
+///     is backed up, and a backup that held live invitation links would be a backup that could make
+///     members.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.InvitationGrainState")]
+public sealed class InvitationGrainState {
+    /// <summary>The SHA-256 of the link's secret. Empty before <c>CreateAsync</c>.</summary>
+    [Id(0)]
+    public string SecretDigest { get; set; } = string.Empty;
+
+    /// <summary>The user created, or reused, for the invitee.</summary>
+    [Id(1)]
+    public Guid UserId { get; set; }
+
+    /// <summary>The address invited, normalized.</summary>
+    [Id(2)]
+    public string Email { get; set; } = string.Empty;
+
+    /// <summary>When the link stops working.</summary>
+    [Id(3)]
+    public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>Pending or accepted; expiry is read against <see cref="ExpiresAt" />, not stored.</summary>
+    [Id(4)]
+    public InvitationStatus Status { get; set; }
+
+    /// <summary>Who sent it.</summary>
+    [Id(5)]
+    public Guid InvitedBy { get; set; }
+
+    /// <summary>The tenant's name, as the mail said it.</summary>
+    [Id(6)]
+    public string TenantName { get; set; } = string.Empty;
+
+    /// <summary>When it was created.</summary>
+    [Id(7)]
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>When it was accepted, or <see langword="null" />.</summary>
+    [Id(8)]
+    public DateTimeOffset? AcceptedAt { get; set; }
+
+    /// <summary>How many mails have gone, the first included — the next resend's number less one.</summary>
+    [Id(9)]
+    public int Sendings { get; set; }
+
+    /// <summary>When the last mail went.</summary>
+    [Id(10)]
+    public DateTimeOffset SentAt { get; set; }
+}
+
+/// <summary><c>DirectoryIndexGrain</c>'s durable state — the ids, oldest first. Issue #41.</summary>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.DirectoryIndexGrainState")]
+public sealed class DirectoryIndexGrainState {
+    /// <summary>The ids, in the order they were added.</summary>
+    [Id(0)]
+    public List<Guid> Ids { get; set; } = [];
 }

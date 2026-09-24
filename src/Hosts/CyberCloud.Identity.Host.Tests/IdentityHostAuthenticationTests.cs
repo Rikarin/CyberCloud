@@ -143,7 +143,10 @@ public sealed class IdentityHostAuthenticationTests {
             .ToList();
 
         paths.ShouldNotContain(x => x.Contains("introspect", StringComparison.OrdinalIgnoreCase));
-        paths.ShouldNotContain(x => x.Contains("revoke", StringComparison.OrdinalIgnoreCase));
+
+        // ⚠ /revoke exists since #43 (cyc logout) and takes refresh tokens only; an access token
+        // is answered unsupported_token_type — DeviceFlowOverHttpTests pins it on the wire.
+        paths.ShouldContain(IdentityHostOpenIddict.RevocationPath);
 
         paths.ShouldContain(IdentityHostOpenIddict.TokenPath);
         paths.ShouldContain(IdentityHostOpenIddict.AuthorizationPath);

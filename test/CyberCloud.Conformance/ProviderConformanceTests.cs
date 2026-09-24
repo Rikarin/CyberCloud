@@ -2088,7 +2088,13 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
             // ⚠ AND THE CROSS-RESOURCE SEAM, bound to this address the way the driver binds it. A
             // type that reads another resource — the vault — would otherwise meet the refusing
             // default and fail clause 4 for a reason that is the harness's. See ProviderTestCluster.Views.
-        ) { SecretWriter = Cluster.Vault, Objects = Cluster.Objects, View = view, Watch = watch };
+        ) {
+            SecretWriter = Cluster.Vault,
+            Objects = Cluster.Objects,
+            Grants = ConformanceState<TSource>.Grants,
+            View = view,
+            Watch = watch
+        };
 
         // ⚠ THE WORLD IS THE CLUSTER FOR A TYPE THAT DECLARED ONE AND THE CLUSTERLESS WORLD — the
         // module its case source registered, or the DataPlane its case built — FOR A TYPE THAT DID
@@ -2584,7 +2590,7 @@ public abstract class ProviderConformanceTests<TSource>(ProviderTestCluster<TSou
                     Cluster.Vault,
                     new RecordingLog()
                     // ⚠ And the cross-resource seam, for the reason TheReconcilerSatisfiesTheFourClauseContract gives.
-                ) { SecretWriter = Cluster.Vault, View = view, Watch = watch },
+                ) { SecretWriter = Cluster.Vault, Grants = ConformanceState<TSource>.Grants, View = view, Watch = watch },
                 TestContext.Current.CancellationToken
             );
     }

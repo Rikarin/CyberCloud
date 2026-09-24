@@ -1,8 +1,11 @@
 using CyberCloud.Authorization;
 using CyberCloud.Authorization.Contracts;
+using CyberCloud.Gateway.Host;
 using CyberCloud.Identity.Contracts;
 using CyberCloud.ResourceManager;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Globalization;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -1071,7 +1074,314 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         }
     }
 
+    // ── Just-in-time roles (issue #49) ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AJustInTimeGrantReadsBackItsExpiryAndEndsOnItsOwnWithNoRevoke() {
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a5");
+        var resource = await SeedAsync(subscription);
+        var jane = await UserAsync("jane");
+        var group = ScopeId.Group(Grant, subscription, Group);
+        var assignment = RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, jane));
+        var expiresOn = cluster.Clock.UtcNow.AddHours(1);
+
+        try {
+            // ── The grant: the same PUT as any other, with the one property the address lacks ──
+            var granted = await AssignWithBody(
+                assignment,
+                $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{expiresOn.ToString("O", CultureInfo.InvariantCulture)}}}"}"""
+            );
+
+            granted.IsSuccess.ShouldBeTrue(granted.Error?.Message);
+            granted.GetValueOrThrow().Created.ShouldBeTrue();
+            granted.GetValueOrThrow().ExpiresOn.ShouldBe(expiresOn);
+
+            var read = await ReadAsync(assignment);
+            read.IsSuccess.ShouldBeTrue(read.Error?.Message);
+            read.GetValueOrThrow().ExpiresOn.ShouldBe(expiresOn, "a GET must say when the grant ends");
+
+            (await ListAsync(RoleAssignmentCollectionId.OnScope(group), Owner)).GetValueOrThrow()
+                .Assignments.ShouldContain(
+                    x => x.Path == assignment.Path && x.ExpiresOn == expiresOn,
+                    "the collection must say when the grant ends"
+                );
+
+            // Two hops below the tuple, as the M1 exit story asks — a time-bounded Reader reads.
+            (await AllowedAsync(resource, Permissions.Read, jane)).ShouldBeTrue();
+
+            // ── The hour passes. Nobody revokes. ──────────────────────────────────────────────
+            cluster.Clock.Advance(TimeSpan.FromHours(1));
+
+            (await AllowedAsync(resource, Permissions.Read, jane)).ShouldBeFalse(
+                "a just-in-time Reader still reads after the grant's expiry"
+            );
+
+            var gone = await ReadAsync(assignment);
+            gone.IsFailure.ShouldBeTrue("an expired assignment still reads back");
+            gone.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+
+            (await ListAsync(RoleAssignmentCollectionId.OnScope(group), Owner)).GetValueOrThrow()
+                .Assignments.ShouldNotContain(x => x.Path == assignment.Path, "an expired assignment is still listed");
+
+            // A revoke of an expired grant is the absence it asks for — a success, as ever.
+            (await cluster.Roles.RevokeAsync(
+                    new() { Path = assignment.Path, Caller = IsolationCluster.Caller(Grant, Owner) },
+                    TestContext.Current.CancellationToken
+                )).IsSuccess.ShouldBeTrue();
+        } finally {
+            cluster.Clock.Reset();
+        }
+    }
+
+    [Fact]
+    public async Task APutWithoutExpiresOnMakesAJustInTimeGrantPermanent() {
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a6");
+        var resource = await SeedAsync(subscription);
+        var perry = await UserAsync("perry");
+        var assignment = RoleAssignmentId.OnScope(
+            ScopeId.Group(Grant, subscription, Group),
+            new(Relations.Reader, SubjectTypes.User, perry)
+        );
+
+        try {
+            var expiresOn = cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture);
+            (await AssignWithBody(assignment, $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{expiresOn}}}"}"""))
+                .IsSuccess.ShouldBeTrue();
+
+            // ⚠ A PUT states the whole assignment. One that kept the old expiry because the body
+            // didn't mention it would end a grant at a time this caller never sent.
+            var permanent = await Assign(assignment, Owner);
+            permanent.IsSuccess.ShouldBeTrue(permanent.Error?.Message);
+            permanent.GetValueOrThrow().Created.ShouldBeFalse("the tuple was already there");
+            permanent.GetValueOrThrow().ExpiresOn.ShouldBeNull();
+
+            cluster.Clock.Advance(TimeSpan.FromDays(2));
+
+            (await AllowedAsync(resource, Permissions.Read, perry)).ShouldBeTrue(
+                "a PUT without expiresOn left the earlier expiry in place"
+            );
+            (await ReadAsync(assignment)).GetValueOrThrow().ExpiresOn.ShouldBeNull();
+        } finally {
+            cluster.Clock.Reset();
+        }
+    }
+
+    [Fact]
+    public async Task AGetSentBackAsAPutKeepsTheEndItRendered() {
+        // ⚠ The envelope a GET renders carries expiresOn under `properties`, so a manager that read
+        // the top level alone would make the grant permanent, the opposite of docs/plan/10's promise.
+        // The body sent back is the gateway's own rendering of the manager's own read, so a renderer
+        // that moved expiresOn fails this too.
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a9");
+        var resource = await SeedAsync(subscription);
+        var gwen = await UserAsync("gwen");
+        var group = ScopeId.Group(Grant, subscription, Group);
+        var assignment = RoleAssignmentId.OnScope(group, new(Relations.Reader, SubjectTypes.User, gwen));
+        var expiresOn = cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture);
+
+        try {
+            (await AssignWithBody(assignment, $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{expiresOn}}}"}"""))
+                .IsSuccess.ShouldBeTrue();
+
+            var read = await ReadAsync(assignment);
+            read.IsSuccess.ShouldBeTrue(read.Error?.Message);
+            read.GetValueOrThrow().ExpiresOn.ShouldNotBeNull();
+
+            var sentBack = await AssignWithBody(assignment, Rendered(read.GetValueOrThrow()));
+            sentBack.IsSuccess.ShouldBeTrue(sentBack.Error?.Message);
+            sentBack.GetValueOrThrow().Created.ShouldBeFalse();
+            sentBack.GetValueOrThrow()
+                .ExpiresOn.ShouldBe(
+                    read.GetValueOrThrow().ExpiresOn,
+                    "the rendered envelope's expiresOn was not read, and the grant's end changed"
+                );
+
+            cluster.Clock.Advance(TimeSpan.FromHours(1));
+
+            (await AllowedAsync(resource, Permissions.Read, gwen)).ShouldBeFalse(
+                "a GET sent back as a PUT made a just-in-time grant permanent"
+            );
+
+            // The envelope's properties are held to the address like the top level's are.
+            var disagreeing = await AssignWithBody(
+                assignment,
+                $$$"""{"properties":{"{{{RoleAssignmentBodyProperties.RoleDefinitionId}}}":"{{{Relations.Owner}}}"}}"""
+            );
+            disagreeing.IsFailure.ShouldBeTrue("a role under `properties` that disagrees with the address was granted");
+            disagreeing.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+            // And a body that says it in both places is refused rather than half read.
+            var twice = await AssignWithBody(
+                assignment,
+                $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":null,"properties":{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture)}}}"}}"""
+            );
+            twice.IsFailure.ShouldBeTrue("a body with expiresOn in both places was accepted");
+            twice.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        } finally {
+            cluster.Clock.Reset();
+        }
+    }
+
+    [Fact]
+    public async Task AGetFromOneScopeSentAsAPutToAnotherIsRefused() {
+        // ⚠ The envelope's role, principal type and principal id match any address with the same
+        // name, so only its `id` and `properties.scope` say where it was read. Unchecked, a GET from
+        // the group sent to the subscription's address would grant on the whole subscription.
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000aa");
+        await SeedAsync(subscription);
+        var hana = await UserAsync("hana");
+        var name = new RoleAssignmentName(Relations.Reader, SubjectTypes.User, hana);
+        var onGroup = RoleAssignmentId.OnScope(ScopeId.Group(Grant, subscription, Group), name);
+        var onSubscription = RoleAssignmentId.OnScope(ScopeId.Subscription(Grant, subscription), name);
+
+        (await Assign(onGroup, Owner)).IsSuccess.ShouldBeTrue();
+        var envelope = Rendered((await ReadAsync(onGroup)).GetValueOrThrow());
+
+        var moved = await AssignWithBody(onSubscription, envelope);
+
+        moved.IsFailure.ShouldBeTrue("a GET from the group, sent to the subscription's address, was granted there");
+        moved.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        moved.Error.Message.ShouldContain("'id'");
+
+        // `properties.scope` is held to the address on its own, for a body that leaves `id` out.
+        var scoped = await AssignWithBody(
+            onSubscription,
+            $$$"""{"properties":{"scope":"{{{onGroup.ScopePath}}}"}}"""
+        );
+
+        scoped.IsFailure.ShouldBeTrue("a body whose scope names the group was granted on the subscription");
+        scoped.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        scoped.Error.Message.ShouldContain("'scope'");
+
+        (await ReadAsync(onSubscription)).IsFailure.ShouldBeTrue("a refused PUT wrote its tuple anyway");
+    }
+
+    [Fact]
+    public async Task APutThatShortensAGrantEndsItAtTheEnforcementSeamThoughTheSeamCachedItWhilePermanent() {
+        // ⚠ The review of #49's probe, through the seam that serves requests. ReBacResourceAuthorizer
+        // asks with MinimizeLatency, and an allow it cached while the grant was permanent used to
+        // outlive the end a later PUT set — docs/plan/07 § Time-bounded relations.
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a8");
+        var resource = await SeedAsync(subscription);
+        var sam = await UserAsync("sam");
+        var target = IsolationCatalog.Targets[0];
+
+        // ⚠ With its id, so the seam checks the resource, a hop below the tuple. An address with no
+        // id is checked on its group, and each PUT's own assignRole check walks that group's check
+        // grain and drops every older answer there — which would retire the cached allow for a
+        // reason that has nothing to do with the fence.
+        var address = IsolationCluster.Address(target, ResourceName(subscription), Grant, subscription) with { Id = resource };
+        var assignment = RoleAssignmentId.OnScope(
+            ScopeId.Group(Grant, subscription, Group),
+            new(Relations.Reader, SubjectTypes.User, sam)
+        );
+
+        try {
+            (await Assign(assignment, Owner)).IsSuccess.ShouldBeTrue();
+
+            // Twice: the first fills the resource's check cache, the second is served from it.
+            (await ReadThroughTheSeamAsync(address, target, sam)).IsSuccess.ShouldBeTrue();
+            (await ReadThroughTheSeamAsync(address, target, sam)).IsSuccess.ShouldBeTrue();
+
+            var end = cluster.Clock.UtcNow.AddHours(1).ToString("O", CultureInfo.InvariantCulture);
+            var shortened = await AssignWithBody(assignment, $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{end}}}"}""");
+            shortened.IsSuccess.ShouldBeTrue(shortened.Error?.Message);
+
+            // Shortened again, to end inside the notice: refused, and the hour stands.
+            var tooSoon = cluster.Clock.UtcNow.AddSeconds(30).ToString("O", CultureInfo.InvariantCulture);
+            var refused = await AssignWithBody(assignment, $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":"{{{tooSoon}}}"}""");
+            refused.IsFailure.ShouldBeTrue("a PUT that ends a grant inside TupleExpiry.ShorteningNotice was accepted");
+            refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+            cluster.Clock.Advance(TimeSpan.FromHours(1));
+
+            var after = await ReadThroughTheSeamAsync(address, target, sam);
+            after.IsFailure.ShouldBeTrue("the seam served an allow cached while the grant was permanent past the end a PUT set");
+            after.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        } finally {
+            cluster.Clock.Reset();
+        }
+    }
+
+    [Theory]
+    [InlineData("past")]
+    [InlineData("now")]
+    [InlineData("no-offset")]
+    [InlineData("number")]
+    [InlineData("not-a-date")]
+    public async Task AnExpiresOnThatIsNotAFutureInstantWithAnOffsetIsRefusedAndNothingIsGranted(string shape) {
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000a7");
+        await SeedAsync(subscription);
+        var nora = await UserAsync("nora-" + shape);
+        var assignment = RoleAssignmentId.OnScope(
+            ScopeId.Group(Grant, subscription, Group),
+            new(Relations.Reader, SubjectTypes.User, nora)
+        );
+
+        var now = cluster.Clock.UtcNow;
+        var value = shape switch {
+            "past" => $"\"{now.AddMinutes(-1).ToString("O", CultureInfo.InvariantCulture)}\"",
+            "now" => $"\"{now.ToString("O", CultureInfo.InvariantCulture)}\"",
+            "no-offset" => $"\"{now.AddHours(1).UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)}\"",
+            "number" => "1758628800",
+            _ => "\"tomorrow\""
+        };
+
+        var refused = await AssignWithBody(
+            assignment,
+            $$$"""{"{{{RoleAssignmentBodyProperties.ExpiresOn}}}":{{{value}}}}"""
+        );
+
+        refused.IsFailure.ShouldBeTrue($"an expiresOn of {value} was accepted");
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+        var subjects = await SubjectsOfAsync(ScopeId.Group(Grant, subscription, Group), Relations.Reader);
+        subjects.ShouldNotContain(x => x.Id == nora, "a refused grant wrote its tuple anyway");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    Task<Result<RoleAssignmentSnapshot>> AssignWithBody(RoleAssignmentId assignment, string body) =>
+        cluster.Roles.AssignAsync(
+            new() { Path = assignment.Path, Body = body, Caller = IsolationCluster.Caller(Grant, Owner) },
+            TestContext.Current.CancellationToken
+        );
+
+    /// <summary>A read through the production seam, in the mode it asks with for a read.</summary>
+    Task<Result> ReadThroughTheSeamAsync(ResourceId address, IsolationTarget target, string user) {
+        cluster.Registry.TryGetType(target.Type, out var registration).ShouldBeTrue();
+
+        return new ReBacResourceAuthorizer(cluster.Grains, NullLogger<ReBacResourceAuthorizer>.Instance)
+            .AuthorizeAsync(
+                address,
+                registration.ReadPermission,
+                registration.ReadPermission,
+                IsolationCluster.Caller(Grant, user),
+                false,
+                TestContext.Current.CancellationToken
+            );
+    }
+
+    Task<Result<RoleAssignmentSnapshot>> ReadAsync(RoleAssignmentId assignment) =>
+        cluster.Roles.ReadAsync(
+            new() { Path = assignment.Path, Caller = IsolationCluster.Caller(Grant, Owner) },
+            TestContext.Current.CancellationToken
+        );
+
+    /// <summary>
+    ///     The body the gateway answers a <c>GET</c> with for <paramref name="snapshot" />, byte for
+    ///     byte, so a test sends back what a client would.
+    /// </summary>
+    /// <remarks>
+    ///     By reflection, because <c>ResponseBodies</c> is internal to the gateway and only its sibling
+    ///     suite sees its internals. <c>HostCompositionTests</c> reaches a gateway type the same way,
+    ///     rather than widen <c>InternalsVisibleTo</c> to a second suite for one call.
+    /// </remarks>
+    static string Rendered(RoleAssignmentSnapshot snapshot) =>
+        (string)typeof(GatewayComposition).Assembly
+            .GetType("CyberCloud.Gateway.Host.Http.ResponseBodies", true)!
+            .GetMethod("RoleAssignment", BindingFlags.Public | BindingFlags.Static)!
+            .Invoke(null, [snapshot])!;
 
     Task<Result<RoleAssignmentSnapshot>> Assign(RoleAssignmentId assignment, string caller) =>
         cluster.Roles.AssignAsync(

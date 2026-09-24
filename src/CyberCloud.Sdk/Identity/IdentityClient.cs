@@ -185,6 +185,41 @@ public sealed class IdentityClient : IDisposable {
         );
     }
 
+    /// <summary>
+    ///     Revokes a refresh token — RFC 7009, which ends the session behind it on this platform.
+    /// </summary>
+    /// <param name="refreshToken">The token. ⚠ Never reproduced in an exception.</param>
+    /// <param name="clientId">The client it was issued to; the server holds the two together.</param>
+    /// <param name="cancellationToken">The token.</param>
+    /// <exception cref="CredentialUnavailableException">The server advertises no revocation endpoint.</exception>
+    /// <remarks>
+    ///     An unknown or already-dead token is a success, as RFC 7009 § 2.2 says: the caller's goal —
+    ///     that token no longer works — holds either way.
+    /// </remarks>
+    public async ValueTask RevokeAsync(string refreshToken, string clientId, CancellationToken cancellationToken) {
+        ArgumentException.ThrowIfNullOrEmpty(refreshToken);
+        ArgumentException.ThrowIfNullOrEmpty(clientId);
+
+        var document = await GetConfigurationAsync(cancellationToken).ConfigureAwait(false);
+
+        if (string.IsNullOrEmpty(document.RevocationEndpoint)) {
+            throw new CredentialUnavailableException(
+                $"{AuthorityHost} advertises no revocation_endpoint, so a sign-in can be forgotten here but not revoked."
+            );
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, document.RevocationEndpoint);
+        request.Content = new FormUrlEncodedContent(
+            [
+                new("token", refreshToken),
+                new("token_type_hint", "refresh_token"),
+                new("client_id", clientId)
+            ]
+        );
+
+        await SendAsync(request, "revocation", cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Fetches the signing key set.</summary>
     /// <param name="cancellationToken">The token.</param>
     public async ValueTask<JsonWebKeySet> RequestKeysAsync(CancellationToken cancellationToken) {

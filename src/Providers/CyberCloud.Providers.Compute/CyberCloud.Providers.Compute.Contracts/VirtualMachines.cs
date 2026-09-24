@@ -556,6 +556,25 @@ public static class VirtualMachines {
     ///         <c>VirtualMachineReconcilerTests.AHandleOutsideTheTenantsOwnVaultPrefixIsRefusedBeforeItIsResolved</c>
     ///         holds a seeded vault to that.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The invariant runs the other way too: nothing the tenant is not handed may live
+    ///         inside the prefix.</b> A path under it is one the tenant can have a guest read. So
+    ///         platform-held material that happens to belong to a tenant is minted under
+    ///         <c>platform/</c> instead. A key vault's root is at
+    ///         <c>platform/CyberCloud.KeyVault/vaults/{tenantId}/{id}</c> for exactly this reason.
+    ///         <c>KeyVaultRootIsOutsideTheTenantPrefixTests</c> in <c>CyberCloud.Gateway.Host.Tests</c>
+    ///         holds the two families to it, since neither may reference the other. ⚠ One family
+    ///         still breaks it: <c>MailDomains.SecretPath</c> files the Dovecot master password
+    ///         here, which no action hands the tenant. <c>charts/managed/mail/conformance.yaml
+    ///         § owed</c>, <c>the-credentials-sit-inside-the-tenant-vault-prefix</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not the only place a tenant spells a vault path any more, only the only one that
+    ///         resolves it.</b> A communication channel's <c>accountRef</c>, <c>authRef</c> and
+    ///         <c>signingRef</c> are tenant-spelled too, and no carrier resolves them yet.
+    ///         <c>CommunicationChannels.ParseSecretRef</c> holds them to the same prefix, canonical
+    ///         first, so the day one does, it can't reach a root or another tenant.
+    ///     </para>
     /// </remarks>
     public static string TenantVaultPrefix(Guid tenantId) =>
         string.Create(CultureInfo.InvariantCulture, $"tenants/{tenantId:D}/");
@@ -606,11 +625,16 @@ public static class VirtualMachines {
         var path = spelled[..hash];
         var prefix = TenantVaultPrefix(tenantId);
 
-        if (!path.StartsWith(prefix, StringComparison.Ordinal) || path.Length == prefix.Length) {
+        // ⚠ SecretRef.IsConfinedTo and not StartsWith alone: `tenants/{mine}/../{theirs}/x` starts
+        // with this tenant's prefix, and the resolver's HTTP client collapses the dot segments into
+        // the other tenant's path. Found by the #34 review in the mailbox's copy of this check, which
+        // was copied from here.
+        if (!SecretRef.IsConfinedTo(path, prefix)) {
             return Result<SecretRef>.Failure(
                 ErrorCode.AuthorizationFailed,
                 $"cloudInit.userData names '{path}', which is not under your tenant's vault prefix "
-                + $"'{prefix}'. A machine can only be given a value your own tenant holds.",
+                + $"'{prefix}'. A machine can only be given a value your own tenant holds, and the path "
+                + "may not contain an empty, '.' or '..' segment.",
                 "/properties/cloudInit/userData"
             );
         }

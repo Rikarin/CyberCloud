@@ -21,9 +21,8 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>A failed point is listed, with the operator's error text, rather than filtered.</b> A
-///         server whose <c>destinationPath</c> was never filled in produces a <c>failed</c> point on
-///         every tick, and that line — <i>"invalid destination"</i> or whatever barman said — is the
-///         one a tenant needs to see. <c>/completed</c> beside <c>/count</c> is the number that says
+///         server whose store refuses its key or cannot be reached produces a <c>failed</c> point on
+///         every tick, and that line — whatever barman said — is the one a tenant needs to see. <c>/completed</c> beside <c>/count</c> is the number that says
 ///         whether the vault holds anything restorable.
 ///     </para>
 ///     <para>

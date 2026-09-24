@@ -84,14 +84,18 @@ Restating ADR-003 with the operational detail.
   Storing JSON means putting JSON *bytes* in `PayloadBinary`, which is what makes the `psql`
   argument below work; it does not mean a second column. Asserted by a test that reads the live
   schema. Plus, in the same database, the small number of genuinely relational things that are not
-  grain state: the billing ledger (append-only, needs `SUM` over a period) and the audit index.
+  grain state: the audit index. ⚠ **CORRECTED (#38):** this list also named a relational billing
+  ledger (append-only, `SUM` over a period), and none was built. The usage ledger is grain state
+  (`IUsageLedgerGrain`, durable and append-only) and is rated on every read; what billing stores — the
+  finalized invoice, the credit note, the number sequence — is grain state too
+  ([22](22-billing-metering-and-quota.md) § The pipeline).
 - **Why not one big Postgres with partitioning.** Because a partitioned table is still one server's
   WAL, one server's connection pool and one server's failover. Sixteen servers have sixteen. The cost
   is that there is no cross-tenant `JOIN`, ever — which is a feature, since a cross-tenant `JOIN` is
   the thing that turns into a data leak.
 - **What is in it:** tenants, subscriptions, resource groups, resource desired state, users,
   credentials, service principals, ReBAC tuples, operations, cluster connections, quota grants,
-  billing ledger, audit cursors.
+  usage ledgers, invoices and credit notes, audit cursors.
 
 ⚠ **CORRECTED: "16 to start" counts only the tenant-carrying shards, and there is a 17th.** Every
 null-tenant grain in [04 § Grain taxonomy](04-orleans-topology.md) — the tenant directory, the shard

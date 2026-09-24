@@ -247,6 +247,7 @@
   },
   "x-cybercloud-providers": [
     "CyberCloud.Analytics",
+    "CyberCloud.Billing",
     "CyberCloud.Cache",
     "CyberCloud.Communication",
     "CyberCloud.Compute",
@@ -257,11 +258,13 @@
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.Dashboard",
     "CyberCloud.DocumentDB",
+    "CyberCloud.KeyVault",
     "CyberCloud.Mail",
     "CyberCloud.Messaging",
     "CyberCloud.Monitor",
     "CyberCloud.Network",
     "CyberCloud.RecoveryServices",
+    "CyberCloud.Resources",
     "CyberCloud.Sample",
     "CyberCloud.Search",
     "CyberCloud.Storage",
@@ -278,6 +281,19 @@
         "plural": "ClickHouse clusters",
         "alias": "clickhouse",
         "summary": "A managed ClickHouse cluster on the Altinity operator, with declared shards and replicas and a ClickHouse Keeper quorum. The schema is the tenant's.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Billing/budgets",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Budget",
+        "plural": "Budgets",
+        "alias": "budget",
+        "summary": "A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service.",
         "declared": true
       }
     },
@@ -529,6 +545,19 @@
       }
     },
     {
+      "type": "CyberCloud.KeyVault/vaults",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Key vault",
+        "plural": "Key vaults",
+        "alias": "vault",
+        "summary": "Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Mail/domains",
       "apiVersions": [
         "2026-08-01"
@@ -538,6 +567,19 @@
         "plural": "Mail domains",
         "alias": "domain",
         "summary": "A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant mail store, DKIM signing, and the SPF, DKIM, DMARC and MX records the domain must publish before the platform will send for it.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Mail/domains/mailboxes",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Mailbox",
+        "plural": "Mailboxes",
+        "alias": "mailbox",
+        "summary": "One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.",
         "declared": true
       }
     },
@@ -616,6 +658,19 @@
         "plural": "OpenTelemetry collectors",
         "alias": "collector",
         "summary": "A managed OpenTelemetry collector in your cluster that your workloads send OTLP to, carrying metrics, logs and traces into this workspace.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Monitor/workspaces/components",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Application component",
+        "plural": "Application components",
+        "alias": "component",
+        "summary": "An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.",
         "declared": true
       }
     },
@@ -720,6 +775,19 @@
         "plural": "Backup vaults",
         "alias": "backupvault",
         "summary": "A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Resources/deployments",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Deployment",
+        "plural": "Deployments",
+        "alias": "deployment",
+        "summary": "A template of resources deployed in dependency order, each through the write path as its creator.",
         "declared": true
       }
     },

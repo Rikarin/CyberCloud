@@ -3,6 +3,8 @@ using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Expiry;
+using CyberCloud.ResourceManager.Reconcile;
+using CyberCloud.ResourceManager.Orchestration;
 using CyberCloud.ResourceManager.Registry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -38,14 +40,29 @@ namespace CyberCloud.ResourceManager.Tests.Infrastructure;
 ///     </para>
 /// </remarks>
 public sealed class SwitchableAuthorizer : IResourceAuthorizer {
-    /// <summary>Permissions the caller holds. Empty means they hold everything.</summary>
+    /// <summary>
+    ///     Permissions the caller holds. Empty means they hold everything. A key is a bare permission,
+    ///     held on every type, or <c>{type}:{permission}</c>, held on that type alone —
+    ///     <see cref="On" />.
+    /// </summary>
     public static ConcurrentDictionary<string, bool> Granted { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Every <c>{type}:{permission}</c> the write path asked about, in order.</summary>
+    public static ConcurrentQueue<string> AskedOn { get; } = new();
+
+    /// <summary>A grant of <paramref name="permission" /> on <paramref name="type" /> alone.</summary>
+    /// <param name="type">The type the permission is held on.</param>
+    /// <param name="permission">The permission.</param>
+    public static string On(ResourceTypeName type, string permission) => $"{type}:{permission}";
 
     /// <summary>Whether <see cref="Granted" /> is consulted at all.</summary>
     public static bool Restricted { get; set; }
 
     /// <summary>Every <c>(actionPermission, readPermission)</c> pair the write path asked about.</summary>
     public static ConcurrentQueue<string> Asked { get; } = new();
+
+    /// <summary>The permissions asked about that were asked <c>FullyConsistent</c>, in order.</summary>
+    public static ConcurrentQueue<string> AskedFullyConsistent { get; } = new();
 
     /// <summary>
     ///     Resources this caller cannot read at all — a <c>404</c> whatever permission is asked for.
@@ -80,10 +97,27 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     /// <summary>Every <c>(parentResourceId, candidates)</c> pair the listing asked about, in order.</summary>
     public static ConcurrentQueue<(Guid Parent, int Candidates)> CollectionsAsked { get; } = new();
 
+    /// <summary>
+    ///     Every check, as the address it was asked at, the caller it was asked for and the permission
+    ///     — so a test can see WHO a write was authorized as, which is the whole question for a
+    ///     deployment's children.
+    /// </summary>
+    public static ConcurrentQueue<(string Path, string Caller, string Permission)> Checks { get; } = new();
+
+    /// <summary>
+    ///     Resource groups the caller holds nothing on: every check at an address inside one answers the
+    ///     canonical 404, as the real engine does for a scope the caller cannot read.
+    /// </summary>
+    public static ConcurrentDictionary<string, bool> DeniedGroups { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Lets everything through again.</summary>
     public static void Reset() {
         Granted.Clear();
         Asked.Clear();
+        AskedOn.Clear();
+        Checks.Clear();
+        DeniedGroups.Clear();
+        AskedFullyConsistent.Clear();
         Hidden.Clear();
         CollectionsAsked.Clear();
         Restricted = false;
@@ -111,6 +145,16 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
         CancellationToken cancellationToken = default
     ) {
         Asked.Enqueue(actionPermission);
+        AskedOn.Enqueue(On(id.Type, actionPermission));
+        Checks.Enqueue((id.Path, caller.ToString(), actionPermission));
+
+        if (DeniedGroups.ContainsKey(id.ResourceGroup)) {
+            return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{id.Path}' does not exist."));
+        }
+
+        if (fullyConsistent) {
+            AskedFullyConsistent.Enqueue(actionPermission);
+        }
 
         // ⚠ Before the permission set, and it answers the canonical 404 without consulting it. A
         // resource the caller cannot see is not a resource they hold no permission on — it is one
@@ -120,13 +164,13 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
             return Task.FromResult(Result.Failure(ErrorCode.ResourceNotFound, $"'{id.Path}' does not exist."));
         }
 
-        if (!Restricted || Granted.ContainsKey(actionPermission)) {
+        if (!Restricted || Granted.ContainsKey(actionPermission) || Granted.ContainsKey(On(id.Type, actionPermission))) {
             return Task.FromResult(Result.Success);
         }
 
         // ⚠ THE RULE, REPRODUCED EXACTLY. 404 unless the caller can read; 403 only when they can read
         // but not act — docs/plan/07 § The enforcement seam.
-        if (Granted.ContainsKey(readPermission)) {
+        if (Granted.ContainsKey(readPermission) || Granted.ContainsKey(On(id.Type, readPermission))) {
             return Task.FromResult(
                 Result.Failure(
                     ErrorCode.AuthorizationFailed,
@@ -162,6 +206,45 @@ public sealed class SwitchableAuthorizer : IResourceAuthorizer {
     }
 }
 
+/// <summary>
+///     An <see cref="IPrincipalStanding" /> a test can make refuse one subject — the identity grains'
+///     answer for a suspended user, without the identity module this harness doesn't compose.
+/// </summary>
+/// <remarks>
+///     ⚠ The real one, over real users, is what <c>DeploymentAuthorizationTests</c> in
+///     <c>CyberCloud.Isolation</c> drives; this one exists so the write path's side of the rule —
+///     asked before step 1, for every child, and refused on any failure — is testable here.
+/// </remarks>
+public sealed class SwitchablePrincipalStanding : IPrincipalStanding {
+    /// <summary>Subject ids that may no longer act, against the reason given.</summary>
+    public static ConcurrentDictionary<string, string> Refused { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Every subject asked about, as <c>type:id@tenant</c>, in order.</summary>
+    public static ConcurrentQueue<string> Asked { get; } = new();
+
+    /// <summary>Lets everybody act again and forgets who was asked about.</summary>
+    public static void Reset() {
+        Refused.Clear();
+        Asked.Clear();
+    }
+
+    /// <inheritdoc />
+    public Task<Result> EnsureMayActAsync(
+        Guid tenantId,
+        string principalType,
+        string principalId,
+        CancellationToken cancellationToken = default
+    ) {
+        Asked.Enqueue($"{principalType}:{principalId}@{tenantId:D}");
+
+        return Task.FromResult(
+            Refused.TryGetValue(principalId, out var reason)
+                ? Result.Failure(ErrorCode.AuthorizationFailed, reason)
+                : Result.Success
+        );
+    }
+}
+
 /// <summary>An <see cref="IPolicyEvaluator" /> a test can make deny or modify.</summary>
 public sealed class SwitchablePolicyEvaluator : IPolicyEvaluator {
     /// <summary>What to decide. Defaults to the honest "no engine ran".</summary>
@@ -178,15 +261,24 @@ public sealed class SwitchablePolicyEvaluator : IPolicyEvaluator {
 
     /// <inheritdoc />
     public Task<PolicyDecision> EvaluateAsync(
-        ResourceId id,
-        string apiVersion,
-        string body,
-        CallerContext caller,
+        PolicyEvaluationRequest request,
         CancellationToken cancellationToken = default
     ) {
         Asked++;
         return Task.FromResult(Next);
     }
+
+    /// <inheritdoc />
+    public Task<Result> RecordComplianceAsync(
+        ResourceId id,
+        PolicyDecision decision,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result.Success);
+
+    /// <inheritdoc />
+    public Task<Result> ForgetAsync(ResourceId id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Success);
 }
 
 /// <summary>An <see cref="ILockResolver" /> a test can set a lock on.</summary>
@@ -566,6 +658,12 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     /// <summary>The built registry.</summary>
     public IProviderRegistry Registry { get; private set; } = null!;
 
+    /// <summary>
+    ///     The silo's container — for <c>IReminderTable</c>, which is how a test reads the row a grain
+    ///     registered rather than a proxy for it.
+    /// </summary>
+    public IServiceProvider SiloServices => cluster.GetSiloServiceProvider();
+
     /// <summary>A tenant-qualified grain factory.</summary>
     public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
@@ -669,6 +767,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     public static void ResetDoubles() {
         FakeWorld.Reset();
         SwitchableAuthorizer.Reset();
+        SwitchablePrincipalStanding.Reset();
         SwitchablePolicyEvaluator.Reset();
         SwitchableLockResolver.Reset();
         RecordingRelationWriter.Reset();
@@ -687,7 +786,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         cluster = builder.Build();
         await cluster.DeployAsync();
 
-        Registry = ProviderRegistry.Build([new TestingProvider()]);
+        Registry = ProviderRegistry.Build([new TestingProvider(), new DeploymentsProvider()]);
 
         // ⚠ Step 1 of the write path reads ISubscriptionGrain and answers 404 for a subscription
         // this tenant does not have, so the suite's subscriptions are created before anything is
@@ -727,6 +826,24 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
         await LiftQuotaAsync(Tenant, IsolatedSubscription);
         await LiftQuotaAsync(OtherTenant, Subscription);
 
+        // ⚠ The tenant's directory entry, because a deployment's child reads it before step 1 and
+        // refuses a tenant it can't find — the status ResolveTenantStage enforces for a direct write.
+        // Only Tenant: the expiry backfill walks every entry and reads each tenant's grain, and
+        // OtherTenant has none. The slug is ExpirySweeperTests' own, so its re-registration is the
+        // same entry rather than a slug conflict.
+        var registered = await Grains
+            .GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
+            .RegisterAsync(
+                new() {
+                    TenantId = Tenant,
+                    Slug = "resource-manager-tests",
+                    HomeRegion = "eu-west-1",
+                    Status = TenantStatus.Active
+                }
+            );
+
+        registered.IsSuccess.ShouldBeTrue(registered.Error?.Message);
+
         Manager = new ResourceManagerService(
             Registry,
             new SwitchableAuthorizer(),
@@ -746,7 +863,8 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                 new NoClusterConnectionFactory(),
                 new UnavailableSecretResolver()
             ),
-            NullLogger<ResourceManagerService>.Instance
+            NullLogger<ResourceManagerService>.Instance,
+            validators: [new DeploymentBodyValidator(Registry)]
         );
     }
 
@@ -756,6 +874,8 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
 
         services.AddSingleton<RestartHandler>();
         services.AddSingleton<ListKeysHandler>();
+        services.AddSingleton<CloneHandler>();
+        services.AddSingleton<ParentEchoHandler>();
 
         return services.BuildServiceProvider();
     }
@@ -830,6 +950,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     services.AddSingleton<ILockResolver, SwitchableLockResolver>();
                     services.AddSingleton<IResourceChangedSink, RecordingChangeSink>();
                     services.AddSingleton<IResourceRelationWriter, RecordingRelationWriter>();
+                    services.AddSingleton<IPrincipalStanding, SwitchablePrincipalStanding>();
 
                     // The connection grain's seam. docs/plan/10 § SignalR — per-subscribe, never
                     // per-connect, and re-checked on relation changes.
@@ -853,6 +974,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // RunAsync, which is the same method AddCyberCloudResourceManager's hosted
                     // service calls.
                     services.Configure<ExpirySweeperBackfillOptions>(static backfill => backfill.RunOnStart = false);
+                    services.Configure<PeriodicPassBackfillOptions>(static backfill => backfill.RunOnStart = false);
 
                     services.AddSingleton<ConformingReconciler>();
 
@@ -863,7 +985,11 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // assertion fails somewhere else entirely. Adding a type here is adding a line
                     // here.
                     services.AddSingleton<SoftDeletableReconciler>();
+                    services.AddSingleton<PeriodicReconciler>();
                     services.AddSingleton<IResourceProvider, TestingProvider>();
+                    // The deployment type, so the silo's own write path — the one a parent operation
+                    // writes its children through — knows it, as a real silo does.
+                    services.AddSingleton<IResourceProvider, DeploymentsProvider>();
                     services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );

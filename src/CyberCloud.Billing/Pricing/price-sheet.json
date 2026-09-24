@@ -1,0 +1,36 @@
+{
+  "notes": [
+    "The platform's price sheet — docs/plan/22 § Rating. Read by CyberCloud.Billing.Pricing.PriceSheet.Committed.",
+    "A version is in force from its effectiveFrom, which is the first instant of a month in UTC, until the next version's.",
+    "⚠ A version whose effectiveFrom has passed is never edited: a price change is a NEW version with a later date. PriceSheetTests.NoVersionInForceHasBeenEdited pins every version in force by hash.",
+    "Every BillingMeter is priced in every version, at zero if it is free; an unpriced meter would be usage nobody is charged for.",
+    "Tiers are per subscription, per meter, per calendar month; upTo is the cumulative monthly quantity a tier ends at, and the last tier has none. A first tier at 0.0 is the meter's monthly free tier.",
+    "StorageGbMonths is rated on the DECLARED size — docs/plan/22 § What is owed, storage-is-declared-not-observed. BackupGbMonths is whatever the provider that emits it measured."
+  ],
+  "versions": [
+    {
+      "effectiveFrom": "2026-08-01T00:00:00Z",
+      "meters": [
+        { "meter": "VCpuHours", "unit": "vCPU-hour", "currency": "EUR", "tiers": [ { "upTo": null, "unitPrice": 0.0250 } ] },
+        { "meter": "MemoryGbHours", "unit": "GiB-hour", "currency": "EUR", "tiers": [ { "upTo": null, "unitPrice": 0.0035 } ] },
+        {
+          "meter": "StorageGbMonths", "unit": "GiB-month", "currency": "EUR",
+          "tiers": [ { "upTo": 50, "unitPrice": 0.0 }, { "upTo": 102400, "unitPrice": 0.080 }, { "upTo": null, "unitPrice": 0.060 } ]
+        },
+        { "meter": "BackupGbMonths", "unit": "GiB-month", "currency": "EUR", "tiers": [ { "upTo": null, "unitPrice": 0.030 } ] },
+        { "meter": "PublicIpHours", "unit": "IP-hour", "currency": "EUR", "tiers": [ { "upTo": null, "unitPrice": 0.004 } ] },
+        { "meter": "ClusterHours", "unit": "cluster-hour", "currency": "EUR", "tiers": [ { "upTo": 744, "unitPrice": 0.0 }, { "upTo": null, "unitPrice": 0.10 } ] },
+        { "meter": "ResourceHours", "unit": "resource-hour", "currency": "EUR", "tiers": [ { "upTo": null, "unitPrice": 0.0 } ] },
+        {
+          "meter": "Requests", "unit": "request", "currency": "EUR",
+          "tiers": [ { "upTo": 1000000, "unitPrice": 0.0 }, { "upTo": null, "unitPrice": 0.0000004 } ]
+        },
+        {
+          "meter": "EgressGb", "unit": "GiB", "currency": "EUR",
+          "tiers": [ { "upTo": 100, "unitPrice": 0.0 }, { "upTo": 10240, "unitPrice": 0.050 }, { "upTo": null, "unitPrice": 0.030 } ]
+        },
+        { "meter": "MessagesSent", "unit": "message", "currency": "EUR", "tiers": [ { "upTo": null, "unitPrice": 0.010 } ] }
+      ]
+    }
+  ]
+}

@@ -255,7 +255,13 @@ public sealed class ComputeDeclarationTests {
                      Compute.VaultPath("CyberCloud.ContainerRegistry/registries/x", Compute.TenantB) + "#password",
                      "platform/bootstrap#token", "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa#userdata",
                      "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/#userdata",
-                     "tenants/AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA/web#userdata"
+                     "tenants/AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA/web#userdata",
+                     // ⚠ Traversal: each starts with tenant A's prefix, and the resolver's HTTP client
+                     // collapses the dot segments into tenant B's path — the #34 review's probe.
+                     "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/../" + Compute.TenantB.ToString("D") + "/x#password",
+                     "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/web/../../../platform/root#token",
+                     "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/./web#userdata",
+                     "tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa//web#userdata"
                  }) {
             var refused = VirtualMachines.ParseCloudInitRef(foreign, Compute.TenantA);
 

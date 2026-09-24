@@ -115,6 +115,11 @@ public sealed class OpenBaoSecretResolver(
             return Refuse(VaultFailures.EmptyHandle(reference));
         }
 
+        // ⚠ Before the token and before Url: see Url's remarks for what a dot segment reads.
+        if (!SecretRef.IsCanonicalPath(reference.Path)) {
+            return Refuse(VaultFailures.NotCanonical(reference));
+        }
+
         var token = await tokens.GetAsync(cancellationToken);
 
         if (token.IsFailure) {
@@ -334,6 +339,13 @@ public sealed class OpenBaoSecretResolver(
     ///     structure into <c>%2F</c> and address a single secret whose name contains slashes.
     ///     Escaping nothing would let a path segment carrying <c>?</c> or <c>#</c> rewrite the query
     ///     the client thinks it is sending.
+    ///     <para>
+    ///         ⚠ <b>Escaping doesn't stop a <c>..</c> segment.</b> <c>..</c> is unreserved, so
+    ///         <c>Uri.EscapeDataString</c> returns it unchanged, and <see cref="Uri" /> then collapses
+    ///         it. <c>tenants/{a}/../../platform/x</c> reaches OpenBao as <c>platform/x</c>, read with
+    ///         the platform's broad token. <see cref="ResolveAsync" /> refuses such a path before it
+    ///         gets here, through <see cref="SecretRef.IsCanonicalPath" />.
+    ///     </para>
     /// </remarks>
     string Url(SecretRef reference) {
         var path = string.Join('/', reference.Path.Split('/').Select(Uri.EscapeDataString));

@@ -173,7 +173,43 @@ public enum GrainKeyKind {
     ///     by a GUID; see <see cref="GrainKeys.ManagementGroup" /> for why, and for why the name is
     ///     unique within the tenant by construction.
     /// </summary>
-    ManagementGroup
+    ManagementGroup,
+
+    /// <summary>
+    ///     <c>IDeviceAuthorizationGrain</c> — <c>device/{digest}</c>, one RFC 8628 device
+    ///     authorization, qualified by the <b>platform</b> tenant and keyed by its user code's
+    ///     digest. See <see cref="GrainKeys.DeviceAuthorization" />.
+    /// </summary>
+    DeviceAuthorization,
+
+    /// <summary>
+    ///     <c>IInvitationGrain</c> — <c>invite/{invitationId:N}</c>, one invitation of an address
+    ///     into a tenant. See <see cref="GrainKeys.Invitation" />.
+    /// </summary>
+    Invitation,
+
+    /// <summary>
+    ///     <c>IDirectoryIndexGrain</c> — <c>idx/dir/{collection}</c>, the ids of one kind of
+    ///     directory object in a tenant: its users, its invitations or its applications.
+    ///     <see cref="GrainKey.Name" /> carries the collection; the set is closed and is
+    ///     <see cref="GrainKeys.DirectoryCollections" />. See <see cref="GrainKeys.DirectoryIndex" />.
+    /// </summary>
+    DirectoryIndex,
+
+    /// <summary>
+    ///     <c>IMonitorAccountGrain</c> — <c>metrics-account/{accountId}</c>, the one claim on a
+    ///     VictoriaMetrics <c>accountID</c> across every tenant. ⚠ <b>Null tenant</b>, see
+    ///     <see cref="GrainKeys.MetricsAccount" />. <see cref="GrainKey.Name" /> carries the account
+    ///     in decimal.
+    /// </summary>
+    MetricsAccount,
+
+    /// <summary>
+    ///     <c>IPolicyCatalogGrain</c> — <c>policy/{tenantId:N}</c>, the tenant's policy definitions,
+    ///     assignments and compliance states (issue #46). See <see cref="GrainKeys.PolicyCatalog" />
+    ///     for why one activation per tenant is the right cardinality for a grain on the write path.
+    /// </summary>
+    PolicyCatalog
 }
 
 /// <summary>
@@ -236,6 +272,12 @@ public enum GrainKeyKind {
 ///         </item>
 ///         <item>
 ///             <term>
+///                 <see cref="GrainKeyKind.PolicyCatalog" />
+///             </term>
+///             <description><see cref="Id" /> = the tenant, repeated inside its own qualification.</description>
+///         </item>
+///         <item>
+///             <term>
 ///                 <see cref="GrainKeyKind.PathIndex" /> / <see cref="GrainKeyKind.EmailIndex" /> /
 ///                 <see cref="GrainKeyKind.ClientIndex" />
 ///             </term>
@@ -268,11 +310,16 @@ public readonly record struct GrainKey {
     ///     The resource group name, for <see cref="GrainKeyKind.ResourceGroup" />,
     ///     <see cref="GrainKeyKind.ParkedResourceRegistry" /> and
     ///     <see cref="GrainKeyKind.ExpirySweeper" />; the management group name, for
-    ///     <see cref="GrainKeyKind.ManagementGroup" />.
+    ///     <see cref="GrainKeyKind.ManagementGroup" />; the collection, for
+    ///     <see cref="GrainKeyKind.DirectoryIndex" />; the <c>accountID</c> in decimal, for
+    ///     <see cref="GrainKeyKind.MetricsAccount" />.
     /// </summary>
     public string Name => name ?? string.Empty;
 
-    /// <summary>The digest, for the three <c>idx/</c> shapes and <see cref="GrainKeyKind.ConsentGrant" />.</summary>
+    /// <summary>
+    ///     The digest, for the three <c>idx/</c> shapes, <see cref="GrainKeyKind.ConsentGrant" /> and
+    ///     <see cref="GrainKeyKind.DeviceAuthorization" />.
+    /// </summary>
     public string Digest => digest ?? string.Empty;
 
     /// <summary>
@@ -339,6 +386,11 @@ public readonly record struct GrainKey {
             GrainKeyKind.ListObjects => GrainKeys.ListObjects(ObjectType, ObjectId),
             GrainKeyKind.MembershipIndex => GrainKeys.MembershipIndex(ObjectType, ObjectId),
             GrainKeyKind.ManagementGroup => GrainKeys.ManagementGroup(Name),
+            GrainKeyKind.DeviceAuthorization => GrainKeys.DeviceAuthorizationPrefix + Digest,
+            GrainKeyKind.Invitation => GrainKeys.Invitation(Id),
+            GrainKeyKind.DirectoryIndex => GrainKeys.DirectoryIndexPrefix + Name,
+            GrainKeyKind.MetricsAccount => GrainKeys.MetricsAccountPrefix + Name,
+            GrainKeyKind.PolicyCatalog => GrainKeys.PolicyCatalog(Id),
             _ => string.Empty
         };
 }
@@ -355,7 +407,7 @@ public readonly record struct GrainKey {
 ///         contains them. Nothing else in the codebase may concatenate one.
 ///     </para>
 ///     <para>
-///         <b>The twenty-nine shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
+///         <b>The thirty-four shapes.</b> Eight of them are the table at docs/plan/06 § Grain keys;
 ///         two more — <see cref="Tenant" /> and <see cref="PlatformSingleton" /> — are the rows that
 ///         table is <i>missing</i> for grains docs/plan/04 § Grain taxonomy names in its Entity and
 ///         Platform rows; four are docs/plan/07 § Storage's authorization grains; five are
@@ -381,10 +433,22 @@ public readonly record struct GrainKey {
 ///         <see cref="AuthorizationCode" /> and <see cref="ConsentGrant" />, the hot-tier code store
 ///         RFC 6749 § 4.1.2's one-time use needs and the record of a person's consent to a
 ///         tenant-registered client, both of which docs/plan/11 § Protocol carried as owed until
-///         #94; the twenty-eighth is <see cref="WatchIndex" />, #90's; and the twenty-ninth is
+///         #94; the twenty-eighth is <see cref="WatchIndex" />, #90's; the twenty-ninth is
 ///         <see cref="ManagementGroup" />, the scope above the subscription that docs/plan/06 § The
 ///         hierarchy drew from the first day and docs/plan/06 § Grain keys carried no row for until
-///         issue #39 put a grain behind it. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
+///         issue #39 put a grain behind it; and the thirtieth and thirty-first are
+///         <see cref="DeviceAuthorization" /> and <see cref="Invitation" />, issue #43's — the code
+///         store RFC 8628's device flow needs, which is the second identity shape qualified by the
+///         platform tenant and for <see cref="SignUp" />'s reason, and the invitation of an address
+///         into a tenant that docs/plan/11 § Sign-up and tenant creation describes as the invited
+///         path; and the thirty-second is <see cref="DirectoryIndex" />, issue #41's, the per-tenant
+///         list of users, invitations and applications the identity administration pages read,
+///         which nothing else in this type could answer because every directory object is keyed by
+///         a random id. And the thirty-third is <see cref="MetricsAccount" />, the claim that keeps two
+///         monitor workspaces off one VictoriaMetrics <c>accountID</c>, which #41's review asked
+///         for once the metrics explorer read under that account. And the thirty-fourth is <see cref="PolicyCatalog" />, #46's — the tenant's
+///         policy definitions, assignments and compliance states, one activation per tenant on
+///         the write path. See the remarks on each. Every one of them is formatted <i>and</i> parsed —
 ///         a key that can
 ///         be built but not decoded is half a type, and routing a physical key back to a grain type
 ///         (in a log, in a repair tool, in a dead-letter handler) needs the other half.
@@ -392,12 +456,24 @@ public readonly record struct GrainKey {
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Twenty-eight was twenty-seven, was twenty-five, was twenty-four, was twenty-three, was twenty-two, was
-///             twenty-one, was twenty, was nineteen, and was eight before that, and the count is
-///             re-derived rather than incremented.
-///         </b> Counted on 2026-09-18 off
-///         <see cref="GrainKeyKind" />'s members, excluding <see cref="GrainKeyKind.None" />, which
-///         is not a key — twenty-nine members: <see cref="ManagementGroup" /> is #39's and
+///             Thirty-four was thirty-three, was thirty-two, was thirty-one, was twenty-nine, was twenty-eight, was twenty-seven, was
+///             twenty-five, was twenty-four, was twenty-three, was twenty-two, was twenty-one, was
+///             twenty, was nineteen, and was eight before that, and the count is re-derived rather
+///             than incremented.
+///         </b> Recounted at the 2026-09-24 merge off <see cref="GrainKeyKind" />'s members,
+///         excluding <see cref="GrainKeyKind.None" />, which is not a key — thirty-four members:
+///         the thirty-three below plus #46's <see cref="PolicyCatalog" />, whose branch had counted
+///         itself thirty as the explorers' had. Thirty-three before it: the thirty-two below plus
+///         <see cref="MetricsAccount" />, #41's review's, on the explorers'
+///         branch, which had counted itself thirty against a master of twenty-nine and did not see
+///         #43's two or the identity pages' one. Counted before that the same day — thirty-two: the
+///         thirty-one of the count below plus #41's <see cref="DirectoryIndex" />, on a branch
+///         taken from #43's, so a merge beside another branch that adds a kind recounts here
+///         again. Counted before that on 2026-09-23 — thirty-one members, the
+///         twenty-nine below plus #43's <see cref="DeviceAuthorization" /> and
+///         <see cref="Invitation" />; the heading's "twenty-eight" had already lagged the
+///         twenty-nine this paragraph counted, which is the drift the sentence warns of. Counted
+///         before that on 2026-09-18 — twenty-nine members: <see cref="ManagementGroup" /> is #39's and
 ///         <see cref="WatchIndex" /> #90's, both merged on this date beside #94's <see cref="AuthorizationCode" /> and
 ///         <see cref="ConsentGrant" />, the two added on top of the twenty-five #88's
 ///         <see cref="SignUp" /> had made of the twenty-four the same day's merge of three branches
@@ -406,7 +482,7 @@ public readonly record struct GrainKey {
 ///         and #88 before this. It goes stale the moment a
 ///         member is added without this sentence being reread, which is exactly how issue #71 came to
 ///         describe this type as covering "eight key shapes today": eight is the size of
-///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-one shapes ago (twenty-nine less
+///         docs/plan/06's <i>table</i>, and it stopped being the size of this type twenty-six shapes ago (thirty-four less
 ///         eight — re-derived, as #39's review of this sentence
 ///         asked; #39's own task text had called its kind "the 25th", a count from an older tree).
 ///     </para>
@@ -590,6 +666,40 @@ public readonly record struct GrainKey {
 ///             </term>
 ///             <description><c>mg/{name}</c> — docs/plan/06 § Grain keys, since issue #39</description>
 ///         </item>
+///         <item>
+///             <term>
+///                 <see cref="DeviceAuthorization" />
+///             </term>
+///             <description><c>device/{digest}</c> — docs/plan/11 § Protocol, since issue #43</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="Invitation" />
+///             </term>
+///             <description>
+///                 <c>invite/{invitationId:N}</c> — docs/plan/11 § Sign-up and tenant creation, since issue #43
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="DirectoryIndex" />
+///             </term>
+///             <description>
+///                 <c>idx/dir/{collection}</c> — docs/plan/11 § The object model, since issue #41
+///             </description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="MetricsAccount" />
+///             </term>
+///             <description><c>metrics-account/{accountId}</c> — <b>null tenant</b>, docs/plan/16 § Querying a workspace</description>
+///         </item>
+///         <item>
+///             <term>
+///                 <see cref="PolicyCatalog" />
+///             </term>
+///             <description><c>policy/{tenantId:N}</c> — docs/plan/06 § Grain keys, since issue #46</description>
+///         </item>
 ///     </list>
 ///     <para>
 ///         The six <c>rel/</c> shapes are docs/plan/07 § Storage's three indexes, plus the three
@@ -647,8 +757,8 @@ public readonly record struct GrainKey {
 ///         <b>The shapes cannot collide, and that is a property rather than a coincidence.</b> Each
 ///         shape is fixed by its first segment (<c>sub</c>, <c>res</c>, <c>user</c>, <c>op</c>,
 ///         <c>cluster</c>, <c>group</c>, <c>app</c>, <c>sp</c>, <c>session</c>, <c>mi</c>,
-///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>mg</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>,
-///         <c>tenant</c>,
+///         <c>signup</c>, <c>code</c>, <c>consent</c>, <c>mg</c>, <c>policy</c>, <c>parked</c>, <c>sweep</c>, <c>idx</c>, <c>rel</c>,
+///         <c>tenant</c>, <c>metrics-account</c>,
 ///         <c>platform</c>) and
 ///         its segment count, and the only caller-controlled components
 ///         — the resource group name, in <see cref="ResourceGroup" />, in
@@ -697,11 +807,23 @@ public static class GrainKeys {
     /// <summary><c>consent/</c> — a person's consent to one client, docs/plan/11 § Protocol.</summary>
     public const string ConsentGrantPrefix = "consent/";
 
+    /// <summary><c>device/</c> — one RFC 8628 device authorization, docs/plan/11 § Protocol.</summary>
+    public const string DeviceAuthorizationPrefix = "device/";
+
+    /// <summary><c>invite/</c> — an invitation into a tenant, docs/plan/11 § Sign-up and tenant creation.</summary>
+    public const string InvitationPrefix = "invite/";
+
     /// <summary><c>mg/</c> — a management group, keyed by its name within the tenant.</summary>
     public const string ManagementGroupPrefix = "mg/";
 
+    /// <summary><c>policy/</c> — the tenant's policy catalog, docs/plan/08 § Policy.</summary>
+    public const string PolicyCatalogPrefix = "policy/";
+
     /// <summary><c>cluster/</c> — a cluster connection. Null tenant.</summary>
     public const string ClusterConnectionPrefix = "cluster/";
+
+    /// <summary><c>metrics-account/</c> — the claim on one VictoriaMetrics <c>accountID</c>. Null tenant.</summary>
+    public const string MetricsAccountPrefix = "metrics-account/";
 
     /// <summary>
     ///     <c>parked/</c> — a resource group's registry of soft-deleted resources, docs/plan/08
@@ -730,6 +852,21 @@ public static class GrainKeys {
     ///     deliberately does not do.
     /// </summary>
     public const string WatchIndexPrefix = "idx/watch/";
+
+    /// <summary>
+    ///     <c>idx/dir/</c> — <c>IDirectoryIndexGrain</c>, the ids of one kind of directory object in
+    ///     a tenant. The payload is a collection name, never a digest.
+    /// </summary>
+    public const string DirectoryIndexPrefix = "idx/dir/";
+
+    /// <summary><c>idx/dir/users</c> — every user the tenant's directory has created.</summary>
+    public const string DirectoryUsers = "users";
+
+    /// <summary><c>idx/dir/invitations</c> — every invitation the tenant has sent.</summary>
+    public const string DirectoryInvitations = "invitations";
+
+    /// <summary><c>idx/dir/applications</c> — every OAuth client the tenant has registered.</summary>
+    public const string DirectoryApplications = "applications";
 
     /// <summary><c>tenant/</c> — the tenant's own entity grain.</summary>
     public const string TenantPrefix = "tenant/";
@@ -763,6 +900,25 @@ public static class GrainKeys {
 
     /// <summary><c>platform/tenant-directory</c> — <c>ITenantDirectoryGrain</c>'s singleton name.</summary>
     public const string TenantDirectorySingleton = "tenant-directory";
+
+    /// <summary>
+    ///     <c>platform/invoice-numbering</c> — <c>IInvoiceNumberingGrain</c>, docs/plan/22 § Invoicing
+    ///     and payment. Reach it through <see cref="PlatformSingleton" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The third singleton, and the first whose traffic is not O(new tenants per day).</b> An
+    ///     invoice or a credit note asks it for a number once, at finalization, so its write rate is
+    ///     O(tenants per month) and arrives in the 48 hours after the 1st. That is still far inside
+    ///     one activation's reach, and it has to be one activation: a gap-free sequence per issuer is
+    ///     a single counter, and two counters for one issuer are two invoices with one number.
+    ///     ⚠ The rate is two writes per document (allocate, confirm), each rewriting the whole state.
+    ///     The state stays small only because confirming forgets the document's key: it holds the
+    ///     counters and what's in flight, not every document ever numbered.
+    ///     ⚠ No formatter of its own, deliberately — CC1006's null-tenant allowance recognises
+    ///     <see cref="PlatformSingleton" /> by name, and a new formatter would be flagged at every
+    ///     correct call site until the analyzer learned it.
+    /// </remarks>
+    public const string InvoiceNumberingSingleton = "invoice-numbering";
 
     /// <summary>The <c>rg</c> literal in <c>sub/{subscriptionId:N}/rg/{name}</c>.</summary>
     public const string ResourceGroupSegment = "rg";
@@ -800,7 +956,13 @@ public static class GrainKeys {
     const int DigestBytes = DigestLength / 2;
 
     /// <summary>The closed set of platform-singleton names.</summary>
-    public static IReadOnlyList<string> PlatformSingletons { get; } = [ShardMapSingleton, TenantDirectorySingleton];
+    public static IReadOnlyList<string> PlatformSingletons { get; } = [
+        ShardMapSingleton, TenantDirectorySingleton, InvoiceNumberingSingleton
+    ];
+
+    /// <summary>The closed set of directory-index collections — see <see cref="DirectoryIndex" />.</summary>
+    public static IReadOnlyList<string> DirectoryCollections { get; } =
+        [DirectoryUsers, DirectoryInvitations, DirectoryApplications];
 
     // ── Formatting ─────────────────────────────────────────────────────────────────────────────
 
@@ -1405,6 +1567,130 @@ public static class GrainKeys {
     }
 
     /// <summary>
+    ///     <c>device/{sha256(userCode)[..16]}</c> — <c>IDeviceAuthorizationGrain</c>, one RFC 8628
+    ///     device authorization. docs/plan/11 § Protocol. <b>Hot tier</b>, qualified by the
+    ///     <b>platform</b> tenant.
+    /// </summary>
+    /// <param name="userCode">
+    ///     The user code in its normalized form, upper-case with no separator. The identity host's
+    ///     <c>DeviceCodes.NormalizeUserCode</c> produces it from anything a person types, and only
+    ///     from RFC 8628 § 6.1's twenty consonants; this method checks the wider shape, letters and
+    ///     digits, so it can't disagree with a later alphabet.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Keyed by the user code, because the user code is the one thing both halves hold.</b>
+    ///         The device polls with its <c>device_code</c> and the person types the
+    ///         <c>user_code</c> into a page on another machine, and one grain has to answer both.
+    ///         The device code carries its user code inside it (the identity host's
+    ///         <c>DeviceCodes</c> says how), so a poll finds the grain the page reached; the other
+    ///         direction would need the page to know the device code, which is the secret the flow
+    ///         exists to keep off the person's screen.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A digest, and never the code spelled out.</b> A live user code is a short-lived
+    ///         credential — whoever types it first approves the device — and a key that spelled it
+    ///         would put it in every log line and trace that prints a grain id. The digest is
+    ///         unkeyed: the code space is small enough that a reader of the logs could grind it back
+    ///         to a code, and what that buys is a code that expired minutes ago or one somebody is
+    ///         about to type, with the per-IP limit on the page in front of both. The same trade
+    ///         <c>CommunicationOtpDelivery</c> records for its idempotency key, and the same HMAC
+    ///         would close it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The platform tenant, because the tenant is not known yet.</b> The device asks
+    ///         before anybody has signed in, and the person names their tenant on the sign-in page
+    ///         afterwards — so the authorization cannot live in the tenant it will end up in, exactly
+    ///         as <see cref="SignUp" /> cannot. <b>Cardinality</b> is one record per device
+    ///         authorization, and the record is short-lived: a reminder clears it a minute after the
+    ///         codes expire.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    ///     <paramref name="userCode" /> is empty, longer than 32 characters, or holds anything but
+    ///     upper-case ASCII letters and digits.
+    /// </exception>
+    public static string DeviceAuthorization(string userCode) {
+        if (string.IsNullOrEmpty(userCode)
+            || userCode.Length > 32
+            || !userCode.All(static c => c is >= 'A' and <= 'Z' or >= '0' and <= '9')) {
+            throw new ArgumentException(
+                "A device-authorization key is built from a normalized user code — upper-case ASCII "
+                + "letters and digits, at most 32 of them. Normalize what a person typed before "
+                + "building a key from it.",
+                nameof(userCode)
+            );
+        }
+
+        return DeviceAuthorizationPrefix + Digest(DeviceAuthorizationPrefix, userCode);
+    }
+
+    /// <summary>
+    ///     <c>invite/{invitationId:N}</c> — <c>IInvitationGrain</c>, one invitation of an address
+    ///     into a tenant. docs/plan/11 § Sign-up and tenant creation, the invited path.
+    ///     <b>Durable</b>, tenant-qualified.
+    /// </summary>
+    /// <param name="invitationId">Random, minted when the invitation is created, and carried in its link.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Keyed by a random id and never by the address.</b> An invitation reachable by
+    ///         address would be a second email index — the per-tenant <see cref="EmailIndex" />
+    ///         already says whether the address belongs to somebody here, and the invitation grain
+    ///         holds the user id that claim was made for. Reaching the grain proves nothing: the link
+    ///         carries a secret beside the id, and the grain compares its digest.
+    ///     </para>
+    ///     <para>
+    ///         <b>Cardinality</b> is one activation per invitation; the record outlives acceptance
+    ///         so a second click on the link can be told "already used" rather than "not found".
+    ///     </para>
+    /// </remarks>
+    public static string Invitation(Guid invitationId) => InvitationPrefix + N(invitationId);
+
+    /// <summary>
+    ///     <c>idx/dir/{collection}</c> — <c>IDirectoryIndexGrain</c>, the ids of one kind of directory
+    ///     object in a tenant, so the identity administration pages have something to list.
+    ///     <b>Durable</b>, tenant-qualified. Issue #41.
+    /// </summary>
+    /// <param name="collection">
+    ///     One of <see cref="DirectoryCollections" />: <see cref="DirectoryUsers" />,
+    ///     <see cref="DirectoryInvitations" /> or <see cref="DirectoryApplications" />.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The directory's objects are keyed by random ids, so nothing else can enumerate
+    ///         them.</b> A user is <see cref="User" />, reached by its GUID; the email index is keyed
+    ///         by a digest of the address, so it answers "whose is this address" and never "who is
+    ///         here"; the client index is the same shape over a <c>client_id</c>. Until this key
+    ///         existed, "list the tenant's members" had no answer short of a scan of the durable
+    ///         store, which is the operation docs/plan/05 § The two tiers never offers a grain.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>One grain per collection per tenant, by name and not by digest.</b> The payload is
+    ///         a word from a closed set — the only <c>idx/</c> shape that is not a digest — because
+    ///         the key names a list, not an entry: a tenant has exactly one list of users, and its
+    ///         name is what a repair tool reading a physical key needs to see. The tenant is the
+    ///         <c>Orleans.Multitenant</c> qualification, as for every shape here.
+    ///     </para>
+    ///     <para>
+    ///         <b>Cardinality</b> is three activations per tenant. Each is written once per created
+    ///         object — a sign-up, an invitation, a registration — which is the write rate of a
+    ///         directory, not of a hot path.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="collection" /> is not in the closed set.</exception>
+    public static string DirectoryIndex(string collection) {
+        if (!DirectoryCollections.Contains(collection, StringComparer.Ordinal)) {
+            throw new ArgumentException(
+                $"'{collection}' is not a directory collection. The set is closed and is "
+                + $"[{string.Join(", ", DirectoryCollections)}].",
+                nameof(collection)
+            );
+        }
+
+        return DirectoryIndexPrefix + collection;
+    }
+
+    /// <summary>
     ///     <c>mg/{name}</c> — <c>IManagementGroupGrain</c>, the scope above the subscription in
     ///     docs/plan/06 § The hierarchy (issue #39).
     /// </summary>
@@ -1446,6 +1732,47 @@ public static class GrainKeys {
     }
 
     /// <summary>
+    ///     <c>policy/{tenantId:N}</c> — <c>IPolicyCatalogGrain</c>, the tenant's policy definitions,
+    ///     assignments and compliance states (docs/plan/08 § Policy, issue #46).
+    /// </summary>
+    /// <param name="tenantId">The tenant.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             ONE ACTIVATION PER TENANT, ON THE WRITE PATH — WHICH IS THE SHAPE docs/plan/04
+    ///             § Grain taxonomy WARNS ABOUT, AND THE REASON IT IS ACCEPTABLE HERE IS THE READ/WRITE
+    ///             SPLIT.
+    ///         </b> That warning is about an index grain keyed by a low-cardinality value
+    ///         <i>serialising</i> every create. Step 5 asks this grain once per write, and the ask is
+    ///         <c>[ReadOnly]</c>: evaluations interleave with each other and queue only behind a
+    ///         definition or assignment write, which docs/plan/07 § Caching across requests would call
+    ///         rare for the same reason it calls role assignments rare. The one write on the hot path —
+    ///         an audit's compliance state — persists only when a state <i>changes</i>, so a tenant
+    ///         re-applying the same body does not turn every write into a durable write here.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Per tenant and not per scope, because inheritance is the question and a per-scope
+    ///             grain cannot answer it alone.
+    ///         </b> An assignment at a management group applies to every
+    ///         resource group beneath it, so a per-scope key would make evaluation a call per ancestor
+    ///         — up to <c>IManagementGroupGrain.MaxDepth</c> plus two — on every write. One grain holds
+    ///         every scope's assignments and caches the compiled set per scope, which is what keeps the
+    ///         cost of step 5 one grain call whatever the depth. The tenant boundary is the key's
+    ///         qualification, so tenant A's assignments are not in the activation tenant B's writes
+    ///         reach — by construction rather than by a comparison.
+    ///     </para>
+    ///     <para>
+    ///         <b>The tenant id is repeated inside the tenant-qualified key</b> for the reason
+    ///         <see cref="TupleStore" /> and <see cref="Tenant" /> repeat it: a key read outside its
+    ///         qualification still says whose it is.
+    ///     </para>
+    /// </remarks>
+    public static string PolicyCatalog(Guid tenantId) => PolicyCatalogPrefix + N(tenantId);
+
+    /// <summary>
     ///     <c>cluster/{clusterId:N}</c> — <c>IClusterConnectionGrain</c>, docs/plan/06 § Grain keys.
     /// </summary>
     /// <remarks>
@@ -1467,6 +1794,44 @@ public static class GrainKeys {
     ///     </para>
     /// </remarks>
     public static string ClusterConnection(Guid clusterId) => ClusterConnectionPrefix + N(clusterId);
+
+    /// <summary>
+    ///     <c>metrics-account/{accountId}</c> — <c>IMonitorAccountGrain</c>, the record of which
+    ///     monitor workspace holds one VictoriaMetrics <c>accountID</c>.
+    /// </summary>
+    /// <param name="accountId">
+    ///     The account, as <c>MonitorWorkspaces.AccountId</c> folds it from a workspace's GUID. Never
+    ///     zero: the fold skips it, and zero is the account every misconfigured client writes to.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This key is NOT tenant-qualified, and it's the second per-entity null-tenant shape
+    ///         after <see cref="ClusterConnection" />.</b> An <c>accountID</c> is a 32-bit fold of a
+    ///         workspace's GUID, so two workspaces in two tenants can fold to one account and would
+    ///         then read and write each other's metrics. The claim that prevents it has to see every
+    ///         tenant's workspaces at once, which a tenant-qualified key can't: under
+    ///         <c>ForTenant(a)</c> and <c>ForTenant(b)</c> the same account is two grains that each
+    ///         say "free". The platform tenant would be one grain, and the separator refuses a
+    ///         reconciler's call into it (<c>CyberCloudGrainCallTenantSeparator</c>'s remarks say why
+    ///         that list stays short); a call into the null tenant is the edge
+    ///         <c>PlatformCrossTenantAuthorizer</c> already allows and logs.
+    ///     </para>
+    ///     <para>
+    ///         The grain holds a workspace GUID and nothing a tenant wrote. It answers only whether a
+    ///         given workspace holds the account, so it never tells one tenant another's GUID.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Decimal, not the <c>N</c> form, because the account is a number.</b> The parser
+    ///         accepts exactly <see cref="uint" />'s invariant spelling with no sign, no leading zero,
+    ///         and not zero itself, so one account has one key.
+    ///     </para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="accountId" /> is zero.</exception>
+    public static string MetricsAccount(uint accountId) {
+        ArgumentOutOfRangeException.ThrowIfZero(accountId);
+
+        return MetricsAccountPrefix + accountId.ToString(CultureInfo.InvariantCulture);
+    }
 
     /// <summary>
     ///     <c>idx/path/{sha256(canonicalPath)[..16]}</c> — <c>IResourceIndexGrain</c>,
@@ -1843,10 +2208,11 @@ public static class GrainKeys {
                 + "'res/{id}', 'user/{id}', "
                 + "'op/{id}', 'cluster/{id}', "
                 + "'tenant/{id}', 'group/{id}', 'app/{id}', 'sp/{id}', 'session/{id}', 'mi/{id}', 'signup/{id}', "
+                + "'policy/{tenantId}', "
                 + "'code/{id}', 'consent/{digest}', 'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'idx/client/{digest}', 'idx/watch/{digest}', "
-                + "'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
-                + "'mg/{name}', 'platform/{singleton}', 'idx/path/{digest}', "
+                + "'idx/dir/{collection}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
+                + "'mg/{name}', 'metrics-account/{accountId}', 'platform/{singleton}', 'idx/path/{digest}', "
                 + "'idx/email/{digest}', 'idx/client/{digest}', 'rel/store/{tenantId}', 'rel/obj/{type}/{id}', "
                 + "'rel/sub/{type}/{id}', 'rel/check/{type}/{id}', 'rel/list/{type}/{id}' or "
                 + "'rel/idx/{type}/{id}' — see "
@@ -1937,6 +2303,20 @@ public static class GrainKeys {
                 );
         }
 
+        // The second digest-payload shape, for the same reason: a user code is typed by a person
+        // and is not key-safe text, so the key carries its digest — DeviceAuthorization says more.
+        if (string.Equals(segments[0], "device", StringComparison.Ordinal)) {
+            return IsDigest(segments[1])
+                ? Result<GrainKey>.Success(new(GrainKeyKind.DeviceAuthorization, Guid.Empty, null, segments[1]))
+                : Invalid(
+                    $"'{segments[1]}' is not a device-authorization digest: it must be exactly "
+                    + Int(DigestLength)
+                    + " lower-case hexadecimal characters, the first "
+                    + Int(DigestLength)
+                    + " of a SHA-256."
+                );
+        }
+
         if (string.Equals(segments[0], "platform", StringComparison.Ordinal)) {
             return PlatformSingletons.Contains(segments[1], StringComparer.Ordinal)
                 ? Result<GrainKey>.Success(new(GrainKeyKind.PlatformSingleton, Guid.Empty, segments[1], null))
@@ -1944,6 +2324,20 @@ public static class GrainKeys {
                     $"'{key}' is not a grain key: '{segments[1]}' is not a platform singleton. The "
                     + $"set is closed and is [{string.Join(", ", PlatformSingletons)}]."
                 );
+        }
+
+        if (string.Equals(segments[0], "metrics-account", StringComparison.Ordinal)) {
+            // ⚠ A number, not a GUID, so it is decided before the GUID rule below runs. The
+            // re-spelling comparison is what refuses "007": the key carries the text it was given, so
+            // the canonicity guard in Parse would round-trip a leading zero rather than catch it.
+            return uint.TryParse(segments[1], NumberStyles.None, CultureInfo.InvariantCulture, out var account)
+                && account != 0
+                && string.Equals(account.ToString(CultureInfo.InvariantCulture), segments[1], StringComparison.Ordinal)
+                    ? Result<GrainKey>.Success(new(GrainKeyKind.MetricsAccount, Guid.Empty, segments[1], null))
+                    : Invalid(
+                        $"'{key}' is not a grain key: '{segments[1]}' is not an accountID. A metrics "
+                        + "account is a decimal number from 1 to 4294967295 with no sign and no leading zero."
+                    );
         }
 
         if (string.Equals(segments[0], "mg", StringComparison.Ordinal)) {
@@ -1970,6 +2364,8 @@ public static class GrainKeys {
             "mi" => GrainKeyKind.ManagedIdentity,
             "signup" => GrainKeyKind.SignUp,
             "code" => GrainKeyKind.AuthorizationCode,
+            "invite" => GrainKeyKind.Invitation,
+            "policy" => GrainKeyKind.PolicyCatalog,
             _ => GrainKeyKind.None
         };
 
@@ -1977,9 +2373,7 @@ public static class GrainKeys {
             return Invalid(
                 $"'{key}' is not a grain key: '{segments[0]}' is not one of 'sub', 'res', 'user', "
                 + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'code', "
-                + "'consent' or 'platform'. "
-                + "'op', 'cluster', 'tenant', 'group', 'app', 'sp', 'session', 'mi', 'signup', 'mg' or "
-                + "'platform'. "
+                + "'invite', 'consent', 'device', 'mg', 'metrics-account', 'policy' or 'platform'. "
                 + "The prefix is matched case-sensitively — see docs/plan/06 § Grain keys and "
                 + "docs/plan/11 § The object model."
             );
@@ -2018,6 +2412,17 @@ public static class GrainKeys {
             );
         }
 
+        // ⚠ The one idx/ shape whose payload is a name from a closed set rather than a digest, so
+        // it is decided before the digest rule below — DirectoryIndex says why.
+        if (string.Equals(segments[1], "dir", StringComparison.Ordinal)) {
+            return DirectoryCollections.Contains(segments[2], StringComparer.Ordinal)
+                ? Result<GrainKey>.Success(new(GrainKeyKind.DirectoryIndex, Guid.Empty, segments[2], null))
+                : Invalid(
+                    $"'{key}' is not a grain key: '{segments[2]}' is not a directory collection. The "
+                    + $"set is closed and is [{string.Join(", ", DirectoryCollections)}]."
+                );
+        }
+
         var kind = segments[1] switch {
             "path" => GrainKeyKind.PathIndex,
             "email" => GrainKeyKind.EmailIndex,
@@ -2028,10 +2433,11 @@ public static class GrainKeys {
 
         if (kind == GrainKeyKind.None) {
             return Invalid(
-                $"'{key}' is not a grain key: '{segments[1]}' is not an index. The four indexes are "
+                $"'{key}' is not a grain key: '{segments[1]}' is not an index. The five indexes are "
                 + "'idx/path' (docs/plan/06 § Grain keys), 'idx/email' (docs/plan/06 § Grain keys), "
-                + "'idx/client' (docs/plan/11 § Protocol) and 'idx/watch' (docs/plan/08 § What the "
-                + "resource manager deliberately does not do)."
+                + "'idx/client' (docs/plan/11 § Protocol), 'idx/watch' (docs/plan/08 § What the "
+                + "resource manager deliberately does not do) and 'idx/dir' (docs/plan/11 § The "
+                + "object model)."
             );
         }
 

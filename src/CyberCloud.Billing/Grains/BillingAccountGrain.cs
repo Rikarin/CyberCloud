@@ -1,0 +1,636 @@
+using CyberCloud.Billing.Pricing;
+using CyberCloud.Core.Contracts;
+using CyberCloud.Core.Time;
+using CyberCloud.Tenancy.Contracts;
+using Microsoft.Extensions.Logging;
+using Orleans.Multitenant;
+using System.Collections.Immutable;
+using System.Globalization;
+
+namespace CyberCloud.Billing.Grains;
+
+/// <summary>
+///     <see cref="IBillingAccountGrain" /> — Coordinator, Durable, key <c>tenant/{tenantId:N}</c>.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Read <see cref="IBillingAccountGrain" /> first.</b> This class keeps its two promises in
+///     the only places they could be broken: <see cref="FinalizeAsync" /> and
+///     <see cref="IssueCreditNoteAsync" /> are the only writers of <c>Invoices</c> and
+///     <c>CreditNotes</c>, and both call <c>Add</c> and nothing else.
+///     ⚠ Every call that throws leaves memory suspect, and <see cref="Invoke" /> re-reads the state
+///     before the next one—the rule <c>InvoiceNumberingGrain</c> gives the reason for. Here, an
+///     invoice added before a write that failed would otherwise be answered to the retry as finalized
+///     while no storage held it.
+/// </remarks>
+public sealed class BillingAccountGrain(
+    [PersistentState("billing-account", StorageTiers.Durable)]
+    IPersistentState<BillingAccountState> state,
+    IGrainFactory grains,
+    UsagePricing pricing,
+    ITaxService tax,
+    BillingOptions options,
+    IClock clock,
+    ILogger<BillingAccountGrain> logger
+)
+    : Grain, IBillingAccountGrain, IRemindable, IIncomingGrainCallFilter {
+    /// <summary>The month-close reminder's name.</summary>
+    public const string MonthCloseReminder = "close-months";
+
+    Guid tenantId;
+    bool suspect;
+
+    /// <summary>Re-reads the state before the first call after one that threw, then runs the call.</summary>
+    /// <param name="context">The call.</param>
+    public async Task Invoke(IIncomingGrainCallContext context) {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (suspect) {
+            await state.ReadStateAsync();
+            suspect = false;
+        }
+
+        try {
+            await context.Invoke();
+        } catch {
+            suspect = true;
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public override Task OnActivateAsync(CancellationToken cancellationToken) {
+        tenantId = BillingGrainKeys.TenantOf(this);
+        var key = BillingGrainKeys.Decode(this, GrainKeyKind.Tenant);
+
+        if (key.Id != tenantId) {
+            throw new InvalidOperationException(
+                $"BillingAccountGrain for tenant {tenantId:D} was activated with the key of tenant {key.Id:D}. "
+                + "An account is its own tenant's; a mismatch would invoice one tenant's usage to another."
+            );
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<BillingAccountSnapshot>> ConfigureAsync(BillingProfile profile) {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        if (string.IsNullOrWhiteSpace(profile.LegalName)) {
+            return Refuse("A billing profile names the legal entity invoiced.", "/legalName");
+        }
+
+        if (profile.Country is not { Length: 2 } country || !country.All(char.IsAsciiLetterUpper)) {
+            return Refuse($"'{profile.Country}' is not an ISO 3166-1 alpha-2 country code, upper case.", "/country");
+        }
+
+        var exponent = Currencies.ExponentOf(profile.Currency);
+        if (exponent.TryGetError(out var currencyError)) {
+            return Refuse(currencyError.Message, "/currency");
+        }
+
+        var checkedProfile = tax.CheckCustomer(profile);
+        if (checkedProfile.TryGetError(out var taxError)) {
+            return Result<BillingAccountSnapshot>.Failure(taxError);
+        }
+
+        state.State.Profile = profile;
+        state.State.Configured = true;
+        await state.WriteStateAsync();
+
+        return Result<BillingAccountSnapshot>.Success(Snapshot());
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<BillingAccountSnapshot>> AttachSubscriptionAsync(Guid subscriptionId) {
+        if (subscriptionId == Guid.Empty) {
+            return Refuse("A subscription is named by its GUID.", "/subscriptionId");
+        }
+
+        if (state.State.Subscriptions.Contains(subscriptionId)) {
+            await ArmMonthCloseAsync();
+            return Result<BillingAccountSnapshot>.Success(Snapshot());
+        }
+
+        // ⚠ Through the tenant's own subscription grain, so a GUID from another tenant — or one that
+        // was never created — is refused rather than attached and billed at zero forever.
+        var subscription = await Tenant()
+            .GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(subscriptionId))
+            .GetAsync();
+
+        if (subscription.TryGetError(out var missing)) {
+            return Result<BillingAccountSnapshot>.Failure(
+                ErrorCode.ResourceNotFound,
+                $"Tenant {tenantId:D} has no subscription {subscriptionId:D} to attach: {missing.Message}"
+            );
+        }
+
+        state.State.Subscriptions.Add(subscriptionId);
+        state.State.FirstMonth ??= Rating.MonthOf(clock.UtcNow);
+        await state.WriteStateAsync();
+
+        await ArmMonthCloseAsync();
+
+        return Result<BillingAccountSnapshot>.Success(Snapshot());
+    }
+
+    /// <inheritdoc />
+    public Task<Result<BillingAccountSnapshot>> GetAsync() =>
+        Task.FromResult(Result<BillingAccountSnapshot>.Success(Snapshot()));
+
+    /// <inheritdoc />
+    public async Task<Result<Invoice>> PreviewAsync(DateTimeOffset periodStart) {
+        if (!Rating.IsMonthStart(periodStart)) {
+            return NotAMonth(periodStart);
+        }
+
+        return Finalized(periodStart) is { } finalized
+            ? Result<Invoice>.Success(finalized)
+            : await DraftAsync(periodStart, state.State.Subscriptions);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<Invoice>> FinalizeAsync(DateTimeOffset periodStart) {
+        if (!Rating.IsMonthStart(periodStart)) {
+            return NotAMonth(periodStart);
+        }
+
+        // ⚠ FIRST, AND BEFORE EVERY OTHER CHECK: a finalized month answers the stored invoice. A retry
+        // after a timeout lands here and must not be refused by a rule that has changed since — a
+        // profile edited after finalization is not a reason to fail the retry of the finalization.
+        if (Finalized(periodStart) is { } already) {
+            return Result<Invoice>.Success(already);
+        }
+
+        if (OutOfOrder(periodStart) is { } refusal) {
+            return Result<Invoice>.Failure(ErrorCode.Conflict, refusal);
+        }
+
+        var closesAt = periodStart.AddMonths(1) + IBillingAccountGrain.LateUsageWindow;
+
+        if (clock.UtcNow < closesAt) {
+            return Result<Invoice>.Failure(
+                ErrorCode.Conflict,
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{periodStart:yyyy-MM} cannot be finalized before {closesAt:O}: docs/plan/22 § Invoicing and payment keeps a 48-hour late-usage window after the month, because a usage event will arrive late and closing instantly means correcting invoices instead."
+                )
+            );
+        }
+
+        if (!state.State.Configured) {
+            return Result<Invoice>.Failure(
+                ErrorCode.Conflict,
+                $"Tenant {tenantId:D}'s billing account has no profile. An invoice names the entity it is issued "
+                + "to; set one with ConfigureAsync."
+            );
+        }
+
+        var draft = await DraftAsync(periodStart, state.State.Subscriptions);
+        if (draft.TryGetError(out var draftError)) {
+            return Result<Invoice>.Failure(draftError);
+        }
+
+        var numbering = Numbering();
+        var documentKey = string.Create(CultureInfo.InvariantCulture, $"{tenantId:N}/{periodStart:yyyy-MM}");
+
+        var number = await numbering.AllocateAsync(options.Issuer, DocumentSeries.Invoice, documentKey);
+        if (number.TryGetError(out var numberError)) {
+            return Result<Invoice>.Failure(numberError);
+        }
+
+        // ⚠ Dated by the allocation, not by this grain's clock — InvoiceNumberingGrain's remarks on why
+        // numbers and dates have to run in the same order.
+        var invoice = draft.GetValueOrThrow() with {
+            InvoiceId = Guid.NewGuid(),
+            Number = number.GetValueOrThrow().Number,
+            Status = InvoiceStatus.Finalized,
+            FinalizedAt = number.GetValueOrThrow().AllocatedAt
+        };
+
+        // The one write. Everything before it is recomputable, and the number above is the same number
+        // on a retry — so a crash between the allocation and this line costs nothing but the retry.
+        state.State.Invoices.Add(invoice);
+        await state.WriteStateAsync();
+
+        await ConfirmAsync(numbering, options.Issuer.Code, DocumentSeries.Invoice, invoice.Number);
+
+        return Result<Invoice>.Success(invoice);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<ImmutableArray<Invoice>>> CloseMonthsAsync() {
+        if (state.State.FirstMonth is not { } month) {
+            return Result<ImmutableArray<Invoice>>.Success([]);
+        }
+
+        var closed = ImmutableArray.CreateBuilder<Invoice>();
+        var now = clock.UtcNow;
+
+        for (; month.AddMonths(1) + IBillingAccountGrain.LateUsageWindow <= now; month = month.AddMonths(1)) {
+            if (Finalized(month) is not null) {
+                continue;
+            }
+
+            // ⚠ STOPS AT THE FIRST REFUSAL rather than skipping to the next month. Every refusal
+            // FinalizeAsync has—no profile, no issuer, a currency—holds for the next month too, and
+            // finalizing past a gap would number a later month before an earlier one, which
+            // FinalizeAsync refuses as well (OutOfOrder).
+            var finalized = await FinalizeAsync(month);
+            if (finalized.TryGetError(out var error)) {
+                return Result<ImmutableArray<Invoice>>.Failure(error);
+            }
+
+            closed.Add(finalized.GetValueOrThrow());
+        }
+
+        return Result<ImmutableArray<Invoice>>.Success(closed.ToImmutable());
+    }
+
+    /// <inheritdoc />
+    public async Task ReceiveReminder(string reminderName, TickStatus status) {
+        if (!string.Equals(reminderName, MonthCloseReminder, StringComparison.Ordinal)) {
+            return;
+        }
+
+        var closed = await CloseMonthsAsync();
+
+        if (closed.TryGetError(out var error)) {
+            logger.LogWarning(
+                "Tenant {Tenant}'s billing account could not close a month: {Reason}",
+                tenantId,
+                error.Message
+            );
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<Result<ImmutableArray<Invoice>>> ListInvoicesAsync() =>
+        Task.FromResult(Result<ImmutableArray<Invoice>>.Success([.. state.State.Invoices]));
+
+    /// <inheritdoc />
+    public Task<Result<Invoice>> GetInvoiceAsync(string number) =>
+        Task.FromResult(
+            Invoice(number) is { } invoice
+                ? Result<Invoice>.Success(invoice)
+                : Result<Invoice>.Failure(ErrorCode.ResourceNotFound, $"Tenant {tenantId:D} has no invoice '{number}'.")
+        );
+
+    /// <inheritdoc />
+    public async Task<Result<CorrectionProposal>> ProposeCorrectionAsync(string invoiceNumber) {
+        if (Invoice(invoiceNumber) is not { } invoice) {
+            return Result<CorrectionProposal>.Failure(
+                ErrorCode.ResourceNotFound,
+                $"Tenant {tenantId:D} has no invoice '{invoiceNumber}'."
+            );
+        }
+
+        var subscriptions = invoice.Lines.Select(static x => x.SubscriptionId).Distinct().ToList();
+        var now = await DraftAsync(invoice.PeriodStart, subscriptions, invoice.Customer);
+        if (now.TryGetError(out var draftError)) {
+            return Result<CorrectionProposal>.Failure(draftError);
+        }
+
+        var credits = ImmutableArray.CreateBuilder<CreditNoteLineRequest>();
+        var underbilled = ImmutableArray.CreateBuilder<InvoiceLine>();
+        var rerated = now.GetValueOrThrow().Lines.ToDictionary(static x => (x.SubscriptionId, x.Meter));
+
+        for (var index = 0; index < invoice.Lines.Length; index++) {
+            var line = invoice.Lines[index];
+            var carried = line.Amount - Credited(invoice.Number, index);
+            var worth = rerated.Remove((line.SubscriptionId, line.Meter), out var current) ? current.Amount : 0m;
+
+            if (worth < carried) {
+                credits.Add(new() { LineIndex = index, Amount = carried - worth });
+            } else if (worth > line.Amount) {
+                underbilled.Add(current! with { Amount = worth - line.Amount, Quantity = current.Quantity - line.Quantity });
+            }
+        }
+
+        // A meter that had no line at all when the month was finalized and has usage now.
+        underbilled.AddRange(rerated.Values);
+
+        return Result<CorrectionProposal>.Success(
+            new() { InvoiceNumber = invoice.Number, Credits = credits.ToImmutable(), Underbilled = underbilled.ToImmutable() }
+        );
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<CreditNote>> IssueCreditNoteAsync(CreditNoteRequest request) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(request.RequestId)) {
+            return RefuseCredit(
+                "A credit note request carries a request id, and a retry repeats it — otherwise a timeout "
+                + "credits twice.",
+                "/requestId"
+            );
+        }
+
+        // ⚠ THE RETRY PATH FIRST, for the reason FinalizeAsync answers a finalized month first.
+        // ⚠ And only for the same request. A request id reused for another invoice or other lines is a
+        // bug in the caller's id, and answering it with the earlier note would report a credit that was
+        // never issued — the refusal says which note holds the id.
+        if (state.State.CreditNotes.FirstOrDefault(x => string.Equals(x.RequestId, request.RequestId, StringComparison.Ordinal)) is { } issued) {
+            return IsRequestOf(issued, request)
+                ? Result<CreditNote>.Success(issued)
+                : Result<CreditNote>.Failure(
+                    ErrorCode.Conflict,
+                    $"Request id '{request.RequestId}' already issued credit note '{issued.Number}' against invoice "
+                    + $"'{issued.InvoiceNumber}', and this request differs from it. One request id is one credit note; "
+                    + "a different credit needs a new id.",
+                    "/requestId"
+                );
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason) || string.IsNullOrWhiteSpace(request.ApprovedBy)) {
+            return RefuseCredit(
+                """A credit note carries a reason and an approver. docs/plan/22 § Invoicing and payment: "Credits """
+                + """and refunds: ledger entries with a reason, an approver, and an audit trail." """,
+                string.IsNullOrWhiteSpace(request.Reason) ? "/reason" : "/approvedBy"
+            );
+        }
+
+        if (Invoice(request.InvoiceNumber) is not { } invoice) {
+            return Result<CreditNote>.Failure(
+                ErrorCode.ResourceNotFound,
+                $"Tenant {tenantId:D} has no finalized invoice '{request.InvoiceNumber}' to credit. A draft is corrected "
+                + "by correcting the ledger — it is rated again on the next read."
+            );
+        }
+
+        if (request.Lines.IsDefaultOrEmpty) {
+            return RefuseCredit("A credit note credits at least one line.", "/lines");
+        }
+
+        var lines = ImmutableArray.CreateBuilder<CreditNoteLine>(request.Lines.Length);
+
+        foreach (var wanted in request.Lines.GroupBy(static x => x.LineIndex)) {
+            if (wanted.Key < 0 || wanted.Key >= invoice.Lines.Length) {
+                return RefuseCredit($"Invoice '{invoice.Number}' has no line {wanted.Key}.", "/lines");
+            }
+
+            var amount = wanted.Sum(static x => x.Amount);
+            if (wanted.Any(static x => x.Amount <= 0)) {
+                return RefuseCredit("A credited amount is positive; the credit note carries it negated.", "/lines");
+            }
+
+            if (MoneyRounding.Round(amount, invoice.Currency).GetValueOrThrow() != amount) {
+                return RefuseCredit(
+                    $"{amount} has more decimals than {invoice.Currency} has. A document carries rounded amounts.",
+                    "/lines"
+                );
+            }
+
+            var line = invoice.Lines[wanted.Key];
+            var remaining = line.Amount - Credited(invoice.Number, wanted.Key);
+
+            if (amount > remaining) {
+                return RefuseCredit(
+                    $"Line {wanted.Key} of '{invoice.Number}' carries {MoneyRounding.Format(remaining, invoice.Currency)} "
+                    + $"after the credit notes already issued against it, and {MoneyRounding.Format(amount, invoice.Currency)} "
+                    + "was asked for. A credit note cannot credit more than was invoiced.",
+                    "/lines"
+                );
+            }
+
+            lines.Add(
+                new() {
+                    LineIndex = wanted.Key,
+                    SubscriptionId = line.SubscriptionId,
+                    Meter = line.Meter,
+                    Amount = -amount,
+                    Description = "Credit: " + line.Description
+                }
+            );
+        }
+
+        var subtotal = lines.Sum(static x => x.Amount);
+        var earlier = state.State.CreditNotes
+            .Where(x => string.Equals(x.InvoiceNumber, invoice.Number, StringComparison.Ordinal))
+            .ToList();
+
+        var credited = InvoiceBuilder.CreditTax(invoice, subtotal, earlier);
+        if (credited.TryGetError(out var taxError)) {
+            return Result<CreditNote>.Failure(taxError);
+        }
+
+        var creditNoteId = Guid.NewGuid();
+        var numbering = Numbering();
+
+        // ⚠ The document key is the REQUEST id, not the credit note's own GUID: a retry after a crash
+        // between this allocation and the write below mints a new GUID and must still get this number.
+        var number = await numbering.AllocateAsync(
+            invoice.Issuer,
+            DocumentSeries.CreditNote,
+            string.Create(CultureInfo.InvariantCulture, $"{tenantId:N}/{request.RequestId}")
+        );
+
+        if (number.TryGetError(out var numberError)) {
+            return Result<CreditNote>.Failure(numberError);
+        }
+
+        var note = new CreditNote {
+            CreditNoteId = creditNoteId,
+            Number = number.GetValueOrThrow().Number,
+            InvoiceNumber = invoice.Number,
+            TenantId = tenantId,
+            Currency = invoice.Currency,
+            Lines = lines.ToImmutable(),
+            Subtotal = subtotal,
+            Tax = credited.GetValueOrThrow(),
+            Total = subtotal + credited.GetValueOrThrow().Amount,
+            Reason = request.Reason,
+            ApprovedBy = request.ApprovedBy,
+            IssuedAt = number.GetValueOrThrow().AllocatedAt,
+            RequestId = request.RequestId
+        };
+
+        state.State.CreditNotes.Add(note);
+        await state.WriteStateAsync();
+
+        await ConfirmAsync(numbering, invoice.Issuer.Code, DocumentSeries.CreditNote, note.Number);
+
+        return Result<CreditNote>.Success(note);
+    }
+
+    /// <inheritdoc />
+    public Task<Result<ImmutableArray<CreditNote>>> ListCreditNotesAsync() =>
+        Task.FromResult(Result<ImmutableArray<CreditNote>>.Success([.. state.State.CreditNotes]));
+
+    /// <inheritdoc />
+    public Task DeactivateAsync() {
+        DeactivateOnIdle();
+        return Task.CompletedTask;
+    }
+
+    // ── The draft ────────────────────────────────────────────────────────────────────────────────
+
+    async Task<Result<Invoice>> DraftAsync(
+        DateTimeOffset periodStart,
+        IReadOnlyList<Guid> subscriptions,
+        BillingProfile? customer = null
+    ) {
+        // ⚠ A DRAFT NEEDS THE ISSUER TOO. The tax on a line depends on where the issuer is — reverse
+        // charge is "another member state than the issuer's" — so a draft without one is a number with
+        // no tax decision behind it. Without this check the real silo, with no issuer configured,
+        // answers a draft with EuVatTaxService's refusal of an issuer in country '' — the failure
+        // BillingAcrossTheHostsTests caught. Cost queries and budgets price usage and never tax it, and keep
+        // working without one.
+        if (!options.HasIssuer) {
+            return Result<Invoice>.Failure(
+                ErrorCode.InternalError,
+                $"This silo has no invoice issuer — {BillingOptions.SectionName}:Issuer is not configured "
+                + "(Code, LegalName, Country, VatId, NumberPrefix). An invoice, draft or final, names the entity "
+                + "issuing it and is taxed from its country; it is not computed on behalf of a placeholder."
+            );
+        }
+
+        var profile = customer ?? state.State.Profile;
+        var lines = ImmutableArray.CreateBuilder<InvoiceLine>();
+        var versions = new SortedSet<DateTimeOffset>();
+
+        foreach (var subscription in subscriptions) {
+            var rated = await pricing.RateAsync(tenantId, subscription, periodStart, periodStart.AddMonths(1));
+            if (rated.TryGetError(out var rateError)) {
+                return Result<Invoice>.Failure(rateError);
+            }
+
+            foreach (var hour in rated.GetValueOrThrow()) {
+                versions.Add(hour.PriceVersion);
+            }
+
+            var built = InvoiceBuilder.Lines(subscription, rated.GetValueOrThrow(), profile.Currency);
+            if (built.TryGetError(out var lineError)) {
+                return Result<Invoice>.Failure(lineError);
+            }
+
+            lines.AddRange(built.GetValueOrThrow());
+        }
+
+        return InvoiceBuilder.Draft(tenantId, periodStart, options.Issuer, profile, lines.ToImmutable(), [.. versions], tax);
+    }
+
+    // ── The month close ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Registers the month-close reminder unless it's already registered.</summary>
+    /// <remarks>
+    ///     ⚠ Registered only when <c>GetReminder</c> answers null, for the reason <c>BudgetGrain</c>
+    ///     gives: re-registering on every attach would push the tick out by an hour each time. A
+    ///     failure is logged and not returned—the subscription is attached either way, and attaching
+    ///     it again re-arms.
+    /// </remarks>
+    async Task ArmMonthCloseAsync() {
+        try {
+            if (await this.GetReminder(MonthCloseReminder) is null) {
+                _ = await this.RegisterOrUpdateReminder(
+                    MonthCloseReminder,
+                    IBillingAccountGrain.MonthCloseTick,
+                    IBillingAccountGrain.MonthCloseTick
+                );
+            }
+        } catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(error, "Tenant {Tenant}'s billing account could not arm its month close", tenantId);
+        }
+    }
+
+    /// <summary>Why a month can't be finalized yet without breaking number order, or null when it can.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Numbers follow months, and this is where that's enforced.</b> A number is allocated at
+    ///     finalization, so finalizing a month after a later one, or past an unfinalized month since
+    ///     the first attach, prints a later month with an earlier number. <see cref="CloseMonthsAsync" />
+    ///     goes oldest first and never asks out of order; a caller naming a month does.
+    ///     <see cref="BillingAccountState.FirstMonth" /> doesn't bound the past: a month before it can
+    ///     be finalized by name, as long as no later month already is.
+    /// </remarks>
+    string? OutOfOrder(DateTimeOffset periodStart) {
+        if (state.State.Invoices.LastOrDefault(x => x.PeriodStart > periodStart)?.PeriodStart is { } later) {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{later:yyyy-MM} is already finalized, so {periodStart:yyyy-MM} can't be: its number would be later than a later month's."
+            );
+        }
+
+        var previous = periodStart.AddMonths(-1);
+        if (state.State.FirstMonth is { } first && previous >= first && Finalized(previous) is null) {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{previous:yyyy-MM} isn't finalized yet, so {periodStart:yyyy-MM} can't be. Months since the first attach are numbered in order—finalize {previous:yyyy-MM} first."
+            );
+        }
+
+        return null;
+    }
+
+    /// <summary>Tells the numbering grain the document is written, and logs rather than fails if it can't.</summary>
+    /// <remarks>
+    ///     ⚠ The document is written by now, so a confirmation that's refused or throws isn't a reason
+    ///     to fail the call: its number is already on disk in the numbering grain and can't be given
+    ///     out again. What's left is a false alarm in the audit's unconfirmed list, and the warning
+    ///     says which number to clear.
+    /// </remarks>
+    async Task ConfirmAsync(IInvoiceNumberingGrain numbering, string issuerCode, DocumentSeries series, string number) {
+        try {
+            var confirmed = await numbering.ConfirmAsync(issuerCode, series, number);
+            if (confirmed.TryGetError(out var error)) {
+                logger.LogWarning("Tenant {Tenant}'s {Number} is written but was not confirmed: {Reason}", tenantId, number, error.Message);
+            }
+        } catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(error, "Tenant {Tenant}'s {Number} is written but was not confirmed", tenantId, number);
+        }
+    }
+
+    // ── Reads over state ─────────────────────────────────────────────────────────────────────────
+
+    Invoice? Finalized(DateTimeOffset periodStart) =>
+        state.State.Invoices.FirstOrDefault(x => x.PeriodStart == periodStart);
+
+    Invoice? Invoice(string number) =>
+        state.State.Invoices.FirstOrDefault(x => string.Equals(x.Number, number, StringComparison.Ordinal));
+
+    decimal Credited(string invoiceNumber, int lineIndex) =>
+        -state.State.CreditNotes
+            .Where(x => string.Equals(x.InvoiceNumber, invoiceNumber, StringComparison.Ordinal))
+            .SelectMany(static x => x.Lines)
+            .Where(x => x.LineIndex == lineIndex)
+            .Sum(static x => x.Amount);
+
+    BillingAccountSnapshot Snapshot() =>
+        new() {
+            TenantId = tenantId,
+            Profile = state.State.Profile,
+            Subscriptions = [.. state.State.Subscriptions],
+            Configured = state.State.Configured
+        };
+
+    TenantGrainFactory Tenant() => grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture));
+
+    // ⚠ A plain GetGrain, deliberately: the numbering grain is null-tenant, and ForTenant would reach a
+    // second, tenant-qualified copy with a second counter — which OnActivateAsync there refuses.
+    IInvoiceNumberingGrain Numbering() =>
+        grains.GetGrain<IInvoiceNumberingGrain>(GrainKeys.PlatformSingleton(GrainKeys.InvoiceNumberingSingleton));
+
+    static Result<Invoice> NotAMonth(DateTimeOffset periodStart) =>
+        Result<Invoice>.Failure(
+            ErrorCode.InvalidRequestBody,
+            string.Create(CultureInfo.InvariantCulture, $"{periodStart:O} is not the first instant of a month in UTC. An invoice's period is a calendar month.")
+        );
+
+    static Result<BillingAccountSnapshot> Refuse(string message, string target) =>
+        Result<BillingAccountSnapshot>.Failure(ErrorCode.InvalidRequestBody, message, target);
+
+    /// <summary>Whether a credit note is what a request asks for: its invoice, reason, approver and lines.</summary>
+    static bool IsRequestOf(CreditNote issued, CreditNoteRequest request) {
+        IEnumerable<(int, decimal)> asked = request.Lines.IsDefault
+            ? []
+            : request.Lines.GroupBy(static x => x.LineIndex).Select(static x => (x.Key, -x.Sum(static y => y.Amount))).OrderBy(static x => x.Key);
+
+        return string.Equals(issued.InvoiceNumber, request.InvoiceNumber, StringComparison.Ordinal)
+            && string.Equals(issued.Reason, request.Reason, StringComparison.Ordinal)
+            && string.Equals(issued.ApprovedBy, request.ApprovedBy, StringComparison.Ordinal)
+            && issued.Lines.Select(static x => (x.LineIndex, x.Amount)).OrderBy(static x => x.LineIndex).SequenceEqual(asked);
+    }
+
+    static Result<CreditNote> RefuseCredit(string message, string target) =>
+        Result<CreditNote>.Failure(ErrorCode.InvalidRequestBody, message, target);
+}

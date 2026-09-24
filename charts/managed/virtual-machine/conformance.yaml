@@ -257,3 +257,18 @@ owed:
       Sixth sighting of charts/managed/nats' item of the same name. KubeVirt exports guest CPU,
       memory and network metrics per instance through virt-handler; nothing here scrapes or shows
       them.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.Compute/virtualMachines. OWED, AND ADDED BY THE #30 REVIEW. THE ENGINE STEP is
+      charts/managed/disk's for the root disk, which this chart clones from an image into a volume
+      of its own (`the-root-disk-clones-the-named-image-in-this-namespace` above), and nothing in the
+      bundle encrypts a block volume. The data disks are CyberCloud.Compute/disks and carry that
+      type's row. The cloud-init user data is resolved from a handle in the tenant's own vault path
+      into a Secret, so it rests in the vault and in the cluster's etcd rather than on a volume.
+      What every family still needs is docs/plan/18 § What customer-managed keys still need: (1) a
+      key-use seam — the grant is expressible today, `keyVaultCryptoUser` with principalType
+      `resource` on a CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and
+      wrapKey/unwrapKey are actions, so no reconciler can call them; (2) an `encryption.keyUri`
+      property on a NEW api-version of this type; (3) revocation — a disabled key taking the data
+      offline, which needs a re-unwrap on a schedule nothing runs. The key's home is no longer the
+      blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.

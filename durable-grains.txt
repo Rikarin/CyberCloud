@@ -117,6 +117,14 @@ CyberCloud.ResourceManager.Grains.ParkedResourceRegistryGrain
 # fan-out reading an empty set after a silo restart delivers nothing and reports nothing wrong. A
 # vault that missed the change to a share it protects is a backup that silently stopped covering it.
 CyberCloud.ResourceManager.Grains.ResourceWatchGrain
+#
+# PolicyCatalogGrain is a tenant's policy definitions, assignments and audit verdicts — docs/plan/08
+# § Policy, issue #46. The test answers no, and the failure is the worst kind: a catalog that came
+# back empty is not an error anywhere. Every write succeeds, every deny rule a tenant's compliance
+# depends on has silently stopped applying, and nothing says so until an auditor asks why a
+# resource the policy forbids exists. The definitions and assignments are configuration a person
+# wrote and there is no second copy of them to rebuild from.
+CyberCloud.ResourceManager.Grains.PolicyCatalogGrain
 
 # ── Metering — docs/plan/22 ────────────────────────────────────────────────────────────────────
 # The two halves of "a usage record, once emitted, is never lost and never double-counted"
@@ -154,8 +162,35 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # honest answer is 'this can be rebuilt', the tier is Hot") answers cleanly, and it answers that way
 # only because the dedup above is durable.
 
+# ── Billing — docs/plan/22, issue #38 ──────────────────────────────────────────────────────────
+# ⚠ WHAT THE ENTRY ABOVE CALLED "A SECOND LEDGER DERIVED FROM THIS ONE" DID NOT SHIP AS A LEDGER.
+# Charges are not stored: a draft invoice, a cost row and a budget's figure are all the usage ledger
+# rated on the day they are asked for (CyberCloud.Billing.Pricing.UsagePricing), so there is nothing
+# about money that could disagree with the usage it was derived from. What IS stored is what cannot
+# be derived again, and that is three grains:
+#
+# BillingAccountGrain holds the finalized invoices and the credit notes — documents a customer has
+# been sent, whose integrity must be kept for the whole storage period (Council Directive
+# 2006/112/EC, Articles 233 and 247) and which no re-rating reproduces once the price sheet or the ledger has
+# moved on. Loss tolerance is legal, not operational, as the usage ledger's is.
+CyberCloud.Billing.Grains.BillingAccountGrain
+#
+# InvoiceNumberingGrain holds the gap-free sequences. Losing it restarts numbering at 1: every new
+# invoice then carries a number an existing one already has, which is the defect a sequential
+# invoice number exists to make impossible.
+CyberCloud.Billing.Grains.InvoiceNumberingGrain
+#
+# BudgetGrain holds which thresholds have fired this period. A forgotten one fires again on the
+# next tick, and the sending module's idempotency key is the only thing between that and a second
+# page to finance — a second defence is not a reason to lose the first.
+CyberCloud.Billing.Grains.BudgetGrain
+#
+# ⚠ NOT CostQueryGrain, which holds nothing: it is a stateless worker over the ledger and the check
+# grains, and has no [PersistentState] to bind. Nor InvoiceQueryGrain (#41), a stateless worker over
+# the billing account and one check grain, for the same reason.
+
 # ── Providers — docs/plan/03 § Providers ───────────────────────────────────────────────────────
-# TWO, since #32 and #29 — and for fifteen families before them NOTHING, an absence that was the
+# THREE, since #32, #29 and the key vault — and for fifteen families before them NOTHING, an absence that was the
 # reviewed decision rather than an omission.
 #
 # CyberCloud.Providers.Sample is the first provider (docs/plan/24 § Phase 1, exit criterion 1) and
@@ -190,6 +225,15 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # the state a person might mistake for sensitive, and they are what a notification is addressed to.
 CyberCloud.Providers.Monitor.Alerting.AlertEvaluatorGrain
 #
+# ⚠ THE ACCOUNTID LEDGER, AND ITS LOSS TOLERANCE IS ZERO BECAUSE LOSING IT IS A CROSS-TENANT READ.
+# MonitorAccountGrain records which workspace GUID claimed a folded VictoriaMetrics accountID first
+# (#41's review; IMonitorAccountGrain carries the argument). Nothing can rebuild it: the fold says
+# which account a workspace maps to and not which of two colliding workspaces got there first, and a
+# flush would hand the account to whichever reconciled next — possibly the one that folded onto a
+# victim's series. Null tenant, one small row per workspace ever created in the region, written once
+# per workspace and never released, because the series outlive the workspace.
+CyberCloud.Providers.Monitor.Accounts.MonitorAccountGrain
+#
 # ⚠ THE QUESTION WAS ASKED, AND THE ANSWER IS THAT THE MANAGER IS MISSING NOTHING. FeedGrain is the
 # catalogue of CyberCloud.ContainerRegistry/feeds (docs/plan/13 § Artifact feeds): which versions of
 # which packages tenants have PUSHED INTO the feed, which are listed, what each hashes to, where its
@@ -209,6 +253,28 @@ CyberCloud.Providers.Monitor.Alerting.AlertEvaluatorGrain
 # every feed of every tenant is exactly the operation that is impossible during the incident where
 # you need it.
 CyberCloud.Providers.ContainerRegistry.FeedGrain
+#
+# ⚠ THE THIRD PROVIDER GRAIN, AND THE MANAGER IS MISSING NOTHING HERE EITHER. KeyVaultGrain holds what
+# a tenant put INTO a CyberCloud.KeyVault/vaults through its data plane (docs/plan/18 § The resource
+# model): every version of every secret and key, their enabled/expiry attributes, and which are
+# soft-deleted until when. ResourceGrain holds the vault's declared intent — its purge protection and
+# its description — and nothing else; a secret's value in a desired body would be a secret handed to
+# every `read` holder and written into every backup of ResourceGrain.
+#
+# ⚠ DURABLE, AND THE TEST ANSWERS IN THE SHARPEST DIRECTION OF ANY LINE IN THIS FILE. "Can this be
+# rebuilt" — no, from anywhere: a generated key's private half exists nowhere else by design, so losing
+# this state is losing the key, and every ciphertext and signature made with it becomes unopenable and
+# unverifiable. docs/plan/18 § The resource model calls a deleted signing key "a business-ending
+# event"; a flushed one is the same event without the seven days. And the soft-deleted half is a
+# promise with a date on it: an item inside its recovery window must still be recoverable after an
+# incident.
+#
+# ⚠ AND NOTHING IN IT IS A SECRET IN CC1005'S SENSE, WHICH IS WHY IT MAY BE HERE AT ALL. Every value and
+# every private key is AES-256-GCM ciphertext under a per-vault root that lives in OpenBao, minted by the
+# reconciler through ISecretWriter and never written to any grain; a backup of this tier opens nothing
+# without the platform vault. KeyVaultGrainTests.TheDurableStateHoldsNoValueAndNoKeyMaterial reads the
+# stored state back and searches it for the plaintext.
+CyberCloud.Providers.KeyVault.KeyVaultGrain
 #
 # ⚠ The measurement docs/plan/25 § R1 asks for is still being taken, and this line is part of it:
 # what the feeds provider added to the platform was not a grain the manager should have held but a
@@ -349,3 +415,28 @@ CyberCloud.Identity.Grains.ConsentGrain
 # costs one replay window on the codes in flight at that moment, each still bound to its verifier by
 # PKCE. Session-shaped, bounded by concurrent sign-ins, and written once per sign-in on the path a
 # person is waiting on.
+#
+# ⚠ DeviceAuthorizationGrain is ABSENT for AuthorizationCodeGrain's reason (#43). It is one RFC 8628
+# device authorization — the codes `cyc login` on a headless box prints, and the person's answer —
+# and it is worth ten minutes: past them the codes are refused whatever the tier holds, and the grain
+# clears itself. Losing the tier mid-flow costs one more `cyc login`. Bounded by concurrent device
+# sign-ins, and polled every five seconds while pending, which is a write rate the durable tier's
+# synchronous replication should never see.
+#
+# InvitationGrain is one invitation of an address into a tenant (#43, docs/plan/11 § Sign-up and
+# tenant creation, the invited path), and DURABLE for the question docs/plan/05 § Choosing a tier
+# asks: its loss is a colleague holding a link they were told would work for seven days and that
+# answers "not valid" — a dead end a person notices, with no way to rebuild the record from anything
+# else (the link's secret is kept only as a digest, by design). Written a handful of times per
+# invitation, so the durable tier's write cost is nothing; the invited user it created is in the
+# durable tier already, and an invitation that outlived a hot-tier flush while its user did not would
+# be the worse split.
+CyberCloud.Identity.Grains.InvitationGrain
+#
+# DirectoryIndexGrain is the list of a tenant's users, invitations or applications (#41, the identity
+# administration pages), and DURABLE because it is the only thing that can enumerate them: every one
+# is keyed by a random id, the email and client indexes are keyed by digests, and so "rebuildable by
+# scanning" means scanning the durable store — the incident-time operation the indexes above exist
+# to avoid. Its loss is a member no administrator can see, list or remove. Written once per created
+# object; read by an owner opening a page.
+CyberCloud.Identity.Grains.DirectoryIndexGrain

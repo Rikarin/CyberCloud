@@ -270,6 +270,107 @@ public sealed class ServedShapesMatchTheDocumentTests {
     }
 
     /// <summary>
+    ///     ⚠ Policy's addresses reached the document with the review of issue #46, and what the gateway
+    ///     serves at them validates against it — the rule included, which the validator follows into
+    ///     <c>Policy.Rule</c> and <c>Policy.Condition</c> through the member's <c>$ref</c>.
+    /// </summary>
+    /// <remarks>
+    ///     The properties are the member set <c>PolicyManagerService</c> renders — every one, always —
+    ///     which <c>PolicyEnforcementTests.TheManagersRenderingIsTheDocumentsSchema</c> holds against the
+    ///     real manager; here the question is the envelope <c>ResponseBodies</c> puts around them.
+    /// </remarks>
+    [Fact]
+    public async Task APolicyDefinitionAndAssignmentValidateAgainstTheirGetAndPut() {
+        var gateway = new GatewayHarness();
+        const string rule = """
+            {"if":{"allOf":[{"field":"type","like":"CyberCloud.Network/*"},{"not":{"field":"/tags/env","in":["prod","dev"]}}]},
+             "then":{"effect":"modify","operations":[{"operation":"add","field":"/tags/env","value":"dev"}]}}
+            """;
+
+        gateway.Policies.OnRead = request => Result<PolicyObjectSnapshot>.Success(
+            PolicySnapshot(request.Path, $$"""{"displayName":"Tagged","description":"","policyRule":{{rule}}}""")
+        );
+        gateway.Policies.OnPut = request => Result<PolicyObjectSnapshot>.Success(
+            PolicySnapshot(
+                request.Path,
+                """{"displayName":"","policyDefinitionId":"/tenants/x/providers/CyberCloud.Policy/policyDefinitions/tagged","notScopes":[],"scope":"/tenants/x"}"""
+            ) with { Created = true }
+        );
+
+        var definition = GatewayHarness.SubscriptionPath(GatewayHarness.TenantA)
+            + PolicyAddress.NamespaceSegment + PolicyAddress.DefinitionsSegment + "/tagged";
+        var read = await gateway.SendAsync("GET", definition, gateway.Token(GatewayHarness.TenantA));
+
+        read.Status.ShouldBe(StatusCodes.Status200OK, read.Body);
+        Conforms(read.Body, ResponseSchema(PolicyTemplate(OpenApiEmitter.SubscriptionPathTemplate, PolicyObjectKind.Definition), "get", "200"));
+
+        var assignment = GatewayHarness.GroupPath(GatewayHarness.TenantA)
+            + PolicyAddress.NamespaceSegment + PolicyAddress.AssignmentsSegment + "/tagged";
+        var put = await gateway.SendAsync(
+            "PUT",
+            assignment,
+            gateway.Token(GatewayHarness.TenantA),
+            body: """{"properties":{"policyDefinitionId":"x"}}"""
+        );
+
+        put.Status.ShouldBe(StatusCodes.Status201Created, put.Body);
+        Conforms(put.Body, ResponseSchema(PolicyTemplate(OpenApiEmitter.ResourceGroupPathTemplate, PolicyObjectKind.Assignment), "put", "201"));
+    }
+
+    /// <summary>⚠ A compliance page — the one policy listing whose rows are not objects — validates too.</summary>
+    [Fact]
+    public async Task APolicyStatesPageValidatesAgainstTheStatesList200() {
+        var gateway = new GatewayHarness();
+
+        gateway.Policies.OnList = static _ => Result<PolicyListPage>.Success(
+            new() {
+                States = [
+                    new() {
+                        ResourcePath = "/tenants/x/subscriptions/y/resourceGroups/prod/providers/CyberCloud.Network/networks/n",
+                        ResourceType = "CyberCloud.Network/networks",
+                        AssignmentPath = "/tenants/x/providers/CyberCloud.Policy/policyAssignments/a",
+                        DefinitionPath = "/tenants/x/providers/CyberCloud.Policy/policyDefinitions/d",
+                        State = PolicyComplianceState.NonCompliant,
+                        Since = DateTimeOffset.UnixEpoch
+                    }
+                ],
+                Continuation = "a"
+            }
+        );
+
+        var path = GatewayHarness.ManagementGroupPath(GatewayHarness.TenantA)
+            + PolicyAddress.NamespaceSegment + PolicyAddress.StatesSegment;
+        var response = await gateway.SendAsync("GET", path, gateway.Token(GatewayHarness.TenantA));
+
+        response.Status.ShouldBe(StatusCodes.Status200OK, response.Body);
+        Conforms(response.Body, ResponseSchema(PolicyTemplate(OpenApiEmitter.ManagementGroupPathTemplate, PolicyObjectKind.State), "get", "200"));
+
+        using var page = JsonDocument.Parse(response.Body);
+        page.RootElement.GetProperty("value").GetArrayLength().ShouldBe(1);
+    }
+
+    static string PolicyTemplate(string scope, PolicyObjectKind kind) =>
+        scope
+        + PolicyAddress.NamespaceSegment
+        + kind switch {
+            PolicyObjectKind.Definition => PolicyAddress.DefinitionsSegment + "/{" + OpenApiEmitter.PolicyDefinitionPlaceholder + "}",
+            PolicyObjectKind.Assignment => PolicyAddress.AssignmentsSegment + "/{" + OpenApiEmitter.PolicyAssignmentPlaceholder + "}",
+            _ => PolicyAddress.StatesSegment
+        };
+
+    static PolicyObjectSnapshot PolicySnapshot(string path, string properties) {
+        var address = PolicyAddress.ParsePath(path).GetValueOrThrow();
+
+        return new() {
+            Path = address.Path,
+            Name = address.Name,
+            Type = address.Kind == PolicyObjectKind.Definition ? PolicyAddress.DefinitionTypeName : PolicyAddress.AssignmentTypeName,
+            Scope = address.Scope.Path,
+            Properties = properties
+        };
+    }
+
+    /// <summary>
     ///     ⚠ The validator refuses what it is meant to refuse. A body carrying a member no schema
     ///     names is the exact defect of issue #85, and a check that passed it would be this whole
     ///     class printing ticks over nothing.

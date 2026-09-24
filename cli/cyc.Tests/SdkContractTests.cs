@@ -64,9 +64,15 @@ public sealed class SdkContractTests {
         // ⚠ Not `cc`. `cc` is the POSIX name of the system C compiler and `CC` is the standard make
         // variable, so a CLI called `cc` shadows a toolchain on every Unix box. Both assemblies have
         // to agree, and this is where they are compared. (The SDK's `Executable` constant is
-        // internal, so what is checkable from here is the client id it registers under — the same
-        // word, and the one that keys the shared token-cache entry.)
-        CyberCloudCliCredential.CliClientId.ShouldBe("cyc");
+        // internal, so what is checkable from here is the client id it registers under, which is
+        // named after it and keys the shared token-cache entry.)
+        CyberCloudCliCredential.CliClientId.ShouldStartWith("cyc");
+
+        // ⚠ And the whole of it is the identity host's registration, `cyc-cli` — docs/plan/11
+        // § Protocol. It was `cyc` while no document named one, and every sign-in against the real
+        // host was invalid_client (#43); Identity.Host.Tests' DeviceFlowThroughTheSdkTests pins it
+        // against FirstPartyClients.Cli itself.
+        CyberCloudCliCredential.CliClientId.ShouldBe("cyc-cli");
     }
 
     [Fact]

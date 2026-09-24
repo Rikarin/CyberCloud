@@ -82,6 +82,18 @@ public sealed class UserGrain(
                 );
         }
 
+        // ⚠ Listed before it exists — IDirectoryIndexGrain's remarks. A crash after this line leaves
+        // an id whose grain answers "not found", which a listing skips; the other order would leave
+        // a person no administrator can find. Issue #41.
+        var listed = await grains
+            .ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IDirectoryIndexGrain>(GrainKeys.DirectoryIndex(GrainKeys.DirectoryUsers))
+            .AddAsync(userId);
+
+        if (listed.TryGetError(out var unlisted)) {
+            return Result<UserProfile>.Failure(unlisted);
+        }
+
         state.State.Email = address;
         state.State.DisplayName = displayName ?? string.Empty;
         state.State.Status = status;
@@ -117,6 +129,10 @@ public sealed class UserGrain(
             state.State.Totp = null;
             state.State.SpentTotpCounters.Clear();
 
+            // The home account is how a member who joined with one signs in, so it is a credential
+            // here in all but name, and it goes with the rest.
+            state.State.HomeAccount = null;
+
             // ⚠ An outstanding code is a credential, so it goes with the rest of them. Leaving one
             // behind would let a code issued moments before the deprovision still be redeemed — and
             // the redemption path checks CanAuthenticate, so it would fail, but a credential that
@@ -127,6 +143,82 @@ public sealed class UserGrain(
 
         await state.WriteStateAsync();
         return Result<UserProfile>.Success(Profile());
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<UserProfile>> AcceptInvitationAsync(string displayName, string password) {
+        if (!Exists()) {
+            return NotFound<UserProfile>();
+        }
+
+        if (Joinable(displayName) is { } refused) {
+            return refused;
+        }
+
+        if (string.IsNullOrEmpty(password)) {
+            return Result<UserProfile>.Failure(ErrorCode.InvalidRequestBody, "A password is required.");
+        }
+
+        // No session to revoke, unlike SetPasswordAsync: an invited user cannot authenticate
+        // (CanAuthenticate), so none was ever opened.
+        state.State.DisplayName = displayName.Trim();
+        state.State.PasswordHash = hasher.Hash(password);
+        state.State.Status = UserStatus.Active;
+        await state.WriteStateAsync();
+
+        return Result<UserProfile>.Success(Profile());
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<UserProfile>> JoinWithHomeAccountAsync(string displayName, HomeAccount home) {
+        if (!Exists()) {
+            return NotFound<UserProfile>();
+        }
+
+        if (Joinable(displayName) is { } refused) {
+            return refused;
+        }
+
+        if (home is null || home.TenantId == Guid.Empty || home.UserId == Guid.Empty || home.TenantId == tenantId) {
+            return Result<UserProfile>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "A home account names a user in another tenant."
+            );
+        }
+
+        state.State.DisplayName = displayName.Trim();
+        state.State.HomeAccount = home;
+        state.State.Status = UserStatus.Active;
+        await state.WriteStateAsync();
+
+        return Result<UserProfile>.Success(Profile());
+    }
+
+    /// <summary>
+    ///     Why an invitation may not make this user a member with <paramref name="displayName" />, or
+    ///     <see langword="null" /> when it may.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The status first, before the input is even read: a member, a suspended account or a
+    ///     deprovisioned one is not waiting for an invitation, and whatever the link carries must
+    ///     change nothing.
+    /// </remarks>
+    Result<UserProfile>? Joinable(string? displayName) {
+        if (state.State.Status != UserStatus.Invited) {
+            return Result<UserProfile>.Failure(
+                ErrorCode.PreconditionFailed,
+                $"User {userId:D} is {state.State.Status}, not Invited; an invitation cannot change it."
+            );
+        }
+
+        if ((displayName ?? string.Empty).Trim().Length is 0 or > 200) {
+            return Result<UserProfile>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "A display name is between one and two hundred characters."
+            );
+        }
+
+        return null;
     }
 
     /// <inheritdoc />
@@ -618,7 +710,8 @@ public sealed class UserGrain(
             Status = state.State.Status,
             CreatedAt = state.State.CreatedAt,
             EnrolledCredentials = [.. Enrolled()],
-            RemainingRecoveryCodes = state.State.RecoveryCodeHashes.Count
+            RemainingRecoveryCodes = state.State.RecoveryCodeHashes.Count,
+            HomeAccount = state.State.HomeAccount
         };
 
     IEnumerable<CredentialKind> Enrolled() {

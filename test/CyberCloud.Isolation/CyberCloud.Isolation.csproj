@@ -74,6 +74,8 @@
           is built from the public contracts, the way an outside caller would build it.
         -->
         <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.csproj"/>
+        <!-- CyberCloud.Resources/deployments: a deployment's children, authorized by the real engine as its creator. -->
+        <ProjectReference Include="../../src/Providers/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.csproj"/>
     </ItemGroup>
 
 </Project>

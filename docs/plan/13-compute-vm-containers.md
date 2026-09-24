@@ -123,9 +123,18 @@ tree where a vault path a *tenant* spelled is resolved, by a resolver holding on
 token, into a Secret the tenant's own guest mounts; the reconciler now refuses any path outside
 `tenants/{tenantId}/` before the vault is asked (`VirtualMachines.TenantVaultPrefix`), which is the
 scoping [18 § Shape](18-security-vault-and-malware-scan.md)'s namespace-per-tenant topology
-would give and this platform's single namespace does not. The two nouns of #28 this row's first
-landing did not include were recorded there as owed and have since landed: scale sets as this row's
-fourth type (above), container instances as the next row's provider namespace.
+would give and this platform's single namespace does not. ⚠ The prefix binds the other way too:
+anything under it is something the tenant can have a guest read, so platform-held material that
+belongs to a tenant is minted outside it. A key vault's root was first minted under
+`tenants/{tenantId}/` and #30's second review moved it to `platform/CyberCloud.KeyVault/vaults/`
+([18 § What landed, and what is owed](18-security-vault-and-malware-scan.md)). The mail family's
+DKIM key and Dovecot master password are still inside it, which is owed
+(`charts/managed/mail/conformance.yaml § owed`,
+`the-credentials-sit-inside-the-tenant-vault-prefix`). A container group's `secureEnvironment` is a
+second reader of that prefix, and a shorter one than a guest: a container can print what it was
+given and `logs` returns it. The two nouns of #28 this row's first landing did not include were
+recorded as owed and have since landed: scale sets as this row's fourth type (above), container
+instances as the next row's provider namespace.
 
 ## Container Instances — `CyberCloud.ContainerInstance/containerGroups` · M2 · 0.8 EM
 

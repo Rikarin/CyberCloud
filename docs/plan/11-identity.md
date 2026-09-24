@@ -41,6 +41,23 @@ is `group:X#member@user:Y`, so "is Alice in Eng" is a `Check`, "who is in Eng" i
 groups work with no extra code, and revoking a group's access is a tuple write. A member list in grain
 state would be a second source of truth and a hot spot for large groups.
 
+⚠ **The tenant does hold a list of its users, and that is not the member list refused above.** Every
+directory object is keyed by a random id, and the two indexes over them are keyed by digests (the
+address, the `client_id`), so until #41 nothing could answer "who is in this organisation" or "which
+applications has it registered" short of a scan of the durable store. `IDirectoryIndexGrain` —
+durable, tenant-qualified, `idx/dir/{users|invitations|applications}` — is that answer: the ids, oldest
+first, written by the object's own grain *before* the object (`UserGrain.CreateAsync`,
+`InvitationGrain.CreateAsync`, `ApplicationGrain.CreateAsync`), so a crash between the two leaves an id
+a reader skips as "not found" and never an object nothing lists. It records existence, not
+membership: who belongs to a *group* is still the tuples. Capped at ten thousand ids a list, refused
+past it rather than trimmed. ⚠ A tenant created before #41 lists only the users created since —
+nothing can backfill a list of ids no index ever held, and the dev run's tenants are the only ones
+that exist. ⚠ Only a deleted application leaves its list. A user is deprovisioned, never deleted, and
+an invitation is kept for its history, so for those two the cap is a lifetime cap: the ten-thousandth
+invitation a tenant ever sends is its last, and so is its ten-thousandth user. A reader reads a list
+in batches of 64 rather than all at once. **Owed:** a retention rule that prunes spent invitations
+(accepted, revoked, withdrawn or long expired) out of the list, and a paged store past the cap.
+
 ## Protocol
 
 OpenIddict 7.3.0 (ADR-015), OAuth 2.1 + OIDC.
@@ -48,7 +65,7 @@ OpenIddict 7.3.0 (ADR-015), OAuth 2.1 + OIDC.
 | Flow | For | Notes |
 |---|---|---|
 | Authorization Code + PKCE | Portal, third-party apps | The only interactive flow. No implicit, no hybrid |
-| Device Authorization | `cyc login` on a headless box | |
+| Device Authorization | `cyc login` on a headless box | RFC 8628, served since #43 — see the bullet below |
 | Client Credentials | Service principals, CI | |
 | Refresh Token | All of the above | Rotating, one-time-use, with reuse detection → revoke the whole chain |
 | Token Exchange (RFC 8693) | Workload identity | A cluster's SA token → a platform token |
@@ -77,7 +94,7 @@ groups into a JWT produces the header-size failures every large enterprise hits.
 `Check` per request, which is the p99 < 10 ms budget in [00](00-vision-and-principles.md), and is why
 that budget exists.
 
-⚠ **What is served today, and what is not.** Three rows of the flow table are served, and a person
+⚠ **What is served today, and what is not.** Four rows of the flow table are served, and a person
 can hold a token. `/authorize` + PKCE mints an authorization code from the fully authenticated
 session cookie; `/token` exchanges it for an access token, an id_token and a refresh token, and
 rotates the refresh token; the client-credentials grant serves service principals as before. The
@@ -118,11 +135,23 @@ it. The decisions that shape the served half, each argued in the type that makes
   (`IConsentGrain.RevokeAsync`) and the next request asks from scratch. #94.
 - **A confidential client authenticates on the code and refresh grants.** RFC 6749 § 4.1.3 and
   § 6: `DegradedModeHandlers.ValidateTokenRequest` requires `client_secret` from a client whose
-  registration is not public and verifies it through `IClientSecretSeam` against the registration's
-  `ClientSecretRef` — the same vault seam the client-credentials grant checks a service principal
-  through — before the origin and grant checks and before any grain is touched; missing, wrong and
-  unreadable are one `invalid_client` sentence. Landed with the consent page (#94), which is what
-  made a tenant client's code mintable at all; a public client that sends a secret is still refused.
+  registration is not public and verifies it through `ClientSecretVerifier` before the origin and
+  grant checks and before the grant's grains are touched; missing, wrong and unreadable are one
+  `invalid_client` sentence. Landed with the consent page (#94), which is what made a tenant client's
+  code mintable at all; a public client that sends a secret is still refused. ⚠ **A secret lives in
+  one of two places since #41, and the verifier asks the right one.** A registration that names a
+  `ClientSecretRef` is checked through `IClientSecretSeam` against the vault — the seam the
+  client-credentials grant checks a service principal through, and the one #94's tests register.
+  A registration made through the administration API has a secret the *platform* minted — 256
+  random bits, shown to the owner once — and nothing ever needs it back, only compared, so the
+  application grain keeps its SHA-256 (`IApplicationGrain.IssueClientSecretAsync`) and answers
+  `VerifyClientSecretAsync` in constant time; `ApplicationRegistration.ClientSecretIssuedAt` says
+  which, and the issued secret wins where both exist, because a rotation is the newer intent. A
+  plain digest rather than Argon2id is a decision about the input: there is no dictionary for 256
+  random bits, and a slow hash would tax every exchange a server client makes. Rotation replaces the
+  digest in one turn, so the old secret dies at once — `IdentityAdministrationThroughTheGatewayTests`
+  registers a client through the gateway, exchanges a code with the secret it was shown, rotates, and
+  watches the old one get `invalid_client` at `/token`.
 - **An authorization code is exchanged once.** RFC 6749 § 4.1.2, both halves. Degraded mode has
   no token store, so OpenIddict's own `CreateTokenEntry` never gives a code an id;
   `DegradedModeHandlers.StampAuthorizationCodeId` sets `oi_tkn_id` on the code's principal before
@@ -164,6 +193,38 @@ it. The decisions that shape the served half, each argued in the type that makes
   `AccessTokenClaims.Permitted`: OpenIddict's own `scope`, `client_id` and presenter claims are
   stripped before signing, because `scope` is on the forbidden list and the gateway refuses a token
   that carries it.
+- **Device authorization is RFC 8628 over the same degraded mode, with a grain for a store.**
+  `/device` is open to `cyc-cli` alone (the one registration with the grant, and the request names no
+  tenant to resolve another in), counted per IP (`IdentityRateLimits.DeviceAuthorization`, 20 per 10
+  minutes). OpenIddict cannot make a user code self-contained and has no token store to remember one,
+  so `DegradedModeHandlers.StoreDeviceCodes` mints both codes into `IDeviceAuthorizationGrain` —
+  platform-tenant, hot, keyed `device/{digest(userCode)}` — at generation: the user code is eight
+  letters from RFC 8628 § 6.1's twenty consonants, shown `BCDF-GHJK` and typed any way; the device
+  code is `{userCode}.{256 random bits}`, and the grain keeps only the secret's SHA-256, so the user
+  code on a screen is half a credential. Both live ten minutes and the response says `interval: 5`;
+  ⚠ the grain measures the ten minutes from its own clock, as it does the interval, because an
+  expiry instant stamped by the host would tie every code's life to the skew between two machines.
+  A poll is answered from the grain, in one turn, with exactly § 3.5's errors — `authorization_pending`,
+  `slow_down` (and five seconds more for this and every later poll, as state), `access_denied`,
+  `expired_token` — and `invalid_grant` for a code that is spent or never existed; a guessed secret
+  moves nothing. The person's half is the identity app's device page (`/device-code`, reached from
+  `/device/verify`, which only redirects): enter the code (`/api/device/lookup`, anonymous), sign in
+  through the existing flow if the cookie is not a complete sign-in, then allow or deny
+  (`/api/device/decision`, the cookie's session and never the body, and only from the page's
+  origin) — both in the `code-verify` bucket, and a user code is answered once. An approved code is
+  redeemed at `/token` like an authorization code — the token session id recorded before the session
+  opens, a second redemption refused and the first session revoked
+  (`RevocationReason.DeviceCodeReuseDetected`), and, like a code, refused once the sign-in behind it
+  is gone: the approving session must still be live, and the user still `Active` after the new
+  session is tracked, so a code approved before a suspension or a "sign out everywhere" opens nothing
+  (⚠ the first cut read neither, and the review of #43 got tokens and a live refresh chain for a
+  suspended user). One deliberate difference: once the device has its tokens, its token session is
+  bound to **itself**, not to the browser session that approved it, because the device and the
+  browser are two machines and a sign-out on the phone must not end a build agent's CLI.
+  `/revoke` (RFC 7009) takes a refresh token and ends its token session (`RevokedByClient`) — what
+  `cyc logout` calls — and answers an access token `unsupported_token_type`, since access tokens stay
+  irrevocable. `DeviceFlowOverHttpTests` pins every answer over the wire; `DeviceFlowThroughTheSdkTests`
+  runs the SDK's credential, its refresh and its sign-out against the host. #43.
 - **Keys persist on the development run, and nowhere else.** `IdentityHostOptions.DevelopmentKeyDirectory`
   keeps the ES256 signing key, the encryption key and the data-protection ring on disk under the
   AppHost's `.identity/`, so a restart does not sign every portal tab out — both keys, because codes
@@ -211,9 +272,12 @@ naming one id. `ClientResolver` in the identity host is the reader.
   #88's closing criterion (a person signs in, holds a `cyc.api` token, reads through the gateway,
   refreshes, survives a restart) was also performed by hand on the dev run, in a browser, on
   2026-09-15.
-- **Device authorization and token exchange (RFC 8693)** remain owed as before — the device flow
-  needs a verification page and a code store, and token exchange has `ITokenExchange` built and
-  waiting on `/token` to accept the grant.
+- ~~Device authorization~~ — landed with #43, in the bullet above. **Token exchange (RFC 8693)**
+  remains owed: `ITokenExchange` is built and waiting on `/token` to accept the grant. ⚠ And two
+  things the device flow leaves: a tenant-registered device client (the request would need a
+  `tenant` to resolve one in), and the device page saying *where* the request came from — the
+  flow's known weakness is a person talked into typing somebody else's code, and the page's only
+  defence today is naming the account being lent and the scopes.
 - **`displayName` on the tenant body.** `ScopeManagerService.ReadTenantAsync` renders the slug as
   `name` and `ScopeSnapshot` carries no display name, so `GET /tenants/{t}` has none and the
   portal's context bar (`portal/libs/shell`, `context-bar.ts`) shows `contoso` rather than
@@ -323,13 +387,102 @@ The progress UI, the welcome mail and the optional cluster are the part
 of [06 § Tenant lifecycle](06-tenancy-and-resource-model.md)'s operation still owed; the step record
 in the grain is its seed.
 
-**Invited.** An existing tenant owner invites an email into their tenant with a role. The invitee
+**Invited.** An existing tenant owner invites an email into their tenant ~~with a role~~. The invitee
 either signs in (if they already have a user in *another* tenant — see below) or signs up.
+
+⚠ **What shipped with #43, and the one place it departs from that sentence.** An owner `POST`s
+`{ "email" }` to `/tenants/{t}/providers/CyberCloud.Identity/invitations` at the gateway;
+`InvitationService` in the resource manager checks `assignRole` on the tenant, fully consistent, and
+`IInvitationGrain` (durable, `invite/{id:N}`) claims the address in the tenant's email index, creates
+the user in `Invited`, keeps the SHA-256 of a 256-bit secret and mails a seven-day link —
+`{identity app}/invitation?tenant=…&invitation=…&token=…` — through the platform's own communication
+service (`CommunicationInvitationDelivery`, a template in code, and a refusing seam on a silo with no
+route). The identity app's invitation page describes the link and accepts it in one of the two ways
+the sentence above names. **Signs up:** the person chooses a name and a password, the link is spent
+(a second use is told it was used), the user becomes `Active`, and they are signed in with a session
+stamped password + delivered code, because the link went to the address and nowhere else. **Signs
+in:** the page sends a person who already uses Cyber Cloud to the ordinary sign-in page for their
+own organisation, with the invitation page as the return URL (the sign-in page reads `tenant` only
+off an `/authorize` return URL, so the link's tenant doesn't hijack it). Back on the page, a complete,
+live sign-in whose address is the invited one is offered "join with this account", and accepting
+that way (`IInvitationGrain.AcceptWithHomeAccountAsync`, from the page's origin only) makes the
+invited user `Active` with the home account's name, no credential of its own, and a
+`UserProfile.HomeAccount` naming the account it joined with. That is still two users — the rule
+below holds — and one sign-in: `/authorize` for the member's tenant, with the home account's cookie,
+finds the member through that tenant's own email index, requires its `HomeAccount` to name exactly
+the cookie's user, and opens the member's session there with the home sign-in's `amr` and
+`auth_time` (`HomeAccounts`). The cookie stays the home account's. No global index, and no credential
+shared between two users: the second proof is a sign-in the home tenant already checks. ⚠ The home
+tenant decides whether a session *opens* here — a suspension or a sign-out-everywhere there ends the
+next one — and this tenant decides whether it *lasts*, as it would for any member. A deprovision here
+drops the link with the other credentials. (1) **No role — the departure.** The invitation makes a
+member; what they may do is a role assignment — the existing `PUT …/roleAssignments/{name}`, which
+`GrainPrincipalDirectory` now answers for the invited user — so a role is granted, audited and
+revoked in one place. Re-inviting
+an address whose user is still `Invited` reuses that user, which is how an expired link is replaced;
+inviting a member is a conflict. ⚠ So two links can name one user, and a link outlives a suspension
+or a deprovision of the person it names: a link opens an `Invited` user and nothing else. Once the
+user is anything else the invitation reads `withdrawn`, and `IUserGrain.AcceptInvitationAsync`
+checks the status in the same turn as it sets the name, the password and `Active`. The first cut did
+three separate writes with no check, and the review proved a second link un-suspending a member and
+a link resurrecting a deprovisioned invitee, signed in as password + code past any second factor
+enrolled since. Since #41 an owner withdraws one directly: `DELETE …/invitations/{id}` makes it
+`revoked` (stored, where `withdrawn` is read from the user) and leaves the invited user `Invited`, so
+a new invitation reuses them; `POST …/invitations/{id}/resend` replaces the link's secret, restarts
+the seven days and mails again under its own idempotency key (`invite-{t}-{i}-{n}` from the second
+mail — the first key alone made the communication service answer a resend with the first mail's
+receipt and send nothing). ⚠ A resend is refused for an invitation nobody is waiting on, and an
+expired one counts: `withdrawn` wins over `expired`, so an invitation that expired before its user
+was removed, or before they joined through another link, reads `withdrawn` and isn't mailed again.
+The first cut asked the user only about a pending invitation, and #41's review traced a fresh link
+mailed to a removed member (`InvitationExpiryTests`). One invitation is mailed at most
+`InvitationPolicy.MaxSendings` (5) times, then the resend is `429 QuotaExceeded`. The first cut shipped the signs-up half only and recorded "signs in" as a departure; the second review of #43 held that it was an asked-for path missing, and it is the path above. `InvitationThroughTheGatewayTests` (the `POST` through the real gateway with a device-flow
+token, then the owner's `PUT` of Reader on one group and the member's read of it over HTTP),
+`InvitationsOverHttpTests` (Mailpit, both halves, and the refusals: another origin, another address,
+a suspended home account), `IdentityHostInItsOwnProcessTests` (the join across a real process
+boundary) and `CyberCloud.Isolation § InvitationTests` pin it. ⚠ **Owed:** a registered Communication template in place of the
+code template ([17 § The outbound carrier](17-communication-and-email.md)); a passkey at acceptance
+(the page takes a password, the sign-up page's passkey ceremony is not reused yet); an idempotency
+key the sender supplies, so a retried `POST` resumes one invitation rather than making a second; a
+per-tenant rate on invitation mail (the per-invitation count bounds a resend, and nothing but the
+invitation list's cap bounds revoking and inviting again); the welcome mail, which is still [§ the owed paragraph above](#sign-up-and-tenant-creation)'s; a way back in for a member whose home account is gone (deprovisioned there, they have no credential here and inviting them again is a conflict); the sign-in page offering "continue with the account you're signed in with" by name, which today only `/authorize` does, silently; and a member reading what was granted after a denial was cached — the check cache keeps a denial under `MinimizeLatency` with no TTL, so a colleague who looked before their Reader grant goes on reading `404` until something carries the grant's token ([07 § Consistency](07-rebac-authorization.md#consistency)), which nothing in the gateway does yet.
+~~Listing and revoking pending invitations~~ and ~~the portal page that sends one~~ landed with #41's
+identity administration pages — [20 § The pages that are not generated](20-portal.md) and the
+administration API below.
+
+⚠ **The identity administration API (#41), and why it is the gateway's.** Everything under
+`/tenants/{t}/providers/CyberCloud.Identity/` — `invitations` (list, send, `{id}` revoke,
+`{id}/resend`), `members` (list, `{id}` remove), `applications` (list, register, `{id}` read and
+delete, `{id}/rotateSecret`) and `sessions` (the caller's own: list, `{id}` sign out) — is a bearer
+API on the gateway, not a cookie API here: [§ Hosts](#hosts) keeps cookies on this host and the
+portal holds a token for the gateway. The gateway only routes (`IdentityAddress`, `IdentityDispatch`);
+`IdentityAdministrationService` in the resource manager checks `assignRole` on the tenant, fully
+consistent, for every directory call — the owner's permission, the one inviting already needs — and
+the gateway's `GrainIdentityDirectory` does the work over the grains, the invitation's arrangement.
+The sessions need no role: the address names no user, the list is read off the caller's own user,
+and a session that isn't theirs is one `404` whether it exists or not. Removing a member deprovisions
+the user (every session revoked, every credential cleared) *then* deletes every tuple naming them
+through the reverse index, so a removed member holds no role anywhere and is out of every group;
+nobody removes themselves. A registered redirect URI is https, http on a loopback host, or a
+private-use scheme named after a domain in reverse order (`com.example.app:/cb`), OAuth 2.1's three.
+The check #94 wrote refused only a relative URI and a fragment, and #41's review found
+`http://any.host/cb` and `javascript:` registrable once an owner could register over HTTP. `IdentityRoutingTests`, `CyberCloud.Isolation § IdentityAdministrationTests`
+and `IdentityAdministrationThroughTheGatewayTests` pin it. ⚠ **Owed:** an update of a registration
+(redirect URIs and scopes are fixed at registration today — delete and re-register); a second live
+secret for a rotation window, Entra's answer to rotating without downtime; a last-person rule (only
+self-removal is refused, so a service principal holding `owner` can remove the one person who
+does);
+re-inviting an address whose user was removed (`Deprovisioned` keeps the email-index claim, so it is
+a `409`); paging the three lists past one directory index read whole; and the address in the
+generated OpenAPI document — the reserved namespace keeps it out of the registry the emitters read,
+[10 § Shape](10-gateway-and-api.md)'s question again.
 
 ⚠ **A user belongs to exactly one tenant.** The same human with accounts in two tenants has two user
 objects with two GUIDs and (probably) the same email. This is Azure's guest-user problem and Azure's
 answer (B2B guests) is complicated. The M1 answer is the simple one: one user, one tenant, and the
-portal's account switcher is a client-side list of tokens. Revisit at M3 if customers actually ask;
+portal's account switcher is a client-side list of tokens. A member who joined with an account
+elsewhere is still a second user; `UserProfile.HomeAccount` says which sign-in opens it, and nothing
+maps a home account to the tenants it joined. Revisit at M3 if customers actually ask;
 committing to cross-tenant identity in M1 would put a global user index on the hot path, which
 [05](05-state-and-storage.md) is specifically arranged to avoid.
 
@@ -386,6 +539,15 @@ exchange.
 Sessions are hot-tier grains. Refresh tokens carry a session id; refresh checks the session is live.
 Revoking a session (sign out everywhere, password change, admin action, refresh-reuse detection)
 invalidates the refresh chain immediately.
+
+⚠ **A person sees and ends their own sessions since #41** — `GET` and `DELETE`
+`/tenants/{t}/providers/CyberCloud.Identity/sessions[/{id}]` at the gateway, and the portal's *My
+sessions* page. The list is the user grain's tracked ids, each read from its session grain and kept
+only while live, and the one the request's own token belongs to is marked from its `sid` — which the
+gateway now reads off the token (`TokenClaims.SessionId`) to mark that row and for nothing else. Two
+honest limits: ending the browser's cookie session ends the token sessions it opened at their next
+refresh, not at once, so they stay listed until then; and "sign out everywhere" as one button is
+owed — each session is ended one row at a time.
 
 **Access tokens are not revocable and are not made so.** They live 10 minutes. An introspection call
 per request would put the identity system on the hot path of every request, which is precisely what a

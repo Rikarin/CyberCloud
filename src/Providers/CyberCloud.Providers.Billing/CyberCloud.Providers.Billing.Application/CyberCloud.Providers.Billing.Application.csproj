@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the third of the five projects. It holds the ABP module and no
+      application service: a budget's PUT, GET and DELETE are generic resource-manager verbs the gateway
+      routes from the registry (ADR-012).
+
+      ⚠ WHAT THIS MODULE DOES NOT REGISTER: IBudgetControlPlane, which the reconciler takes. It lives in
+      CyberCloud.Billing, which a provider module may not reference (module-layering.txt grants this
+      family the .Contracts edge only), so the silo gets it through AddCyberCloudBilling and the gateway
+      through AddCyberCloudBillingClient — the Communication family's arrangement. HostCompositionTests
+      is what notices if either host stops.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Billing.Contracts/CyberCloud.Providers.Billing.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

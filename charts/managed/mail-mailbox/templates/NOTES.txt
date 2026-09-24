@@ -1,0 +1,8 @@
+{{ .Chart.Name }}: this release installed no object, and that is the type.
+
+A mailbox is four keys of its domain's mailbox Secret — a password file, alias-map lines and a claim
+per address. The platform's reconciler writes them through the co-owned apply (docs/plan/09 § A
+second writer on an object); Helm cannot. templates/fragments.yaml shows the slice.
+
+  domain Secret: {{ .Values.platform.domainSecret | default "<set by the reconciler>" }}
+  mail domain:   {{ .Values.platform.mailDomain | default "<read off that Secret>" }}

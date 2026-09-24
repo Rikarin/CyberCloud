@@ -11,7 +11,7 @@ chart: mail
 
 # Objects the reconciler must have applied once the resource reports Succeeded.
 #
-# ⚠ FIVE, AND FOR A STRONGER VERSION OF THE REASON charts/managed/nats GIVES. That service lost its
+# ⚠ SIX, AND FOR A STRONGER VERSION OF THE REASON charts/managed/nats GIVES. That service lost its
 # operator to an archive; this one never had a candidate. Postfix and Dovecot predate Kubernetes by
 # about two decades and are configured by files rather than by an API, and Rspamd ships no CRD — so
 # what gets applied is the workload itself. See SOURCE.
@@ -21,12 +21,12 @@ chart: mail
 renders:
   - group: ""
     version: v1
-    # ⚠ The DKIM private key and the Dovecot master password, in ONE Secret. See
-    # MailDomains.GenerateCredentials for why one document rather than two: MintAsync's cas=0 is per
-    # PATH, so two paths would be two independent races and a pass interrupted between them would
-    # leave a signer and a listener from different attempts.
+    # ⚠ TWO. The credentials Secret — the DKIM private key and the Dovecot master password in ONE
+    # document, because MintAsync's cas=0 is per PATH (MailDomains.GenerateCredentials) — and the
+    # mailbox Secret, which the domain applies EMPTY and its mailboxes co-write (charts/managed/
+    # mail-mailbox). The domain's own apply names no data, so it never removes a mailbox.
     kind: Secret
-    count: 1
+    count: 2
   - group: ""
     version: v1
     kind: ConfigMap
@@ -34,8 +34,9 @@ renders:
   - group: ""
     version: v1
     # ⚠ ONE, where the NATS row has two. There is no headless/client split because there is one pod
-    # and no peers for it to find: the shared inbound pool reaches this Service over LMTP and that is
-    # the only traffic it carries.
+    # and no peers for it to find. It carries SMTP (to Postfix — not LMTP to Dovecot, see
+    # `inbound-mail-meets-the-alias-map`) and IMAP for the shared pools, submission, and ManageSieve
+    # when `sieve` is on — ClusterIP at every setting.
     kind: Service
     count: 1
   - group: apps
@@ -89,7 +90,7 @@ assertions:
       the domain sends fails DKIM at every receiver while this platform reports the domain healthy.
   - id: published-record-matches-the-signing-key
     says: >
-      The p= tag MailDomains.TryRequiredRecords derives is the public half of the private key the
+      The p= tag MailDnsRecords.TryRequired derives is the public half of the private key the
       Secret carries, for the key actually in the vault rather than a freshly generated one. This is
       the other half of the assertion above and it fails on a different mistake: a reconciler that
       minted correctly but derived the record from GenerateCredentials' return value.
@@ -124,6 +125,64 @@ assertions:
       configuration, so neither reports drift against the other.
   - id: storage-grows-never-shrinks
     says: Increasing storage.size resizes online; decreasing it is refused at the API.
+  - id: mail-flows-on-a-running-back-end
+    says: >
+      THE ASSERTION THE FIRST CUT OF THIS TYPE COULD NOT MAKE. On a real k3s through the real write
+      path, the pod starts from the real images; a mailbox a second writer put into the mailbox Secret
+      signs in over IMAP; a message submitted with AUTH is delivered through Postfix and fetched; and it
+      carries a DKIM-Signature (rsa-sha256, d=the domain, s=cc) that a verifier knowing only the
+      record resolved from a real DNS server accepts. MailDeliveryOnK3sTests.
+  - id: sending-is-held-until-the-records-verify
+    says: >
+      docs/plan/17 § Deliverability, "the platform will not enable sending until the DNS records
+      verify", built. A domain whose SPF, DKIM and DMARC do not all resolve to what dnsRecords returns
+      renders its relay restrictions closed: authenticated mail to its own mailboxes is accepted, mail
+      to anywhere else is refused at RCPT TO with "held until its SPF, DKIM and DMARC records verify",
+      and the smtp transport is deferred so a mailbox's forwardTo cannot leave either. Publishing the
+      records and calling verify opens it on the running Postfix. MailDeliverabilityTests for the
+      decision; MailDeliveryOnK3sTests for a real client refused and then accepted.
+  - id: suspension-wins-over-verification
+    says: >
+      A tenant in CyberCloud:Mail:SuspendedTenants renders the gate Suspended — refused at RCPT TO
+      naming the abuse desk, forwards deferred — however perfect its records. doc 17's abuse desk.
+      The list is read from configuration as an array or as one comma-separated value, and an entry
+      that is not a tenant id stops the host rather than suspending nobody.
+      MailPlatformConfigurationTests, from configuration keys to the decision.
+  - id: a-mailbox-sends-as-itself-and-nobody-else
+    says: >
+      THE #34 REVIEW'S HIGH FINDING. Every tenant's SPF includes the same platform include, so an open
+      gate that relayed for any envelope sender let one tenant's mailbox pass SPF — and DMARC, through
+      SPF alignment — for another tenant's domain. Submission now refuses, at RCPT TO, any MAIL FROM
+      that is not the signed-in mailbox's own address or one of its claimed aliases
+      (smtpd_sender_login_maps + reject_sender_login_mismatch), and Rspamd rejects at the end of DATA
+      any authenticated message whose From: header is not that envelope sender. MailDeliveryOnK3sTests
+      submits ceo@another-domain and a colleague on the envelope and a forged From: header, and is
+      refused all three; MailDataPlaneTests scans the header forgery against the real Rspamd.
+  - id: inbound-mail-meets-the-alias-map
+    says: >
+      THE #34 REVIEW'S MEDIUM FINDING. The Service offers SMTP on 25 to the domain's own Postfix and
+      no LMTP, so mail from the inbound pool passes the alias map, forwardTo, the catch-all and the
+      Rspamd scan before Dovecot sees it. The first two cuts exposed Dovecot's LMTP as docs/plan/17
+      § Topology drew it, which refused internet mail to an alias at RCPT. The port-25 smtpd offers no
+      AUTH and relays nowhere. MailDeliveryOnK3sTests delivers to an alias from outside, unauthenticated,
+      and is refused a relay to a third domain on the same connection.
+  - id: an-unanswered-dns-never-closes-an-open-gate
+    says: >
+      A pass or a verify whose resolver did not answer keeps a domain that is Open open; an answer that
+      says a gating record is missing or mismatched closes it on the spot; a domain that was never open
+      is not opened by silence. The first cut closed a verified domain on one DNS blip, and nothing
+      re-opened it until the tenant called verify. MailDeliverabilityTests.AnUnansweredDnsNeverClosesAGateThatIsOpen.
+  - id: verify-resolves-through-a-real-resolver
+    says: >
+      The seven records dnsRecords returns — MX, SPF, DKIM, DMARC, MTA-STS, its policy host and
+      TLS-RPT — are served by CoreDNS from the zone file dnsRecords writes and read back by the
+      platform's own RFC 1035 client over UDP, over TCP, and through the truncation fallback between
+      them; every one verifies. MailDnsResolverTests.
+  - id: the-rendered-configuration-is-run-not-read
+    says: >
+      Both Dovecot majors start on what DovecotConf renders, deliver over LMTP, honour a mailbox's own
+      quota over the domain's, and sign in only with the right password; Rspamd's configtest accepts
+      every local.d file this type renders. MailDataPlaneTests.
 
 # Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
 meters:
@@ -136,56 +195,111 @@ meters:
 # Named here rather than left to be discovered, because an absent capability that nobody wrote down
 # is indistinguishable from one nobody thought of.
 owed:
-  - id: the-images-do-not-exist
+  - id: the-postfix-image-is-not-published
     says: >
-      THE LARGEST ITEM ON THIS LIST AND THE ONE MOST EASILY READ AS DONE. MailDomains.ImageRegistry
-      is docker.io/cybercloud and NOTHING IN THIS REPOSITORY BUILDS dovecot, postfix OR rspamd. The
-      chart and the reconciler both render a pod spec that is correct and unschedulable. Neither the
-      official images nor any third-party one reads the ConfigMap and Secret this type renders, so
-      the image build is real work rather than a tag to pick. Until it lands, every assertion above
-      that needs a RUNNING back end — which is all of them except the four about rendered documents
-      — cannot be executed anywhere.
-  - id: child-types
+      Dovecot and Rspamd run the projects' own images (docker.io/dovecot/dovecot:2.4.5 and :2.3.21.1,
+      docker.io/rspamd/rspamd:4.1.5, each read off Docker Hub's tag list and pulled on 2026-09-23).
+      Postfix has no upstream image, so deploy/images/mail-postfix/Dockerfile is Debian 13's postfix
+      package and nothing else — and NOTHING PUBLISHES IT to ghcr.io/rikarin/cybercloud/mail-postfix:1.0.0.
+      The cluster-backed suite builds it and imports it into its own k3s; a real cluster pulling that
+      tag gets ImagePullBackOff on one container of three. The package version is Debian's on the day
+      of the build (3.10.13 on 2026-09-23), pinned by the base tag and not by a version string.
+      ⚠ The first cut named docker.io/cybercloud/postfix, and "ImagePullBackOff" was only true while
+      the tag stayed absent: the cybercloud organisation on Docker Hub was registered in 2018 by an
+      unrelated party, who could publish that tag and have every mail pod run it with the mailbox
+      Secret mounted (the #34 review). ghcr.io/rikarin is bound to the GitHub account that owns this
+      repository, where the agent image already lives.
+  - id: the-gate-is-not-re-evaluated-by-itself
     says: >
-      docs/plan/17 § Resource model names mailboxes/{local} and groups/{name} as child types and
-      NEITHER IS DECLARED. Unlike charts/managed/nats' entry of the same name, nothing platform-level
-      blocks these: CyberCloud.Storage/accounts/buckets and
-      CyberCloud.ContainerService/managedClusters/agentPools both ship, so the harness, the CLI and
-      the SDK all carry the interleaved shape now. They are simply not in this pass. ⚠ A mail domain
-      with no mailboxes accepts no mail for anybody, so this is the gap between a running back end
-      and a usable product.
-  - id: verify-needs-a-dns-seam
+      The gate is decided on every reconcile pass and every verify, and a converged domain gets
+      neither on its own: nothing re-reconciles a resource nobody writes (docs/plan/08's drift scan
+      reports and does not repair). So a tenant who publishes their records opens the gate with
+      verify — which is what the action is for — and a tenant who later REMOVES their SPF or breaks
+      their DKIM record keeps sending until something re-verifies. ⚠ WHAT WOULD CLOSE IT: a periodic
+      re-verification — a reminder per domain, or the manager-started pass IResourceWatch's remarks
+      record as owed — which reads the records and closes the gate the way verify opens it. ⚠ The
+      other direction is closed: a pass that met a DNS that did not answer no longer shuts a verified
+      domain (an-unanswered-dns-never-closes-an-open-gate), which with no re-evaluation would have
+      held its mail until the tenant happened to call verify.
+  - id: suspension-has-no-trigger
     says: >
-      docs/plan/17 names a verify action and it IS NOT DECLARED, which is deliberate and is argued at
-      MailProvider. It would answer "do this domain's SPF, DKIM, DMARC and MX records resolve", and
-      THIS REPOSITORY HAS NO DNS RESOLUTION SEAM AT ALL. actions-without-handlers.txt is not the
-      escape hatch: its rule permits a handler-less action only on an ALREADY published api-version,
-      and 2026-08-01 of this type is published by the same change that would have declared it. ⚠ The
-      derivable half is not owed — MailDomains.TryRequiredRecords is a pure function of the domain
-      and the resolved key, so "the exact records to add" is answerable today. What is owed is
-      reading them back, and the thing that would provide it — CyberCloud.Network/dnsZones — is
-      itself unbuilt.
-  - id: sending-is-not-actually-gated
+      doc 17 § Deliverability requires a human with the authority to suspend a tenant within the
+      hour. The enforcement is built (suspension-wins-over-verification) and, since the #34 review, its
+      configuration parser is tested and refuses a malformed entry; the TRIGGER is not. The list is
+      configuration, read when the silo starts, and a converged domain renders it only on its next
+      pass — so an abuse suspension takes a configuration change, a restart, and a write to each
+      affected domain or a verify on it. ⚠ It is deliberately NOT TenantStatus.Suspended: docs/plan/06
+      § Tenant lifecycle makes that the overdue-invoice state and keeps the data plane running, and
+      stopping a tenant's mail over a late payment is exactly what that row forbids. ⚠ WHY THE REVIEW
+      FIX STOPPED HERE: nothing in this platform re-drives a resource that has converged — an
+      OperationGrain's reminder ends with its operation, DriftScanner "reports; it does not repair",
+      and the manager-started pass is owed in IResourceWatch's remarks — so a trigger built inside this
+      provider would be a per-domain reminder grain carrying a copy of each domain's desired body and a
+      cluster connection of its own, which is that platform pass written a second time. ⚠ WHERE THE
+      LEVER BELONGS: doc 17 § Topology's shared SUBMISSION pool knows the tenant from the credential, so
+      refusing a suspended tenant there is instant and touches no back end — this list becomes that
+      pool's input when the-shared-pools-are-not-built closes.
+  - id: rate-limits-are-not-rendered
     says: >
-      docs/plan/17 § Deliverability says "the platform will not enable sending until the DNS records
-      verify". THAT GATE IS NOT BUILT AND CANNOT BE UNTIL THE ROW ABOVE IS: with no way to read the
-      records back there is nothing to gate on. A domain created today renders a back end that would
-      send if it had images. This is the single most consequential owed item for reputation, because
-      it is the one the abuse desk exists to catch after the fact.
+      docs/plan/17 § Components gives Rspamd "rate limits, greylisting", and neither is rendered.
+      Both of Rspamd's modules keep their counters in Redis, and the 4.1.5 image's ratelimit.lua says
+      so itself: with no Redis servers configured it logs "no servers are specified, disabling module".
+      This pod has no Redis. Postfix's own anvil limits count per client address, and every
+      submission will arrive from the shared submission pool's address, so they would limit the pool
+      rather than a mailbox. ⚠ WHAT WOULD CLOSE IT: a Redis beside Rspamd (a fourth container, or a
+      per-region shared one with a key prefix per tenant) and a local.d/ratelimit.conf keyed on the
+      authenticated user — or the limit at the submission pool, which sees every tenant at once.
+  - id: groups
+    says: >
+      docs/plan/17 § Resource model's groups/{name} — distribution lists — is not declared. Mailboxes
+      are (charts/managed/mail-mailbox), and a group is the same shape: a co-writer onto the mailbox
+      Secret contributing one `{list}.virtual` line naming its members and one `{list}.claim`.
   - id: the-shared-pools-are-not-built
     says: >
       docs/plan/17 § Topology's answer is "shared front doors, per-tenant back ends". This type is
       the back end ONLY. The shared inbound MTA pool that routes by recipient domain to a tenant's
-      LMTP, the shared submission pool, and the shared IMAP front door with SNI and cert-manager
-      certificates per verified domain are all absent, and none of them is a resource type — they
-      are platform infrastructure, so they belong in charts/bundle or deploy rather than here.
+      port 25 (Postfix — see inbound-mail-meets-the-alias-map for why not LMTP), the shared submission
+      pool that terminates TLS and relays to this back end's 587, and the
+      shared IMAP front door with SNI and cert-manager certificates per verified domain are all
+      absent, and none of them is a resource type — they are platform infrastructure, so they belong
+      in charts/bundle or deploy rather than here. ⚠ Until they exist, submission and IMAP are
+      plaintext AUTH on a ClusterIP Service — reachable only from inside the cluster, and a password
+      crossing the pod network in clear. ⚠ And the MX, SPF include and MTA-STS host every domain's
+      records name are configuration (CyberCloud:Mail) pointing at hosts that do not yet exist;
+      dnsRecords refuses in a region that has not configured them rather than inventing names.
+  - id: mta-sts-policy-is-served-by-nothing
+    says: >
+      dnsRecords returns the _mta-sts TXT, the mta-sts CNAME to the platform's policy host and the
+      policy text itself (mode: testing, because enforce promises a certificate on the MX the
+      unbuilt inbound pool cannot present). Nothing serves that text at
+      https://mta-sts.{domain}/.well-known/mta-sts.txt. A sender that finds the TXT and cannot fetch the
+      policy treats the domain as having none, which is safe and useless.
+  - id: dmarc-reports-go-to-a-mailbox-nobody-created
+    says: >
+      The DMARC record's rua is mailto:dmarc@{domain}. Nothing creates that mailbox, so aggregate
+      reports are refused at RCPT until the tenant creates one (or a catch-all receives them). The
+      platform reading those reports — the other half of "feedback loops" — is not built.
+  - id: forwarding-breaks-spf-without-srs
+    says: >
+      A mailbox's forwardTo re-sends a message under its ORIGINAL envelope sender through this
+      domain's outbound path, so the receiver checks the original domain's SPF against the platform's
+      addresses and fails it. The standard answer is SRS (postsrsd), which rewrites the envelope sender
+      on forward; it is not rendered.
+  - id: the-postfix-queue-is-not-on-the-volume
+    says: >
+      Postfix's queue is the container's own filesystem, so a message accepted and not yet delivered
+      — a deferred forward, a relay behind a held gate — is lost when the pod restarts. The mail store
+      is on the claim; the queue is not. A subPath of the same claim at /var/spool/postfix, with the
+      queue directories created by `postfix post-install create-missing` at start, is the likely fix
+      and was not run.
   - id: outbound-pools-and-warm-up
     says: >
       /properties/dedicatedIp is accepted and does nothing. docs/plan/17 prices outbound pools,
       dedicated IPs, the ~4-week warm-up ramp and RBL monitoring at 0.8 EM and every part is owed.
       ⚠ docs/plan/25 row 2 adds a requirement easy to lose: the platform's OWN transactional sending
       IPs must be separate from tenant sending IPs, so that one tenant's reputation problem cannot
-      take down the platform's OTPs and invoices.
+      take down the platform's OTPs and invoices. ⚠ An open gate relays through `relayHost` or
+      directly; there is no pool between this back end and the internet yet.
   - id: webmail
     says: >
       docs/plan/17 puts a minimal webmail — list, read, compose, search — in the M2 deliverable at
@@ -198,21 +312,64 @@ owed:
       serves Prometheus metrics without a sidecar. Postfix and Dovecot each need an exporter that is
       not rendered, so delivery latency, queue depth and IMAP session counts are unmonitored — and a
       mail queue nobody can see the depth of is the classic way a delivery outage goes unnoticed.
-  - id: antivirus-can-be-asked-for-on-a-pod-too-small
+  - id: antivirus-has-no-scanner
     says: >
-      filtering.antivirus adds roughly 1 GiB resident for the ClamAV signature database and nothing
-      stops a tenant enabling it on c1.nano, whose limit is 512Mi — an OOM-kill loop. The check is
-      an admission-time rule over TWO fields, and this platform's schema has no seam for one:
-      SchemaProperty constrains a property against constants, never against another property.
+      filtering.antivirus is accepted and does NOTHING. The first cut rendered Rspamd's antivirus
+      module at /run/clamav/clamd.sock, which no container served — and Rspamd fails a message whose
+      scanner is unreachable, which with milter_default_action = tempfail would have deferred every
+      message with an attachment. It is no longer rendered. A ClamAV container costs roughly 1 GiB
+      resident for its signature database and nothing stops a tenant asking for it on c1.nano, whose
+      limit is 512Mi — an admission-time rule over two fields this platform's schema has no seam for.
   - id: dkim-key-rotation
     says: >
-      MailDomains.DkimSelector is a constant, so there is no key rotation. Rotating means two
-      selectors live at once — publish the new record, switch the signer, retire the old — and this
-      platform cannot hold two live credentials for one resource, which is the same constraint that
-      keeps regenerateKeys undeclared across the whole catalogue.
-  - id: version-pins-are-unverified
+      MailDomains.DkimSelector is a constant, so there is no key rotation. The first cut said the
+      platform cannot hold two live credentials for one resource; it can — cas=0 is per path, so a
+      second selector is a second mint at a second path. What is missing is desired state for the
+      three steps (publish the new record, switch the signer, retire the old), and on this type a new
+      property is a new api-version (docs/plan/08 § The provider registry), which no type has yet
+      needed. The design that fits: a child type domains/dkimKeys/{selector} — a selector is a DNS
+      label, exactly what a resource name must be — minted once per key resource, co-written onto the
+      credentials Secret the way a mailbox is onto the mailbox one, with at most one key signing
+      enforced by the co-writer merge refusing two values for one scalar. ⚠ The #34 review asked for
+      rotation as part of the issue's scope and it was declined in the review fix, for the reason
+      above: every spelling of "which selector signs" is new public surface — a property is a new
+      api-version, and a child type is a 41st published type that ./build.sh Generate writes into
+      the OpenAPI document and five SDKs — which is a decision about the issue's scope, not a defect
+      in what landed.
+  - id: the-credentials-sit-inside-the-tenant-vault-prefix
     says: >
-      Every version in MailDomains — the Dovecot minors and the three image tags — was written from
-      docs/plan/17 and upstream release naming rather than from an API query on the day it was
-      written. CyberCloud.ContainerService established the discipline after two of its pins turned
-      out not to exist. These must be checked before the row ships.
+      MailDomains.SecretPath is tenants/{tenantId}/CyberCloud.Mail/domains/{id}, and neither field
+      filed there is tenant-visible — the DKIM private key and the Dovecot master password, which
+      opens every mailbox on the domain. But VirtualMachines.ParseCloudInitRef accepts any
+      cloudInit.userData handle under tenants/{tenantId}/ and the VM reconciler resolves it with the
+      platform's token into a Secret the guest mounts. So a Contributor on the domain's subscription
+      who knew its GUID could put the master password into a machine they own and read mail they
+      hold no mailbox for. Found by #30's second review, which moved the key vault's root to
+      platform/ for the same reason (docs/plan/18 § What landed, and what is owed). The fix is the
+      same move, platform/CyberCloud.Mail/domains/{tenantId}/{id}, with a test beside
+      KeyVaultRootIsOutsideTheTenantPrefixTests; it was not made in #30 because it changes where a
+      family #30 does not own keeps the only copy of its DKIM key.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.Mail/domains. OWED, AND ADDED BY THE #30 REVIEW, which found this family missing
+      from the thirteen. THE ENGINE STEP: the mailbox store is Dovecot's mdbox on the StatefulSet's
+      volumeClaimTemplate (templates/statefulset.yaml), and `mail-store-survives-delete` above keeps
+      it past a delete, so the mail at rest outlives the resource. Two places a customer key could
+      sit, neither built: Dovecot's mail_crypt plugin, whose global key pair would be the thing the
+      customer's key wraps, or the volume below the claim, which is charts/managed/disk's row. Which
+      of the two is unread against the pinned Dovecot, and `the-postfix-image-is-not-published` above comes
+      first either way. The DKIM private key is a minted credential in the platform vault, not mail,
+      and is not this row's.
+      What every family still needs is docs/plan/18 § What customer-managed keys still need: (1) a
+      key-use seam — the grant is expressible today, `keyVaultCryptoUser` with principalType
+      `resource` on a CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and
+      wrapKey/unwrapKey are actions, so no reconciler can call them; (2) an `encryption.keyUri`
+      property on a NEW api-version of this type; (3) revocation — a disabled key taking the data
+      offline, which needs a re-unwrap on a schedule nothing runs. The key's home is no longer the
+      blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.
+  - id: sendtest-and-exportmailbox
+    says: >
+      docs/plan/17's other two actions are not declared. sendTest needs the outbound pool to send
+      through; exportMailbox needs somewhere to put an export (an object-storage handle) and a
+      doveadm-backup run against the pod. Neither is declared bare: actions-without-handlers.txt is
+      not for an api-version this type is still growing.

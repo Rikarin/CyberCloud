@@ -291,6 +291,40 @@ public interface IResourceGrain : IGrainWithStringKey {
     /// </param>
     Task<Result> ReportObservedAsync(ObservedState observed);
 
+    /// <summary>
+    ///     Writes server-owned values into the resource's body — the read-only properties a caller
+    ///     may not send and the resource's own operation fills in.
+    /// </summary>
+    /// <param name="values">
+    ///     Each read-only property's JSON Pointer, against its value as JSON text. A pointer the body
+    ///     already holds is overwritten.
+    /// </param>
+    /// <returns>
+    ///     Success, <see cref="ErrorCode.ResourceNotFound" /> for a resource that does not exist, or
+    ///     <see cref="ErrorCode.InvalidRequestBody" /> for a value that is not JSON.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The one writer of a read-only property, and it is the operation that owns the
+    ///         resource.</b> The write path refuses a body carrying one (<c>ResourceSchema.Validate</c>),
+    ///         so without this nothing could ever set one; <c>CyberCloud.Resources/deployments</c>' run
+    ///         record is the first type to declare any. The caller passes only pointers its type
+    ///         declares <c>ReadOnly</c> — the grain cannot tell, because it holds pointers and not a
+    ///         schema.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A later <c>PUT</c> removes them</b>, because every declared pointer is replaced by a
+    ///         <c>PUT</c> and a read-only one is declared. For a deployment that is the right answer —
+    ///         a new run replaces the old one's record — and the new run writes its own when it ends.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not refused by a lock.</b> A lock refuses a tenant's writes; this is the platform
+    ///         recording what it did, and a <c>ReadOnly</c> lock that froze the record of a deployment
+    ///         that ran before it was set would make the record lie.
+    ///     </para>
+    /// </remarks>
+    Task<Result> RecordReadOnlyAsync(ImmutableDictionary<string, string> values);
+
     /// <summary>Sets or clears the lock at this scope.</summary>
     /// <param name="level">The lock. <see cref="LockLevel.None" /> clears it.</param>
     /// <remarks>
@@ -348,6 +382,51 @@ public interface IResourceGrain : IGrainWithStringKey {
     ///     failed one may not have started.
     /// </remarks>
     Task<Result> AcknowledgeChangesAsync(long throughSequence);
+
+    /// <summary>
+    ///     Starts a manager-started pass over this resource, if its type declares one and nothing else
+    ///     owns the resource right now — docs/plan/08 § The manager-started pass.
+    /// </summary>
+    /// <returns>
+    ///     The <see cref="OperationKind.Refresh" /> operation started, or <see cref="Guid.Empty" />
+    ///     when the tick had nothing to do: the type declares no period, the resource is not
+    ///     <c>Succeeded</c>, a write owns it, or the previous pass is still running.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The body the <c>periodic-pass</c> reminder calls, and the one a test drives</b> —
+    ///         the split <c>IOperationGrain.DriveAsync</c> makes, for its reason: Orleans' reminder
+    ///         floor is a minute and a test that waited for one would be a slow test.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It never calls the running pass's operation.</b> That operation calls this grain
+    ///         mid-pass (<see cref="GetReconcileInputAsync" />, <see cref="ReportObservedAsync" />), and
+    ///         neither grain is reentrant, so a tick that asked it for its status while it was driving
+    ///         would wait on a grain that waits on it, until Orleans' response timeout. The pass reports
+    ///         its own end through <see cref="EndPeriodicPassAsync" />, and a pass older than an
+    ///         operation's sixty-minute ceiling is treated as ended.
+    ///     </para>
+    /// </remarks>
+    Task<Result<Guid>> RunPeriodicPassAsync();
+
+    /// <summary>
+    ///     Records that a manager-started pass ended, so the next tick may start another and a write
+    ///     need not wait for it.
+    /// </summary>
+    /// <param name="operationId">The pass's operation. Anything but the current pass is ignored.</param>
+    Task<Result> EndPeriodicPassAsync(Guid operationId);
+
+    /// <summary>
+    ///     Registers the <c>periodic-pass</c> reminder for a converged resource of a periodic type that
+    ///     has none — the silo-start backfill's call.
+    /// </summary>
+    /// <returns><c>true</c> if this call registered a reminder.</returns>
+    /// <remarks>
+    ///     ⚠ A write arms the reminder when it converges, so a resource that converged before its type
+    ///     declared <c>PassEvery</c>, or before the platform had manager-started passes at all, has none
+    ///     until somebody writes to it. <c>PeriodicPassBackfill</c> walks the platform and calls this.
+    /// </remarks>
+    Task<Result<bool>> ArmPeriodicPassAsync();
 
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
     Task DeactivateAsync();
@@ -413,6 +492,17 @@ public sealed record ReconcileInput {
     /// <summary>How many events were dropped since the last acknowledgement because the list was full.</summary>
     [Id(10)]
     public int ChangesDropped { get; init; }
+
+    /// <summary>
+    ///     The manager-started pass still running over this resource, or <see cref="Guid.Empty" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A write's pass reads this and stops that pass before it applies anything — docs/plan/08
+    ///     § The manager-started pass, "one driver per resource". Without it, a refresh that read the
+    ///     old body could apply it after the write converged, or re-create what a delete tore down.
+    /// </remarks>
+    [Id(11)]
+    public Guid PassOperationId { get; init; }
 
     /// <summary>
     ///     How many delivered events a resource keeps before dropping the oldest and counting the drop.

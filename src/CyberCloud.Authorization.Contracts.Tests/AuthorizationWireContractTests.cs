@@ -31,6 +31,9 @@ public sealed class AuthorizationWireContractTests {
         ("RelationTuple", 0, "Object"),
         ("RelationTuple", 1, "Relation"),
         ("RelationTuple", 2, "Subject"),
+        // Time-bounded relations, issue #49 — the expiry rides on the tuple through the store's
+        // journal and across the gateway-to-silo boundary on every role assignment PUT.
+        ("RelationTuple", 3, "ExpiresOn"),
 
         ("ConsistencyToken", 0, "TenantId"),
         ("ConsistencyToken", 1, "Version"),
@@ -62,6 +65,7 @@ public sealed class AuthorizationWireContractTests {
         ("MembershipIndexSnapshot", 1, "SchemaVersion"),
         ("MembershipIndexSnapshot", 2, "Members"),
         ("MembershipIndexSnapshot", 3, "Usersets"),
+        ("MembershipIndexSnapshot", 4, "Unclosed"),
 
         ("MembershipIndexChange", 0, "SchemaVersion"),
         ("MembershipIndexChange", 1, "AddMembers"),
@@ -69,6 +73,7 @@ public sealed class AuthorizationWireContractTests {
         ("MembershipIndexChange", 3, "AddUsersets"),
         ("MembershipIndexChange", 4, "RemoveUsersets"),
         ("MembershipIndexChange", 5, "Reset"),
+        ("MembershipIndexChange", 6, "Unclosed"),
 
         ("Consistency", 0, "Mode"),
         ("Consistency", 1, "Token"),
@@ -80,29 +85,45 @@ public sealed class AuthorizationWireContractTests {
         ("CheckResult", 4, "TriplesVisited"),
         ("CheckResult", 5, "MaxDepthReached"),
         ("CheckResult", 6, "CapDetail"),
+        ("CheckResult", 7, "ValidUntil"),
 
         ("RoleAssignment", 0, "Scope"),
         ("RoleAssignment", 1, "RoleName"),
         ("RoleAssignment", 2, "Principal"),
         ("RoleAssignment", 3, "Inherited"),
         ("RoleAssignment", 4, "InheritedFrom"),
+        ("RoleAssignment", 5, "ExpiresOn"),
 
         ("ObjectRelationsSnapshot", 0, "Object"),
         ("ObjectRelationsSnapshot", 1, "ByRelation"),
         ("ObjectRelationsSnapshot", 2, "Count"),
+        ("ObjectRelationsSnapshot", 3, "Expiries"),
 
         ("SubjectIndexEntry", 0, "Object"),
         ("SubjectIndexEntry", 1, "Relation"),
         ("SubjectIndexEntry", 2, "SubjectRelation"),
+        ("SubjectIndexEntry", 3, "ExpiresOn"),
+
+        ("ExpirySweepReport", 0, "Removed"),
+        ("ExpirySweepReport", 1, "Remaining"),
+        ("ExpirySweepReport", 2, "Armed"),
+        ("ExpirySweepReport", 3, "Failed"),
 
         ("SweepReport", 0, "Pending"),
         ("SweepReport", 1, "Repaired"),
-        ("SweepReport", 2, "Remaining")
+        ("SweepReport", 2, "Remaining"),
+        ("SweepReport", 3, "Superseded"),
+
+        // The review of #49 — a shortened grant's end, read by every check grain from the store.
+        ("CacheFence", 0, "Below"),
+        ("CacheFence", 1, "At")
     ];
 
     static readonly (string Type, string Alias)[] Aliases = [
+        ("CacheFence", "CyberCloud.Authorization.CacheFence"),
         ("CheckResult", "CyberCloud.Authorization.CheckResult"),
         ("Consistency", "CyberCloud.Authorization.Consistency"),
+        ("ExpirySweepReport", "CyberCloud.Authorization.ExpirySweepReport"),
         ("ConsistencyToken", "CyberCloud.Authorization.ConsistencyToken"),
         ("ListObjectsPage", "CyberCloud.Authorization.ListObjectsPage"),
         ("ListObjectsRequest", "CyberCloud.Authorization.ListObjectsRequest"),

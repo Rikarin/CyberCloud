@@ -2,14 +2,15 @@
 // this import would otherwise put back in play.
 
 using CyberCloud.Core;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.Providers.RecoveryServices;
 
 /// <summary>
-///     Answers <c>POST …/vaults/{name}/recover</c>: a <b>new</b> CloudNativePG cluster, bootstrapped
-///     from one of the vault's completed recovery points, beside the protected server.
+///     Answers <c>POST …/vaults/{name}/recover</c>: a <b>new</b> PostgreSQL server resource,
+///     bootstrapped from one of the vault's completed recovery points, beside the protected server.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -27,31 +28,38 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The source cluster may be gone, and that is the case a restore exists for.</b> The
-///         restored cluster copies its storage size, class and image from the protected server's
-///         <c>Cluster</c> when it is still there; when it is not — the disaster the vault was bought
-///         against — the defaults <see cref="RecoveryVaults.RestoredClusterJson" /> falls back to are
-///         used and the restore proceeds. A handler that required the source would refuse the one
-///         restore that matters.
+///         restored server copies its version, storage, replicas and database from the protected
+///         server's <c>Cluster</c> when it is still there; when it is not — the disaster the vault
+///         was bought against — the version comes from the point's own <c>status.majorVersion</c>
+///         (<see cref="RecoveryVaults.RestoredMajorVersion" />), the rest fall back to the server
+///         schema's defaults, and the restore proceeds. A handler that required the source would
+///         refuse the one restore that matters. A point that records no major is refused rather than
+///         restored into a guessed one.
 ///     </para>
 ///     <para>
 ///         ⚠
 ///         <b>
-///             The second handler in the catalogue that writes an object, and the first outside the
-///             Terminal family.
-///         </b> It writes through <see cref="KubeCommand" /> like a reconciler, under
-///         the vault's own id and with <see cref="RecoveryVaults.RestoreRoleLabel" /> beside the seven,
-///         so the drift scan attributes the cluster to the vault and the vault's teardown knows to
-///         leave it standing. What the restored cluster is <i>not</i> — a
-///         <c>CyberCloud.DBforPostgreSQL/servers</c> resource — is stated on
-///         <see cref="RecoveryVaults.RecoverAction" /> and owed in the chart's manifest.
+///             It writes nothing to the cluster itself any more — #30.
+///         </b> The first cut applied a CloudNativePG <c>Cluster</c> through <see cref="KubeCommand" />
+///         under the vault's labels. Now it hands a server body to
+///         <see cref="ActionContext.Creator" />, which the manager bound to this request's caller:
+///         the server is created through the whole write path, as that caller's <c>PUT</c>, and its
+///         own reconciler renders the <c>Cluster</c>. What the caller gets back is the new server's
+///         id and the create's operation.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Four checks, and none of them is about the caller.</b> The manager gated this call
-///         with <see cref="RecoveryVaults.RecoverPermission" /> on the vault before it reached here,
-///         and nothing here or there asks whether the caller may read the protected server the
-///         point was taken from; <see cref="ActionContext" /> carries no caller to ask about. That
-///         gap is the vault's <c>recover-is-gated-by-the-vault-alone</c>, and the remarks on the
-///         permission say what closes it.
+///         ⚠ <b>Four checks here, and the caller is checked twice by the manager.</b> Once for
+///         <see cref="RecoveryVaults.RecoverPermission" /> on the vault, and again, by the create, for
+///         the server type's <c>write</c> in this group. What nobody asks is whether the caller may
+///         read the protected server the point was taken from — the vault's
+///         <c>recover-is-gated-by-the-vault-alone</c>, narrowed to that.
+///     </para>
+///     <para>
+///         ⚠ <b>And this is the only way in.</b> The server's <c>restore.recoveryPoint</c> is
+///         declared <c>SetOnlyByAnAction</c>, so a caller's own <c>PUT</c> of a server naming a point
+///         is refused by the write path. Before #30's review it was not, and a caller with nothing but
+///         <c>write</c> on servers could restore any <c>Backup</c> in the group's namespace — skipping
+///         all four checks above, and the vault's permission with them.
 ///     </para>
 /// </remarks>
 public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
@@ -168,29 +176,41 @@ public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
 
         var sourceJson = source.IsSuccess ? source.GetValueOrThrow().Json : "{}";
 
-        // ── The restore ────────────────────────────────────────────────────────────────────────
-        var applied = await KubeCommand.For(cluster)
-            .WithTenantId(context.Id.TenantId)
-            .WithResourceId(context.Id)
-            .InNamespace(context.Namespace)
-            .WithKind(RecoveryVaults.ClusterKind)
-            .WithApiVersion(context.ApiVersion)
-            .WithLabels(
-                (RecoveryVaults.ProtectedItemLabel, item),
-                (RecoveryVaults.RestoreRoleLabel, RecoveryVaults.RestoreRoleValue)
-            )
-            .ObjectJson(RecoveryVaults.RestoredClusterJson(targetName, recoveryPoint, sourceJson))
-            .ApplyAsync(cancellationToken);
-
-        if (applied.TryGetError(out var applyError)) {
-            return Result<string>.Failure(applyError);
+        // ⚠ The major, from the source or from the point. A restore into the wrong major is a Cluster
+        // that never starts, found an hour later in an operator log; refusing here names the cause.
+        if (RecoveryVaults.RestoredMajorVersion(sourceJson, backupJson).Length == 0) {
+            return Result<string>.Failure(
+                ErrorCode.PreconditionFailed,
+                $"Recovery point '{recoveryPoint}' does not record which PostgreSQL major it was taken from, and "
+                + "its source server is gone, so the restored server's version would be a guess. A restore "
+                + "into another major does not start.",
+                "/recoveryPoint"
+            );
         }
 
-        if (applied.GetValueOrThrow().Result is ApplyResult.Suspended or ApplyResult.Conflict) {
-            return Result<string>.Failure(
-                ErrorCode.OperationInProgress,
-                $"The restore of '{recoveryPoint}' into '{targetName}' was not written: {applied.GetValueOrThrow().Message}. Ask again."
-            );
+        var pooler = sourceName.Length > 0
+            ? await cluster.GetAsync(
+                new() { Kind = RecoveryVaults.PoolerKind, Namespace = context.Namespace, Name = sourceName + "-pooler" },
+                cancellationToken
+            )
+            : Result<KubeObject>.Failure(ErrorCode.ResourceNotFound, "the Backup names no cluster");
+
+        // ── The restore: a server, written as the caller ───────────────────────────────────────
+        //
+        // ⚠ THROUGH THE WRITE PATH AND NOT THROUGH KubeCommand. The server's own reconciler renders
+        // the Cluster, gives it a bucket of its own and a key to it, and meters it; this handler only
+        // says which point to start from. A refusal here — the caller may not create a server, the
+        // name is taken, the quota is spent — is the write path's own, with its own code.
+        var created = await context.Creator.CreateAsync(
+            RecoveryVaults.PostgresServerType,
+            targetName,
+            RecoveryVaults.PostgresServerApiVersion,
+            RecoveryVaults.RestoredServerBody(recoveryPoint, context.Desired, sourceJson, pooler.IsSuccess, backupJson),
+            cancellationToken
+        );
+
+        if (created.TryGetError(out var createError)) {
+            return Result<string>.Failure(createError);
         }
 
         var sourcePath = new ResourceId(
@@ -206,11 +226,13 @@ public sealed class RecoveryVaultRecoverHandler : IResourceActionHandler {
         // dispatcher checks that rather than trusting it.
         return Result<string>.Success(
             new JsonObject {
-                ["kind"] = RecoveryVaults.ClusterKind.Kind,
+                ["kind"] = RecoveryVaults.PostgresServerType.ToString(),
                 ["name"] = targetName,
                 ["namespace"] = context.Namespace,
                 ["recoveryPoint"] = recoveryPoint,
-                ["source"] = sourcePath
+                ["source"] = sourcePath,
+                ["resourceId"] = created.GetValueOrThrow().Id.Path,
+                ["operationId"] = created.GetValueOrThrow().OperationId.ToString("D", CultureInfo.InvariantCulture)
             }.ToJsonString()
         );
     }

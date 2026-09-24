@@ -113,6 +113,9 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     static readonly Guid Subscription = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0021");
     static readonly Guid Cluster = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0022");
 
+    /// <summary>A tenant nothing here bootstraps, whose policy catalog step 7c asks about <see cref="Tenant" />'s paths.</summary>
+    static readonly Guid OtherTenant = new("0d1f0dfe-4c7e-4f2c-9b5b-2f9b4d0a0024");
+
     /// <summary>
     ///     The service principal the story is performed as. Its id is its <c>client_id</c> —
     ///     <c>TokenApi</c>'s remarks say why — and the ReBAC subject the tenant's owner tuple names.
@@ -425,6 +428,315 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
 
         value[0].GetProperty("id").GetString().ShouldBe(Address.Path);
         value[0].GetProperty("provisioningState").GetString().ShouldBe("Succeeded");
+
+        // ── Step 7: policy (#46) — written over HTTP, enforced at step 5 of a write over HTTP. ───
+        //
+        // ⚠ THE FIRST TIME THE POLICY CATALOG IS REACHED ACROSS A PROCESS BOUNDARY. The gateway here is
+        // an Orleans CLIENT in this process and the catalog grain lives in a silo PROCESS, so every
+        // type the policy path puts on the wire — the definition and assignment records, the subject
+        // step 5 sends, the evaluation it gets back — has to be resolvable by name on the other side.
+        // In-process TestClusters share one type manifest and cannot see a missing [Alias]; this can,
+        // and it is how #39's shard-map confirmation was caught after its merge.
+        var definition = PolicyAddress.Definition(ScopeId.Subscription(Tenant, Subscription), "no-second-widget");
+
+        var defined = await PutAsync(
+            definition.Path,
+            """
+            { "properties": { "displayName": "No second widget",
+              "policyRule": { "if": { "allOf": [
+                  { "field": "type", "equals": "CyberCloud.Sample/widgets" },
+                  { "field": "name", "like": "second-*" } ] },
+                "then": { "effect": "deny" } } } }
+            """,
+            cancellationToken
+        );
+
+        defined.Status.ShouldBe(
+            HttpStatusCode.Created,
+            "the tenant's owner could not write a policy definition on its own subscription: " + defined.Body
+        );
+
+        var assignment = PolicyAddress.Assignment(ScopeId.Group(Tenant, Subscription, ResourceGroup), "no-second-widget");
+
+        var assigned = await PutAsync(
+            assignment.Path,
+            $$"""{ "properties": { "policyDefinitionId": "{{definition.Path}}" } }""",
+            cancellationToken
+        );
+
+        assigned.Status.ShouldBe(HttpStatusCode.Created, "the assignment was refused: " + assigned.Body);
+
+        var readBack = await GetAsync(assignment.Path, cancellationToken);
+        readBack.Status.ShouldBe(HttpStatusCode.OK, readBack.Body);
+        Json(readBack.Body).GetProperty("properties").GetProperty("policyDefinitionId").GetString().ShouldBe(definition.Path);
+
+        var second = new ResourceId(Tenant, Subscription, ResourceGroup, SampleWidgets.Type, "second-widget", Guid.Empty);
+        var refusedWrite = await PutAsync(second.Path, SampleWidgets.Body(Cluster), cancellationToken);
+
+        refusedWrite.Status.ShouldBe(
+            HttpStatusCode.Forbidden,
+            "a write the tenant's own deny assignment matches was not refused at step 5: " + refusedWrite.Body
+        );
+
+        var error = Json(refusedWrite.Body).GetProperty("error");
+        error.GetProperty("code").GetString().ShouldBe("PolicyViolation");
+        error.GetProperty("message").GetString().ShouldNotBeNull().ShouldContain(assignment.Path);
+
+        // The widget the deny does not match is untouched by it — step 5 ran on this PUT and found
+        // nothing to refuse.
+        var unaffected = await PutAsync(Address.Path, SampleWidgets.Body(Cluster), cancellationToken);
+        unaffected.Status.ShouldBeOneOf(
+            [HttpStatusCode.OK, HttpStatusCode.Accepted],
+            "the first widget's re-PUT, which the rule does not match, was refused: " + unaffected.Body
+        );
+
+        await SettleAsync(unaffected, cancellationToken);
+
+        // ── Step 7b: modify and audit across the same boundary (#46's third review). ────────────
+        //
+        // ⚠ THE TYPES A DENY NEVER PUTS ON THE WIRE. A modify comes back from the catalog as a
+        // PolicyModificationRecord and is applied in the gateway process; an audit's verdicts go back
+        // to the silo through RecordStatesAsync after step 9 and are read through ListStatesAsync by a
+        // policyStates GET. The deny above crossed with none of them.
+        var tagDefinition = PolicyAddress.Definition(ScopeId.Subscription(Tenant, Subscription), "cost-center");
+        var tagged = await PutAsync(
+            tagDefinition.Path,
+            """
+            { "properties": { "policyRule": {
+                "if": { "field": "type", "equals": "CyberCloud.Sample/widgets" },
+                "then": { "effect": "modify", "operations": [
+                  { "operation": "add", "field": "/tags/costCenter", "value": "unassigned" } ] } } } }
+            """,
+            cancellationToken
+        );
+        tagged.Status.ShouldBe(HttpStatusCode.Created, tagged.Body);
+
+        var auditDefinition = PolicyAddress.Definition(ScopeId.Subscription(Tenant, Subscription), "enabled-widgets");
+        var audited = await PutAsync(
+            auditDefinition.Path,
+            """{ "properties": { "policyRule": { "if": { "field": "/properties/enabled", "equals": true }, "then": { "effect": "audit" } } } }""",
+            cancellationToken
+        );
+        audited.Status.ShouldBe(HttpStatusCode.Created, audited.Body);
+
+        var policyGroup = ScopeId.Group(Tenant, Subscription, ResourceGroup);
+
+        foreach (var name in new[] { "cost-center", "enabled-widgets" }) {
+            var assignedHere = await PutAsync(
+                PolicyAddress.Assignment(policyGroup, name).Path,
+                $$"""{ "properties": { "policyDefinitionId": "{{PolicyAddress.Definition(ScopeId.Subscription(Tenant, Subscription), name).Path}}" } }""",
+                cancellationToken
+            );
+            assignedHere.Status.ShouldBe(HttpStatusCode.Created, assignedHere.Body);
+        }
+
+        var rewritten = await PutAsync(Address.Path, SampleWidgets.Body(Cluster), cancellationToken);
+        rewritten.Status.ShouldBeOneOf(
+            [HttpStatusCode.OK, HttpStatusCode.Accepted],
+            "a PUT the modify and the audit both apply to was refused: " + rewritten.Body
+        );
+        await SettleAsync(rewritten, cancellationToken);
+
+        var withTag = Json((await GetAsync(Address.Path, cancellationToken)).Body);
+        withTag.GetProperty("tags").GetProperty("costCenter").GetString().ShouldBe(
+            "unassigned",
+            "the modify's add did not reach the stored tag bag — the rewrite the catalog returned was lost on its way back"
+        );
+
+        var states = await GetAsync(PolicyAddress.States(policyGroup).Path, cancellationToken);
+        states.Status.ShouldBe(HttpStatusCode.OK, states.Body);
+
+        var verdict = Json(states.Body).GetProperty("value").EnumerateArray()
+            .Single(x => string.Equals(x.GetProperty("resourceId").GetString(), Address.CanonicalPath, StringComparison.OrdinalIgnoreCase));
+        verdict.GetProperty("complianceState").GetString().ShouldBe("NonCompliant", states.Body);
+        string.Equals(
+                verdict.GetProperty("policyAssignmentId").GetString(),
+                PolicyAddress.Assignment(policyGroup, "enabled-widgets").Path,
+                StringComparison.OrdinalIgnoreCase
+            )
+            .ShouldBeTrue(states.Body);
+
+        foreach (var name in new[] { "cost-center", "enabled-widgets" }) {
+            (await DeleteAsync(PolicyAddress.Assignment(policyGroup, name).Path, cancellationToken)).Status
+                .ShouldBeOneOf([HttpStatusCode.OK, HttpStatusCode.NoContent]);
+        }
+
+        // ── Step 7c: tenant B's catalog, asked from this process, holds nothing of tenant A's. ────
+        //
+        // ⚠ THE GRAIN KEY'S QUALIFICATION, ACROSS THE BOUNDARY. The isolation is ForTenant plus the
+        // tenant in the key, and in a TestCluster both halves live in one process. Here the client is
+        // this process and the catalogs are in a silo: tenant A's catalog denies the second widget and
+        // tenant B's, asked about the same subscription, group and name, has no assignment to deny it.
+        var subject = new PolicySubject {
+            ResourcePath = second.CanonicalPath,
+            SubscriptionId = Subscription,
+            ResourceGroup = ResourceGroup,
+            ResourceType = SampleWidgets.Type.ToString(),
+            ResourceName = second.Name,
+            Operation = "create",
+            Document = SampleWidgets.Body(Cluster)
+        };
+
+        (await Catalog(Tenant).EvaluateAsync(subject)).GetValueOrThrow().Denial
+            .ShouldNotBeNull("tenant A's own catalog, reached from outside the silo, no longer denies what the gateway refused");
+
+        var theirs = new ResourceId(OtherTenant, Subscription, ResourceGroup, SampleWidgets.Type, second.Name, Guid.Empty);
+        var judgedForB = (await Catalog(OtherTenant).EvaluateAsync(subject with { ResourcePath = theirs.CanonicalPath })).GetValueOrThrow();
+        judgedForB.Denial.ShouldBeNull("tenant A's assignment reached tenant B's catalog across the process boundary");
+        judgedForB.Entries.ShouldBeEmpty();
+        (await Catalog(OtherTenant).ListAssignmentsAsync(ScopeId.Group(OtherTenant, Subscription, ResourceGroup).Path))
+            .GetValueOrThrow().ShouldBeEmpty();
+
+        // ── Step 8: a deleted management group takes its policy with it (#46's review). ─────────
+        //
+        // ⚠ THE FORGET RUNS IN THE GATEWAY PROCESS AND THE CATALOG IN THE SILO, so this is the new
+        // IPolicyCatalogGrain.ForgetScopeAsync crossing the boundary. The group's path is its name, so
+        // an assignment the delete left behind would be readable, and in force, on the group
+        // re-created under that name.
+        var managementGroup = ScopeId.ManagementGroupOf(Tenant, "policy-residue");
+        var madeGroup = await PutAsync(managementGroup.Path, "{}", cancellationToken);
+        madeGroup.Status.ShouldBe(HttpStatusCode.Created, madeGroup.Body);
+
+        var groupDefinition = PolicyAddress.Definition(managementGroup, "residue");
+        var madeDefinition = await PutAsync(
+            groupDefinition.Path,
+            """{ "properties": { "policyRule": { "if": { "field": "type", "like": "*" }, "then": { "effect": "deny" } } } }""",
+            cancellationToken
+        );
+        madeDefinition.Status.ShouldBe(HttpStatusCode.Created, madeDefinition.Body);
+
+        var groupAssignment = PolicyAddress.Assignment(managementGroup, "residue");
+        var madeAssignment = await PutAsync(
+            groupAssignment.Path,
+            $$"""{ "properties": { "policyDefinitionId": "{{groupDefinition.Path}}" } }""",
+            cancellationToken
+        );
+        madeAssignment.Status.ShouldBe(HttpStatusCode.Created, madeAssignment.Body);
+
+        var deleted = await DeleteAsync(managementGroup.Path, cancellationToken);
+        deleted.Status.ShouldBe(HttpStatusCode.NoContent, "the empty group's delete: " + deleted.Body);
+
+        var remade = await PutAsync(managementGroup.Path, "{}", cancellationToken);
+        remade.Status.ShouldBe(HttpStatusCode.Created, remade.Body);
+
+        var residue = await GetAsync(groupAssignment.Path, cancellationToken);
+        residue.Status.ShouldBe(
+            HttpStatusCode.NotFound,
+            "the deleted group's assignment is back on the group re-created under its name: " + residue.Body
+        );
+
+        // ── Step 9: a just-in-time role assignment (#49), across the process boundary. ──────────
+        await AJustInTimeGrantCrossesTheProcessBoundaryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    ///     Step 9: a role assignment with an end (issue #49), granted, read, listed, shortened and
+    ///     revoked over HTTP.
+    /// </summary>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is here for the process boundary, not for the expiry.</b> The gateway built
+    ///         here is an Orleans client, and <c>RoleAssignmentService</c> runs in it: the tuple it
+    ///         writes carries <c>ExpiresOn</c> into a silo process, and the row it reads back carries
+    ///         it out. #39's refused type got past every test because a <c>TestCluster</c>'s client and
+    ///         silos share one type manifest, and every other #49 test runs in one. Whether the grant
+    ///         ends on time is <c>test/CyberCloud.Isolation</c>'s question, where the test owns the
+    ///         clock. These silos read the machine's.
+    ///     </para>
+    ///     <para>
+    ///         A step of the one story rather than a test of its own, for the reason the class gives:
+    ///         the story's tenant, token and gateway are what this needs, and a second test would
+    ///         bring them all up again.
+    ///     </para>
+    /// </remarks>
+    async Task AJustInTimeGrantCrossesTheProcessBoundaryAsync(CancellationToken cancellationToken) {
+        var assignment = RoleAssignmentId.OnScope(
+            ScopeId.Group(Tenant, Subscription, ResourceGroup),
+            new(Relations.Reader, SubjectTypes.ServicePrincipal, ServicePrincipal.ToString("N", CultureInfo.InvariantCulture))
+        );
+
+        // Whole seconds, so the instant the platform renders compares equal to the one sent.
+        var now = DateTimeOffset.UtcNow;
+        var twoHours = new DateTimeOffset(now.Ticks - now.Ticks % TimeSpan.TicksPerSecond, TimeSpan.Zero).AddHours(2);
+        var oneHour = twoHours.AddHours(-1);
+
+        var granted = await PutAsync(assignment.Path, ExpiresOnBody(twoHours), cancellationToken);
+
+        granted.Status.ShouldBe(
+            HttpStatusCode.Created,
+            "the tenant's owner could not grant a role with an end: " + granted.Body
+        );
+        ExpiresOnOf(granted.Body).ShouldBe(twoHours);
+
+        var read = await GetAsync(assignment.Path, cancellationToken);
+
+        read.Status.ShouldBe(HttpStatusCode.OK, "the grant just made is not readable: " + read.Body);
+        ExpiresOnOf(read.Body)
+            .ShouldBe(twoHours, "the end did not come back out of the silo process. Body: " + read.Body);
+
+        var listed = await GetAsync(RoleAssignmentCollectionId.Of(assignment).Path, cancellationToken);
+
+        listed.Status.ShouldBe(HttpStatusCode.OK, "the assignment collection is not readable: " + listed.Body);
+        Json(listed.Body)
+            .GetProperty("value")
+            .EnumerateArray()
+            .Where(x => x.GetProperty("id").GetString() == assignment.Path)
+            .Select(static x => ExpiresOnOf(x.GetRawText()))
+            .ShouldBe([twoHours], "the collection did not carry the grant with its end. Body: " + listed.Body);
+
+        // The envelope the GET rendered, sent back unchanged as the PUT, keeps the end it shows.
+        var sentBack = await PutAsync(assignment.Path, read.Body, cancellationToken);
+
+        sentBack.Status.ShouldBe(HttpStatusCode.OK, "a GET sent back as a PUT was refused: " + sentBack.Body);
+        ExpiresOnOf(sentBack.Body)
+            .ShouldBe(twoHours, "a GET sent back as a PUT changed the grant's end. Body: " + sentBack.Body);
+
+        // ⚠ A closer end is the write that fences the check caches. Inside the notice it is refused,
+        // and the refusal is a silo's, returned through the client as a 400.
+        var tooSoon = await PutAsync(assignment.Path, ExpiresOnBody(DateTimeOffset.UtcNow.AddSeconds(20)), cancellationToken);
+
+        tooSoon.Status.ShouldBe(
+            HttpStatusCode.BadRequest,
+            "an end closer than TupleExpiry.ShorteningNotice was accepted: " + tooSoon.Body
+        );
+
+        // ⚠ The code alone doesn't say whose refusal this is: the gateway refuses a body's shape with
+        // the same one. Only the tuple store names the notice, so the message is what places it in
+        // the silo.
+        var notice = Json(tooSoon.Body).GetProperty("error");
+        notice.GetProperty("code").GetString().ShouldBe(CyberCloud.Core.ErrorCode.InvalidRequestBody.Value);
+        notice.GetProperty("message")
+            .GetString()
+            .ShouldNotBeNull()
+            .ShouldContain(
+                "less than "
+                + TupleExpiry.ShorteningNotice.TotalSeconds.ToString(CultureInfo.InvariantCulture)
+                + " seconds from now",
+                Case.Sensitive,
+                "the 400 is not the tuple store's shortening refusal. Body: " + tooSoon.Body
+            );
+
+        var shortened = await PutAsync(assignment.Path, ExpiresOnBody(oneHour), cancellationToken);
+
+        shortened.Status.ShouldBe(HttpStatusCode.OK, "a shortening with an hour's notice was refused: " + shortened.Body);
+        ExpiresOnOf((await GetAsync(assignment.Path, cancellationToken)).Body).ShouldBe(oneHour);
+
+        var revoked = await DeleteAsync(assignment.Path, cancellationToken);
+
+        revoked.Status.ShouldBe(HttpStatusCode.NoContent, "the grant could not be revoked: " + revoked.Body);
+        (await GetAsync(assignment.Path, cancellationToken)).Status.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    static string ExpiresOnBody(DateTimeOffset expiresOn) =>
+        $$"""{"{{RoleAssignmentBodyProperties.ExpiresOn}}":"{{expiresOn.ToString("O", CultureInfo.InvariantCulture)}}"}""";
+
+    static DateTimeOffset? ExpiresOnOf(string body) {
+        var value = Json(body).GetProperty("properties").GetProperty(RoleAssignmentBodyProperties.ExpiresOn);
+
+        return value.ValueKind == JsonValueKind.Null
+            ? null
+            : DateTimeOffset.Parse(value.GetString()!, CultureInfo.InvariantCulture);
     }
 
     // ── Polling ──────────────────────────────────────────────────────────────────────────────────
@@ -485,6 +797,15 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
         return await SendAsync(request, cancellationToken);
     }
 
+    async Task<Answer> DeleteAsync(string path, CancellationToken cancellationToken) {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            new Uri(path + Version, UriKind.Relative)
+        );
+
+        return await SendAsync(request, cancellationToken);
+    }
+
     async Task<Answer> GetAsync(string path, CancellationToken cancellationToken) {
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
@@ -507,6 +828,33 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
     }
 
     static JsonElement Json(string body) => JsonDocument.Parse(body).RootElement.Clone();
+
+    /// <summary>
+    ///     Waits out the operation a write started, if it started one — so the next write to the same
+    ///     resource isn't refused because this one is still in progress.
+    /// </summary>
+    /// <param name="write">The write's answer. A <c>200</c> with no <c>Azure-AsyncOperation</c> started nothing.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    async Task SettleAsync(Answer write, CancellationToken cancellationToken) {
+        if (!write.Headers.TryGetValues("Azure-AsyncOperation", out var operation)) {
+            return;
+        }
+
+        // ⚠ A re-PUT of an unchanged body names the empty operation: nothing was started, and
+        // /operations/{empty} is a 404 rather than a finished one.
+        var operationId = OperationIdFrom(operation.First());
+        if (operationId == Guid.Empty) {
+            return;
+        }
+
+        var terminal = await ConvergeAsync(operationId, cancellationToken);
+        Json(terminal).GetProperty("status").GetString().ShouldBe("Succeeded", terminal);
+    }
+
+    /// <summary>A tenant's policy catalog, reached through the Orleans client in this process.</summary>
+    IPolicyCatalogGrain Catalog(Guid tenant) =>
+        topology.Client.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IPolicyCatalogGrain>(GrainKeys.PolicyCatalog(tenant));
 
     /// <summary>The operation id out of the <c>Azure-AsyncOperation</c> URL the gateway wrote.</summary>
     /// <param name="header">The header value.</param>

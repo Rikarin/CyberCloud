@@ -128,6 +128,9 @@ sealed class RecordingConnection : IKubeClusterConnection {
             command.Labels.Select(static x => KeyValuePair.Create(x.Key, (JsonNode?)x.Value))
         );
         metadata["namespace"] = command.Target.Namespace;
+        // A uid, as the API server issues one — stable per object, so a re-apply keeps it and an owner
+        // reference taken from it stays valid.
+        metadata["uid"] = "uid-" + Key(command.Target);
         root["metadata"] = metadata;
         root["kind"] = command.Target.Kind.Kind;
         root["apiVersion"] = command.Target.Kind.ApiVersion;
@@ -230,6 +233,37 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
 sealed class FixedClock : IClock {
     public DateTimeOffset UtcNow { get; init; } = new(2026, 9, 18, 12, 0, 0, TimeSpan.Zero);
+}
+
+/// <summary>
+///     Records what a handler asked the manager to create, and answers the way the write path would.
+/// </summary>
+/// <remarks>
+///     ⚠ A double of the SEAM, never of the write path: what the manager does with the request is
+///     <c>ResourceManagerService.CreateForActionAsync</c>'s, tested through the real manager in
+///     <c>RecoverThroughTheWritePathTests</c>. This one lets the handler's own checks be asserted in
+///     isolation — what it asks for, and that a refusal comes back unchanged.
+/// </remarks>
+sealed class RecordingCreator : IResourceCreator {
+    public List<(ResourceTypeName Type, string Name, string ApiVersion, string Body)> Created { get; } = [];
+
+    public Error? Refuse { get; init; }
+
+    public Task<Result<ResourceCreated>> CreateAsync(
+        ResourceTypeName type,
+        string name,
+        string apiVersion,
+        string body,
+        CancellationToken cancellationToken = default
+    ) {
+        if (Refuse is { } refusal) {
+            return Task.FromResult(Result<ResourceCreated>.Failure(refusal));
+        }
+
+        Created.Add((type, name, apiVersion, body));
+        var id = new ResourceId(Ids.TenantA, Ids.SubscriptionA, "prod", type, name, Guid.NewGuid());
+        return Task.FromResult(Result<ResourceCreated>.Success(new(id, Guid.NewGuid())));
+    }
 }
 
 sealed class RecordingLog : IReconcileLog {

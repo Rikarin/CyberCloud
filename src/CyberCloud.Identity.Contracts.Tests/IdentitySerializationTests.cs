@@ -247,6 +247,8 @@ public sealed class IdentitySerializationTests : IDisposable {
         ("ApplicationRegistration", 8, "IsPublicClient"),
         ("ApplicationRegistration", 9, "ClientSecretRef"),
         ("ApplicationRegistration", 10, "CreatedAt"),
+        // #41: when the platform issued the client's secret — appended, never renumbered.
+        ("ApplicationRegistration", 11, "ClientSecretIssuedAt"),
 
         ("ServicePrincipalDescriptor", 0, "ServicePrincipalId"),
         ("ServicePrincipalDescriptor", 1, "TenantId"),
@@ -351,7 +353,29 @@ public sealed class IdentitySerializationTests : IDisposable {
         RoundTrip(new TotpEnrollment { SecretRef = new() { Path = "p", Field = "f" } }).Digits.ShouldBe(6);
         RoundTrip(SignInOutcome.Success(Guid.NewGuid(), Guid.NewGuid(), AuthenticationMethod.Passkey))
             .Succeeded.ShouldBeTrue();
-        RoundTrip(new Invitation { Email = "b@example.com", Relation = "owner" }).Relation.ShouldBe("owner");
+        RoundTrip(new Invitation { Email = "b@example.com", Status = InvitationStatus.Accepted, TenantName = "contoso" })
+            .Status.ShouldBe(InvitationStatus.Accepted);
+        RoundTrip(new InvitationRequest { Email = "c@example.com", TenantName = "contoso" }).TenantName.ShouldBe("contoso");
+
+        // #43's second review: a member who joined with an account elsewhere.
+        var home = new HomeAccount { TenantId = Guid.NewGuid(), UserId = Guid.NewGuid() };
+
+        RoundTrip(new UserProfile { Email = "h@example.com", HomeAccount = home }).HomeAccount.ShouldBe(home);
+        RoundTrip(new UserProfile { Email = "i@example.com" }).HomeAccount.ShouldBeNull();
+
+        // #43's device flow: every type a poll, a lookup and a redemption carry across the silo.
+        var approval = new DeviceApproval {
+            TenantId = Guid.NewGuid(), UserId = Guid.NewGuid(), Methods = [AuthenticationMethod.Password], Email = "d@example.com"
+        };
+
+        RoundTrip(new DeviceAuthorizationRequest { ClientId = "cyc-cli", Scopes = ["cyc.api"], Lifetime = TimeSpan.FromMinutes(10), Interval = TimeSpan.FromSeconds(5) })
+            .Interval.ShouldBe(TimeSpan.FromSeconds(5));
+        RoundTrip(new DeviceAuthorizationDescriptor { ClientId = "cyc-cli", Status = DeviceAuthorizationStatus.Approved })
+            .Status.ShouldBe(DeviceAuthorizationStatus.Approved);
+        RoundTrip(approval).Methods.ShouldBe([AuthenticationMethod.Password]);
+        RoundTrip(new DevicePoll(DevicePollOutcome.SlowDown, TimeSpan.FromSeconds(10), "cyc-cli", ["cyc.api"], approval))
+            .Outcome.ShouldBe(DevicePollOutcome.SlowDown);
+        RoundTrip(new DeviceRedemption(true, Guid.NewGuid(), approval, ["cyc.api"])).FirstUse.ShouldBeTrue();
         RoundTrip(new PasskeyRegistrationChallenge { OptionsJson = "{}" }).OptionsJson.ShouldBe("{}");
         RoundTrip(new PasskeyAssertionChallenge { OptionsJson = "{}" }).OptionsJson.ShouldBe("{}");
         RoundTrip(new PasskeyRegistrationRequest { Email = "c@example.com", Existing = [] }).Email
@@ -394,19 +418,32 @@ public sealed class IdentitySerializationTests : IDisposable {
         "CyberCloud.Identity.CodeConsumption",
         "CyberCloud.Identity.ConsentGrant",
         "CyberCloud.Identity.CredentialKind",
+        "CyberCloud.Identity.DeviceApproval",
+        "CyberCloud.Identity.DeviceAuthorizationDescriptor",
+        "CyberCloud.Identity.DeviceAuthorizationRequest",
+        "CyberCloud.Identity.DeviceAuthorizationStatus",
+        "CyberCloud.Identity.DevicePoll",
+        "CyberCloud.Identity.DevicePollOutcome",
+        "CyberCloud.Identity.DeviceRedemption",
         "CyberCloud.Identity.ExchangedSubject",
         "CyberCloud.Identity.GrantType",
         "CyberCloud.Identity.GroupDescriptor",
+        "CyberCloud.Identity.HomeAccount",
         "CyberCloud.Identity.IApplicationGrain",
         "CyberCloud.Identity.IAuthorizationCodeGrain",
         "CyberCloud.Identity.IConsentGrain",
+        "CyberCloud.Identity.IDeviceAuthorizationGrain",
+        "CyberCloud.Identity.IDirectoryIndexGrain",
         "CyberCloud.Identity.IGroupGrain",
+        "CyberCloud.Identity.IInvitationGrain",
         "CyberCloud.Identity.IManagedIdentityGrain",
         "CyberCloud.Identity.IServicePrincipalGrain",
         "CyberCloud.Identity.ISessionGrain",
         "CyberCloud.Identity.ISignUpGrain",
         "CyberCloud.Identity.IUserGrain",
         "CyberCloud.Identity.Invitation",
+        "CyberCloud.Identity.InvitationRequest",
+        "CyberCloud.Identity.InvitationStatus",
         "CyberCloud.Identity.ManagedIdentityDescriptor",
         "CyberCloud.Identity.PasskeyAssertionChallenge",
         "CyberCloud.Identity.PasskeyCredential",
@@ -432,6 +469,29 @@ public sealed class IdentitySerializationTests : IDisposable {
         // silo had ever run, this would instead be a burned entry with a comment. The full argument,
         // including when it stops being available, is at the top of IdentityWireTypes.cs.
     ];
+
+    /// <summary>
+    ///     <see cref="Invitation" />'s <c>[Id(3)]</c> stays empty: v0.1.0 published <c>Relation</c>
+    ///     there (<c>build/wire/v0.1.0.txt</c>), and a new member at 3 would be read by a v0.1.0 peer
+    ///     as that string.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The Wire compatibility gate would catch a reuse by comparing against the v0.1.0
+    ///     manifest, but only once <c>git tag</c> names v0.1.0 — until then the gate is vacuous and
+    ///     this is the only machine check the retirement has. The review of #43 found the remark on
+    ///     <see cref="Invitation" /> leaning on a gate that had never run against it.
+    /// </remarks>
+    [Fact]
+    public void TheInvitationsRetiredRelationNumberIsNeverReused() {
+        var numbers = typeof(Invitation)
+            .GetProperties()
+            .Select(static x => x.GetCustomAttribute<IdAttribute>()?.Id)
+            .Where(static x => x is not null)
+            .ToList();
+
+        numbers.ShouldNotContain(3u, "Invitation reused [Id(3)], which v0.1.0 published as Relation");
+        numbers.ShouldContain(0u, "the reflection found no [Id] at all, so the assertion above proves nothing");
+    }
 
     [Fact]
     public void TheAliasesAreTheOnesRecordedHere() {

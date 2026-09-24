@@ -17,25 +17,19 @@ namespace CyberCloud.Providers.Mail;
 ///         this row does <b>not</b> build and why each omission is a different kind.
 ///     </para>
 ///     <para>
-///         ⚠
-///         <b>
-///             THE ONLY TYPE IN THE CATALOGUE THAT DECLARES NO ACTION, AND THE REASON IS A RULE
-///             RATHER THAN A GAP.
-///         </b> doc 17 § Resource model names three — <c>verify</c>,
-///         <c>sendTest</c> and <c>exportMailbox</c>. <c>actions-without-handlers.txt</c> allows a
-///         declared action with no handler <i>only</i> when the action's api-version is already
-///         published, because a published api-version is immutable and removing a path from one is a
-///         breaking change; <c>2026-08-01</c> of this type is published <b>by this change</b>, so
-///         that door is shut and the file's own words apply:
-///         <i>
-///             "'No handler yet' on an unpublished
-///             action is not a reason to add a line; it is a reason to write the handler or not declare
-///             the action."
-///         </i> None of the three can be written yet — see <see cref="MailDomains" /> —
-///         so none is declared. ⚠ <b>This costs nothing that matters</b>: the half of <c>verify</c>
-///         a tenant actually needs, <i>the exact records to publish</i>, is
-///         <see cref="MailDomains.TryRequiredRecords" />, a pure function reachable without an action
-///         at all.
+///         ⚠ <b>TWO TYPES AND TWO ACTIONS, AND THE ACTIONS ARE THE ONES THE FIRST CUT ARGUED COULD NOT
+///         BE DECLARED.</b> Issue #34's first pass shipped the domain alone and declared no action,
+///         because <c>verify</c> needs to ask the DNS and nothing in the repository could; that pass
+///         was the only type in the catalogue with no action. <c>IMailDnsResolver</c> is the seam it
+///         was missing, so <c>dnsRecords</c> (read) and <c>verify</c> (write — it moves the sending
+///         gate) are declared with handlers at the same api-version, the way every other family grew.
+///         <c>sendTest</c> and <c>exportMailbox</c> are still not: see <see cref="MailDomains" />.
+///     </para>
+///     <para>
+///         ⚠ <b><c>mailboxes</c> owns no object</b> — it writes four keys of its domain's mailbox
+///         <c>Secret</c> as a second writer, the shape <c>virtualNetworks/peerings</c> established.
+///         <see cref="MailMailboxes" /> has the argument, and its chart documents the slice rather
+///         than installing anything.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -108,6 +102,20 @@ public sealed class MailProvider : IResourceProvider {
             // reserving one IP the moment a tenant ticked a box would charge for an address nothing
             // allocated.
             .Permissions("read", "write", "delete")
+            .Action(
+                MailDomains.DnsRecordsAction,
+                ActionKind.Post,
+                "read",
+                response: MailDomains.DnsRecordsResponse,
+                handler: typeof(MailDnsRecordsHandler)
+            )
+            .Action(
+                MailDomains.VerifyAction,
+                ActionKind.Post,
+                MailDomains.VerifyPermission,
+                response: MailDomains.VerifyResponse,
+                handler: typeof(MailVerifyHandler)
+            )
             .Display(
                 "Mail domain",
                 "Mail domains",
@@ -122,6 +130,28 @@ public sealed class MailProvider : IResourceProvider {
                 + "must publish before the platform will send for it."
             )
             .Chart(MailDomains.ChartName)
+            .SupportsTags()
+            .RequiresCluster()
+            // ── The second type — docs/plan/17 § Resource model's `mailboxes/{local}` ───────────
+            .ResourceType(MailMailboxes.TypePath)
+            .ApiVersion(MailMailboxes.V2026, MailMailboxes.Schema2026)
+            .Reconciler<MailMailboxReconciler>()
+            // ⚠ `Resources` ALONE. A mailbox is four keys of a Secret and a directory in the domain's
+            // mail store, which the domain's StorageGb already reserved — its quota is a ceiling
+            // Dovecot enforces inside that volume, the argument StorageDrawn makes for mailboxQuota.
+            // Charging it again here would bill the same bytes twice.
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            // ⚠ `mailbox`, which is the word a tenant reaches for, and it collides with nothing
+            // under `cyc mail` — the group is `mail` and the domain's short name is `domain`.
+            .Display(
+                "Mailbox",
+                "Mailboxes",
+                "mailbox",
+                "One address of a mail domain: a password from your vault, a quota, aliases and "
+                + "forwarding. Delivered to over LMTP and read over IMAP."
+            )
+            .Chart(MailMailboxes.ChartName)
             .SupportsTags()
             .RequiresCluster();
     }

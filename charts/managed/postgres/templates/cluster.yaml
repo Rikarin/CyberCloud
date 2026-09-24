@@ -91,6 +91,19 @@ spec:
     {{- end }}
 
   bootstrap:
+    {{- if .Values.restore.recoveryPoint }}
+    {{/*
+      ⚠ A restore bootstraps from a CloudNativePG Backup beside it. The operator reads the destination,
+      the endpoint and the credential Secret off that Backup's status — the source server's — so this
+      server's own backup section below points at its own, empty, bucket. PostgresServers.ClusterJson
+      renders the same block.
+    */}}
+    recovery:
+      backup:
+        name: {{ .Values.restore.recoveryPoint | quote }}
+      database: {{ .Values.bootstrap.database | quote }}
+      owner: {{ .Values.bootstrap.owner | quote }}
+    {{- else }}
     initdb:
       database: {{ .Values.bootstrap.database | quote }}
       owner: {{ .Values.bootstrap.owner | quote }}
@@ -116,6 +129,7 @@ spec:
         - CREATE EXTENSION IF NOT EXISTS {{ get $row "extension" }};
         {{- end }}
       {{- end }}
+    {{- end }}
 
   storage:
     size: {{ .Values.storage.size | quote }}
@@ -131,11 +145,27 @@ spec:
     {{- end }}
   {{- end }}
 
-  {{- if .Values.backup.enabled }}
+  {{- if and .Values.backup.enabled .Values.platform.backupBucket }}
+  {{/*
+    ⚠ The platform's store, in the server's own bucket, with the key the reconciler minted into the
+    vault and rendered into {name}-backup-s3 — #30. `backup.destinationPath` is not rendered: a
+    destination of the tenant's own is refused before anything is applied, because nothing in this
+    api-version could carry its credentials and CloudNativePG's webhook refuses a store with none.
+    The in-tree barmanObjectStore, which the pinned 1.30.0 still serves; see conformance.yaml § owed,
+    `the-in-tree-archiver-goes-in-1-31`.
+  */}}
   backup:
     retentionPolicy: {{ printf "%dd" (int .Values.backup.retentionDays) | quote }}
     barmanObjectStore:
-      destinationPath: {{ .Values.backup.destinationPath | quote }}
+      destinationPath: {{ printf "s3://%s/" .Values.platform.backupBucket | quote }}
+      endpointURL: {{ .Values.platform.backupEndpoint | quote }}
+      s3Credentials:
+        accessKeyId:
+          name: {{ include "postgres.name" . }}-backup-s3
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: {{ include "postgres.name" . }}-backup-s3
+          key: ACCESS_SECRET_KEY
       wal:
         compression: gzip
   {{- end }}

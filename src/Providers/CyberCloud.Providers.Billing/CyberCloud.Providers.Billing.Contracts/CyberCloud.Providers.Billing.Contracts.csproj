@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". CyberCloud.Billing/budgets' schema and the pure function that turns a desired
+      body into the BudgetSpec CyberCloud.Billing's budget grain holds.
+
+      ⚠ THE SECOND FAMILY WHOSE TYPES ARE A MODULE'S GRAINS, AND IT TAKES THE COMMUNICATION FAMILY'S
+      SHAPE FOR THE COMMUNICATION FAMILY'S REASON. A budget is evaluated on a reminder against rated
+      usage, which is CyberCloud.Billing's — the rating path, the ledger read, the ReBAC check and the
+      send — and that module is reached by the gateway (the cost query) as well as by this family, so
+      the grain lives there and this family converges onto it through IBudgetControlPlane. The fifth
+      line in module-layering.txt is to CyberCloud.Billing, and it is to the .Contracts only.
+
+      ⚠ NO CyberCloud.Communication.Contracts, WHICH A BUDGET'S NOTIFICATION WANTS. The Monitor family
+      took that line for its action group. This one does not need it: the sending service is named by
+      its path and the channel by its spelling (BudgetNotification's remarks), and CyberCloud.Billing
+      — which already holds the edge — derives the grain id and the ChannelKind where it sends.
+
+      ⚠ NO CyberCloud.Kubernetes.Contracts. Clusterless, like the Communication family.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Billing.Contracts/CyberCloud.Billing.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

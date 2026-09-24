@@ -915,6 +915,35 @@ owed:
       the type is a child — its harness has to create the workspace ancestor against a real API
       server before it can kill a silo under the rule — so the clusterless silo-kill harness now has
       a second shape to cover, and two creditors.
+      ⚠ A THIRD CREDITOR (2026-09-23): CyberCloud.KeyVault/vaults is clusterless, converges onto
+      KeyVaultGrain through its own IConvergedModule, and its mid-create criterion is sharper than the
+      other two's — the create mints the vault's root into OpenBao before it opens the grain, so a silo
+      killed between the two has to leave a vault that the next pass finishes with the SAME root
+      (mint-once makes that the expected outcome; nothing has run it). Its
+      KeyVaultClusterBackedConformance is the generic skip, like the feeds type's.
+      ⚠ A FOURTH CREDITOR (2026-09-23, #38): CyberCloud.Billing/budgets, a clusterless top-level type
+      converging onto CyberCloud.Billing's durable budget grain through GrainBudgetControlPlane in
+      production — BudgetModule is the conformance suite's IConvergedModule over the same plane, the
+      shape the sending module's four have. What IS measured for it that the first two have not had:
+      BillingAcrossTheHostsTests in CyberCloud.Hosts.Tests writes a budget, a finalized invoice and a
+      number sequence through the real silo host's PostgreSQL durable tier, stops and disposes both
+      the silo and the gateway host, starts new ones over the same storage and reads each of them
+      back — the storage half of the criterion, with an orderly restart rather than the kill.
+  - id: communication-customer-managed-keys
+    says: >
+      CyberCloud.Communication/services and its children. OWED, AND RECORDED HERE BECAUSE THE FAMILY
+      HAS NO CHART to carry the `customer-managed-keys` row every chart-backed stateful family has. Its
+      state is grain state: templates (MessageTemplateGrain), suppression lists — recipient addresses
+      and phone numbers (SuppressionListGrain) — sender identities and the service's channels are in
+      the Durable tier, PostgreSQL. Message records and send limits are Hot and expire. So THE ENGINE
+      STEP is not a chart value: it is sealing a tenant's durable grain rows under a data key the
+      tenant's vault key wraps, in the grain-storage provider or in each grain as KeyVaultGrain seals
+      its own versions, and neither is designed. The rest is docs/plan/18 § What customer-managed keys
+      still need — the key-use seam (which covers a reconciler, and these grains are not one), a new
+      api-version with encryption.keyUri, revocation. ⚠ The same shape holds for the other clusterless
+      durable family, CyberCloud.Monitor/workspaces/alertRules (AlertEvaluatorGrain), and is recorded
+      once, here. CyberCloud.KeyVault/vaults needs none: it is where the key lives, and its durable
+      rows are already ciphertext under a per-vault root.
   - id: communication-senders-have-no-resource-surface
     says: >
       docs/plan/17 § The channel abstraction makes sender-id registration, US 10DLC campaign approval

@@ -220,11 +220,13 @@ public sealed class DeletePathTests(ResourceManagerCluster cluster) {
 
         trace.StoppedAt.ShouldBe(WriteStep.Accepted);
 
-        // ⚠ The delete path skips 2, 5 and 6 — there is no body, policy is not evaluated for a delete
-        // in this build, and quota is RETURNED rather than reserved and only once teardown converges.
-        // So the trace is increasing but is NOT a canonical prefix, and saying so is more honest than
-        // recording steps that did not run.
+        // ⚠ The delete path skips 2 and 6 — there is no body, and quota is RETURNED rather than
+        // reserved and only once teardown converges. So the trace is increasing but is NOT a canonical
+        // prefix, and saying so is more honest than recording steps that did not run. Step 5 it does
+        // enter since #46: a deny rule that names the operation refuses a delete —
+        // PolicyEnforcementTests.EveryWriteKindEntersStepFiveAndADenyStopsEachOne.
         trace.Reached.ShouldNotContain(WriteStep.ValidateBody);
+        trace.Reached.ShouldContain(WriteStep.Policy);
         trace.Reached.ShouldNotContain(WriteStep.Quota);
 
         for (var i = 1; i < trace.Reached.Length; i++) {

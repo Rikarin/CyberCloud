@@ -21,6 +21,16 @@ Two things Azure does that we copy exactly, because they are load-bearing and no
   subscriptions — production, staging, per-team — is the shape every real customer wants within a
   month, and retrofitting it later means renumbering every resource id.
 
+⚠ **The first bullet is the design and not yet the behaviour, and #39 changed what stands between them.**
+A resource group's delete refuses while the group holds anything (`IScopeManager.DeleteAsync`, with the
+argument on it). What a cascade needs — one parent operation with a child operation per resource,
+ordered by the dependency graph, whose failure and cancellation reach the parent — was built on
+2026-09-23 for deployments, the other user [08 § Long-running operations](08-resource-manager.md)
+named, and the cascade is owed there as its second. A deployment is also the first thing that writes
+into more than one group at once: `CyberCloud.Resources/deployments` lives in one group and its template
+may place a resource in another group of the same subscription, which is written as the deployment's
+creator and checked at *that* group — never inherited from the one the deployment lives in.
+
 **The management group landed with #39, as a scope path and not as a typed resource.** It is
 `/tenants/{t}/managementGroups/{name}` — four segments like a subscription, told apart by the literal,
 the name a DNS-1123 label unique within the tenant — with a flat collection at
@@ -75,8 +85,10 @@ are ([24 § What the type list cannot say](24-roadmap.md), the tenancy case) and
 a different parent for an existing group is a `409`, because a safe move re-checks the depth of every
 node beneath it against the cap and refuses a cycle, with nothing holding the tree still between the
 calls; that is the seal-then-move choreography a resource group's delete uses, and it is M3. *A lock at
-a group* — see [§ Tags, locks](#tags-locks-and-the-small-stuff-that-is-not-small) below. *Policy* — the
-"for policy" half of the tree's purpose has no policy engine to attach to yet. And one thing that is a
+a group* — see [§ Tags, locks](#tags-locks-and-the-small-stuff-that-is-not-small) below. *Policy* — ~~the
+"for policy" half of the tree's purpose has no policy engine to attach to yet~~ paid by #46: an
+assignment at a group reaches every subscription and resource group beneath it, and an exclusion of a
+child group is decided by the tree rather than by the path's spelling ([08 § Policy](08-resource-manager.md)). And one thing that is a
 consequence rather than a debt: **a tenant that has any group loses the one-walk subscription listing**
 and falls back to a check per member, because a subscription in a group sits two or more hops below the
 tenant where the depth-1 walk cannot see it and a deeper walk would read every resource under every
@@ -199,11 +211,16 @@ tenant-qualified key. `GrainKeys` is the only type allowed to build the within-t
 | `IClientIndexGrain` | `idx/client/{sha256(tenantId + clientId)[..16]}` — [11 § Protocol](11-identity.md) |
 | `IResourceWatchGrain` | `idx/watch/{sha256(subscriptionId + canonicalType)[..16]}` — [08 § What the resource manager deliberately does not do](08-resource-manager.md) |
 | `ISignUpGrain` | `signup/{signupId:N}` — **hot tier, qualified by the platform tenant**, [11 § Sign-up and tenant creation](11-identity.md) |
+| `IDeviceAuthorizationGrain` | `device/{sha256(userCode)[..16]}` — **hot tier, qualified by the platform tenant**, one RFC 8628 device authorization, [11 § Protocol](11-identity.md), #43 |
+| `IInvitationGrain` | `invite/{invitationId:N}` — one invitation of an address into the tenant, [11 § Sign-up and tenant creation](11-identity.md), #43 |
+| `IDirectoryIndexGrain` | `idx/dir/{users\|invitations\|applications}` — the ids of one kind of directory object, the only `idx/` row keyed by a name from a closed set rather than a digest, [11 § The object model](11-identity.md), #41 |
 | `IOperationGrain` | `op/{operationId:N}` |
+| `IPolicyCatalogGrain` | `policy/{tenantId:N}` — the tenant's policy definitions, assignments and verdicts, one activation per tenant on the write path's step 5; [08 § Policy](08-resource-manager.md), #46 |
 | `IQuotaGrain` | `sub/{subscriptionId:N}` — same key string as the subscription, different grain **type** |
 | `ITenantDirectoryGrain` | *(null tenant)* `platform/tenant-directory` |
 | `IShardMapGrain` | *(null tenant)* `platform/shard-map` |
 | `IClusterConnectionGrain` | *(null tenant)* `cluster/{clusterId:N}` — see below |
+| `IMonitorAccountGrain` | *(null tenant)* `metrics-account/{accountId}` — which workspace holds a folded VictoriaMetrics `accountID`, across every tenant; [16 § Querying a workspace](16-observability.md), #41 |
 
 ⚠ This table is the closed set that `GrainKeys` implements, so a grain missing from it is a grain
 that cannot be addressed. The first, tenth, eleventh and twelfth rows were absent from an earlier
@@ -278,6 +295,14 @@ owning tenant as *state* and checks it on every call, and `PlatformCrossTenantAu
 allows the platform → connection edge and logs it. This is the single place tenancy is enforced by
 code rather than by key, and it is called out here so nobody has to discover it.
 
+⚠ **`IMonitorAccountGrain` is the second null-tenant grain keyed per entity, and it owns nothing a
+tenant wrote.** A monitor workspace's VictoriaMetrics `accountID` is its GUID folded to 32 bits
+([16 § Querying a workspace](16-observability.md)), so two workspaces in two tenants can share one, and
+the check that stops it has to see every tenant at once — tenant-qualified, the same account would be
+one grain per tenant, each answering "free". The grain records which workspace GUID claimed the account
+first and answers one question, *does this workspace hold it*, so it never hands one tenant another's
+GUID. A claim is never released: the series under an account outlive the workspace that wrote them.
+
 ## Two-phase create
 
 Creating a resource must be atomic across two grains — the resource and its name index — without a
@@ -330,6 +355,12 @@ is a billing-dispute prevention measure as much as a correctness one.
 | `Disabled` | Explicit shutdown | Data plane scaled to zero. State retained |
 | `PendingDeletion` | 30-day tombstone | Nothing runs, nothing is billed, everything is restorable |
 | `Purged` | Gone | Grain state deleted, shards reclaimed, directory entry tombstoned forever (never reuse an id) |
+
+⚠ **"Control-plane writes rejected" has two doors, and for a while it had one.** A request is refused at
+the gateway's `ResolveTenantStage`. A deployment's children are written from a reminder and never pass
+it, so `IResourceManager.WriteChildAsync` reads the directory entry again before each child and refuses
+anything but `Active` or `Warned` — until the review of #39, a template running when its tenant was
+suspended went on creating resources ([08 § Long-running operations](08-resource-manager.md)).
 
 Tenant creation is itself a long-running operation with a progress model, because it is: allocate
 shards, create the identity realm, create the default subscription, create the default resource group,

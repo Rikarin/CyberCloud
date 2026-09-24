@@ -102,6 +102,56 @@ public readonly record struct ActionRegistration(
     ///     </para>
     /// </remarks>
     public Type? HandlerType { get; init; }
+
+    /// <summary>
+    ///     The entry point beside the resource manager that serves this action, or empty when an
+    ///     <see cref="IResourceActionHandler" /> (or the operation grain) does.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>For an action that has to run as the caller, which a handler cannot.</b>
+    ///         <c>ActionContext</c> carries no <see cref="CallerContext" /> on purpose — a provider
+    ///         acts as the platform against a cluster and never as a tenant against this API — so an
+    ///         action whose whole job is to read other resources the way the caller would see them
+    ///         has no handler to be. <c>CyberCloud.Resources/deployments</c>' <c>whatIf</c> is the
+    ///         first: it reads every resource a template names through
+    ///         <see cref="IResourceManager.ReadAsync" /> with the caller's own subject, and the
+    ///         gateway routes it to <see cref="IDeploymentManager" /> rather than to
+    ///         <see cref="IResourceManager.ActionAsync" />.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Carried on the declaration so the Action handlers gate can tell it from a gap.</b>
+    ///         Without it the gate reads a synchronous action with no handler as one that answers
+    ///         <c>500</c>, which is true of the dispatcher and false of the route. <c>ActionDispatcher</c>
+    ///         still refuses it by name if anything ever sends it there.
+    ///     </para>
+    /// </remarks>
+    public string EntryPoint { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     Whether the manager checks this action's permission <c>FullyConsistent</c>, so a revoked
+    ///     role is refused on the very next call.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         docs/plan/07 § Consistency puts "Deletion, key export, billing changes, anything where a
+    ///         stale allow is a real incident" in the <c>FullyConsistent</c> row. A
+    ///         <see cref="Secret" /> action is checked that way already, as a key export. This flag is
+    ///         for the rest of that row: an action that destroys, or that uses a key, and returns
+    ///         nothing secret.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Everything else is checked <c>MinimizeLatency</c>, and <c>CheckGrain</c>'s cache has
+    ///         no TTL.</b> A revoke writes no fence into it, so an allow cached before the revoke is
+    ///         served until some <c>FullyConsistent</c> walk on that object replaces it. For a key
+    ///         vault's purge or sign, that's a revoked officer purging or signing indefinitely.
+    ///     </para>
+    ///     <para>
+    ///         Separate from <see cref="Secret" /> because that flag also tells every generated
+    ///         surface that the response carries secret material, which a purge's doesn't.
+    ///     </para>
+    /// </remarks>
+    public bool FullyConsistent { get; init; }
 }
 
 /// <summary>
@@ -386,6 +436,24 @@ public sealed record ResourceTypeRegistration {
     ///     </para>
     /// </remarks>
     public string ClusterIdPointer { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     How often a converged resource of this type gets a pass nobody asked for, or
+    ///     <see cref="TimeSpan.Zero" /> for a type that declared none — <c>PassEvery</c>.
+    /// </summary>
+    public TimeSpan PassPeriod { get; init; }
+
+    /// <summary>
+    ///     The properties only an action may set — <c>SetOnlyByAnAction</c>. A caller's own
+    ///     <c>PUT</c> or <c>PATCH</c> may repeat the stored value and may not change it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Read by the write path, not by the emitters.</b> The property stays in the published
+    ///     schema, so a client can read it back and send it again. What the write path refuses is a
+    ///     value the stored resource does not already hold (the schema's default, on a create), unless
+    ///     the write came through <see cref="IResourceCreator" />.
+    /// </remarks>
+    public ImmutableArray<string> ActionOnlyPointers { get; init; } = [];
 
     /// <summary>What this type is called, for the surfaces a human reads.</summary>
     public DisplayMetadata Display { get; init; }

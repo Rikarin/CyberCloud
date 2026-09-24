@@ -633,7 +633,10 @@ public sealed class CheckEvaluatorTests {
                 .. tuples
                     .Where(t => t.Subject.Object == subjectObject)
                     .Select(t => new SubjectIndexEntry {
-                            Object = t.Object, Relation = t.Relation, SubjectRelation = t.Subject.Relation
+                            Object = t.Object,
+                            Relation = t.Relation,
+                            SubjectRelation = t.Subject.Relation,
+                            ExpiresOn = t.ExpiresOn
                         }
                     )
                     .Distinct()

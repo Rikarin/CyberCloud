@@ -68,3 +68,11 @@ resolutionMode: highest
 # installed there at all. The warning half of that arrangement was measured and lost, and
 # `pnpm node:recap` is the answer — see scripts/check-node.mjs's header and README § Node.
 engineStrict: false
+
+# ⚠ One tslib, and echarts is why this block exists. echarts@6.1.0 and zrender@6.1.0 (the cost
+# page's chart, #41) each depend on `tslib: 2.3.0` exactly, which put a second tslib beside the 2.8.1
+# the root pins: two copies of the helpers in the chart chunk, and a second resolution of a package
+# the single-version policy above says is declared once. tslib keeps its helper signatures across
+# 2.x, so both run on 2.8.1 unchanged, and the lockfile carries one tslib.
+overrides:
+  tslib: 2.8.1

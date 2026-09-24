@@ -196,6 +196,25 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
     }
 
     [Fact]
+    public async Task ADotSegmentIsRefusedRatherThanCollapsedIntoAnotherPath() {
+        await Seed();
+
+        // ⚠ THE #34 REVIEW'S PROBE, AT THE LAST PLACE THAT CAN STOP IT. `…/main/../main` is collapsed
+        // by the HTTP client, before OpenBao sees it, back into the seeded secret itself — so a
+        // resolver that let the segments through would come back with its value, and the reader
+        // token would answer for any other path a traversal named just as readily.
+        var resolved = await vault.Resolver(await Reader())
+            .ResolveAsync(
+                new() { Path = Path + "/../" + Path.Split('/')[^1], Field = "adminPassword" },
+                TestContext.Current.CancellationToken
+            );
+
+        resolved.IsFailure.ShouldBeTrue("a path with a '..' segment was resolved");
+        resolved.Error!.Code.ShouldBe(ErrorCode.InternalError);
+        resolved.Error.Message.ShouldContain("malformed handle");
+    }
+
+    [Fact]
     public async Task AnEmptyHandleIsRefusedWithoutAskingTheVault() {
         // ⚠ No seeding and a token that is not a token: if this reached OpenBao it would come back
         // as a permission denial rather than as the handle fault it is. SecretRef.IsEmpty's own
@@ -209,6 +228,34 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
 
         resolved.IsFailure.ShouldBeTrue();
         resolved.Error!.Code.ShouldBe(ErrorCode.InternalError);
+    }
+
+    [Fact]
+    public async Task ADotSegmentHandleIsRefusedBeforeOpenBaoCollapsesItIntoAnotherPath() {
+        // ⚠ The root token stands in for the platform's broad one, and the path starts with tenant
+        // 9f2b's prefix, which is all a tenant-prefix check looks at. Uri.EscapeDataString leaves
+        // '..' alone and System.Uri collapses it, so without the refusal this read platform/…
+        // and handed back the value below.
+        const string Platform = "platform/CyberCloud.KeyVault/vaults/9f2b/root-under-test";
+        await vault.WriteSecretAsync(Platform, new Dictionary<string, string> { ["root"] = "the-platforms-own" });
+
+        var resolver = vault.Resolver(OpenBaoFixture.RootToken);
+
+        // The control: the platform's own path, spelled directly, reads with this token.
+        (await resolver.ResolveAsync(new() { Path = Platform, Field = "root" }, TestContext.Current.CancellationToken))
+            .GetValueOrThrow()
+            .ShouldBe("the-platforms-own");
+
+        foreach (var path in new[] { "tenants/9f2b/../../" + Platform, "tenants/9f2b/./../../" + Platform, "tenants/9f2b//x" }) {
+            var resolved = await resolver.ResolveAsync(
+                new() { Path = path, Field = "root" },
+                TestContext.Current.CancellationToken
+            );
+
+            resolved.IsFailure.ShouldBeTrue($"'{path}' resolved to '{(resolved.IsSuccess ? resolved.GetValueOrThrow() : "")}'");
+            resolved.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+            resolved.Error.Message.ShouldNotContain("the-platforms-own");
+        }
     }
 
     [Fact]

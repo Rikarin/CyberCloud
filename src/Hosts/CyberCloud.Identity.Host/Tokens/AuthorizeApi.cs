@@ -75,6 +75,11 @@ public enum ConsentDecision {
 ///         <item>
 ///             The cookie's <c>tid</c> is the tenant the request resolved to — a session in one
 ///             tenant does not authorize a code for another, however the same person got there.
+///             ⚠ The one exception is a member who joined this tenant <i>with</i> the cookie's
+///             account (<see cref="UserProfile.HomeAccount" />): they have no credential here by
+///             design, and a complete, live sign-in of that account opens their session here —
+///             <see cref="HomeAccounts" />' remarks. Any other session in another tenant is still
+///             the sign-in page.
 ///         </item>
 ///         <item>
 ///             <c>prompt=login</c> was not asked for — a client that wants a fresh sign-in gets
@@ -111,6 +116,7 @@ public enum ConsentDecision {
 public sealed class AuthorizeApi(
     IGrainFactory grains,
     IOptions<IdentityHostOptions> options,
+    HomeAccounts homes,
     ILogger<AuthorizeApi> logger
 ) {
     /// <summary>
@@ -146,6 +152,10 @@ public sealed class AuthorizeApi(
     ///     What the consent page posted back, or <see langword="null" /> when this request carries
     ///     no answer — every <c>GET</c>, and a <c>POST</c> from anywhere but the page's origin.
     /// </param>
+    /// <param name="signIn">
+    ///     The request, for the device record of a session this opens — only a member signing in
+    ///     through their home account gets one. Defaults to the client id and nothing else.
+    /// </param>
     /// <param name="cancellationToken">Cancels the grain call.</param>
     public async Task<AuthorizeDecision> DecideAsync(
         OpenIddictRequest request,
@@ -154,6 +164,7 @@ public sealed class AuthorizeApi(
         ClaimsPrincipal? user,
         string pathAndQuery,
         ConsentDecision? consent = null,
+        SignInContext? signIn = null,
         CancellationToken cancellationToken = default
     ) {
         ArgumentNullException.ThrowIfNull(request);
@@ -163,14 +174,27 @@ public sealed class AuthorizeApi(
         var promptNone = request.HasPromptValue(OpenIddictConstants.PromptValues.None);
 
         if (!IdentitySessionPrincipal.IsFullyAuthenticated(user)
-            || IdentitySessionPrincipal.TenantId(user) != tenantId
-            || IdentitySessionPrincipal.UserId(user) is not { } userId
+            || IdentitySessionPrincipal.TenantId(user) is not { } cookieTenantId
+            || IdentitySessionPrincipal.UserId(user) is not { } cookieUserId
             || IdentitySessionPrincipal.SessionId(user) is not { } sessionId
             || promptLogin) {
             return NotSignedIn(promptNone, pathAndQuery, "no-usable-session");
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (cookieTenantId != tenantId) {
+            return await ThroughHomeAccountAsync(
+                request,
+                tenantId,
+                client,
+                user!,
+                pathAndQuery,
+                consent,
+                signIn ?? new() { ClientId = client.ClientId },
+                cancellationToken
+            );
+        }
 
         var tenant = grains.ForTenant(TenantHint.Qualifier(tenantId));
 
@@ -180,11 +204,80 @@ public sealed class AuthorizeApi(
             return NotSignedIn(promptNone, pathAndQuery, "session-not-live");
         }
 
-        var profile = await tenant.GetGrain<IUserGrain>(GrainKeys.User(userId)).GetAsync();
+        var profile = await tenant.GetGrain<IUserGrain>(GrainKeys.User(cookieUserId)).GetAsync();
 
         if (profile.TryGetError(out _)) {
             return NotSignedIn(promptNone, pathAndQuery, "user-not-found");
         }
+
+        return await IssueAsync(
+            request,
+            tenantId,
+            client,
+            WithCookieMethods(session.GetValueOrThrow(), user!),
+            profile.GetValueOrThrow(),
+            pathAndQuery,
+            consent
+        );
+    }
+
+    /// <summary>
+    ///     The decision for a cookie signed into another tenant: the member who joined this one with
+    ///     that account, signed in from it, or the sign-in page.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The member is found and consent is settled before any session opens, so a request that
+    ///     ends on the consent page, or refused, leaves no session behind. The session is opened only
+    ///     when a code is about to be minted from it.
+    /// </remarks>
+    async Task<AuthorizeDecision> ThroughHomeAccountAsync(
+        OpenIddictRequest request,
+        Guid tenantId,
+        ApplicationRegistration client,
+        ClaimsPrincipal user,
+        string pathAndQuery,
+        ConsentDecision? consent,
+        SignInContext signIn,
+        CancellationToken cancellationToken
+    ) {
+        if (await homes.SignedInAsync(user) is not { } home
+            || await homes.MemberAsync(home, tenantId, cancellationToken) is not { } member) {
+            return NotSignedIn(
+                request.HasPromptValue(OpenIddictConstants.PromptValues.None),
+                pathAndQuery,
+                "no-usable-session"
+            );
+        }
+
+        return await IssueAsync(
+            request,
+            tenantId,
+            client,
+            null,
+            member,
+            pathAndQuery,
+            consent,
+            () => homes.OpenAsync(home, member, signIn with { ClientId = client.ClientId })
+        );
+    }
+
+    /// <summary>Consent, then the code — the half of the decision both kinds of session share.</summary>
+    /// <remarks>
+    ///     Either <c>session</c> is the cookie's, or it is <see langword="null" /> and <c>open</c>
+    ///     makes the member's once nothing stands between the request and a code.
+    /// </remarks>
+    async Task<AuthorizeDecision> IssueAsync(
+        OpenIddictRequest request,
+        Guid tenantId,
+        ApplicationRegistration client,
+        SessionDescriptor? session,
+        UserProfile profile,
+        string pathAndQuery,
+        ConsentDecision? consent,
+        Func<Task<SessionDescriptor?>>? open = null
+    ) {
+        var promptNone = request.HasPromptValue(OpenIddictConstants.PromptValues.None);
+        var userId = profile.UserId;
 
         // The request's scopes, cut to what the client may have. The validator already refused a
         // scope outside the client's, so this is the same set — cut again so the code cannot carry
@@ -212,16 +305,17 @@ public sealed class AuthorizeApi(
             }
         }
 
-        GrantLog.AuthorizationCodeIssued(logger, tenantId, userId, sessionId);
+        if (session is null) {
+            session = open is null ? null : await open();
 
-        return new AuthorizeDecision.IssueCode(
-            TokenApi.BuildCodePrincipal(
-                WithCookieMethods(session.GetValueOrThrow(), user!),
-                profile.GetValueOrThrow(),
-                client,
-                scopes
-            )
-        );
+            if (session is null) {
+                return NotSignedIn(promptNone, pathAndQuery, "member-session-not-opened");
+            }
+        }
+
+        GrantLog.AuthorizationCodeIssued(logger, tenantId, userId, session.SessionId);
+
+        return new AuthorizeDecision.IssueCode(TokenApi.BuildCodePrincipal(session, profile, client, scopes));
     }
 
     /// <summary>

@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — the .Contracts split. The billing domain's grain interfaces, wire types and
+      seams: the billing account and its invoices and credit notes, the gap-free number sequence, the
+      budget the CyberCloud.Billing/budgets type converges onto, the cost query the gateway calls, and
+      the two seams that leave the platform — the payment service provider and the tax service.
+
+      ⚠ ONE PACKAGE, Microsoft.Orleans.Sdk — the code generator plus Orleans.Serialization, no
+      hosting. The gateway references this assembly to ask for costs and the Billing provider family
+      references it to converge a budget, and neither may thereby acquire a silo.
+      CyberCloud.Billing — the implementation — is where hosting starts.
+
+      ⚠ WHY THIS REFERENCES CyberCloud.Metering.Contracts. An invoice line and a cost row are priced
+      per BillingMeter, and MeterCatalog is the one place a meter's unit is spelled. Billing READS
+      metering; the reverse edge would let a rating bug make usage recording fail, which is the
+      failure docs/plan/22 § Effort's ordering exists to prevent ("usage that was never recorded
+      cannot be recovered").
+
+      ⚠ WHY THIS DOES NOT REFERENCE CyberCloud.ResourceManager.Contracts, although the cost query
+      carries a caller. CallerContext lives there, and taking it would put the resource manager's wire
+      surface behind every billing type — the argument CyberCloud.Communication.Contracts makes for
+      CarrierSecretRef. CostCaller is the two fields the ReBAC check needs, and the gateway copies
+      them across.
+
+      ⚠ AND NOT CyberCloud.Communication.Contracts either. A budget names its sending service and its
+      channel the way the body spells them; ChannelKind is resolved inside CyberCloud.Billing, which is
+      the one assembly that sends. A provider family converging a budget binds this assembly, and a
+      ChannelKind member here would have made that family's fifth module edge the sending module's.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Metering.Contracts/CyberCloud.Metering.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!-- CC1003 ([Alias] on every wire type) and CC1005 (no secret as a serialized member) are live here. -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

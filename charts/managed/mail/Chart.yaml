@@ -11,7 +11,7 @@ description: Managed mail — per-tenant Dovecot, Postfix and Rspamd, with DKIM 
 type: application
 
 # The chart's own version. Bumped on every change to this directory.
-version: 0.1.0
+version: 0.2.0
 
 # The default Dovecot version, matching values.yaml `version`.
 appVersion: "2.4"

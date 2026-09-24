@@ -37,10 +37,21 @@ public sealed class LoginTests {
 
         host.Browsed.ShouldContain(x => x.ToString().Contains("device", StringComparison.Ordinal));
 
+        // ⚠ The token's tenant, not the flag's: a device sign-in sends no tenant, and the person
+        // chose the organisation on the sign-in page. The review of #43 found `contoso` reported here.
+        host.Stderr.ShouldContain("--tenant is not sent with a device sign-in");
+
         using var document = host.StdoutAsJson();
-        document.RootElement.GetProperty("tenant").GetString().ShouldBe("contoso");
+        document.RootElement.GetProperty("tenant").GetString().ShouldBe(TokenTenant);
         document.RootElement.TryGetProperty("accessToken", out _).ShouldBeFalse();
     }
+
+    [Theory]
+    [InlineData("opaque-token")]
+    [InlineData("a.not-base64-json.c")]
+    [InlineData("a.e30.c")]
+    public void ATokenThatNamesNoTenantReportsNone(string token) =>
+        CyberCloud.Cli.Commands.LoginCommand.TenantOf(token).ShouldBeNull();
 
     [Fact]
     public async Task TheAccessTokenNeverReachesEitherStream() {
@@ -68,8 +79,8 @@ public sealed class LoginTests {
 
         await host.RunAsync("login", "--device-code", "--output", "none");
 
-        // ⚠ docs/plan/21 § Decisions: "Never a plaintext file — that is how CI credentials leak into
-        // container images." The refresh token went to the SDK's cache. The two files that may be
+        // ⚠ The refresh token went to the SDK's cache (docs/plan/21 § Decisions, the token-cache row),
+        // never to the CLI's state directory. The two files that may be
         // here are the update-check stamp and `config`, which holds the telemetry answer this run
         // recorded — and no token.
         var files = Directory.GetFiles(host.StateDirectory, "*", SearchOption.AllDirectories);
@@ -155,7 +166,102 @@ public sealed class LoginTests {
         host.Stderr.ShouldContain("invalid_client");
     }
 
-    const string SignedInToken = "signed-in-token-9a3f";
+    [Fact]
+    public async Task TheDeviceFlowAsksForARefreshTokenAndPollsWithoutAScope() {
+        var identity = new ScriptedTransport(static (request, _) => Identity(request));
+
+        using var host = TestHost.Create(credentialOptions: () => new CyberCloudCredentialOptions {
+                Transport = identity, TokenCache = TokenCache.CreateInMemory()
+            }
+        );
+
+        (await host.RunAsync("login", "--device-code", "--output", "none")).ShouldBe((int)ExitCode.Ok);
+
+        var device = identity.Requests.Single(static x => x.Uri.AbsolutePath.EndsWith("devicecode", StringComparison.Ordinal));
+        var poll = identity.Requests.Last(static x => x.Uri.AbsolutePath.EndsWith("token", StringComparison.Ordinal));
+
+        // ⚠ The registered client and the scopes the identity host knows — #43 found the SDK sending
+        // `cyc` and an Azure-shaped `.default` scope, both refused by the real host — and
+        // offline_access, without which nothing is cached and `cyc login` persists nothing.
+        device.Body.ShouldContain("client_id=" + FirstPartyClientId);
+        device.Body.ShouldContain("scope=cyc.api+offline_access");
+
+        // ⚠ RFC 8628 § 3.4's three parameters and no scope: OpenIddict refuses a device-code
+        // token request that carries one.
+        poll.Body.ShouldContain("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code");
+        poll.Body.ShouldNotContain("scope=");
+    }
+
+    [Fact]
+    public async Task LogoutRevokesTheCachedSignInAtTheIdentityHostAndForgetsIt() {
+        var identity = new ScriptedTransport(static (request, _) => Identity(request));
+        var cache = TokenCache.CreateInMemory();
+
+        using var host = TestHost.Create(credentialOptions: () => new CyberCloudCredentialOptions {
+                Transport = identity, TokenCache = cache
+            }
+        );
+
+        (await host.RunAsync("login", "--device-code", "--output", "none")).ShouldBe((int)ExitCode.Ok);
+        (await cache.GetAsync(Key(), TestContext.Current.CancellationToken)).ShouldNotBeNull("login cached nothing");
+
+        (await host.RunAsync("logout")).ShouldBe((int)ExitCode.Ok);
+
+        var revoke = identity.Requests.Single(static x => x.Uri.AbsolutePath.EndsWith("revoke", StringComparison.Ordinal));
+
+        revoke.Method.ShouldBe(HttpMethod.Post);
+        revoke.Body.ShouldContain("token=" + RefreshToken);
+        revoke.Body.ShouldContain("client_id=" + FirstPartyClientId);
+        host.Stderr.ShouldContain("revoked at the identity host");
+        host.Stderr.ShouldNotContain(RefreshToken);
+
+        (await cache.GetAsync(Key(), TestContext.Current.CancellationToken)).ShouldBeNull("logout left the sign-in cached");
+    }
+
+    [Fact]
+    public async Task LogoutForgetsTheSignInEvenWhenTheIdentityHostCannotBeReached() {
+        var reachable = true;
+        var identity = new ScriptedTransport((request, _) => reachable
+            ? Identity(request)
+            : throw new HttpRequestException("connection refused")
+        );
+        var cache = TokenCache.CreateInMemory();
+
+        using var host = TestHost.Create(credentialOptions: () => new CyberCloudCredentialOptions {
+                Transport = identity, TokenCache = cache
+            }
+        );
+
+        (await host.RunAsync("login", "--device-code", "--output", "none")).ShouldBe((int)ExitCode.Ok);
+
+        reachable = false;
+
+        // ⚠ Exit 0 and the entry gone: a logout on a machine that lost its network still signs it
+        // out here, and says the server-side half is owed rather than pretending it happened.
+        (await host.RunAsync("logout")).ShouldBe((int)ExitCode.Ok);
+        host.Stderr.ShouldContain("could not be revoked");
+        (await cache.GetAsync(Key(), TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
+
+    /// <summary>The client id the SDK signs in as — the identity host's <c>cyc-cli</c>.</summary>
+    const string FirstPartyClientId = "cyc-cli";
+
+    static string Key() => TokenCache.KeyFor(new Uri("https://login.cybercloud.io/"), CyberCloudCliCredential.CliClientId, null);
+
+    /// <summary>The tenant the scripted identity server's token is for — not the one any test names.</summary>
+    const string TokenTenant = "7e2a0c51d9b84f36a1e0c4d2b6f89a13";
+
+    /// <summary>
+    ///     A JWT-shaped access token naming <see cref="TokenTenant" />, with a marker for a signature
+    ///     so the leak checks can find it in any stream.
+    /// </summary>
+    static readonly string SignedInToken =
+        "eyJhbGciOiJub25lIn0."
+        + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("{\"tid\":\"" + TokenTenant + "\"}"))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_')
+        + ".signed-in-token-9a3f";
 
     const string RefreshToken = "refresh-token-4b2e";
 
@@ -175,6 +281,7 @@ public sealed class LoginTests {
                   "authorization_endpoint": "https://login.cybercloud.io/authorize",
                   "token_endpoint": "https://login.cybercloud.io/token",
                   "device_authorization_endpoint": "https://login.cybercloud.io/devicecode",
+                  "revocation_endpoint": "https://login.cybercloud.io/revoke",
                   "jwks_uri": "https://login.cybercloud.io/jwks"
                 }
                 """
@@ -195,6 +302,10 @@ public sealed class LoginTests {
                 }
                 """
             );
+        }
+
+        if (path.EndsWith("revoke", StringComparison.Ordinal)) {
+            return Responses.Json(HttpStatusCode.OK, "{}");
         }
 
         return Responses.Json(

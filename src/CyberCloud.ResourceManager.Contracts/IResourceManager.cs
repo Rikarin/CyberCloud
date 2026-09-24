@@ -48,6 +48,140 @@ public interface IResourceManager {
     /// </returns>
     Task<Result<WriteAccepted>> WriteAsync(WriteRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     The write path entered by a parent operation on behalf of the caller it recorded — all
+    ///     twelve steps, with that caller's subject in step 3, and the new operation made a child of
+    ///     the parent. <c>PUT</c> only.
+    /// </summary>
+    /// <param name="parentOperationId">
+    ///     The parent operation. Recorded as <see cref="OperationSpec.ParentOperationId" /> on the
+    ///     child, which is what lets the child tell the parent when it ends.
+    /// </param>
+    /// <param name="request">
+    ///     The child's write. <see cref="WriteRequest.Caller" /> is the parent's
+    ///     <see cref="OperationSpec.Caller" />, unchanged — the one identity the gateway authenticated
+    ///     when the parent was accepted.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the request. ⚠ Not the operation it starts.</param>
+    /// <returns>
+    ///     <see cref="WriteAccepted" />, or the first step's refusal exactly as
+    ///     <see cref="WriteAsync" /> would give it to that caller — so a child the caller may not
+    ///     write is <see cref="ErrorCode.ResourceNotFound" /> or <see cref="ErrorCode.AuthorizationFailed" />,
+    ///     never a success. Refused outright for an empty parent, an empty subject, a verb other
+    ///     than <see cref="WriteVerb.Put" />, and a child that is itself a deployment; and, before
+    ///     step 1, with <see cref="ErrorCode.TenantSuspended" /> for a tenant that no longer takes
+    ///     control-plane writes and <see cref="ErrorCode.AuthorizationFailed" /> for an impersonated
+    ///     caller or a principal that may no longer act.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE ARGUMENT FOR WRITING AS A RECORDED CALLER, WRITTEN DOWN.</b> A deployment's
+    ///         children are written long after the request that asked for them has returned, by a
+    ///         grain, from a reminder. Nothing on that path carries a token. What it carries is the
+    ///         <see cref="CallerContext" /> the gateway built from one when the deployment's own
+    ///         <c>PUT</c> passed step 3 at the resource group — persisted in the parent's
+    ///         <see cref="OperationSpec.Caller" /> and never re-derived. Replaying that identity is
+    ///         safe for four reasons, and each is a property of this method rather than of its
+    ///         caller's care:
+    ///     </para>
+    ///     <list type="number">
+    ///         <item>
+    ///             <b>What the gateway would have refused before step 3 is asked again, now.</b> A
+    ///             direct request meets the gateway's stages before it reaches this service, and a
+    ///             child meets none of them, so this argument used to cover ReBAC alone. Three gates
+    ///             sat in those stages and nowhere else, and a child now meets each before step 1:
+    ///             <list type="bullet">
+    ///                 <item>
+    ///                     The tenant's status, read from <c>ITenantDirectoryGrain</c> — the record
+    ///                     <c>ResolveTenantStage</c> reads a mirror of — and refused with
+    ///                     <see cref="ErrorCode.TenantSuspended" /> unless <c>Active</c> or
+    ///                     <c>Warned</c> (docs/plan/06 § Tenant lifecycle).
+    ///                 </item>
+    ///                 <item>
+    ///                     The principal's own status, through <c>IPrincipalStanding</c>: a user must be
+    ///                     active, a service principal enabled, and a managed identity bound. A
+    ///                     suspension revokes the user's sessions, so they can't renew a token for the
+    ///                     gateway, but leaves their role tuples, so step 3 alone still allowed them.
+    ///                 </item>
+    ///                 <item>
+    ///                     Impersonation, refused outright. The sixty-minute box
+    ///                     (docs/plan/06 § Platform administration) is the operator's grant, which no
+    ///                     spec records, so a child can't tell a live one from one that has run out.
+    ///                 </item>
+    ///             </list>
+    ///             <para>
+    ///                 ⚠ <b>Before the review of #39 none of these was asked.</b> A tenant suspended
+    ///                 by billing, or a compromised account an administrator suspended, mid-way
+    ///                 through a hundred-resource template had every remaining child created as
+    ///                 them. <c>DeploymentTests.ATenantSuspendedBetweenTwoChildrenStopsTheDeploymentAtTheSecond</c>
+    ///                 and
+    ///                 <c>DeploymentAuthorizationTests.ACreatorSuspendedBetweenTwoChildrenIsRefusedAtTheSecond</c>
+    ///                 hold the line.
+    ///             </para>
+    ///             <para>
+    ///                 ⚠ <b>The rate limiter is the one stage that isn't repeated, deliberately.</b> It
+    ///                 charged the deployment's own <c>PUT</c>, and a child can't multiply that
+    ///                 charge without bound: <c>DeploymentLimits.MaxResources</c> caps a template at a
+    ///                 hundred children, they're written one at a time, and each waits for its
+    ///                 predecessor's operation to end. Quota, the budget that matters for what a
+    ///                 child creates, is step 6 of every child. The counters are
+    ///                 <c>CyberCloud.ServiceDefaults</c>' and this module has no edge to it;
+    ///                 docs/plan/08 § Long-running operations records charging children as owed.
+    ///             </para>
+    ///         </item>
+    ///         <item>
+    ///             <b>Every child is checked at its own scope, now, against the durable rows.</b> This is
+    ///             <see cref="WriteAsync" />'s body: step 3 runs the caller's subject against the child's
+    ///             address — its group, or the child itself on an update — at the moment the child is
+    ///             written, and for a child it runs <c>FullyConsistent</c>. A deployment therefore grants
+    ///             nothing its creator does not hold at each child, and a right revoked between two
+    ///             children is honoured at the second.
+    ///             <para>
+    ///                 ⚠ <b>"Now" was not true at <c>MinimizeLatency</c>, which every other write uses.</b>
+    ///                 <c>CheckGrain</c> answers that mode from any cached entry with no TTL, and the
+    ///                 deployment's own <c>PUT</c> has just cached an allow for its creator at the group —
+    ///                 so a revoked creator went on writing children as themselves, from a reminder, until
+    ///                 the template ran out (the review of #39 saw exactly that, and
+    ///                 <c>DeploymentAuthorizationTests.ARightRevokedBetweenTwoChildrenIsHonouredAtTheSecond</c>
+    ///                 now holds the line). The same bypass lets a grant made after a refused child reach
+    ///                 the rerun, where a cached deny used to answer instead.
+    ///             </para>
+    ///         </item>
+    ///         <item>
+    ///             <b>There is no platform identity to fall back to.</b> The platform has no system
+    ///             principal (see <see cref="ExpiredPurgeRequest" />), so the only subject a write
+    ///             can carry is a tenant's; an empty subject is refused here rather than handed to
+    ///             step 3 to deny, so a spec that lost its caller fails loudly instead of looking like
+    ///             a permissions problem.
+    ///         </item>
+    ///         <item>
+    ///             <b>The gateway cannot reach it.</b> A request's caller is always the token's; this
+    ///             method is the one way to name a caller that is not the current request's, and it is
+    ///             not in the gateway's dispatch (<c>GatewayIsolationTests</c> reads the source for
+    ///             it). Its one production caller is <c>DeploymentDriver</c>, passing its own spec's
+    ///             caller.
+    ///         </item>
+    ///     </list>
+    ///     <para>
+    ///         ⚠ <b>Impersonation doesn't travel with it any more.</b> This paragraph used to say
+    ///         <see cref="CallerContext.ImpersonatedBy" /> reached every child and its audit line, which
+    ///         was true and was the problem: a deployment made the operator's time-boxed session last
+    ///         as long as the template did. A deployment created under impersonation is accepted, and
+    ///         its first child is refused naming the operator, which fails it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It does not ask the parent whether it exists.</b> The parent is the grain calling
+    ///         this, inside its own turn, and a call back into a non-reentrant grain from within its
+    ///         turn is a deadlock rather than a check. The parent id is recorded, and a child whose
+    ///         parent is gone ends normally and tells nobody.
+    ///     </para>
+    /// </remarks>
+    Task<Result<WriteAccepted>> WriteChildAsync(
+        Guid parentOperationId,
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    );
+
     /// <summary>Reads a resource, projected to the requested api-version.</summary>
     /// <param name="request">
     ///     The request. <see cref="WriteRequest.Verb" /> and <see cref="WriteRequest.Body" /> are
@@ -350,53 +484,135 @@ public interface ILockResolver {
     Task<Result<LockLevel>> ResolveAsync(ResourceId id, CancellationToken cancellationToken = default);
 }
 
-/// <summary>What policy evaluation decided about one write. Step 5.</summary>
-/// <param name="Effect">Allow, deny, modify, audit — or <see cref="PolicyEffect.NotSupported" />.</param>
-/// <param name="Error">
-///     Why, for <see cref="PolicyEffect.Deny" />. ⚠ Carries <see cref="ErrorCode.PolicyViolation" />
-///     and a <c>target</c> pointing at the offending field.
-/// </param>
-/// <param name="ModifiedBody">
-///     The rewritten body, for <see cref="PolicyEffect.Modify" />, as JSON text. ⚠ Re-validated
-///     against the schema before step 6 — a policy that produced an invalid body would otherwise reach
-///     the provider unchecked.
-/// </param>
-public readonly record struct PolicyDecision(
-    PolicyEffect Effect,
-    Error? Error = null,
-    string? ModifiedBody = null
-) {
+/// <summary>What policy evaluation decided about one request. Step 5.</summary>
+/// <remarks>
+///     ⚠ <b>Not a wire type.</b> It lives in the process that runs the write path — the gateway — and
+///     is built from the <see cref="PolicyEvaluation" /> the catalog grain returned, which is.
+/// </remarks>
+public sealed record PolicyDecision {
     /// <summary>The decision a platform with no policy engine makes.</summary>
-    public static PolicyDecision NotSupported { get; } = new(PolicyEffect.NotSupported);
+    public static PolicyDecision NotSupported { get; } = new() { Effect = PolicyEffect.NotSupported };
+
+    /// <summary>
+    ///     The strongest thing that happened: <see cref="PolicyEffect.Deny" />, else
+    ///     <see cref="PolicyEffect.Modify" /> when a rewrite was made, else
+    ///     <see cref="PolicyEffect.Audit" /> when an audit recorded a non-compliant verdict, else
+    ///     <see cref="PolicyEffect.Allow" /> — or <see cref="PolicyEffect.NotSupported" /> when no engine
+    ///     ran.
+    /// </summary>
+    public PolicyEffect Effect { get; init; } = PolicyEffect.NotSupported;
+
+    /// <summary>
+    ///     Why, for <see cref="PolicyEffect.Deny" />. ⚠ <see cref="ErrorCode.PolicyViolation" />, naming
+    ///     the assignment and the definition in its message and again in its two details, with the
+    ///     rule's first body pointer as its <c>target</c>.
+    /// </summary>
+    public Error? Error { get; init; }
+
+    /// <summary>
+    ///     The rewrites to make on the body the write sends, in order. ⚠ The write path makes them and
+    ///     then validates the result against the schema again — a policy that produced an invalid body
+    ///     would otherwise reach the provider unchecked.
+    /// </summary>
+    public ImmutableArray<PolicyModificationRecord> Modifications { get; init; } = [];
+
+    /// <summary>What the write's trace records at step 5 — every assignment that applied.</summary>
+    public ImmutableArray<PolicyTraceEntry> Trace { get; init; } = [];
+
+    /// <summary>The audit verdicts, to record once the write is accepted.</summary>
+    public ImmutableArray<PolicyStateRecord> States { get; init; } = [];
+
+    /// <summary>
+    ///     Whether <see cref="IPolicyEvaluator.RecordComplianceAsync" /> has anything to do: verdicts to
+    ///     record, or old ones an empty set must clear.
+    /// </summary>
+    public bool RecordsCompliance { get; init; }
 
     /// <summary>Whether the write may proceed.</summary>
     public bool Permits => Effect != PolicyEffect.Deny;
+}
+
+/// <summary>One request, as step 5 hands it to <see cref="IPolicyEvaluator" />.</summary>
+/// <remarks>
+///     ⚠ <b><see cref="Document" /> is the body as the write would leave the resource</b> — a
+///     <c>PUT</c>'s body, a <c>PATCH</c> merged onto what is stored, the stored body for a
+///     <c>DELETE</c> or an action — with the secret properties of every api-version of the type
+///     removed, since the stored superset holds what every version wrote. A condition over a
+///     password would be an oracle for it: an audit's verdict is readable by anyone with
+///     <c>read</c> on the scope, one bit per rule, and the rule is the owner's to write.
+/// </remarks>
+public sealed record PolicyEvaluationRequest {
+    /// <summary>The resource, with its GUID once it has one.</summary>
+    public ResourceId Id { get; init; }
+
+    /// <summary>One of <c>create</c>, <c>update</c>, <c>delete</c>, <c>action</c> — <c>PolicyOperations</c>.</summary>
+    public string Operation { get; init; } = string.Empty;
+
+    /// <summary>The action's name, for an action.</summary>
+    public string Action { get; init; } = string.Empty;
+
+    /// <summary>The body as the write would leave it, secrets removed, as JSON text — see the remarks.</summary>
+    public string Document { get; init; } = "{}";
+
+    /// <summary>The subscription's management group as step 1 read it, or empty.</summary>
+    public string ManagementGroup { get; init; } = string.Empty;
+
+    /// <summary>Who is asking.</summary>
+    public CallerContext Caller { get; init; } = new();
 }
 
 /// <summary>
 ///     Step 5 of docs/plan/08 § The write path, end to end — deny, modify, audit.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>The seam exists and the engine does not.</b> Policy is M3. The step is in the write path,
-///     in the right place, from the start, and the registered default returns
-///     <see cref="PolicyEffect.NotSupported" /> — which the write path treats as "carry on" and
-///     records in the trace. That way the day a real evaluator lands, nothing about the ordering has
-///     to move, and the ordering is the thing that must not move.
+///     <para>
+///         ⚠ <b>The seam that stood here from the start now has an engine behind it</b> — the tenant's
+///         <see cref="IPolicyCatalogGrain" />, through <c>CatalogPolicyEvaluator</c> (issue #46). The
+///         step did not move to receive it: it was placed between the locks and the quota when it did
+///         nothing, precisely so that the day it did something the order would already be right.
+///     </para>
+///     <para>
+///         ⚠ <b>Every write kind enters it</b> — a <c>PUT</c>, a <c>PATCH</c>, a <c>DELETE</c> and an
+///         action — and a provider cannot skip it, because no provider is reached before it: the
+///         reconciler runs from the operation grain, which step 10 starts, and a synchronous action's
+///         handler runs after it. <c>PolicyEnforcementTests.EveryWriteKindEntersStepFiveAndADenyStopsEachOne</c>
+///         drives all five shapes through real grains.
+///     </para>
+///     <para>
+///         ⚠ <b>Every write kind the issue names, not every write method.</b> <c>RestoreAsync</c>,
+///         <c>PurgeAsync</c> and <c>PurgeExpiredAsync</c> don't enter step 5, so a restore brings back
+///         a body that a deny assigned since would refuse. docs/plan/08 § Policy records that as a
+///         decision still owed rather than a default.
+///     </para>
 /// </remarks>
 public interface IPolicyEvaluator {
-    /// <summary>Evaluates policy for one write.</summary>
-    /// <param name="id">The resource being written.</param>
-    /// <param name="apiVersion">The api-version the body is at.</param>
-    /// <param name="body">The body, as JSON text.</param>
-    /// <param name="caller">Who is asking.</param>
+    /// <summary>Evaluates every assignment that applies to one request.</summary>
+    /// <param name="request">The request and the body it would leave.</param>
     /// <param name="cancellationToken">Cancels the evaluation.</param>
-    Task<PolicyDecision> EvaluateAsync(
-        ResourceId id,
-        string apiVersion,
-        string body,
-        CallerContext caller,
-        CancellationToken cancellationToken = default
-    );
+    /// <returns>
+    ///     The decision. ⚠ An evaluator that <i>cannot</i> answer — the catalog unreachable — denies,
+    ///     naming the reason: a write that slipped past a deny rule because the rule's store was down
+    ///     is the enforcement failing open.
+    /// </returns>
+    Task<PolicyDecision> EvaluateAsync(PolicyEvaluationRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Records the audit verdicts of a write that was accepted. Called after step 9 and only when
+    ///     <see cref="PolicyDecision.RecordsCompliance" /> is set.
+    /// </summary>
+    /// <param name="id">The resource, with its GUID.</param>
+    /// <param name="decision">The decision step 5 returned for this write.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>
+    ///     Success or the failure. ⚠ The write path logs a failure and does not fail the request: the
+    ///     resource is already durable, and a <c>500</c> for a create that succeeded is the worse lie.
+    /// </returns>
+    Task<Result> RecordComplianceAsync(ResourceId id, PolicyDecision decision, CancellationToken cancellationToken = default);
+
+    /// <summary>Forgets a resource's verdicts. Called when its delete is accepted.</summary>
+    /// <param name="id">The resource.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    Task<Result> ForgetAsync(ResourceId id, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

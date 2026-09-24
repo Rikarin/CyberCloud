@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -215,6 +216,77 @@ public static class PostgresServers {
     public static GroupVersionKind PoolerKind { get; } =
         new() { Group = "postgresql.cnpg.io", Version = "v1", Kind = "Pooler", Plural = "poolers" };
 
+    /// <summary>The core <c>Secret</c> the backup key is rendered into.</summary>
+    public static GroupVersionKind SecretKind { get; } =
+        new() { Group = "", Version = "v1", Kind = "Secret", Plural = "secrets" };
+
+    // ── Backups, to the platform's object store ───────────────────────────────────────────────
+
+    /// <summary>The prefix of a server's bucket: <c>pg-{resourceId:N}</c>.</summary>
+    public const string BucketPrefix = "pg";
+
+    /// <summary>The <c>Secret</c> a server's backup key is rendered into: <c>{name}-backup-s3</c>.</summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠ <b>Beside the server, in the tenant's namespace, and that is the one place the key is
+    ///     readable by the tenant.</b> CloudNativePG's instance pods read <c>s3Credentials</c> from a
+    ///     <c>Secret</c> in their own namespace and nowhere else, so the key has to be there; what keeps
+    ///     that safe is <see cref="ObjectStoreCredentials" />'s scope — the key opens this server's
+    ///     bucket and no other — rather than the Secret's visibility.
+    /// </remarks>
+    public static string BackupSecretName(string name) => name + "-backup-s3";
+
+    /// <summary>The backup <c>Secret</c> a server owns.</summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    public static ObjectRef BackupSecretRef(string ns, string name) =>
+        new() { Kind = SecretKind, Namespace = ns, Name = BackupSecretName(name) };
+
+    /// <summary>The key the <c>Secret</c> files the access key id under.</summary>
+    public const string AccessKeyIdKey = "ACCESS_KEY_ID";
+
+    /// <summary>The key the <c>Secret</c> files the secret access key under.</summary>
+    public const string SecretAccessKeyKey = "ACCESS_SECRET_KEY";
+
+    /// <summary>
+    ///     The <c>Secret</c> document a server's backup key becomes.
+    /// </summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="key">The key the vault holds. ⚠ A value for the length of the pass that renders it.</param>
+    public static string BackupSecretJson(string name, ObjectStoreKey key) {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(key);
+
+        // ⚠ `data`, base64, and not `stringData`: the API server folds stringData into data on write,
+        // so a server-side apply of stringData reads back as a field this manager never set, and every
+        // pass would see drift. StorageAccounts.ConfigSecretJson renders its identities file the same way.
+        return new JsonObject {
+            ["metadata"] = new JsonObject { ["name"] = BackupSecretName(name) },
+            ["type"] = "Opaque",
+            ["data"] = new JsonObject {
+                [AccessKeyIdKey] = Convert.ToBase64String(Encoding.UTF8.GetBytes(key.AccessKeyId)),
+                [SecretAccessKeyKey] = Convert.ToBase64String(Encoding.UTF8.GetBytes(key.SecretAccessKey))
+            }
+        }.ToJsonString();
+    }
+
+    /// <summary>Where a server's backups go: the platform's store, in the server's own bucket.</summary>
+    /// <param name="DestinationPath">The <c>s3://{bucket}/</c> barman archives under.</param>
+    /// <param name="EndpointUrl">The store's data-plane endpoint.</param>
+    /// <param name="SecretName">The <c>Secret</c> holding the key — <see cref="BackupSecretName" />.</param>
+    public sealed record BackupStore(string DestinationPath, string EndpointUrl, string SecretName) {
+        /// <summary>The store a server with this id and name renders.</summary>
+        /// <param name="resourceId">The server's GUID.</param>
+        /// <param name="name">The server's name.</param>
+        /// <param name="endpointUrl">The store's data-plane endpoint.</param>
+        public static BackupStore For(Guid resourceId, string name, string endpointUrl) =>
+            new(
+                "s3://" + ObjectStoreCredentials.BucketFor(BucketPrefix, resourceId) + "/",
+                endpointUrl,
+                BackupSecretName(name)
+            );
+    }
+
     /// <summary>The labels every claim CloudNativePG created for a server carries, and the selector's pairs.</summary>
     /// <param name="name">The resource's own name, which is the <c>Cluster</c>'s.</param>
     public static ImmutableDictionary<string, string> ClaimOwnership(string name) {
@@ -318,6 +390,18 @@ public static class PostgresServers {
     ///     database whose name is not the one in the resource body and no error anywhere.
     /// </remarks>
     public const int MaxIdentifierLength = 63;
+
+    /// <summary>
+    ///     What a recovery point's name may be: a Kubernetes object name, because it names
+    ///     CloudNativePG's <c>Backup</c> — or empty.
+    /// </summary>
+    public const string RecoveryPointPattern = "([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?";
+
+    /// <summary>The longest name <see cref="RecoveryPointPattern" /> admits — a DNS subdomain's.</summary>
+    public const int MaxRecoveryPointLength = 253;
+
+    /// <summary>The property a restore reads its recovery point from.</summary>
+    public const string RecoveryPointPointer = "/properties/restore/recoveryPoint";
 
     /// <summary>
     ///     The body shape at <see cref="V2026" />.
@@ -491,14 +575,33 @@ public static class PostgresServers {
                 new(
                     "/properties/backup/destinationPath",
                     SchemaKind.Text,
-                    Description: "Object-store URL for base backups and WAL, for example "
-                    + "s3://tenant-bucket/postgres. Required while backup.enabled is true: the "
-                    + "platform does not fill in a default bucket yet, and a body that leaves it "
-                    + "empty with backups on is refused naming this property."
+                    Description: "Leave empty. Base backups and WAL go to the platform's object "
+                    + "store, in a bucket of this server's own, with a key the platform issues and "
+                    + "holds. A destination of your own is refused naming this property: this "
+                    + "api-version has nowhere to carry the credentials it would need."
                 ) {
                     Pattern = BackupDestinationPattern,
                     DefaultJson = "\"\"",
-                    ExampleJson = "\"s3://tenant-bucket/postgres\""
+                    ExampleJson = "\"\""
+                },
+                new(
+                    "/properties/restore",
+                    SchemaKind.Nested,
+                    Description: "Where the server's data comes from when it is created from a "
+                    + "recovery point rather than empty."
+                ),
+                new(
+                    "/properties/restore/recoveryPoint",
+                    SchemaKind.Text,
+                    Description: "The recovery point this server was restored from. Set only by a backup "
+                    + "vault's recover action, which creates the server: a write may send back the "
+                    + "value the server holds and nothing else. Empty means the server started as a "
+                    + "new, empty database."
+                ) {
+                    Pattern = RecoveryPointPattern,
+                    MaxLength = MaxRecoveryPointLength,
+                    Immutable = true,
+                    DefaultJson = "\"\""
                 },
                 new(
                     "/properties/bootstrap",
@@ -794,15 +897,30 @@ public static class PostgresServers {
     ///     apply, so the refusal names the tenant's own property and not the operator's field, and
     ///     so the message says what to do: name a bucket, or turn backups off. Terminal rather than
     ///     retryable, because the body will say the same thing on every pass.
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             #30 turned the refusal round: the empty destination is now the platform's store and
+    ///             a named one is what is refused.
+    ///         </b> The half #91 left — <c>the-default-bucket-is-not-filled-in</c> — was that a
+    ///         destination alone never rescued the body: CloudNativePG 1.30.0's webhook answers
+    ///         <i>"missing credentials. One and only one of azureCredentials, s3Credentials and
+    ///         googleCredentials are required"</i>, and this api-version has no property that could
+    ///         carry a credential without putting it in the body. The platform's store has one — a key
+    ///         <see cref="ObjectStoreCredentials" /> issues and the vault holds — so an empty
+    ///         destination renders a complete <c>barmanObjectStore</c>, and a named one, which could
+    ///         only ever have been refused by the operator after the caller was told 202, is refused
+    ///         here, before anything is applied.
+    ///     </para>
     /// </remarks>
     public static string? BackupDestinationProblem(JsonElement desired) =>
-        BackupEnabled(desired) && BackupDestination(desired).Length == 0
-            ? "backup.enabled is true and backup.destinationPath is empty. CloudNativePG needs an "
-            + "s3://bucket/prefix to archive WAL and base backups to, and the platform does not fill "
-            + "in a default bucket yet. Set "
+        BackupEnabled(desired) && BackupDestination(desired).Length > 0
+            ? "backup.destinationPath names a destination of its own, and this api-version has nowhere "
+            + "to carry the credentials CloudNativePG needs to write there — its admission webhook "
+            + "refuses a barmanObjectStore with none. Leave "
             + BackupDestinationPointer
-            + ", or set "
-            + "/properties/backup/enabled to false."
+            + " empty: backups then go to the platform's object store, in a bucket of this server's own, "
+            + "with a key the platform issues and holds. Or set /properties/backup/enabled to false."
             : null;
 
     /// <summary>The property <see cref="BackupDestinationProblem" /> is reported against.</summary>
@@ -863,6 +981,12 @@ public static class PostgresServers {
     public static string Owner(JsonElement desired) => Text(desired, "bootstrap", "owner", "app");
 
     /// <summary>
+    ///     The recovery point a server is created from, or the empty string for a new, empty one.
+    /// </summary>
+    /// <param name="desired">The validated desired body.</param>
+    public static string RecoveryPoint(JsonElement desired) => Text(desired, "restore", "recoveryPoint", string.Empty);
+
+    /// <summary>
     ///     The <c>Cluster</c> document a desired body becomes, ready for server-side apply.
     /// </summary>
     /// <param name="name">The object's <c>metadata.name</c> — the resource's own name.</param>
@@ -901,7 +1025,13 @@ public static class PostgresServers {
     ///         out — is closed.
     ///     </para>
     /// </remarks>
-    public static string ClusterJson(string name, JsonElement desired) {
+    /// <param name="store">
+    ///     Where backups go — the platform's store, with the key's <c>Secret</c> — or
+    ///     <see langword="null" /> to render no backup section. ⚠ The reconciler always passes one
+    ///     while backups are on; <see langword="null" /> is for a teardown's pause, where the object
+    ///     is on its way out and nothing reads its backup section again.
+    /// </param>
+    public static string ClusterJson(string name, JsonElement desired, BackupStore? store = null) {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         var (cpu, memory) = Resources(desired);
@@ -993,11 +1123,30 @@ public static class PostgresServers {
             storage["storageClass"] = storageClass;
         }
 
+        // ⚠ A RESTORE BOOTSTRAPS FROM A BACKUP OBJECT BESIDE IT, AND NOTHING ELSE ABOUT THE SERVER
+        // CHANGES. `bootstrap.recovery.backup.name` names a CloudNativePG Backup in the same namespace;
+        // the operator reads the destination, the endpoint and the credential Secret off that Backup's
+        // status — the SOURCE server's — so the restore needs no store of its own to read from, and
+        // this server's own backup section below points at its own, empty, bucket. `database` and
+        // `owner` are what the operator writes the `{name}-app` Secret for, so listKeys answers for a
+        // restored server exactly as for a new one. The extensions are not re-created: they came back
+        // with the data.
+        var restoreFrom = RecoveryPoint(desired);
+        var bootstrap = restoreFrom.Length > 0
+            ? new JsonObject {
+                ["recovery"] = new JsonObject {
+                    ["backup"] = new JsonObject { ["name"] = restoreFrom },
+                    ["database"] = Database(desired),
+                    ["owner"] = Owner(desired)
+                }
+            }
+            : new JsonObject { ["initdb"] = initdb };
+
         var spec = new JsonObject {
             ["instances"] = Number(desired, "replicas", 2),
             ["imageName"] = "ghcr.io/cloudnative-pg/postgresql:" + Version(desired),
             ["postgresql"] = postgresql,
-            ["bootstrap"] = new JsonObject { ["initdb"] = initdb },
+            ["bootstrap"] = bootstrap,
             ["storage"] = storage,
             ["monitoring"] = new JsonObject { ["enablePodMonitor"] = Flag(desired, "monitoring", "enabled", true) }
         };
@@ -1017,14 +1166,24 @@ public static class PostgresServers {
             spec["walStorage"] = wal;
         }
 
-        if (BackupEnabled(desired)) {
+        // ⚠ `barmanObjectStore`, CloudNativePG 1.30.0's in-tree archiver, and not the Barman Cloud
+        // plugin the operator's own warning points at. The bundle pins 1.30.0, which still serves the
+        // in-tree path — the warning says it goes in 1.31.0 — and the plugin is a second component
+        // (a Deployment, its own ObjectStore CRD, cert-manager for its TLS) that the bundle does not
+        // install. RecoveryVaults.BackupMethod names the same method for the vault's schedules, and
+        // the move is one change to both, owed in charts/managed/postgres/conformance.yaml § owed,
+        // `the-in-tree-archiver-goes-in-1-31`.
+        if (BackupEnabled(desired) && store is not null) {
             spec["backup"] = new JsonObject {
                 ["retentionPolicy"] =
                     Number(desired, "backup", "retentionDays", 14).ToString(CultureInfo.InvariantCulture) + "d",
                 ["barmanObjectStore"] = new JsonObject {
-                    // ⚠ Never empty here: BackupDestinationProblem refuses the pass first, and the
-                    // reconciler asks it before it asks for this document.
-                    ["destinationPath"] = BackupDestination(desired),
+                    ["destinationPath"] = store.DestinationPath,
+                    ["endpointURL"] = store.EndpointUrl,
+                    ["s3Credentials"] = new JsonObject {
+                        ["accessKeyId"] = new JsonObject { ["name"] = store.SecretName, ["key"] = AccessKeyIdKey },
+                        ["secretAccessKey"] = new JsonObject { ["name"] = store.SecretName, ["key"] = SecretAccessKeyKey }
+                    },
                     ["wal"] = new JsonObject { ["compression"] = "gzip" }
                 }
             };
@@ -1090,8 +1249,21 @@ public static class PostgresServers {
         && (spec["storage"] as JsonObject)?["size"]?.GetValue<string>() == Text(desired, "storage", "size", "20Gi")
         && (spec["monitoring"] as JsonObject)?["enablePodMonitor"]?.GetValue<bool>()
         == Flag(desired, "monitoring", "enabled", true)
-        && ((spec["bootstrap"] as JsonObject)?["initdb"] as JsonObject)?["database"]?.GetValue<string>()
-        == Database(desired);
+        && MatchesBootstrap(spec["bootstrap"] as JsonObject, desired)
+        // ⚠ A server with backups on is not converged until its Cluster archives somewhere: the store
+        // is the reconciler's to choose, so the destination is checked for presence, not for value.
+        && (!BackupEnabled(desired)
+            || (((spec["backup"] as JsonObject)?["barmanObjectStore"] as JsonObject)?["destinationPath"]?.GetValue<string>())
+            is { Length: > 0 });
+
+    /// <summary>Whether the stored bootstrap is the one the body asks for — a restore's or an initdb's.</summary>
+    static bool MatchesBootstrap(JsonObject? bootstrap, JsonElement desired) {
+        var restoreFrom = RecoveryPoint(desired);
+
+        return restoreFrom.Length > 0
+            ? ((bootstrap?["recovery"] as JsonObject)?["backup"] as JsonObject)?["name"]?.GetValue<string>() == restoreFrom
+            : (bootstrap?["initdb"] as JsonObject)?["database"]?.GetValue<string>() == Database(desired);
+    }
 
     static bool MatchesPooler(JsonObject spec, JsonElement desired) =>
         spec["instances"]?.GetValue<int>() == Number(desired, "pooling", "instances", 2)
@@ -1223,8 +1395,13 @@ public static class PostgresServers {
     /// <param name="pooling">Whether to run a pooler.</param>
     /// <param name="location">The region.</param>
     /// <param name="backupDestination">
-    ///     Where backups go. Empty leaves backups on with no destination, which
-    ///     <see cref="BackupDestinationProblem" /> refuses — the shape a test reaches for to see that refusal.
+    ///     Where backups go. Empty — the default — is the platform's store; a named destination is
+    ///     what <see cref="BackupDestinationProblem" /> refuses, the shape a test reaches for to see that
+    ///     refusal.
+    /// </param>
+    /// <param name="recoveryPoint">
+    ///     The recovery point to bootstrap from, or empty for a new database. Written only when
+    ///     non-empty, so every body built before #30 reads back unchanged.
     /// </param>
     /// <remarks>
     ///     ⚠ Every property it writes is a <b>leaf</b>. <c>ResourceSchema.Project</c> skips a
@@ -1238,22 +1415,27 @@ public static class PostgresServers {
         string storageSize = "20Gi",
         bool pooling = true,
         string location = "eu-central",
-        string backupDestination = "s3://tenant-bucket/postgres"
-    ) =>
-        new JsonObject {
-            ["location"] = location,
-            ["properties"] = new JsonObject {
-                ["clusterId"] = clusterId.ToString("D", CultureInfo.InvariantCulture),
-                ["version"] = "17",
-                ["replicas"] = replicas,
-                ["storage"] = new JsonObject { ["size"] = storageSize },
-                ["pooling"] = new JsonObject { ["enabled"] = pooling, ["instances"] = 2 },
-                ["bootstrap"] = new JsonObject { ["database"] = "app", ["owner"] = "app" },
-                // ⚠ Named, because the schema's own defaults — backups on, no destination — are a
-                // body the operator's definition refuses. See BackupDestinationProblem.
-                ["backup"] = new JsonObject { ["destinationPath"] = backupDestination }
-            }
-        }.ToJsonString();
+        string backupDestination = "",
+        string recoveryPoint = ""
+    ) {
+        var properties = new JsonObject {
+            ["clusterId"] = clusterId.ToString("D", CultureInfo.InvariantCulture),
+            ["version"] = "17",
+            ["replicas"] = replicas,
+            ["storage"] = new JsonObject { ["size"] = storageSize },
+            ["pooling"] = new JsonObject { ["enabled"] = pooling, ["instances"] = 2 },
+            ["bootstrap"] = new JsonObject { ["database"] = "app", ["owner"] = "app" },
+            // ⚠ Written even when empty, so a test that names a destination and one that does not
+            // build the same shape. Empty is the platform's store since #30.
+            ["backup"] = new JsonObject { ["destinationPath"] = backupDestination }
+        };
+
+        if (recoveryPoint.Length > 0) {
+            properties["restore"] = new JsonObject { ["recoveryPoint"] = recoveryPoint };
+        }
+
+        return new JsonObject { ["location"] = location, ["properties"] = properties }.ToJsonString();
+    }
 
     // ── Reading one pointer out of a body ─────────────────────────────────────────────────────
 

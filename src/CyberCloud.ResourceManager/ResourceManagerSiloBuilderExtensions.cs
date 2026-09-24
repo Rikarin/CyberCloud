@@ -2,6 +2,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
+using CyberCloud.ResourceManager.Orchestration;
 using CyberCloud.ResourceManager.Drift;
 using CyberCloud.ResourceManager.Expiry;
 using CyberCloud.ResourceManager.Grains;
@@ -43,8 +44,8 @@ public static class ResourceManagerSiloBuilderExtensions {
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Every seam gets a default and every default is honest about what it is.</b>
-    ///         <see cref="NotSupportedPolicyEvaluator" /> says no policy engine ran rather than
-    ///         allowing; <see cref="UnavailableSecretResolver" /> refuses rather than returning empty;
+    ///         <see cref="CatalogPolicyEvaluator" /> fails closed when the catalog cannot answer rather
+    ///         than allowing; <see cref="UnavailableSecretResolver" /> refuses rather than returning empty;
     ///         <see cref="UnavailableClusterObjectInventory" /> fails rather than reporting an empty
     ///         cluster; <see cref="ConnectionNamespaceInventory" /> refuses when there is no
     ///         connection rather than reporting an empty namespace, which is the answer that would
@@ -79,6 +80,11 @@ public static class ResourceManagerSiloBuilderExtensions {
                 // call will not — the lesson AddCyberCloudProvider taught this file the hard way.
                 // ExpirySweeperBackfillOptions.RunOnStart is how a harness turns it off.
                 services.AddHostedService<ExpirySweeperBackfill>();
+
+                // ⚠ The same walk for the manager-started pass, for the same reason: a write arms the
+                // reminder when it converges, and a resource that converged before its type had a pass
+                // has had no write since. PeriodicPassBackfillOptions.RunOnStart turns it off.
+                services.AddHostedService<PeriodicPassBackfill>();
             }
         );
     }
@@ -127,12 +133,16 @@ public static class ResourceManagerSiloBuilderExtensions {
             )
         );
 
-        services.TryAddSingleton<IPolicyEvaluator, NotSupportedPolicyEvaluator>();
+        // ⚠ The real engine since issue #46 — the tenant's policy catalog grain. It replaced
+        // NotSupportedPolicyEvaluator here without step 5 moving, which is the reason the step was put
+        // in its place before it did anything.
+        services.TryAddSingleton<IPolicyEvaluator, CatalogPolicyEvaluator>();
         services.TryAddSingleton<IResourceChangedSink, LoggingResourceChangedSink>();
         services.TryAddSingleton<ILockResolver, ResourceScopeLockResolver>();
         services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
         services.TryAddSingleton<ISecretWriter, UnavailableSecretWriter>();
         services.TryAddSingleton<IObjectStore, UnavailableObjectStore>();
+        services.TryAddSingleton<IObjectStoreGrants, UnavailableObjectStoreGrants>();
         services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
         services.TryAddSingleton<IClusterConnectionRegistrar, UnavailableClusterConnectionRegistrar>();
         // The agent-tunnel seam (#36). A host with a silo registers GrainAgentTunnels first; the
@@ -179,6 +189,19 @@ public static class ResourceManagerSiloBuilderExtensions {
         // (docs/plan/08 § The write path, end to end), a synchronous action runs inside ActionAsync,
         // so a `listKeys` executes in the gateway's process and reads the gateway's ISecretResolver.
         services.TryAddSingleton<ActionDispatcher>();
+
+        // ── Deployments. docs/plan/08 § Long-running operations, "Nested operations". ─────────────
+        //
+        // ⚠ THE VALIDATOR IS WHAT THE WRITE PATH'S STEP 2 RUNS FOR A DEPLOYMENT'S BODY, and it is
+        // registered before the manager so the manager's IEnumerable<IResourceBodyValidator> finds
+        // it; TryAddEnumerable because a second registration of the same validator would run it twice.
+        // The driver is the parent operation's pass and is resolved on a silo only; the what-if is
+        // resolved in the gateway, which routes the action to it — the same both-sides arrangement
+        // DriftScanner and ReconcileDriver already have.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IResourceBodyValidator, DeploymentBodyValidator>());
+        services.TryAddSingleton<DeploymentDriver>();
+        services.TryAddSingleton<IDeploymentManager, DeploymentManagerService>();
+
         services.TryAddSingleton<IResourceManager, ResourceManagerService>();
 
         // ── The scope path. docs/plan/06 § The hierarchy — a subscription and a resource group. ───
@@ -219,6 +242,26 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<IPrincipalDirectory, UnavailablePrincipalDirectory>();
         services.TryAddSingleton<IRoleAssignmentManager, RoleAssignmentService>();
 
+        // ── Invitations (#43) — the member half of the exit story's step 7. ──────────────────────────
+        //
+        // ⚠ The same shape as the directory above: the check is this module's (InvitationService,
+        // assignRole on the tenant) and the work is identity's, behind a refusing default the gateway
+        // Replaces with GrainInvitationIssuer.
+        services.TryAddSingleton<IInvitationIssuer, UnavailableInvitationIssuer>();
+        services.TryAddSingleton<IInvitationManager, InvitationService>();
+
+        // ── Identity administration (#41) — members, invitations, applications, own sessions. ─────
+        //
+        // ⚠ The invitation's shape again: the check here (IdentityAdministrationService), the work
+        // identity's, behind a refusing default the gateway Replaces with GrainIdentityDirectory.
+        services.TryAddSingleton<IIdentityDirectory, UnavailableIdentityDirectory>();
+        services.TryAddSingleton<IIdentityAdministration, IdentityAdministrationService>();
+
+        // Whether a deployment's recorded creator may still act, asked before each child is written.
+        // The real one is identity's, which AddCyberCloudIdentity Replaces this with; a silo without
+        // identity writes no child — UnavailablePrincipalStanding's remarks say why not "yes".
+        services.TryAddSingleton<IPrincipalStanding, UnavailablePrincipalStanding>();
+
         // ── The resource graph query. docs/plan/08 § The resource-graph projection — the read half of #54. ──
         //
         // ⚠ THE FOURTH ENTRY POINT, AND THE ONLY ONE WHOSE REAL IMPLEMENTATION IS NOT IN THIS
@@ -228,6 +271,16 @@ public static class ResourceManagerSiloBuilderExtensions {
         // with AddResourceGraphQuery when its section carries a ClickHouse endpoint, and a silo keeps
         // the refusal because a silo serves no query.
         services.TryAddSingleton<IResourceGraphQuery, UnavailableResourceGraphQuery>();
+
+        // ── Policy. docs/plan/08 § Policy, issue #46 ────────────────────────────────────────────
+        //
+        // ⚠ THE FIFTH ENTRY POINT, AND IT HAS NO REFUSING DEFAULT BECAUSE ITS IMPLEMENTATION IS HERE.
+        // IPolicyManager writes definitions and assignments through the scope seam above — the same
+        // IScopeAuthorizer the role assignment path uses — into the tenant's IPolicyCatalogGrain, and
+        // IPolicyEvaluator (registered at the top of this list) reads the same grain at step 5. Both
+        // run in whichever process holds the manager: the gateway in production, where the catalog is
+        // a grain call to a silo.
+        services.TryAddSingleton<IPolicyManager, PolicyManagerService>();
 
         // ── The SignalR connection grain's dependencies. docs/plan/10 § SignalR ──────────────────
         //
