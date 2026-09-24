@@ -1056,15 +1056,22 @@ public sealed class NetworkSuiteShapeTests {
             target.Name.ShouldBe("net-web");
         }
 
-        // ⚠ And the application gateway is namespaced like the load balancer — the same two kinds,
-        // the same name arithmetic — plus a certificate Secret the case does not own.
+        // ⚠ And the application gateway is namespaced like the load balancer — the same two kinds —
+        // plus a certificate Secret the case does not own. ⚠ BUT NOT THE SAME NAME ARITHMETIC: both
+        // types write under one field manager into one namespace, so a gateway and a balancer of one
+        // name in one network were one ConfigMap and one Deployment, and deleting either deleted the
+        // other's pod — #31's review, on a real k3s. ApplicationGateways.ObjectNameOf says why a dot.
         var gatewayObjects = ApplicationGatewayCase.ProviderCase.Objects(
             child with { Type = ApplicationGateways.Type },
             "ns"
         );
 
         gatewayObjects.Length.ShouldBe(2);
-        gatewayObjects.ShouldAllBe(static x => !x.IsClusterScoped && x.Namespace == "ns" && x.Name == "net-web");
+        gatewayObjects.ShouldAllBe(static x => !x.IsClusterScoped && x.Namespace == "ns" && x.Name == "net.web");
+
+        gatewayObjects.Select(static x => (x.Kind.Kind, x.Name))
+            .Intersect(balancer.Select(static x => (x.Kind.Kind, x.Name)))
+            .ShouldBeEmpty("an application gateway and a load balancer of the same name in the same network render the same object");
 
         // ⚠ AND THE SIXTH IS CLUSTER-SCOPED AGAIN, WITH THE THIRD HYPHENATED PLURAL. The scope
         // alternates through the family — Vpc, Subnet, SecurityGroup and OvnEip cluster-scoped, a

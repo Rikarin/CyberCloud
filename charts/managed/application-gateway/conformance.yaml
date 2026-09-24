@@ -62,7 +62,26 @@ assertions:
       prevention answers 503 and the readiness monitor reports the pod unready; detection passes the
       request. Passing it in prevention would make "the firewall was slow" a bypass. Measured in Docker
       against both pinned images before the chart was written (SOURCE); pinned in the rendered
-      configuration by NetworkApplicationGatewayTests.
+      configuration by NetworkApplicationGatewayTests; and since #31's review held on the real k3s by
+      ApplicationGatewayTrafficConformance, which runs the gateway's own pod template without its agent
+      container and reads a 503, a 503 from the monitor port and a pod the kubelet does not keep ready.
+      ⚠ Not "never ready": HAProxy starts a checked server UP, so until the agent's server has failed
+      three 2-second checks the monitor answers 200, and a kubelet probe inside that window counts the
+      pod ready for the three failed probes it then takes to undo it — measured on the second k3s run.
+      Requests are 503 throughout; only showRouting's readyReplicas can be briefly wrong.
+  - id: a-member-that-fails-its-probe-leaves-its-pool
+    says: >
+      Every member is probed with an HTTP GET on `health.path`, and `unhealthyAfter` failures take it out:
+      ApplicationGatewayTrafficConformance deletes the one backend pod of a pool on the real k3s and reads
+      the pool's 503 and the proxy's own `pool-b/m2 is DOWN`.
+  - id: a-custom-deny-holds-for-every-spelling-of-what-it-names
+    says: >
+      A `host` rule matches the Host header lower-cased and with any trailing dot or port — the name
+      routing reads — and a `path` rule matches the request target percent-decoded with `//`, `.` and `..`
+      resolved, rather than REQUEST_FILENAME, which coraza-spoa derives with Go's url.Parse and which
+      reads `//secret/x` as an authority. Until #31's review `SHOP.example.com`, `shop.example.com:80` and
+      `//secret` evaded a deny and were routed. ApplicationGatewayTrafficConformance sends nine spellings
+      through the real agent and reads the custom rule's id on each 403's own access line.
   - id: a-config-change-restarts-the-gateway
     says: >
       Every file both processes read is hashed onto the pod template, so a changed rule, member or
@@ -82,7 +101,9 @@ assertions:
     says: >
       `listeners.certificate` is `path#field`, resolved on every pass into the `{name}-tls` Secret the
       proxy mounts, its hash on the pod template so a rotation is a rollout; a path outside
-      `tenants/{tenantId}/` is refused with AuthorizationFailed before the resolver is asked, a value
+      `tenants/{tenantId}/` — or one that starts inside it and climbs out through an empty, `.` or `..`
+      segment, which `SecretRef.IsConfinedTo` refuses since #31's review — is refused with
+      AuthorizationFailed before the resolver is asked, a value
       without a certificate and a private key is refused rather than crashing the proxy, and removing
       the certificate deletes the Secret. NetworkApplicationGatewayTests against a seeded resolver;
       ApplicationGatewayTrafficConformance serves HTTPS from a certificate in the harness vault.
@@ -95,6 +116,23 @@ assertions:
       one in another network, resource group or cluster is refused terminally.
       NetworkApplicationGatewayTests, against a view that answers — no k3s here runs KubeVirt beside
       this provider.
+  - id: a-gateway-and-a-load-balancer-of-one-name-are-two-sets-of-objects
+    says: >
+      The gateway's ConfigMap, Deployment and Secret are `{network}.{name}` and the load balancer's
+      `{network}-{name}`, and a resource name holds no dot, so no gateway and balancer in one namespace
+      share an object. Until #31's review both were `{network}-{name}` under one field manager: the second
+      apply took the first's objects over and the gateway's teardown deleted the balancer's pod. And the
+      platform's delete (OwnedDelete, which ClusterConnectionGrain runs) refuses an object labelled for
+      another resource. ApplicationGatewayBesideALoadBalancerConformance converges both on the real k3s,
+      reaches for the balancer's Deployment on the gateway's behalf and is refused, and tears the gateway
+      down with the balancer's objects still there.
+  - id: a-pool-member-is-an-address-as-written-and-not-the-pod-itself
+    says: >
+      A member address must be spelled as the address is written (`10.1`, `0x0a.0.0.1` and a zone are
+      refused naming the canonical form, because the spelling is what HAProxy is given) and may not be
+      loopback — the gateway's own pod, whose agent is on 127.0.0.1:9000 — link-local (169.254.169.254
+      included), unspecified, multicast or the frontend. A machine's address, which its guest agent
+      reports, is held to the same rule. NetworkApplicationGatewayTests.
   - id: the-configured-routing-is-readable
     says: >
       `POST …/showRouting` returns the listeners, the rules in evaluation order, every member with a
@@ -181,6 +219,18 @@ owed:
       `crsVersion` offers the one the pinned image carries — 4.25. A second version is a second pinned
       agent digest and a second value, and a CRS upgrade is a digest bump in this repository, which no
       job does yet: charts/managed/haproxy's `the-image-is-a-tag-and-not-a-digest` in the other direction.
+  - id: element-grammar-is-checked-after-202
+    says: >
+      Each list's element grammar — `host/path=pool`, `pool=target:port`, an exclusion, a custom rule — is
+      ApplicationGateways.BodyProblem's, run by the reconciler before anything is applied, so a malformed
+      element is a 202 and then a terminal InvalidRequestBody naming the element, rather than a 400. The
+      registry would carry it: SchemaProperty applies a Pattern per element on an array and
+      ResourceSchema.Validate enforces it. What refuses it is ADR-012's fifth surface, which cannot say a
+      per-element pattern in a chart's values.schema.json and fails the registration —
+      charts/managed/kafka's `cidr-shape-is-unenforced`, the same gap, which closes for both with one case
+      in ChartAnnotationEmitter and one in Build.Charts' Validate. ⚠ Nothing malformed is rendered: every value that reaches HAProxy's
+      configuration or SecLang has passed one of the four grammars. Cited by ApplicationGateways' Grammar
+      record, which named this row before #31's review found it missing.
   - id: grafana-dashboard
     says: >
       docs/plan/12 § The pattern, once, piece 6. The agent exposes Prometheus metrics (coraza-spoa's

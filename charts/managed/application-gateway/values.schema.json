@@ -8,7 +8,7 @@
       "default": [
         "web=10.20.1.11:8080"
       ],
-      "description": "The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.",
+      "description": "The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. An address is written in its usual form (10.0.0.1, not 10.1) and may not be loopback, link-local, multicast or the gateway's own. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.",
       "examples": [
         [
           "web=10.20.1.11:8080",
@@ -329,7 +329,7 @@
         },
         "customRules": {
           "default": [],
-          "description": "Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely.",
+          "description": "Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. A host is matched in any case and with any port; a path after percent-decoding and resolving //, . and .. segments. ⚠ allow skips the rule set for that request entirely.",
           "examples": [
             [
               "deny ip 203.0.113.0/24"

@@ -1,7 +1,9 @@
 {{/*
-The Kubernetes object-name stem — `ApplicationGateways.ObjectNameOf`, `{network}-{name}`, computed by
+The Kubernetes object-name stem — `ApplicationGateways.ObjectNameOf`, `{network}.{name}`, computed by
 the reconciler. Namespaced objects, so the subscription and resource group are already in the
-namespace; two networks in one resource group are what the network component keeps apart.
+namespace; two networks in one resource group are what the network component keeps apart. ⚠ A DOT and
+not charts/managed/haproxy's hyphen: both charts render a ConfigMap and a Deployment into one
+namespace, and a load balancer and a gateway of one name in one network were one pair of objects.
 */}}
 {{- define "appgw.objectName" -}}
 {{- default .Release.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}

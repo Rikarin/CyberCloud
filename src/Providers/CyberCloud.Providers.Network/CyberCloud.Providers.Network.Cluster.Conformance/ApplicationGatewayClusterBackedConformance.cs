@@ -10,6 +10,7 @@ using CyberCloud.ResourceManager.Reconcile;
 using k8s;
 using k8s.Models;
 using Shouldly;
+using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -129,6 +130,45 @@ public sealed class ApplicationGatewayTrafficConformance(
 
             (await LogAsync(raw, ns, gateway, "haproxy", token)).ShouldContain("waf-action:deny");
 
+            // ── Custom denies hold for every spelling routing or a backend reads as the same ─────
+            //
+            // ⚠ #31's review: the host rule compared the raw Host and the path rule a path Go's
+            // url.Parse had already mangled, so these spellings evaded a deny and were routed. Each
+            // request carries a unique probe in its query so its own access line can be found, and
+            // that line has to name the custom rule — a 403 the CRS gave for some other reason would
+            // prove nothing about the rule.
+            foreach (var (host, path, rule) in ((string, string, string)[])[
+                         ("blocked.example", "/?probe=h1", "190001"),
+                         ("BLOCKED.Example", "/?probe=h2", "190001"),
+                         ("blocked.example:80", "/?probe=h3", "190001"),
+                         ("blocked.example.", "/?probe=h4", "190001"),
+                         ("other.example", "/secret?probe=p1", "190002"),
+                         ("other.example", "//secret?probe=p2", "190002"),
+                         ("other.example", "/%73ecret?probe=p3", "190002"),
+                         ("other.example", "/./secret?probe=p4", "190002"),
+                         ("other.example", "/b/../secret?probe=p5", "190002")
+                     ]) {
+                var denied = await GetAsync(raw, ns, gateway, host, path, token);
+
+                denied.ShouldContain("403 Forbidden", customMessage: $"Host '{host}' {path} evaded a custom deny: {denied}");
+                denied.ShouldNotContain("served-by", customMessage: $"Host '{host}' {path} reached a backend");
+
+                var probe = path[(path.IndexOf('?', StringComparison.Ordinal) + 1)..];
+                var line = (await LogAsync(raw, ns, gateway, "haproxy", token))
+                    .Split('\n')
+                    .LastOrDefault(x => x.Contains(probe, StringComparison.Ordinal));
+
+                line.ShouldNotBeNull($"no access line for {probe}");
+                line.ShouldMatch("waf-rules:[0-9,]*" + rule, $"the 403 for {probe} was not custom rule {rule}: {line}");
+            }
+
+            // And a name that only starts like the denied host is routed as before.
+            (await GetAsync(raw, ns, gateway, "blocked.example.org", "/", token))
+                .ShouldContain("served-by=backend-a");
+
+            // ── Fail closed: the same configuration with no agent answering is a 503 ──────────
+            await FailsClosedWithoutItsAgentAsync(raw, ns, id, token);
+
             // ── Detection: the same resource, PUT with the other mode — a rollout ───────────────
             var detection = Body(a, b, ApplicationGateways.WafDetection, handle + "#pem");
             await PutAsync(harness, detection, token);
@@ -162,6 +202,23 @@ public sealed class ApplicationGatewayTrafficConformance(
             answer["readyReplicas"]!.GetValue<int>().ShouldBe(1);
             answer["waf"]!.GetValue<string>().ShouldStartWith("detection, OWASP CRS 4.25");
 
+            // ── A member that stops answering its probe leaves its pool ────────────────────────
+            //
+            // Pool b's one member is taken away; the rendered `check inter 5000ms fall 3` has to take
+            // it out, after which HAProxy answers 503 for the pool rather than holding the request on
+            // a dead address — and says so in its own log.
+            await raw.CoreV1.DeleteNamespacedPodAsync("appgw-traffic-b", ns, gracePeriodSeconds: 0, cancellationToken: token);
+
+            var removed = await PollAsync(
+                () => GetAsync(raw, ns, gateway, "other.example", "/b/x", token, withLogs: false),
+                static x => x.Contains(" 503 ", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(90),
+                token
+            );
+
+            removed.ShouldContain(" 503 ", customMessage: $"pool b kept a member that no longer answers its probe: {removed}");
+            (await LogAsync(raw, ns, gateway, "haproxy", token)).ShouldContain("pool-b/m2 is DOWN");
+
             // ── Teardown: the pod, the configuration and the certificate all go ───────────────
             var deleted = (await harness.Manager.DeleteAsync(
                     new() {
@@ -191,6 +248,8 @@ public sealed class ApplicationGatewayTrafficConformance(
             rules: ["a.example/=a", "*/b=b", "*/=a"],
             members: [$"a={a}:8080", $"b={b}:8080"],
             wafMode: mode,
+            // Rule 1 is 190001 and rule 2 is 190002 — ApplicationGateways.Directives numbers them.
+            customRules: ["deny host blocked.example", "deny path /secret"],
             certificate: certificate
         );
 
@@ -389,6 +448,162 @@ public sealed class ApplicationGatewayTrafficConformance(
         throw new TimeoutException($"'{name}' did not become ready in {PodReady}: {last}");
     }
 
+    // ── Fail closed ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     The gateway's own pod template, run as a bare pod with the agent's container taken out: the
+    ///     configuration the reconciler rendered, served by the pinned HAProxy with nothing on
+    ///     <c>127.0.0.1:9000</c>, answers 503 and reports itself unready.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The agent removed rather than stopped</b>, because it cannot be stopped from outside in
+    ///     a way a test can hold: the pod's restart policy brings a killed agent back within a second,
+    ///     and SIGSTOP is refused for a namespace's PID 1 from inside it. With no agent at all, what is
+    ///     under test is exactly the rendered <c>set-on-error</c> and <c>deny_status 503</c> lines and
+    ///     the <c>monitor fail</c> — until #31's review they were asserted only as text.
+    /// </remarks>
+    static async Task FailsClosedWithoutItsAgentAsync(IKubernetes raw, string ns, ResourceId id, CancellationToken token) {
+        const string pod = "appgw-traffic-noagent";
+
+        var deployment = await raw.AppsV1.ReadNamespacedDeploymentAsync(ApplicationGateways.ObjectNameOf(id), ns, cancellationToken: token);
+        var spec = deployment.Spec.Template.Spec;
+
+        spec.Containers = [.. spec.Containers.Where(static x => x.Name == "haproxy")];
+        spec.Volumes = [.. spec.Volumes.Where(static x => x.Name != "tmp")];
+
+        await DeletePodAsync(raw, ns, pod, token);
+
+        await raw.CoreV1.CreateNamespacedPodAsync(
+            new V1Pod {
+                // ⚠ Not the Deployment's labels, so neither the Deployment nor WaitForGatewayAsync
+                // counts this pod as the gateway's.
+                Metadata = new() { Name = pod, Labels = new Dictionary<string, string> { ["appgw-traffic"] = "noagent" } },
+                Spec = spec
+            },
+            ns,
+            cancellationToken: token
+        );
+
+        try {
+            var ip = await WaitForRunningAsync(raw, ns, pod, token);
+
+            var answer = await PollAsync(
+                () => GetAsync(raw, ns, ip, "other.example", "/b/x", token, withLogs: false),
+                static x => x.Contains(" 503 ", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(60),
+                token
+            );
+
+            answer.ShouldContain(" 503 ", customMessage: $"a prevention gateway with no firewall answering did not fail closed: {answer}");
+            answer.ShouldNotContain("served-by", customMessage: "a request passed a firewall that was not there");
+
+            // ⚠ Polled: the agent's server is taken out by its own check (`inter 2s`, three falls),
+            // and until then the monitor counts it — the request above failed on the SPOE connect.
+            var monitor = await PollAsync(
+                () => GetAsync(
+                    raw,
+                    ns,
+                    ip,
+                    "any",
+                    ApplicationGateways.ReadinessPath,
+                    token,
+                    withLogs: false,
+                    port: ApplicationGateways.ReadinessPort
+                ),
+                static x => x.Contains(" 503 ", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(60),
+                token
+            );
+
+            monitor.ShouldContain(" 503 ", customMessage: $"the readiness monitor reported a gateway with no firewall as up: {monitor}");
+
+            // ⚠ POLLED, AND NOT READ ONCE AFTER A FIXED WAIT — measured on the second k3s run: the pod
+            // was Ready twelve seconds in. HAProxy starts a checked server UP, so the monitor answers 200
+            // until the agent's server has failed three checks (about six seconds), the kubelet's first
+            // probe can land inside that, and three failed probes five seconds apart are what take Ready
+            // away again. What the monitor promises is that the pod does not STAY ready.
+            var unready = false;
+            var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(90);
+
+            while (!unready && DateTimeOffset.UtcNow < deadline) {
+                var read = await raw.CoreV1.ReadNamespacedPodAsync(pod, ns, cancellationToken: token);
+
+                unready = read.Status?.Conditions?.Any(static x => x.Type == "Ready" && x.Status == "False") ?? false;
+
+                if (!unready) {
+                    await Task.Delay(TimeSpan.FromSeconds(2), token);
+                }
+            }
+
+            unready.ShouldBeTrue("the kubelet went on counting a gateway with no firewall as ready");
+        } finally {
+            await DeletePodAsync(raw, ns, pod, CancellationToken.None);
+        }
+    }
+
+    static async Task DeletePodAsync(IKubernetes raw, string ns, string name, CancellationToken token) {
+        try {
+            await raw.CoreV1.DeleteNamespacedPodAsync(name, ns, gracePeriodSeconds: 0, cancellationToken: token);
+        } catch (k8s.Autorest.HttpOperationException ex) when (ex.Response?.StatusCode == System.Net.HttpStatusCode.NotFound) {
+            return;
+        }
+
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2);
+
+        while (DateTimeOffset.UtcNow < deadline) {
+            try {
+                await raw.CoreV1.ReadNamespacedPodAsync(name, ns, cancellationToken: token);
+            } catch (k8s.Autorest.HttpOperationException ex) when (ex.Response?.StatusCode == System.Net.HttpStatusCode.NotFound) {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), token);
+        }
+    }
+
+    static async Task<string> WaitForRunningAsync(IKubernetes raw, string ns, string name, CancellationToken token) {
+        var deadline = DateTimeOffset.UtcNow + PodReady;
+        var last = "not read yet";
+
+        while (DateTimeOffset.UtcNow < deadline) {
+            var pod = await raw.CoreV1.ReadNamespacedPodAsync(name, ns, cancellationToken: token);
+
+            if (pod.Status?.ContainerStatuses?.All(static x => x.State?.Running is not null) == true
+                && pod.Status.PodIP is { Length: > 0 } ip) {
+                return ip;
+            }
+
+            last = $"{pod.Status?.Phase} "
+                + string.Join(
+                    "; ",
+                    pod.Status?.ContainerStatuses?.Select(static x =>
+                        $"{x.Name} waiting={x.State?.Waiting?.Reason}:{x.State?.Waiting?.Message} restarts={x.RestartCount}"
+                    ) ?? []
+                );
+
+            await Task.Delay(TimeSpan.FromSeconds(2), token);
+        }
+
+        throw new TimeoutException($"'{name}' did not start running in {PodReady}: {last}");
+    }
+
+    static async Task<string> PollAsync(Func<Task<string>> attempt, Func<string, bool> done, TimeSpan within, CancellationToken token) {
+        var deadline = DateTimeOffset.UtcNow + within;
+        var last = string.Empty;
+
+        while (DateTimeOffset.UtcNow < deadline) {
+            last = await attempt();
+
+            if (done(last)) {
+                return last;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), token);
+        }
+
+        return last;
+    }
+
     // ── Requests and logs ────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -402,11 +617,15 @@ public sealed class ApplicationGatewayTrafficConformance(
         string host,
         string path,
         CancellationToken token,
-        bool https = false
+        bool https = false,
+        bool withLogs = true,
+        int port = 0
     ) {
         // ⚠ Every value here is the test's own — a literal host, a percent-encoded path, a pod address
         // — so the single quotes cannot be closed by what they hold.
-        var url = https ? $"https://{gateway}:443{path}" : $"http://{gateway}:80{path}";
+        var url = https
+            ? $"https://{gateway}:{(port > 0 ? port : 443)}{path}"
+            : $"http://{gateway}:{(port > 0 ? port : 80)}{path}";
         var command = $"wget -q -S -O - -T 10 --no-check-certificate --header 'Host: {host}' '{url}' 2>&1; true";
         var output = new StringBuilder();
 
@@ -428,7 +647,7 @@ public sealed class ApplicationGatewayTrafficConformance(
         // ⚠ A 503 from this gateway is one of three causes — no healthy member, no route, or the
         // firewall not answering in time — and only the proxy's own log line says which, so a 503 is
         // returned with that log attached rather than as a bare status line.
-        if (output.ToString().Contains(" 503 ", StringComparison.Ordinal)) {
+        if (withLogs && output.ToString().Contains(" 503 ", StringComparison.Ordinal)) {
             output.Append("\n--- haproxy ---\n").Append(await LogAsync(raw, ns, gateway, "haproxy", token));
             output.Append("\n--- waf ---\n").Append(await LogAsync(raw, ns, gateway, "waf", token));
         }
@@ -474,5 +693,238 @@ public sealed class ApplicationGatewayTrafficConformance(
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-5), DateTimeOffset.UtcNow.AddDays(1));
 
         return certificate.ExportCertificatePem() + "\n" + key.ExportPkcs8PrivateKeyPem() + "\n";
+    }
+}
+
+/// <summary>
+///     An application gateway and a load balancer of one name in one network, both converged on a real
+///     k3s, each with its own objects — and neither's teardown reaching the other's.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>The collision #31's review measured.</b> Both types render a <c>ConfigMap</c> and a
+///         <c>Deployment</c> into the resource group's namespace under one field manager, and both used
+///         to name them <c>{network}-{name}</c>: the second apply took the first's objects over without
+///         a conflict, and deleting the gateway deleted the balancer's pod. The gateway's names are
+///         <c>{network}.{name}</c> now (<see cref="ApplicationGateways.ObjectNameOf" />), and a delete
+///         refuses an object labelled for another resource (<c>OwnedDelete</c>) — this class holds both.
+///     </para>
+///     <para>
+///         ⚠ Not in the shared suite, because the shared suite is one type's — and so is this harness's
+///         silo, which registers the reconciler of the type under test and no other (measured: a
+///         balancer written through it failed <i>"LoadBalancerReconciler … is not registered in the
+///         container"</i>). The gateway goes through the real write path; the balancer is converged by
+///         its own reconciler, driven by hand against the same real connection, the way the shared
+///         suite drives a pass for its drift assertions.
+///     </para>
+/// </remarks>
+/// <param name="fixture">The harness.</param>
+public sealed class ApplicationGatewayBesideALoadBalancerConformance(
+    ClusterConformanceFixture<ApplicationGatewayCase> fixture
+) : IClassFixture<ClusterConformanceFixture<ApplicationGatewayCase>> {
+    const string Name = "twin";
+    const int MaxDrives = 40;
+
+    [Fact]
+    public async Task AGatewayAndABalancerOfOneNameInOneNetworkKeepTheirOwnObjectsAndTeardowns() {
+        var harness = fixture.Require(
+            "that an application gateway and a load balancer with the same name in the same network render "
+            + "distinct objects on a real API server, and that removing one leaves the other's in place."
+        );
+
+        var token = TestContext.Current.CancellationToken;
+        var ns = ClusterConformanceHarness<ApplicationGatewayCase>.Namespace;
+        var cluster = ClusterConformanceHarness<ApplicationGatewayCase>.ClusterId;
+
+        var gatewayAddress = ClusterConformanceHarness<ApplicationGatewayCase>.Address(Name);
+        var balancer = new ResourceId(
+            gatewayAddress.TenantId,
+            gatewayAddress.SubscriptionId,
+            gatewayAddress.ResourceGroup,
+            LoadBalancers.Type,
+            Name,
+            Guid.NewGuid(),
+            ProviderTestCluster<ApplicationGatewayCase>.AncestorPath
+        );
+
+        using var balancerBody = JsonDocument.Parse(LoadBalancers.Body(cluster));
+
+        try {
+            (await DriveBalancerAsync(harness, balancer, balancerBody.RootElement, delete: false))
+                .Kind.ShouldBe(ReconcileOutcomeKind.Converged, "the load balancer did not converge");
+
+            var gateway = await PutAsync(harness, gatewayAddress, ApplicationGateways.V2026, ApplicationGateways.Body(cluster), token);
+
+            var balancerObjects = LoadBalancers.Objects(ns, balancer);
+            var gatewayObjects = ApplicationGateways.Objects(ns, gateway);
+
+            gatewayObjects.Select(static x => (x.Kind.Kind, x.Name))
+                .Intersect(balancerObjects.Select(static x => (x.Kind.Kind, x.Name)))
+                .ShouldBeEmpty("the two types still render one object name");
+
+            // Each object on the API server carries its own resource's id — the second apply did not
+            // take the first's over.
+            foreach (var (objects, owner) in ((ImmutableArray<ObjectRef>, ResourceId)[])[
+                         (balancerObjects, balancer), (gatewayObjects, gateway)
+                     ]) {
+                foreach (var target in objects) {
+                    (await ResourceIdLabelAsync(harness, target, token))
+                        .ShouldBe(KubeLabels.GuidValue(owner.Id), $"'{target}' is not {owner.Type}'s own");
+                }
+            }
+
+            // ⚠ The platform's half: a delete made on the gateway's behalf that names the balancer's
+            // Deployment — the old collision, by hand — is refused, and the Deployment stays.
+            var balancerDeployment = balancerObjects.Single(static x => x.Kind.Kind == "Deployment");
+
+            var reached = await KubeCommand.For(harness.Connection)
+                .WithTenantId(gateway.TenantId)
+                .WithResourceId(gateway)
+                .InNamespace(ns)
+                .WithKind(LoadBalancers.DeploymentKind)
+                .WithApiVersion(ApplicationGateways.V2026)
+                .ObjectJson(new JsonObject { ["metadata"] = new JsonObject { ["name"] = balancerDeployment.Name } }.ToJsonString())
+                .DeleteAsync(CascadePolicy.Foreground, token);
+
+            reached.Error.ShouldNotBeNull("a gateway's delete removed the load balancer's Deployment");
+            reached.Error.Code.ShouldBe(CyberCloud.Core.ErrorCode.Conflict);
+            (await harness.Connection.GetAsync(balancerDeployment, token)).IsSuccess.ShouldBeTrue();
+
+            // And the gateway's real teardown leaves the balancer's objects where they were.
+            await DeleteAsync(harness, gatewayAddress, ApplicationGateways.V2026, token);
+
+            foreach (var target in ApplicationGateways.AllObjects(ns, gateway)) {
+                (await harness.Connection.GetAsync(target, token)).Error?.Code
+                    .ShouldBe(CyberCloud.Core.ErrorCode.ResourceNotFound, $"'{target}' outlived its gateway");
+            }
+
+            foreach (var target in balancerObjects) {
+                (await harness.Connection.GetAsync(target, token)).IsSuccess
+                    .ShouldBeTrue($"the gateway's teardown removed the load balancer's '{target}'");
+            }
+
+            (await DriveBalancerAsync(harness, balancer, balancerBody.RootElement, delete: true))
+                .Kind.ShouldBe(ReconcileOutcomeKind.Converged, "the load balancer's own teardown did not converge");
+        } finally {
+            // Best effort, and idempotent: whatever the body above left, neither type's objects outlive
+            // the test to meet the lifecycle classes' resources.
+            await DeleteAsync(harness, gatewayAddress, ApplicationGateways.V2026, CancellationToken.None);
+            await DriveBalancerAsync(harness, balancer, balancerBody.RootElement, delete: true);
+        }
+    }
+
+    /// <summary>Runs the balancer's own reconciler against the real connection until a pass is terminal.</summary>
+    static async Task<ReconcileOutcome> DriveBalancerAsync(
+        ClusterConformanceHarness<ApplicationGatewayCase> harness,
+        ResourceId balancer,
+        JsonElement desired,
+        bool delete
+    ) {
+        var reconciler = new LoadBalancerReconciler(harness.Clock);
+        ReconcileOutcome? last = null;
+
+        for (var i = 0; i < MaxDrives; i++) {
+            var context = new ReconcileContext(
+                balancer,
+                LoadBalancers.V2026,
+                desired,
+                null,
+                ReconcileDriver.NamespaceFor(balancer),
+                harness.Connection,
+                ClusterConformanceState<ApplicationGatewayCase>.Vault,
+                new RecordingLog()
+            );
+
+            last = delete
+                ? await reconciler.DeleteAsync(context, TestContext.Current.CancellationToken)
+                : await reconciler.ReconcileAsync(context, TestContext.Current.CancellationToken);
+
+            if (last.Kind != ReconcileOutcomeKind.InProgress) {
+                return last;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        }
+
+        last.ShouldNotBeNull();
+        return last;
+    }
+
+    static async Task<ResourceId> PutAsync(
+        ClusterConformanceHarness<ApplicationGatewayCase> harness,
+        ResourceId address,
+        string apiVersion,
+        string body,
+        CancellationToken token
+    ) {
+        var accepted = (await harness.Manager.WriteAsync(
+                new() {
+                    Path = address.Path,
+                    ApiVersion = apiVersion,
+                    Verb = WriteVerb.Put,
+                    Body = body,
+                    Caller = ClusterConformanceHarness<ApplicationGatewayCase>.Caller()
+                },
+                token
+            )).GetValueOrThrow();
+
+        var status = await ConvergeAsync(harness, accepted.OperationId, token);
+        status.State.ShouldBe(OperationState.Succeeded, $"'{address.Path}' ended {status.State}: {status.Error?.Message}");
+
+        return address.WithId(accepted.Resource.Id);
+    }
+
+    static async Task DeleteAsync(
+        ClusterConformanceHarness<ApplicationGatewayCase> harness,
+        ResourceId address,
+        string apiVersion,
+        CancellationToken token
+    ) {
+        var deleted = await harness.Manager.DeleteAsync(
+            new() { Path = address.Path, ApiVersion = apiVersion, Caller = ClusterConformanceHarness<ApplicationGatewayCase>.Caller() },
+            token
+        );
+
+        // Already gone is the end state a teardown in `finally` wants.
+        if (deleted.TryGetError(out var error)) {
+            error.Code.ShouldBe(CyberCloud.Core.ErrorCode.ResourceNotFound, error.Message);
+
+            return;
+        }
+
+        var status = await ConvergeAsync(harness, deleted.GetValueOrThrow().OperationId, token);
+        status.State.ShouldBe(OperationState.Succeeded, $"deleting '{address.Path}' ended {status.State}: {status.Error?.Message}");
+    }
+
+    static async Task<OperationStatus> ConvergeAsync(
+        ClusterConformanceHarness<ApplicationGatewayCase> harness,
+        Guid operationId,
+        CancellationToken token
+    ) {
+        var operation = harness.Operation(ConformanceIds.Tenant, operationId);
+        OperationStatus? last = null;
+
+        for (var i = 0; i < MaxDrives; i++) {
+            last = (await operation.DriveAsync()).GetValueOrThrow();
+
+            if (last.IsTerminal) {
+                return last;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), token);
+        }
+
+        last.ShouldNotBeNull();
+        return last;
+    }
+
+    static async Task<string?> ResourceIdLabelAsync(
+        ClusterConformanceHarness<ApplicationGatewayCase> harness,
+        ObjectRef target,
+        CancellationToken token
+    ) {
+        var read = (await harness.Connection.GetAsync(target, token)).GetValueOrThrow();
+
+        return JsonNode.Parse(read.Json)?["metadata"]?["labels"]?[KubeLabels.ResourceId]?.GetValue<string>();
     }
 }

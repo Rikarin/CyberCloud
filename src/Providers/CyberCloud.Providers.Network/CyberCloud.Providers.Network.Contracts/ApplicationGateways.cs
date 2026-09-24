@@ -35,8 +35,10 @@ namespace CyberCloud.Providers.Network.Contracts;
 ///     <para>
 ///         ⚠ <b>A CHILD OF <c>virtualNetworks</c>, ON <see cref="LoadBalancers" />' ARGUMENT</b>: the
 ///         pod is annotated onto one subnet of one VPC, so the network comes from the address and cannot
-///         be wrong. The object-name arithmetic is that type's too — namespaced objects, so the name is
-///         <c>{network}-{name}</c>.
+///         be wrong. The objects are namespaced like that type's, and ⚠ <b>named
+///         <c>{network}.{name}</c> and not its <c>{network}-{name}</c></b> — both types render a
+///         <c>ConfigMap</c> and a <c>Deployment</c> into one namespace, and <see cref="ObjectNameOf" />
+///         says what one name for both did.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -182,9 +184,38 @@ public static class ApplicationGateways {
     /// <summary>The pod.</summary>
     public static GroupVersionKind DeploymentKind { get; } = LoadBalancers.DeploymentKind;
 
-    /// <summary>The object name: the parent network's name and this resource's, joined.</summary>
+    /// <summary>
+    ///     The object name: the parent network's name and this resource's, joined by a dot — a
+    ///     character no resource name contains, so no load balancer's name can ever equal it.
+    /// </summary>
     /// <param name="id">The gateway's address.</param>
     /// <exception cref="ArgumentException"><paramref name="id" /> carries no parent name.</exception>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             NOT <see cref="LoadBalancers.ObjectNameOf" />' HYPHEN, BECAUSE BOTH TYPES RENDER A
+    ///             <c>ConfigMap</c> AND A <c>Deployment</c> INTO ONE NAMESPACE UNDER ONE FIELD MANAGER.
+    ///         </b> The manager is <c>cybercloud/</c> plus the provider namespace, and neither the
+    ///         apply nor the delete path checks the <c>cybercloud.io/resource-id</c> label on what it
+    ///         touches. With the hyphen, a gateway and a load balancer both called <c>web</c> in the
+    ///         network <c>net</c> were both <c>net-web</c>: the gateway's configuration overwrote the
+    ///         balancer's without a conflict, its Deployment then failed on the immutable selector,
+    ///         and deleting that failed gateway deleted the balancer's pod. Measured by #31's review on
+    ///         a real k3s, where a gateway left behind by one lifecycle class broke the load balancer's
+    ///         claims test with <i>"spec.selector: Invalid value … field is immutable"</i>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A dot, because a hyphen cannot be made injective at all.</b> Resource names are
+    ///         <see cref="ResourceNaming.Pattern" />, which admits interior hyphens, so any
+    ///         hyphen-joined scheme collides with some other network-and-name pair — a prefix or a
+    ///         suffix only moves the collision. A <c>ConfigMap</c>, a <c>Deployment</c> and a
+    ///         <c>Secret</c> take DNS-1123 <i>subdomain</i> names, which admit dots, and the one place
+    ///         the name becomes a label value (<see cref="LoadBalancers.InstanceLabel" />) admits them
+    ///         too. The pods are then named <c>net.web-…</c>; the pod template names its volumes itself
+    ///         rather than after the object, since a volume name is a DNS label.
+    ///     </para>
+    /// </remarks>
     public static string ObjectNameOf(ResourceId id) =>
         id.ParentNames.Length == 0
             ? throw new ArgumentException(
@@ -192,7 +223,7 @@ public static class ApplicationGateways {
                 + "every other network's gateway of the same name in the same resource group.",
                 nameof(id)
             )
-            : id.ParentNames.Replace('/', '-') + "-" + id.Name;
+            : id.ParentNames.Replace('/', '.') + "." + id.Name;
 
     /// <summary>The name of the <c>Secret</c> holding the HTTPS certificate.</summary>
     /// <param name="id">The gateway's address.</param>
@@ -517,7 +548,9 @@ public static class ApplicationGateways {
                     Description: "The pool members, one per entry, as pool=target:port. The target is "
                     + "an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual "
                     + "machine in this network — for example web=10.20.1.11:8080 or "
-                    + "api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A "
+                    + "api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. An address "
+                    + "is written in its usual form (10.0.0.1, not 10.1) and may not be loopback, "
+                    + "link-local, multicast or the gateway's own. ⚠ A "
                     + "machine is resolved to its address only once this gateway has been granted "
                     + "read on it."
                 ) {
@@ -601,8 +634,9 @@ public static class ApplicationGateways {
                     SchemaKind.Array,
                     Description: "Rules evaluated before the rule set, in order: deny or allow, then "
                     + "ip <address or range>, path <prefix>, host <name>, useragent <text> or method "
-                    + "<METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow "
-                    + "skips the rule set for that request entirely."
+                    + "<METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. A host is "
+                    + "matched in any case and with any port; a path after percent-decoding and resolving "
+                    + "//, . and .. segments. ⚠ allow skips the rule set for that request entirely."
                 ) {
                     ElementKind = SchemaKind.Text,
                     DefaultJson = "[]",
@@ -878,8 +912,9 @@ public static class ApplicationGateways {
     ///         Each element's grammar first — <c>Grammar</c> says why that is checked here and not by
     ///         the schema — and then what no pattern can say, each of which would otherwise be a proxy
     ///         that refuses to start or a gateway that answers 503 to every request: a rule naming a pool no
-    ///         member is in; a member whose address does not parse, is the gateway's own, or is in the
-    ///         wrong family for its brackets; a resource id that is not a virtual machine; a port of 0;
+    ///         member is in; a member whose address does not parse, is not spelled the way the address
+    ///         is written, is the gateway's own, is loopback, link-local, unspecified or multicast
+    ///         (<see cref="MemberAddressProblem" />), or is in the wrong family for its brackets; a resource id that is not a virtual machine; a port of 0;
     ///         two listeners on one port, or a listener on a port the pod reserves; an exclusion range
     ///         that runs backwards; and too many entries. ⚠ <b>A machine that is not in this network is
     ///         not refused here</b> — its network is in another resource's body and needs the view, so
@@ -1094,11 +1129,79 @@ public static class ApplicationGateways {
                 + "letter. Write IPv6 addresses in lower case.";
         }
 
-        return string.Equals(member.Target, FrontendV4(desired), StringComparison.Ordinal)
-            || string.Equals(member.Target, FrontendV6(desired), StringComparison.OrdinalIgnoreCase)
+        // ⚠ THE SPELLING HAS TO BE THE ADDRESS'S OWN, BECAUSE THE SPELLING IS WHAT IS RENDERED.
+        // IPAddress.TryParse accepts `10.1` (10.0.0.1), `0x0a.0.0.1`, `010.0.0.1` (octal, 8.0.0.1) and
+        // `fd00::1%3` (a zone), and the target used to be written into haproxy.cfg verbatim — so the
+        // checks below ran on one reading of the text and HAProxy's resolver made another. #31's review.
+        if (address.ToString() != member.Target) {
+            return $"'/properties/backendPools' contains '{member.Target}', which is not how that address is "
+                + $"written. Write '{address}'.";
+        }
+
+        if (MemberAddressProblem(address) is { } unroutable) {
+            return $"'/properties/backendPools' contains '{member}', {unroutable}";
+        }
+
+        // ⚠ Compared as addresses, and a v4-mapped v6 member as the v4 address it is.
+        var plain = address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
+
+        return (IPAddress.TryParse(FrontendV4(desired), out var v4) && plain.Equals(v4))
+            || (IPAddress.TryParse(FrontendV6(desired), out var v6) && plain.Equals(v6))
                 ? $"'/properties/backendPools' contains '{member}', which is this gateway's own frontend "
                 + "address. The gateway would send every request to itself."
                 : null;
+    }
+
+    /// <summary>
+    ///     What makes an address unusable as a pool member's, as the end of a sentence, or
+    ///     <see langword="null" />.
+    /// </summary>
+    /// <param name="address">A parsed address — a member's, or one KubeVirt reported for a machine.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Loopback is the gateway's own pod</b>: the firewall agent listens on
+    ///         <c>127.0.0.1:</c><see cref="WafPort" /> and the readiness monitor on
+    ///         <see cref="ReadinessPort" />, so a member on loopback is a tenant speaking to the agent
+    ///         that is supposed to be judging them. Link-local includes <c>169.254.169.254</c>, an
+    ///         instance-metadata address on most clouds a node runs on; unspecified and multicast are
+    ///         not a server.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Also applied to a machine's reported address</b>, which is not the platform's word
+    ///         but the guest agent's — a tenant's own machine can report <c>127.0.0.1</c>.
+    ///     </para>
+    /// </remarks>
+    public static string? MemberAddressProblem(IPAddress address) {
+        ArgumentNullException.ThrowIfNull(address);
+
+        var plain = address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
+
+        if (plain.AddressFamily == AddressFamily.InterNetworkV6 && plain.ScopeId != 0) {
+            return "which carries a zone. A pool member is an address on the gateway's network, not an interface of its pod.";
+        }
+
+        if (IPAddress.IsLoopback(plain)) {
+            return "a loopback address — inside the gateway's pod that is the gateway itself, whose firewall "
+                + $"agent listens on 127.0.0.1:{Int(WafPort)}.";
+        }
+
+        if (plain.Equals(IPAddress.Any) || plain.Equals(IPAddress.IPv6Any)) {
+            return "the unspecified address, which is not a server.";
+        }
+
+        if (plain.AddressFamily == AddressFamily.InterNetworkV6) {
+            return plain.IsIPv6LinkLocal ? "a link-local address, which is not routed to the gateway's network."
+                : plain.IsIPv6Multicast ? "a multicast address, which is not a server."
+                : null;
+        }
+
+        var bytes = plain.GetAddressBytes();
+
+        return bytes[0] == 0 ? "an address in 0.0.0.0/8, which is not a server."
+            : bytes[0] == 169 && bytes[1] == 254 ? "a link-local address (169.254.0.0/16), which includes the "
+            + "instance-metadata address of the cloud a node may run on."
+            : bytes[0] >= 224 ? "a multicast or reserved address, which is not a server."
+            : null;
     }
 
     /// <summary>The one resource type a pool member may name.</summary>
@@ -1462,25 +1565,47 @@ public static class ApplicationGateways {
         var id = (deny ? 190000 : 100000) + index;
         var value = parts[2];
 
-        var (variable, operation) = parts[1] switch {
-            "ip" => ("REMOTE_ADDR", "@ipMatch " + value),
-            "path" => ("REQUEST_FILENAME", "@beginsWith " + value),
-            "host" => ("SERVER_NAME", "@streq " + value),
-            "useragent" => ("REQUEST_HEADERS:User-Agent", "@contains " + value.ToLowerInvariant()),
-            "method" => ("REQUEST_METHOD", "@streq " + value),
-            _ => (null, null)
+        // ⚠ EVERY VARIABLE IS NORMALIZED THE WAY ROUTING OR THE BACKEND WILL READ IT, AND NOT COMPARED
+        // RAW. #31's review: the host rule compared SERVER_NAME — the Host header as sent — with
+        // `@streq` and `t:none`, while routing lower-cases the header and strips its port
+        // (HaproxyConfig's `txn.host`), so `Host: SHOP.example.com` or `shop.example.com:80` evaded a
+        // deny and still reached the pool the rule was written to protect. The path rule compared
+        // REQUEST_FILENAME, which coraza-spoa derives by Go's url.Parse of the path: decoded once, and
+        // `//secret/x` parses as the AUTHORITY `secret` and the path `/x`, so a doubled slash hid the
+        // prefix entirely — while HAProxy passed `//secret/x` on to a backend that merges slashes.
+        var (variable, operation, transform) = parts[1] switch {
+            "ip" => ("REMOTE_ADDR", "@ipMatch " + value, "t:none,"),
+            // The request line's target as HAProxy sent it (path and query), percent-decoded and with
+            // `//`, `/./`, `/../` and `\` resolved — the path a backend that normalizes will serve.
+            // ⚠ Decoding a second time over a value that arrives decoded is what catches `%252e`, and
+            // on a deny it can only widen what is refused.
+            "path" => ("REQUEST_URI_RAW", "@beginsWith " + value, "t:none,t:urlDecodeUni,t:normalizePathWin,"),
+            // The Host header lower-cased, then matched with an optional trailing dot and port — the
+            // name `req.hdr(host),field(1,:),lower` routes on. `[.]` rather than `\.`, so no backslash
+            // reaches a SecLang string.
+            "host" => ("REQUEST_HEADERS:Host", "@rx " + HostPattern(value), "t:none,t:lowercase,"),
+            "useragent" => ("REQUEST_HEADERS:User-Agent", "@contains " + value.ToLowerInvariant(), "t:none,t:lowercase,"),
+            "method" => ("REQUEST_METHOD", "@streq " + value, "t:none,"),
+            _ => (null, null, null)
         };
 
         if (variable is null) {
             return null;
         }
 
-        var transform = parts[1] == "useragent" ? "t:lowercase," : "t:none,";
         var action = deny ? "deny,status:403,log" : "allow,nolog";
 
         return $"SecRule {variable} \"{operation}\" \"id:{Int(id)},phase:1,{transform}{action},"
             + $"msg:'CyberCloud custom rule {Int(index)}: {parts[0]} {parts[1]} {value}'\"";
     }
+
+    /// <summary>The regular expression a <c>host</c> custom rule matches the lower-cased Host header with.</summary>
+    /// <param name="host">The name as the rule spells it — <c>[a-z0-9.-]</c> only, which the grammar guarantees.</param>
+    /// <remarks>
+    ///     Anchored, each dot a <c>[.]</c> class, then an optional trailing dot (an absolute name is the
+    ///     same host to a backend) and an optional <c>:port</c>.
+    /// </remarks>
+    public static string HostPattern(string host) => "^" + host.Replace(".", "[.]", StringComparison.Ordinal) + "[.]?(:[0-9]*)?$";
 
     /// <summary>What the resolved members record says, as the <c>ConfigMap</c> carries it.</summary>
     /// <param name="resolved">What each resource-id member resolved to.</param>

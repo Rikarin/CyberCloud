@@ -109,9 +109,12 @@ the mistake this note exists to prevent.
 ## Application gateway — `CyberCloud.Network/applicationGateways` · M2 · 2.0 EM
 
 ~~L7 over Envoy Gateway~~ **L7 on HAProxy, with the Coraza WAF as its SPOE agent (#31, shipped as
-`virtualNetworks/applicationGateways`)**: listeners, host/path routes, TLS (with cert-manager and our
-own ACME or an uploaded certificate from Vault), header rewrites, rate limits, and the Coraza WAF with
-a rule-set/paranoia-level selection.
+`virtualNetworks/applicationGateways`)**. The plan's scope: listeners, host/path routes, TLS (with
+cert-manager and our own ACME or an uploaded certificate from Vault), header rewrites, rate limits, and
+the Coraza WAF with a rule-set/paranoia-level selection. ⚠ **2026-08-01 ships part of it** — listeners,
+host/path routes, TLS from a certificate the tenant holds in Vault, and the WAF; ACME, header rewrites
+and rate limits are owed (below, and `conformance.yaml § owed`). This paragraph claimed all of it until
+#31's review.
 
 > ⚠ **Decided (#31): HAProxy + Coraza SPOA, rendered directly, and not Envoy Gateway, Cilium's Gateway
 > API or Caddy.** The measurement that owed this type (`charts/managed/haproxy/conformance.yaml § owed`,
@@ -151,7 +154,11 @@ a rule-set/paranoia-level selection.
 > tenant text reaches HAProxy's configuration or SecLang as text. In prevention an unanswering agent is
 > a 503, never a pass. **Proven on a real k3s** by `ApplicationGatewayTrafficConformance`: routed by host
 > and by path to real backend pods, HTTPS from the harness vault, a SQL-injection probe 403 in
-> prevention and passed with `waf-rules:942100` on the gateway's log line in detection.
+> prevention and passed with `waf-rules:942100` on the gateway's log line in detection, custom denies
+> holding for every spelling of a host or path routing treats as the same, a 503 from the gateway's own
+> pod template with no agent in it, and a pool's member taken out when it stops answering its probe.
+> The objects are named `{network}.{name}` — not the load balancer's `{network}-{name}`, which one name
+> in one network made the same `Deployment` until #31's review (`ApplicationGatewayBesideALoadBalancerConformance`).
 >
 > ⚠ **Owed** — `charts/managed/application-gateway/conformance.yaml § owed`: it is private to the VPC
 > until the inbound attachment lands (`charts/managed/kube-ovn-eip/conformance.yaml § owed`,

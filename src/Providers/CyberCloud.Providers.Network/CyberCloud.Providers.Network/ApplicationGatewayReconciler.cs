@@ -433,14 +433,26 @@ public sealed class ApplicationGatewayReconciler(IClock clock) : IResourceReconc
         }
     }
 
-    /// <summary>The first address KubeVirt reports on a running machine's interfaces, or <see langword="null" />.</summary>
+    /// <summary>
+    ///     The first usable address KubeVirt reports on a running machine's interfaces, in its canonical
+    ///     spelling, or <see langword="null" />.
+    /// </summary>
     /// <param name="instanceJson">The <c>VirtualMachineInstance</c>'s JSON.</param>
+    /// <remarks>
+    ///     ⚠ <b>The address is the guest agent's report, so it is the tenant's word</b>, and it is written
+    ///     into the gateway's configuration. A machine reporting <c>127.0.0.1</c> would otherwise make the
+    ///     gateway send its pool to its own pod — the firewall agent's port included. So it is held to
+    ///     <see cref="ApplicationGateways.MemberAddressProblem" /> like an address a body names, and
+    ///     rendered as <see cref="System.Net.IPAddress.ToString" /> spells it rather than as reported.
+    /// </remarks>
     public static string? AddressOf(string instanceJson) {
         try {
             return JsonNode.Parse(instanceJson)?["status"]?["interfaces"] is JsonArray interfaces
                 ? interfaces
                     .Select(static x => x?["ipAddress"]?.GetValue<string>())
-                    .FirstOrDefault(static x => !string.IsNullOrEmpty(x) && System.Net.IPAddress.TryParse(x, out _))
+                    .Select(static x => System.Net.IPAddress.TryParse(x, out var parsed) ? parsed : null)
+                    .FirstOrDefault(static x => x is not null && ApplicationGateways.MemberAddressProblem(x) is null)
+                    ?.ToString()
                 : null;
         } catch (Exception ex) when (ex is JsonException or InvalidOperationException) {
             return null;
@@ -475,11 +487,17 @@ public sealed class ApplicationGatewayReconciler(IClock clock) : IResourceReconc
         var path = spelled[..hash];
         var prefix = string.Create(CultureInfo.InvariantCulture, $"tenants/{tenantId:D}/");
 
-        if (!path.StartsWith(prefix, StringComparison.Ordinal) || path.Length == prefix.Length) {
+        // ⚠ SecretRef.IsConfinedTo and not StartsWith alone: `tenants/{mine}/../{theirs}/cert` starts
+        // with this tenant's prefix, and the resolver's HTTP client collapses the dot segments into the
+        // other tenant's path — whose private key this gateway's Secret would then carry and its HTTPS
+        // listener serve. Found by #31's review; the Compute and Mail copies of this check had already
+        // been fixed on master for the same reason.
+        if (!SecretRef.IsConfinedTo(path, prefix)) {
             return Result<SecretRef>.Failure(
                 ErrorCode.AuthorizationFailed,
                 $"listeners.certificate names '{path}', which is not under your tenant's vault prefix "
-                + $"'{prefix}'. A gateway can only be given a certificate your own tenant holds.",
+                + $"'{prefix}'. A gateway can only be given a certificate your own tenant holds, and the "
+                + "path may not contain an empty, '.' or '..' segment.",
                 Pointer
             );
         }

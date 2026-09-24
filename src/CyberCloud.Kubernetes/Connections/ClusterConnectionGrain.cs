@@ -329,8 +329,9 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
             return Result.Failure(connectError);
         }
 
-        var outcome = await client.GetValueOrThrow()
-            .DeleteAsync(command.Target, policy, CancellationToken.None);
+        // ⚠ Through OwnedDelete, which reads the object first and refuses one labelled for another
+        // resource — a delete names an object and a name is not an owner (#31's review).
+        var outcome = await OwnedDelete.DeleteAsync(client.GetValueOrThrow(), command, policy, CancellationToken.None);
 
         await RecordReachabilityAsync(Answered(outcome.Error));
         return outcome;

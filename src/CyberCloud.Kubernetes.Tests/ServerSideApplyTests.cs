@@ -412,6 +412,61 @@ public sealed class ServerSideApplyTests(K3sFixture k3s) {
         (await k3s.Api.DeleteAsync(target, CascadePolicy.Background, token)).IsSuccess.ShouldBeTrue();
     }
 
+    /// <summary>
+    ///     ⚠ A delete names an object by kind, namespace and name, and a name is not an owner: a second
+    ///     resource whose rendered name is the first one's is refused, and the object stays.
+    /// </summary>
+    /// <remarks>
+    ///     #31's review measured the collision this closes — an application gateway and a load balancer
+    ///     of one name in one network rendered one <c>Deployment</c>, and the gateway's teardown deleted
+    ///     the balancer's pod. The gateway's names moved; this is <c>OwnedDelete</c>, which
+    ///     <c>ClusterConnectionGrain</c> and the cluster-backed suites both delete through.
+    /// </remarks>
+    [Fact]
+    public async Task ADeleteOfAnObjectLabelledForAnotherResourceIsRefusedAndTheObjectStays() {
+        var token = TestContext.Current.CancellationToken;
+        const string name = "ssa-delete-other";
+
+        var owner = Command(name, 1);
+        var intruder = Command(name, 1, resourceGuid: Guid.Parse("5b1d0f33-6e7a-4b8c-9dae-1f203a4b5c6d"));
+
+        (await k3s.Api.ApplyAsync(owner, token)).GetValueOrThrow().Result.ShouldBe(ApplyResult.Created);
+
+        var refused = await OwnedDelete.DeleteAsync(k3s.Api, intruder, CascadePolicy.Background, token);
+
+        refused.Error.ShouldNotBeNull("another resource's object under the same name was deleted");
+        refused.Error.Code.ShouldBe(ErrorCode.Conflict);
+        refused.Error.Message.ShouldContain(KubeLabels.GuidValue(owner.ResourceId));
+        (await k3s.Api.GetAsync(owner.Target, token)).IsSuccess.ShouldBeTrue("the refused delete removed the object anyway");
+
+        // The owner's own delete goes through, and a second one is still a success.
+        (await OwnedDelete.DeleteAsync(k3s.Api, owner, CascadePolicy.Background, token)).IsSuccess.ShouldBeTrue();
+        (await k3s.Api.GetAsync(owner.Target, token)).Error?.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        (await OwnedDelete.DeleteAsync(k3s.Api, owner, CascadePolicy.Background, token)).IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ADeleteOfAnObjectWithNoResourceIdLabelIsNotRefused() {
+        var token = TestContext.Current.CancellationToken;
+        const string name = "ssa-delete-unlabelled";
+
+        // Created by another manager, carrying none of the seven labels: nothing says it is somebody
+        // else's, so the name is all there is and the delete is what was asked for.
+        await k3s.RivalApplyAsync(
+            RivalManager,
+            "configmaps",
+            name,
+            $$"""{ "apiVersion": "v1", "kind": "ConfigMap", "metadata": { "name": "{{name}}" }, "data": { "k": "v" } }""",
+            group: "",
+            version: "v1"
+        );
+
+        var command = Command(name, 1, ConfigMaps, $$"""{ "metadata": { "name": "{{name}}" } }""");
+
+        (await OwnedDelete.DeleteAsync(k3s.Api, command, CascadePolicy.Background, token)).IsSuccess.ShouldBeTrue();
+        (await k3s.Api.GetAsync(command.Target, token)).Error?.Code.ShouldBe(ErrorCode.ResourceNotFound);
+    }
+
     // ── Reads, lists and the informer's selector ───────────────────────────────────────────────
 
     [Fact]
@@ -529,14 +584,14 @@ public sealed class ServerSideApplyTests(K3sFixture k3s) {
         version.GetValueOrThrow().ShouldStartWith("v1.");
     }
 
-    static ResourceId Resource(string name) =>
+    static ResourceId Resource(string name, Guid? resourceGuid = null) =>
         new(
             Guid.Parse("9f2c1b7e-3d4a-4f21-9c6b-0a1e2d3c4b5a"),
             Guid.Parse("77de4a10-1b2c-4d3e-8f90-a1b2c3d4e5f6"),
             "prod",
             new("CyberCloud.DBforPostgreSQL", "servers"),
             name,
-            Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d")
+            resourceGuid ?? Guid.Parse("3a8f0c22-5e6d-4a7b-8c9d-0e1f2a3b4c5d")
         );
 
     static string DeploymentJson(string name, int replicas) =>
@@ -559,9 +614,10 @@ public sealed class ServerSideApplyTests(K3sFixture k3s) {
         int replicas,
         GroupVersionKind? kind = null,
         string? json = null,
-        (string Key, string Value)[]? extraLabels = null
+        (string Key, string Value)[]? extraLabels = null,
+        Guid? resourceGuid = null
     ) {
-        var id = Resource(name);
+        var id = Resource(name, resourceGuid);
 
         var builder = KubeCommand.For(new UnusedConnection())
             .WithTenantId(id.TenantId)

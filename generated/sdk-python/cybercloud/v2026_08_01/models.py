@@ -10384,7 +10384,7 @@ class ApplicationGatewayData:
 
             # The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.
             crs_version: Optional[ApplicationGatewayCrsVersion] = None
-            # Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. ⚠ allow skips the rule set for that request entirely.
+            # Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. A host is matched in any case and with any port; a path after percent-decoding and resolving //, . and .. segments. ⚠ allow skips the rule set for that request entirely.
             custom_rules: Optional[List[str]] = None
             # Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).
             exclusions: Optional[List[str]] = None
@@ -10419,7 +10419,7 @@ class ApplicationGatewayData:
                     wire["paranoiaLevel"] = self.paranoia_level
                 return wire
 
-        # The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.
+        # The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. An address is written in its usual form (10.0.0.1, not 10.1) and may not be loopback, link-local, multicast or the gateway's own. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.
         backend_pools: List[str]
         # The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.
         cluster_id: str

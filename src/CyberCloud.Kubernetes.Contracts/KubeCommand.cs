@@ -441,6 +441,79 @@ public sealed record KubeCommand {
             );
     }
 
+    /// <summary>
+    ///     Checks an ordinary command's delete against the object it is about to remove: an object that
+    ///     carries a <c>cybercloud.io/resource-id</c> label has to carry this command's.
+    /// </summary>
+    /// <param name="live">The object, as read a moment before the delete.</param>
+    /// <returns>
+    ///     Success for a co-owned command (whose delete is a withdrawal, never a <c>DELETE</c>), for an
+    ///     object with no resource-id label, and for one whose label is this command's resource;
+    ///     otherwise <see cref="ErrorCode.Conflict" /> naming both resources.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             A delete addresses an object by kind, namespace and name, and a name is not an
+    ///             owner.
+    ///         </b> Two resources whose rendered names coincide share one object: the field manager is
+    ///         per provider, so the second apply lands without a conflict, and until this check the
+    ///         first resource's teardown deleted what was by then the second's. Measured by #31's
+    ///         review on a real k3s — an application gateway and a load balancer both called
+    ///         <c>web</c> in the network <c>net</c> rendered one <c>net-web</c> <c>Deployment</c>, and
+    ///         deleting the gateway deleted the balancer's pod. The gateway's names were changed so the
+    ///         two types cannot meet; this is the platform's half, for every pair of names nobody has
+    ///         found yet — a hyphen-joined name is ambiguous whenever both halves admit hyphens.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No label is not a refusal.</b> An object without the label is not one a resource of
+    ///         this platform rendered through the builder, and deleting it by name is what the caller
+    ///         asked for; the refusal is only for an object that says, in the platform's own label,
+    ///         that it is somebody else's. A resource group's own objects carry the group's derived
+    ///         id, and the group's delete names that id, so they compare equal like any other.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The read and the delete are two requests, so a name taken over in between is not
+    ///         caught; what is caught is every object that was already another resource's when the
+    ///         teardown reached it, which is the collision above.
+    ///     </para>
+    /// </remarks>
+    public Result CheckDeleteAgainst(KubeObject live) {
+        ArgumentNullException.ThrowIfNull(live);
+
+        if (IsCoOwned) {
+            return Result.Success;
+        }
+
+        string? owner;
+        try {
+            using var document = JsonDocument.Parse(live.Json);
+
+            owner = document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("metadata", out var metadata)
+                && metadata.ValueKind == JsonValueKind.Object
+                && metadata.TryGetProperty("labels", out var labels)
+                && labels.ValueKind == JsonValueKind.Object
+                && labels.TryGetProperty(KubeLabels.ResourceId, out var value)
+                && value.ValueKind == JsonValueKind.String
+                    ? value.GetString()
+                    : null;
+        } catch (JsonException ex) {
+            return Result.Failure(ErrorCode.Conflict, $"'{Target}' as read is not valid JSON: {ex.Message}");
+        }
+
+        return owner is null || string.Equals(owner, KubeLabels.GuidValue(ResourceId), StringComparison.Ordinal)
+            ? Result.Success
+            : Result.Failure(
+                ErrorCode.Conflict,
+                $"'{Target}' carries '{owner}' as its {KubeLabels.ResourceId}, and the delete is resource "
+                + $"{ResourceId:D}'s. It is another resource's object under the same name, and it was not "
+                + "deleted. Two resources rendering one object name is a naming defect in the type that "
+                + "renders it."
+            );
+    }
+
     // Internal so that only KubeCommandBuilder can mint one. A record's positional/init surface
     // would otherwise let a caller construct an unlabelled command directly, which is the exact
     // hole the type-state chain exists to close.

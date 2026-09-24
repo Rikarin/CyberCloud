@@ -82,6 +82,22 @@ public sealed class NetworkApplicationGatewayTests {
     [InlineData("web=not-an-address:8080", "neither an IP address nor a resource id")]
     [InlineData("web=10.20.1.11:0", "outside 1 to 65535")]
     [InlineData("web=[FD00::1]:8080", "upper-case")]
+    // ⚠ Spellings IPAddress.TryParse reads as some other address, which used to be written into
+    // haproxy.cfg as spelled — #31's review.
+    [InlineData("web=10.1:8080", "Write '10.0.0.1'")]
+    [InlineData("web=0x0a.0.0.1:8080", "Write '10.0.0.1'")]
+    [InlineData("web=010.20.1.11:8080", "Write '8.20.1.11'")]
+    [InlineData("web=[fd00::0:1]:8080", "Write 'fd00::1'")]
+    [InlineData("web=[fd00::1%3]:8080", "carries a zone")]
+    [InlineData("web=127.0.0.1:9000", "loopback")]
+    [InlineData("web=127.8.8.8:8080", "loopback")]
+    [InlineData("web=[::1]:8080", "loopback")]
+    [InlineData("web=[::ffff:127.0.0.1]:8080", "loopback")]
+    [InlineData("web=169.254.169.254:80", "link-local")]
+    [InlineData("web=[fe80::1]:8080", "link-local")]
+    [InlineData("web=0.0.0.0:8080", "unspecified")]
+    [InlineData("web=224.0.0.1:8080", "multicast")]
+    [InlineData("web=[::ffff:10.20.1.20]:8080", "this gateway's own frontend address")]
     [InlineData(
         "web=/tenants/aaaaaaaa-0000-4000-8000-000000000021/subscriptions/aaaaaaaa-0000-4000-8000-00000000002a/resourceGroups/prod/providers/CyberCloud.Storage/accounts/files:8080",
         "CyberCloud.ContainerInstance/containerGroups is not a published type"
@@ -179,7 +195,9 @@ public sealed class NetworkApplicationGatewayTests {
                 Cluster,
                 paranoiaLevel: 3,
                 exclusions: ["942100:ARGS:password", "920350", "941100-941199"],
-                customRules: ["allow path /healthz", "deny ip 203.0.113.0/24", "deny useragent SQLMap"]
+                customRules: [
+                    "allow path /healthz", "deny ip 203.0.113.0/24", "deny useragent SQLMap", "deny host shop.example.com"
+                ]
             )
         );
 
@@ -191,9 +209,10 @@ public sealed class NetworkApplicationGatewayTests {
                 "SecRuleEngine On",
                 "Include @crs-setup.conf.example",
                 "SecAction \"id:900000,phase:1,pass,t:none,nolog,setvar:tx.blocking_paranoia_level=3\"",
-                "SecRule REQUEST_FILENAME \"@beginsWith /healthz\" \"id:100001,phase:1,t:none,allow,nolog,msg:'CyberCloud custom rule 1: allow path /healthz'\"",
+                "SecRule REQUEST_URI_RAW \"@beginsWith /healthz\" \"id:100001,phase:1,t:none,t:urlDecodeUni,t:normalizePathWin,allow,nolog,msg:'CyberCloud custom rule 1: allow path /healthz'\"",
                 "SecRule REMOTE_ADDR \"@ipMatch 203.0.113.0/24\" \"id:190002,phase:1,t:none,deny,status:403,log,msg:'CyberCloud custom rule 2: deny ip 203.0.113.0/24'\"",
-                "SecRule REQUEST_HEADERS:User-Agent \"@contains sqlmap\" \"id:190003,phase:1,t:lowercase,deny,status:403,log,msg:'CyberCloud custom rule 3: deny useragent SQLMap'\"",
+                "SecRule REQUEST_HEADERS:User-Agent \"@contains sqlmap\" \"id:190003,phase:1,t:none,t:lowercase,deny,status:403,log,msg:'CyberCloud custom rule 3: deny useragent SQLMap'\"",
+                "SecRule REQUEST_HEADERS:Host \"@rx ^shop[.]example[.]com[.]?(:[0-9]*)?$\" \"id:190004,phase:1,t:none,t:lowercase,deny,status:403,log,msg:'CyberCloud custom rule 4: deny host shop.example.com'\"",
                 "Include @owasp_crs/*.conf",
                 "SecRuleUpdateTargetById 942100 \"!ARGS:password\"",
                 "SecRuleRemoveById 920350",
@@ -212,6 +231,45 @@ public sealed class NetworkApplicationGatewayTests {
         yaml.Split('\n').SkipWhile(static x => x != "    directives: |").Skip(1)
             .Where(static x => x.Length > 0)
             .ShouldAllBe(static x => x.StartsWith("      ", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     ⚠ A host deny matches every spelling routing treats as the same host, and nothing else — the
+    ///     regular expression a <c>host</c> rule renders, run the way Coraza runs it: after
+    ///     <c>t:lowercase</c>.
+    /// </summary>
+    /// <remarks>
+    ///     #31's review: the rule compared <c>SERVER_NAME</c> raw with <c>@streq</c>, and routing reads
+    ///     <c>req.hdr(host),field(1,:),lower</c>, so the upper-case and the port-carrying spellings
+    ///     routed to the pool the deny was written to protect. That they are 403 through a real agent is
+    ///     <c>ApplicationGatewayTrafficConformance</c>'s.
+    /// </remarks>
+    [Theory]
+    [InlineData("shop.example.com", true)]
+    [InlineData("SHOP.Example.COM", true)]
+    [InlineData("shop.example.com:80", true)]
+    [InlineData("shop.example.com.", true)]
+    [InlineData("shop.example.com.:8443", true)]
+    [InlineData("shopxexample.com", false)]
+    [InlineData("api.shop.example.com", false)]
+    [InlineData("shop.example.com.evil", false)]
+    public void AHostDenyMatchesEverySpellingRoutingTreatsAsThatHost(string header, bool denied) {
+        var pattern = new System.Text.RegularExpressions.Regex(ApplicationGateways.HostPattern("shop.example.com"));
+
+        pattern.IsMatch(header.ToLowerInvariant()).ShouldBe(denied, header);
+    }
+
+    [Fact]
+    public void APathRuleIsComparedAfterTheNormalizationABackendWouldApply() {
+        using var body = Parse(ApplicationGateways.Body(Cluster, customRules: ["deny path /secret"]));
+
+        // ⚠ REQUEST_URI_RAW and not REQUEST_FILENAME: coraza-spoa builds the latter with Go's url.Parse,
+        // which reads `//secret/x` as the authority `secret` and the path `/x`.
+        ApplicationGateways.Directives(body.RootElement)
+            .ShouldContain(
+                "SecRule REQUEST_URI_RAW \"@beginsWith /secret\" \"id:190001,phase:1,t:none,t:urlDecodeUni,"
+                + "t:normalizePathWin,deny,status:403,log,msg:'CyberCloud custom rule 1: deny path /secret'\""
+            );
     }
 
     [Theory]
@@ -325,6 +383,32 @@ public sealed class NetworkApplicationGatewayTests {
         outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
         outcome.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
         resolver.Asked.ShouldBeEmpty("another tenant's vault path reached the resolver");
+        connection.Applied.ShouldBeEmpty("a refused handle applied something");
+    }
+
+    /// <summary>
+    ///     ⚠ Each of these starts with the tenant's own prefix, and the first reads the other tenant's
+    ///     certificate and key once an HTTP client collapses the dot segments — which is what the
+    ///     parser's <c>StartsWith</c> let through until #31's review.
+    /// </summary>
+    [Theory]
+    [InlineData("tenants/aaaaaaaa-0000-4000-8000-000000000021/../bbbbbbbb-0000-4000-8000-000000000022/certs/edge#pem")]
+    [InlineData("tenants/aaaaaaaa-0000-4000-8000-000000000021/certs/../../../platform/root#pem")]
+    [InlineData("tenants/aaaaaaaa-0000-4000-8000-000000000021/./certs/edge#pem")]
+    [InlineData("tenants/aaaaaaaa-0000-4000-8000-000000000021//certs/edge#pem")]
+    public async Task ACertificatePathThatClimbsOutOfTheTenantsPrefixIsRefusedBeforeItIsResolved(string handle) {
+        var resolver = new SeededResolver();
+        resolver.Values[handle] = Pem();
+
+        using var body = Parse(ApplicationGateways.Body(Cluster, certificate: handle));
+        var connection = new RecordingConnection();
+
+        var outcome = await Pass(connection, Address("edge", Tenant), body.RootElement, resolver);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+        outcome.Error.Message.ShouldContain("'..'");
+        resolver.Asked.ShouldBeEmpty("a path that is not canonical reached the resolver");
         connection.Applied.ShouldBeEmpty("a refused handle applied something");
     }
 
@@ -468,6 +552,27 @@ public sealed class NetworkApplicationGatewayTests {
         routing["unresolved"]!.AsArray().Select(static x => x!.GetValue<string>()).ShouldBe(["api=" + machine + ":8080"]);
         routing["members"]!.AsArray().Select(static x => x!.GetValue<string>()).ShouldBe(["api=10.20.1.41:8080"]);
         routing["readyReplicas"]!.GetValue<int>().ShouldBe(0);
+    }
+
+    /// <summary>
+    ///     ⚠ A machine's address is its guest agent's report — the tenant's word — and it is held to what
+    ///     a body may name: loopback and link-local are passed over, and what is rendered is the
+    ///     address's own spelling.
+    /// </summary>
+    [Fact]
+    public void AMachinesReportedAddressIsHeldToWhatABodyMayName() {
+        static string Reported(params string[] addresses) =>
+            new JsonObject {
+                ["status"] = new JsonObject {
+                    ["interfaces"] = new JsonArray([
+                        .. addresses.Select(static x => (JsonNode)new JsonObject { ["ipAddress"] = x })
+                    ])
+                }
+            }.ToJsonString();
+
+        ApplicationGatewayReconciler.AddressOf(Reported("127.0.0.1", "169.254.169.254", "10.20.1.40")).ShouldBe("10.20.1.40");
+        ApplicationGatewayReconciler.AddressOf(Reported("::1", "fe80::1", "FD00:20:1::0:40")).ShouldBe("fd00:20:1::40");
+        ApplicationGatewayReconciler.AddressOf(Reported("127.0.0.1")).ShouldBeNull("a machine reporting only loopback has no address");
     }
 
     [Fact]
