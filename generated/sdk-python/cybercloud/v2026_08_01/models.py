@@ -7521,6 +7521,39 @@ class DeploymentWhatIfContent:
         return wire
 
 
+@dataclass
+class DeploymentWhatIfResult:
+    """What whatIf returns."""
+
+    # The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.
+    creates: List[str]
+    # The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.
+    modifies: List[str]
+    # The resources a deployment would leave as they are, in deployment order.
+    no_changes: List[str]
+    # Succeeded: the template evaluated and every resource was compared.
+    status: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> DeploymentWhatIfResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            creates=wire["creates"],
+            modifies=wire["modifies"],
+            no_changes=wire["noChanges"],
+            status=wire["status"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["creates"] = self.creates
+        wire["modifies"] = self.modifies
+        wire["noChanges"] = self.no_changes
+        wire["status"] = self.status
+        return wire
+
+
 WidgetTier = Literal["free", "basic", "standard", "premium"]
 """The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -8983,6 +9016,7 @@ __all__ = [
     "DeploymentData",
     "DeploymentResource",
     "DeploymentWhatIfContent",
+    "DeploymentWhatIfResult",
     "WidgetTier",
     "WidgetData",
     "WidgetResource",

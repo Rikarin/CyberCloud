@@ -2469,6 +2469,18 @@ export interface ResourcesDeploymentsWhatIfContent {
   };
 }
 
+/** What whatIf returns. */
+export interface ResourcesDeploymentsWhatIfResult {
+  /** The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it. */
+  creates: string[];
+  /** The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'. */
+  modifies: string[];
+  /** The resources a deployment would leave as they are, in deployment order. */
+  noChanges: string[];
+  /** Succeeded: the template evaluated and every resource was compared. */
+  status: string;
+}
+
 /** The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else. */
 export type SampleWidgetsTier =
   | 'free'

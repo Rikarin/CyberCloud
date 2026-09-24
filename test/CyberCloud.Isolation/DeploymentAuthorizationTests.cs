@@ -37,6 +37,8 @@ public sealed class DeploymentAuthorizationTests(IsolationCluster cluster) {
     const string Home = "app";
     const string Elsewhere = "restricted";
     const string Open = "open";
+    const string Revoked = "rita";
+    const string Revocable = "revoke";
 
     static ResourceId Widget(string name, string group) =>
         new(Tenant, Subscription, group, SampleWidgets.Type, name, Guid.Empty);
@@ -92,13 +94,7 @@ public sealed class DeploymentAuthorizationTests(IsolationCluster cluster) {
         // identical but for the group, it deploys. The rerun also leaves the first widget unchanged — a
         // no-op write, recorded as one — which is what makes re-running a failed deployment safe.
         //
-        // ⚠ NOT "grant the missing right and rerun", which is the control this test was written with,
-        // and the reason is a finding rather than a preference. Step 3 checks MinimizeLatency, and
-        // CheckGrain answers that mode from ANY cached entry with no TTL (docs/plan/07 § Consistency).
-        // The refusal above cached a deny for Dora on 'restricted'; a grant written after it did not
-        // reach the rerun's check, which answered the cached 404 again. That is the existing
-        // revoke-then-stale-read class in the grant direction, it is true of an ordinary PUT retried
-        // after a grant as well, and it is recorded in docs/plan/08 § Long-running operations as owed.
+        // The second control, "grant the missing right and rerun", follows it.
         var again = await PutAsync(deployment, Open);
         var rerun = await DriveToEndAsync(again.OperationId);
 
@@ -119,6 +115,94 @@ public sealed class DeploymentAuthorizationTests(IsolationCluster cluster) {
 
         lines[0].ShouldBe($"Succeeded {Widget("front", Home).Path} — no change");
         lines[1].ShouldStartWith("Succeeded " + Widget("vault", Open).Path);
+
+        // ── The second control: grant Dora the missing right and rerun the original template ──────
+        //
+        // ⚠ This is the control the test was first written with, and it failed until a child's step 3
+        // became FullyConsistent. The refusal above cached a deny for Dora on 'restricted'; at
+        // MinimizeLatency CheckGrain answers from any cached entry with no TTL (docs/plan/07
+        // § Consistency), so the rerun met the cached 404 again after the grant. A child is written as
+        // a recorded caller with no token behind it, and its check now reads the durable rows.
+        await cluster.WriteTupleAsync(
+            Tenant,
+            Authorization.Contracts.ObjectRef.Of(ObjectTypes.ResourceGroup, GroupObject(Elsewhere)),
+            Relations.Contributor,
+            SubjectRef.Of(ObjectTypes.User, Deployer)
+        );
+
+        var granted = await DriveToEndAsync((await PutAsync(deployment)).OperationId);
+
+        granted.State.ShouldBe(OperationState.Succeeded, Describe(granted));
+        (await cluster.For(Tenant).GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(refused)).ResolveAsync())
+            .IsSuccess.ShouldBeTrue("the grant did not reach the rerun's check of the child it was granted for.");
+    }
+
+    /// <summary>
+    ///     A contributor revoked between a deployment's two children: the first is written as them, and
+    ///     the second is refused by the engine at its own step 3 — the premise the argument on
+    ///     <see cref="IResourceManager.WriteChildAsync" /> rests on.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>This passed the wrong way until a child's check became <c>FullyConsistent</c>.</b> The
+    ///     deployment's own <c>PUT</c> caches an allow for its creator at the group, both children are in
+    ///     that group, and <c>MinimizeLatency</c> answers from that entry however old it is — the review of
+    ///     #39 ran exactly this and saw the second child created after the revocation.
+    /// </remarks>
+    [Fact]
+    public async Task ARightRevokedBetweenTwoChildrenIsHonouredAtTheSecond() {
+        await SeedAsync();
+
+        var tenant = cluster.For(Tenant);
+        var rita = IsolationCluster.Caller(Tenant, Revoked);
+        var ritaOnGroup = (
+            Target: Authorization.Contracts.ObjectRef.Of(ObjectTypes.ResourceGroup, GroupObject(Revocable)),
+            Subject: SubjectRef.Of(ObjectTypes.User, Revoked)
+        );
+
+        _ = await tenant.GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(Subscription, Revocable)).CreateAsync(Tenant, "eu-west-1");
+        await cluster.WriteTupleAsync(Tenant, ritaOnGroup.Target, Relations.Contributor, ritaOnGroup.Subject);
+
+        var template = new JsonObject {
+            ["resources"] = new JsonArray(Resource("first", Revocable), Resource("second", Revocable, "first"))
+        }.ToJsonString();
+
+        var deployment = new ResourceId(Tenant, Subscription, Revocable, Deployments.Type, "revoked-midway", Guid.Empty);
+
+        var written = await cluster.Manager.WriteAsync(
+            new() {
+                Path = deployment.Path,
+                ApiVersion = Deployments.V2026,
+                Verb = WriteVerb.Put,
+                Body = new JsonObject { ["properties"] = new JsonObject { ["template"] = template } }.ToJsonString(),
+                Caller = rita
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        written.IsSuccess.ShouldBeTrue(written.Error?.Message);
+        var parentId = written.GetValueOrThrow().OperationId;
+
+        // One pass: the first child is accepted as Rita, and nothing drives it yet.
+        var first = (await tenant.GetGrain<IOperationGrain>(GrainKeys.Operation(parentId)).DriveAsync()).GetValueOrThrow();
+        first.Children.Length.ShouldBe(1, Describe(first));
+
+        await cluster.DeleteTupleAsync(Tenant, ritaOnGroup.Target, Relations.Contributor, ritaOnGroup.Subject);
+
+        var ended = await DriveToEndAsync(parentId);
+
+        ended.State.ShouldBe(OperationState.Failed, Describe(ended));
+        ended.Children.Length.ShouldBe(1, "a child was written after its creator lost the right to write it.");
+
+        var second = Widget("second", Revocable);
+        ended.Error!.Message.ShouldContain(second.Path);
+        ended.Error.Message.ShouldContain("ResourceNotFound", Case.Sensitive, "the engine's answer once Rita holds nothing on the group.");
+
+        (await tenant.GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(second)).ResolveAsync())
+            .IsFailure.ShouldBeTrue("the second child holds its name.");
+
+        // The first was written before the revocation and is left, as a failed deployment leaves it.
+        (await tenant.GetGrain<IResourceIndexGrain>(GrainKeys.PathIndex(Widget("first", Revocable))).ResolveAsync())
+            .IsSuccess.ShouldBeTrue();
     }
 
     static string GroupObject(string group) =>

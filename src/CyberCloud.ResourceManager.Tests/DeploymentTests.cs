@@ -477,6 +477,18 @@ public sealed class DeploymentTests(ResourceManagerCluster cluster) {
         // The whole answer renders as the response body.
         using (var rendered = JsonDocument.Parse(answered.GetValueOrThrow().ToJson())) {
             rendered.RootElement.GetProperty("changes")[0].GetProperty("delta")[1].GetProperty("after").GetInt32().ShouldBe(5);
+
+            // ⚠ And it is what the published schema says: the verdict as the three typed lists a
+            // generated client reads, with Azure's `changes` admitted beside them.
+            var declared = Deployments.WhatIfResponse.Validate(rendered.RootElement, true, false);
+            declared.IsSuccess.ShouldBeTrue(declared.Error?.Message);
+
+            string[] Listed(string pointer) =>
+                [.. rendered.RootElement.GetProperty(pointer[1..]).EnumerateArray().Select(static x => x.GetString()!)];
+
+            Listed(Deployments.WhatIfCreatesPointer).ShouldBe([Widget("whatif-new").Path]);
+            Listed(Deployments.WhatIfModifiesPointer).ShouldBe([Widget("whatif-changed").Path]);
+            Listed(Deployments.WhatIfNoChangesPointer).ShouldBe([Widget("whatif-same").Path]);
         }
 
         // ⚠ The action was checked at the deployment's address (absent, so its group) and every

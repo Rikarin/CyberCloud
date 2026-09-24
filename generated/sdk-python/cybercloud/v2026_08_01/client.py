@@ -51,6 +51,7 @@ from .models import (
     DeploymentData,
     DeploymentResource,
     DeploymentWhatIfContent,
+    DeploymentWhatIfResult,
     DocumentDatabaseAccountData,
     DocumentDatabaseAccountListKeysResult,
     DocumentDatabaseAccountResource,
@@ -1882,11 +1883,11 @@ class DeploymentClient:
         """Lists the Deployments in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
         return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments", top, DeploymentResource.from_wire)
 
-    def what_if(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: DeploymentWhatIfContent) -> None:
+    def what_if(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: DeploymentWhatIfContent) -> DeploymentWhatIfResult:
         """whatIf — permission 'write'."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}/whatIf", body=content.to_wire()))
         raise_for_status(response)
-        return None
+        return DeploymentWhatIfResult.from_wire(wire_of(response))
 
 
 class ResourcesProvider:

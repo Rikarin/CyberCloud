@@ -234,6 +234,11 @@ public sealed record DocumentQueryParameter(string Name, string Type, string Des
 ///         second copy of what soft delete is.
 ///     </para>
 /// </param>
+/// <param name="EntryPoint">
+///     The platform entry point that serves it instead of a handler (<c>x-cybercloud-entry-point</c>),
+///     or empty. ⚠ Such an action is not refused with a <c>404</c> on a name that does not exist, so
+///     a surface that prints the handler route's rule on it describes a refusal the API never gives.
+/// </param>
 public sealed record DocumentAction(
     string Name,
     string Permission,
@@ -241,7 +246,8 @@ public sealed record DocumentAction(
     bool LongRunning,
     JsonObject? Request,
     JsonObject? Response,
-    bool RemovesResource
+    bool RemovesResource,
+    string EntryPoint = ""
 );
 
 /// <summary>
@@ -572,7 +578,8 @@ public static class DocumentReader {
                     // provider that declares `purge` on any type, so the only purge a document can
                     // carry is the one the platform synthesised.
                     purgePermission.Length > 0
-                    && string.Equals(name, SoftDeletePolicy.PurgeAction, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(name, SoftDeletePolicy.PurgeAction, StringComparison.OrdinalIgnoreCase),
+                    Text(post["x-cybercloud-entry-point"])
                 )
             );
         }

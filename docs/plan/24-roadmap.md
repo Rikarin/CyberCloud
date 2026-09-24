@@ -94,13 +94,20 @@ compares bytes, which is what makes "and drift fails the build" a fact rather th
 ✔ Generated surfaces  Enforced  40 resource type(s) over 2 OpenAPI document(s), 14 derived file(s) —
   the cyc verb tree, the .NET SDK, the portal forms, and the Python and Go SDKs (#40) — and 6 file(s)
   of the portal's TypeScript client, all regenerated and compared byte-for-byte
-✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 389 type(s), each compiled on its
+✔ Generated SDK compiles  Enforced  1 api-version file(s) declaring 390 type(s), each compiled on its
   own against CyberCloud.Sdk — 301 partial member(s) accepted as declared-but-not-implemented
 ```
 
+⚠ **The second line read "251 type(s) … 176 partial member(s)" from 2026-09-15 until #39, and the jump is
+not #39's.** That line was quoted from #40's run and no merge after it re-read the gate, while eighteen
+resource types landed; the tree #39 branched from already declared 383 types and 294 partial members.
+`Resources/deployments` adds seven of each — a collection, its data, its resource, two property bags
+and the what-if's content and result; get, get by name, list, create, update, delete and what-if —
+and the figures above are re-read from the run of 2026-09-24.
+
 ⚠ **The second gate is younger than the first and exists because the first was not enough** (#73): a
 byte-comparison proves the emitter is deterministic and proves nothing about whether what it emitted is
-valid C#. ⚠ And "compiles" is still short of "packaged" — the 176 partial members are the hand-written
+valid C#. ⚠ And "compiles" is still short of "packaged" — the 301 partial members are the hand-written
 half that does not exist yet ([21 § Generation](21-cli-and-sdks.md)); #79's fourteen duplicate wire
 names closed 2026-09-15. The same day added two more rows of the same kind, **Generated Python SDK
 compiles** and **Generated Go SDK compiles** (#40), which hand the other two generated SDKs to their

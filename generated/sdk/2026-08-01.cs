@@ -8008,8 +8008,28 @@ public sealed partial class DeploymentResource {
         }
     }
 
-    /// <summary>WhatIf. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
-    public partial Task<Response<System.Text.Json.JsonElement>> WhatIfAsync(
+    /// <summary>What whatIf returns.</summary>
+    public sealed partial class WhatIfResult {
+
+        /// <summary>The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.</summary>
+        [JsonPropertyName("creates")]
+        public IList<string> Creates { get; set; } = new List<string>();
+
+        /// <summary>The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.</summary>
+        [JsonPropertyName("modifies")]
+        public IList<string> Modifies { get; set; } = new List<string>();
+
+        /// <summary>The resources a deployment would leave as they are, in deployment order.</summary>
+        [JsonPropertyName("noChanges")]
+        public IList<string> NoChanges { get; set; } = new List<string>();
+
+        /// <summary>Succeeded: the template evaluated and every resource was compared.</summary>
+        [JsonPropertyName("status")]
+        public required string Status { get; set; }
+    }
+
+    /// <summary>WhatIf. ⚠ An action never creates. This one runs as the caller and answers for a name that does not exist yet.</summary>
+    public partial Task<Response<WhatIfResult>> WhatIfAsync(
         WhatIfContent content,
         CancellationToken cancellationToken = default);
 }

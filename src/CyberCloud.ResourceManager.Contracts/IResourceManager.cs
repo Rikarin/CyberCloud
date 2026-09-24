@@ -83,11 +83,22 @@ public interface IResourceManager {
     ///     </para>
     ///     <list type="number">
     ///         <item>
-    ///             <b>Every child is checked at its own scope, now.</b> This is <see cref="WriteAsync" />'s
-    ///             body: step 3 runs the caller's subject against the child's address — its group, or
-    ///             the child itself on an update — at the moment the child is written. A deployment
-    ///             therefore grants nothing its creator does not hold at each child, and a right
-    ///             revoked between two children is honoured at the second.
+    ///             <b>Every child is checked at its own scope, now, against the durable rows.</b> This is
+    ///             <see cref="WriteAsync" />'s body: step 3 runs the caller's subject against the child's
+    ///             address — its group, or the child itself on an update — at the moment the child is
+    ///             written, and for a child it runs <c>FullyConsistent</c>. A deployment therefore grants
+    ///             nothing its creator does not hold at each child, and a right revoked between two
+    ///             children is honoured at the second.
+    ///             <para>
+    ///                 ⚠ <b>"Now" was not true at <c>MinimizeLatency</c>, which every other write uses.</b>
+    ///                 <c>CheckGrain</c> answers that mode from any cached entry with no TTL, and the
+    ///                 deployment's own <c>PUT</c> has just cached an allow for its creator at the group —
+    ///                 so a revoked creator went on writing children as themselves, from a reminder, until
+    ///                 the template ran out (the review of #39 saw exactly that, and
+    ///                 <c>DeploymentAuthorizationTests.ARightRevokedBetweenTwoChildrenIsHonouredAtTheSecond</c>
+    ///                 now holds the line). The same bypass lets a grant made after a refused child reach
+    ///                 the rerun, where a cached deny used to answer instead.
+    ///             </para>
     ///         </item>
     ///         <item>
     ///             <b>There is no platform identity to fall back to.</b> The platform has no system

@@ -2038,6 +2038,17 @@ public sealed class ResourceManagerService(
         // discover a customer's resource names by probing. 403 is returned only when the caller can
         // read the object but not perform the action." IResourceAuthorizer takes both permissions for
         // exactly that reason, and nothing below this line runs when it refuses.
+        //
+        // ⚠ FullyConsistent for a child, and MinimizeLatency for everything else. A child is written as
+        // a caller recorded when the parent was accepted, from a reminder, up to MaxResources steps
+        // later — and the deployment's own PUT has just cached an allow for that caller at the group.
+        // CheckGrain answers MinimizeLatency from any cached entry with no TTL, so at that mode a
+        // contributor revoked mid-deployment went on writing children as themselves until the end
+        // (the review of #39 ran exactly that and saw the second child created), and a deny cached
+        // by a refused child outlived the grant that should have cured it. docs/plan/07 § Consistency
+        // puts "anything where a stale allow is a real incident" on FullyConsistent; replaying a
+        // recorded identity with no token behind it is that case. It costs one durable walk per
+        // child, which the delete path already pays per request.
         trace.Enter(WriteStep.AuthorizationCheck);
 
         var authorized = await authorizer.AuthorizeAsync(
@@ -2045,7 +2056,7 @@ public sealed class ResourceManagerService(
             target.Registration.WritePermission,
             target.Registration.ReadPermission,
             request.Caller,
-            false,
+            parentOperationId != Guid.Empty,
             cancellationToken
         );
 

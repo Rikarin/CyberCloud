@@ -2,6 +2,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.ResourceManager.Reconcile;
 using Orleans.Multitenant;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -47,6 +48,20 @@ namespace CyberCloud.ResourceManager.Orchestration;
 public sealed class DeploymentDriver(IResourceManager manager, IGrainFactory grains, IClock clock) {
     /// <summary>How soon a waiting parent asks again. The child's own reminder decides how soon it moves.</summary>
     public static TimeSpan PollInterval { get; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    ///     How long one pass may keep writing before it yields and lets the reminder bring it back —
+    ///     <see cref="ReconcileDriver.PassBudget" /> unless a test says otherwise.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>docs/plan/08 § The reconcile loop's thirty seconds applies to a parent's pass too.</b> A
+    ///     pass runs inside the operation grain's turn, and a rerun of a hundred-resource template whose
+    ///     every child is a no-op made a hundred full write-path calls in that one turn. The budget is
+    ///     checked between steps, never inside one: a step is a single write, and stopping it half way
+    ///     would lose a child the write path had accepted. The cursor is persisted when the pass
+    ///     returns, so the next pass resumes at the step this one did not reach.
+    /// </remarks>
+    public TimeSpan Budget { get; init; } = ReconcileDriver.PassBudget;
 
     /// <summary>Runs one pass.</summary>
     /// <param name="spec">The parent operation's spec — the deployment's desired body and its creator.</param>
@@ -110,9 +125,27 @@ public sealed class DeploymentDriver(IResourceManager manager, IGrainFactory gra
             return await CancelAsync(spec, run, cancelReason, progress);
         }
 
+        var passStarted = Stopwatch.GetTimestamp();
+        var cursorAtStart = run.Cursor;
+
         while (run.Cursor < run.Steps.Count) {
             var step = run.Steps[run.Cursor];
             var label = Label(run);
+
+            // At least one step per pass, so a budget smaller than one write still makes progress.
+            if (run.Cursor > cursorAtStart && Stopwatch.GetElapsedTime(passStarted) >= Budget) {
+                var done = (run.Cursor - cursorAtStart).ToString(CultureInfo.InvariantCulture);
+
+                progress.Add(
+                    Progress(
+                        "yielding",
+                        $"{done} step(s) done this pass, which used its budget; {label} is next.",
+                        Percent(run, 0)
+                    )
+                );
+
+                return new(ReconcileOutcome.InProgress($"Yielded before {label}.", TimeSpan.Zero), progress.ToImmutable(), true);
+            }
 
             if (step.Status == DeploymentStepStatus.Pending) {
                 // ⚠ The ceiling for a step whose child was never accepted. A child that WAS accepted

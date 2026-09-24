@@ -137,7 +137,7 @@ public sealed class GatewayIsolationTests {
         var offenders = new List<string>();
 
         foreach (var file in Directory.EnumerateFiles(SourceRoot, "*.cs", SearchOption.AllDirectories)) {
-            var code = Regex.Replace(File.ReadAllText(file), @"^s*(///|//).*$", "", RegexOptions.Multiline);
+            var code = Regex.Replace(File.ReadAllText(file), @"^\s*(///|//).*$", "", RegexOptions.Multiline);
 
             if (code.Contains("WriteChildAsync", StringComparison.Ordinal)) {
                 offenders.Add(Path.GetFileName(file));

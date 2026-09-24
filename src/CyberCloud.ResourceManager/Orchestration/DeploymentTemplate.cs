@@ -169,6 +169,7 @@ public static class DeploymentTemplate {
         readonly Dictionary<string, JsonNode?> parameters = new(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string, JsonNode?> variables = new(StringComparer.OrdinalIgnoreCase);
         readonly HashSet<string> resolving = new(StringComparer.OrdinalIgnoreCase);
+        long produced;
         JsonObject declaredParameters = [];
         JsonObject declaredVariables = [];
 
@@ -695,22 +696,56 @@ public static class DeploymentTemplate {
             var function = (Function)node;
             var arguments = function.Arguments.Select(x => Call(x, depth + 1)).ToList();
 
-            switch (function.Name.ToLowerInvariant()) {
-                case "parameters":
-                    return Parameter(SingleText(function, arguments));
-                case "variables":
-                    return Variable(SingleText(function, arguments));
-                case "concat":
-                    return Concat(arguments);
-                case "resourceid":
-                    return JsonValue.Create(ResourceIdOf(arguments));
-                default:
-                    throw new TemplateException(
-                        $"The template calls '{function.Name}()', which is not supported. The supported functions "
-                        + $"are {string.Join(", ", SupportedFunctions.Select(static x => x + "()"))}."
-                    );
+            var result = function.Name.ToLowerInvariant() switch {
+                "parameters" => Parameter(SingleText(function, arguments)),
+                "variables" => Variable(SingleText(function, arguments)),
+                "concat" => Concat(arguments),
+                "resourceid" => JsonValue.Create(ResourceIdOf(arguments)),
+                _ => throw new TemplateException(
+                    $"The template calls '{function.Name}()', which is not supported. The supported functions "
+                    + $"are {string.Join(", ", SupportedFunctions.Select(static x => x + "()"))}."
+                )
+            };
+
+            Charge(result);
+            return result;
+        }
+
+        /// <summary>Counts a call's result against <see cref="DeploymentLimits.MaxEvaluatedLength" />.</summary>
+        /// <remarks>
+        ///     ⚠ <b>Every call's result is charged, not only the output.</b> The input caps do not bound
+        ///     the output: <c>v1 = concat(v0, v0)</c>, <c>v2 = concat(v1, v1)</c> and so on doubles with
+        ///     each variable, so a 1.6 KB template describes sixteen million characters at twenty
+        ///     variables and sixteen billion at thirty — and the evaluation runs in the gateway's
+        ///     process (step 2 and the what-if) as well as the silo's. Charging each result as it is
+        ///     made — a variable's copy at every reference, each argument before <c>concat()</c> joins
+        ///     them — refuses the template before the allocation that would exhaust the process: no
+        ///     result is larger than the arguments already charged for it, so nothing much larger than
+        ///     the cap is ever built. A result nested inside another is charged at each level, which
+        ///     overcounts by at most <see cref="DeploymentLimits.MaxDepth" /> times and keeps the count
+        ///     a bound on the work done, not only on what is kept.
+        /// </remarks>
+        void Charge(JsonNode? result) {
+            produced += Size(result);
+
+            if (produced > DeploymentLimits.MaxEvaluatedLength) {
+                throw new TemplateException(
+                    $"The template's expressions produce more than {DeploymentLimits.MaxEvaluatedLength} characters "
+                    + "between them, which is the cap. A large variable referenced many times, or concat() over "
+                    + "variables that each double the last, is the usual cause."
+                );
             }
         }
+
+        /// <summary>A value's length as JSON text, near enough to charge it — computed without writing it.</summary>
+        static long Size(JsonNode? node) =>
+            node switch {
+                null => 4,
+                JsonObject obj => 2 + obj.Sum(static x => x.Key.Length + 4 + Size(x.Value)),
+                JsonArray array => 2 + array.Sum(static x => 1 + Size(x)),
+                JsonValue v when v.TryGetValue<string>(out var text) => text.Length + 2,
+                _ => node.ToJsonString().Length
+            };
 
         static string SingleText(Function function, List<JsonNode?> arguments) {
             if (arguments.Count != 1 || arguments[0] is not JsonValue v || !v.TryGetValue<string>(out var name)) {

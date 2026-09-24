@@ -38,12 +38,16 @@ public interface IResourceBodyValidator {
 ///     names a resource that is not in it, or has a cycle is a <c>400</c> at the <c>PUT</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>A <c>PATCH</c> that carries no template is not checked here</b>: a merge patch omits what
-///     it does not change, and the template it would leave in place is the one that already passed
-///     this check. A <c>PATCH</c> that does carry one is evaluated with the parameters it carries, which
-///     is stricter than the merged result for the case where it changes the template and not the
-///     parameters — the parent operation evaluates the merged body again on its first pass, so nothing
-///     is missed, only reported later.
+///     ⚠ <b>A <c>PATCH</c> is checked only when it replaces both the template and the parameters.</b>
+///     The template and the parameters are each one string, so a merge patch that carries both decides
+///     the whole of what the merged body will evaluate — and that is the only patch whose result this
+///     step can know. One that carries only the template is evaluated against parameters it cannot
+///     see; checking it against none refused a valid change to a template whose required parameter was
+///     already stored, which is a false <c>400</c>. Reading the stored body here is not the answer:
+///     step 2 runs before step 3, and a refusal built from a resource's stored parameters would
+///     describe that resource to a caller who has not yet been authorized to see it. So a partial
+///     patch passes here and the parent operation evaluates the merged body on its first pass, where
+///     a template that does not deploy fails the operation naming why.
 /// </remarks>
 public sealed class DeploymentBodyValidator : IResourceBodyValidator {
     /// <inheritdoc />
@@ -54,7 +58,8 @@ public sealed class DeploymentBodyValidator : IResourceBodyValidator {
         if (verb == WriteVerb.Patch
             && !(body.TryGetProperty("properties", out var properties)
                 && properties.ValueKind == JsonValueKind.Object
-                && properties.TryGetProperty("template", out _))) {
+                && properties.TryGetProperty("template", out _)
+                && properties.TryGetProperty("parameters", out _))) {
             return Result.Success;
         }
 

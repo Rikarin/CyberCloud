@@ -479,6 +479,27 @@ public sealed class IsolationCluster : IAsyncLifetime {
         written.IsSuccess.ShouldBeTrue(written.Error?.Message);
     }
 
+    /// <summary>Deletes one tuple from a tenant's store — a revocation, as the engine sees one.</summary>
+    /// <param name="tenant">Whose store.</param>
+    /// <param name="target">The object.</param>
+    /// <param name="relation">The relation.</param>
+    /// <param name="subject">The subject.</param>
+    public async Task DeleteTupleAsync(
+        Guid tenant,
+        Authorization.Contracts.ObjectRef target,
+        string relation,
+        SubjectRef subject
+    ) {
+        var tuple = RelationTuple.Create(target, relation, subject);
+        tuple.IsSuccess.ShouldBeTrue(tuple.Error?.Message);
+
+        var deleted = await For(tenant)
+            .GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant))
+            .DeleteAsync(tuple.GetValueOrThrow());
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+    }
+
     // ── Principals — the directory objects a role assignment is checked against (issue #86) ────
 
     /// <summary>

@@ -115,6 +115,7 @@ import type {
   ResourcesDeploymentsData,
   ResourcesDeploymentsResource,
   ResourcesDeploymentsWhatIfContent,
+  ResourcesDeploymentsWhatIfResult,
   SampleWidgetsData,
   SampleWidgetsPingContent,
   SampleWidgetsPingResult,
@@ -1274,8 +1275,8 @@ export class CyberCloudApi {
   }
 
   /** whatIf — permission 'write'. */
-  whatIfDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: ResourcesDeploymentsWhatIfContent): Promise<ApiResponse<unknown>> {
-    return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}/whatIf`, body: content });
+  whatIfDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: ResourcesDeploymentsWhatIfContent): Promise<ApiResponse<ResourcesDeploymentsWhatIfResult>> {
+    return this.transport.send<ResourcesDeploymentsWhatIfResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}/whatIf`, body: content });
   }
 
   /** Reads one Widget. */

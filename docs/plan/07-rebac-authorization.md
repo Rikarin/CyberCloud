@@ -431,6 +431,13 @@ grant does the same. The portal's `AtLeastAsFresh` token is the fix on its own p
 carried the caller's latest token, or a grant that dropped cached denies, is owed — recorded in
 [08 § Long-running operations](08-resource-manager.md) beside the deployment that found it.
 
+⚠ **And in the revoke direction, where it is the incident this section is about.** The same cache let
+a deployment keep writing children as a creator revoked after the first one: the deployment's own `PUT`
+had cached their allow at the group, and every later child at `MinimizeLatency` hit it. A deployment's
+child is written as a recorded caller, from a reminder, with no token to be fresh against, so its step 3
+is `FullyConsistent` — which also closes the grant direction above *for children*
+(`DeploymentAuthorizationTests.ARightRevokedBetweenTwoChildrenIsHonouredAtTheSecond`).
+
 ## The Leopard index — and why it is not optional
 
 The naive `Check` walks group membership at request time. For `group:eng#member@group:platform#member`

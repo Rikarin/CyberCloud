@@ -322,8 +322,15 @@ reminder, with no token anywhere; what the parent carries is the `CallerContext`
 when the deployment's own `PUT` passed step 3, persisted in `OperationSpec.Caller` and never
 re-derived. Writing as that caller is safe for three reasons that are properties of the method: every
 child runs the whole write path, so step 3 checks that subject *at the child's own address, at the
-moment it is written* — a deployment grants nothing its creator lacks at each child, and a revocation
-between two children is honoured at the second; the platform has no system principal to fall back to
+moment it is written, against the durable rows* — a deployment grants nothing its creator lacks at each
+child, and a revocation between two children is honoured at the second. ⚠ The last clause was written
+before it was true: every other write's step 3 is `MinimizeLatency`, which `CheckGrain` answers from any
+cached entry with no TTL, and the deployment's own `PUT` has just cached an allow for its creator at the
+group — so the review of #39 revoked a contributor after the first child and watched the second created
+as them. A child's step 3 is `FullyConsistent` ([07 § Consistency](07-rebac-authorization.md): "anything
+where a stale allow is a real incident"; a recorded identity replayed from a reminder with no token is
+that), one durable walk per child
+(`DeploymentAuthorizationTests.ARightRevokedBetweenTwoChildrenIsHonouredAtTheSecond`); the platform has no system principal to fall back to
 and the method refuses an empty subject rather than letting step 3 deny it as a `404`; and the gateway
 cannot reach it — `GatewayIsolationTests.NoGatewaySourceFileWritesAsARecordedCaller` reads the
 gateway's source for it. `test/CyberCloud.Isolation`'s `DeploymentAuthorizationTests` drives the
@@ -345,7 +352,11 @@ cycle is refused with the cycle walked. `whatIf` answers per resource `Create`, 
 with a property diff against the resource read *as the caller* — so a resource they cannot read is a
 `Create`, which says nothing about it — and is served by `IDeploymentManager`, the entry point the
 registry names on the action (`ActionRegistration.EntryPoint`), because it answers for a deployment
-that need not exist and runs as the caller, neither of which an action handler can. The history is the
+that need not exist and runs as the caller, neither of which an action handler can. The published
+document says so (`x-cybercloud-entry-point`, and no "a `POST` to a name that does not exist is a
+`404`" on this action), and the answer is typed: Azure's `changes` is an array of objects, which
+`SchemaKind` cannot declare, so the verdict is repeated as three arrays of resource ids — `creates`,
+`modifies`, `noChanges` — in an open response schema that admits `changes` beside them. The history is the
 body: the parent writes `outputResources`, `steps`, `error` and `rollback` into the resource's
 read-only properties as it ends (`IResourceGrain.RecordReadOnlyAsync`), and the group's deployments are
 its deployment history. `CyberCloud.Resources` was a reserved provider namespace; it now admits a
@@ -367,12 +378,22 @@ provider whose every type renders nothing, which keeps the property the reservat
   resources; both change what "stopped at the first failure" means and neither is started.
 - **The what-if does not compare secret properties.** A read withholds them, so the current side never
   has them; they are left out on both sides rather than reported as a change on every run.
-- ⚠ **A child refused and retried after a grant can meet the cached refusal — found by
-  `DeploymentAuthorizationTests`.** Step 3 checks `MinimizeLatency`, which `CheckGrain` answers from any
-  cached entry with no TTL ([07 § Consistency](07-rebac-authorization.md)); the refusal caches a deny,
-  and a grant written after it does not reach the rerun's check. That is the existing
-  revoke-then-stale-read class in the grant direction and is as true of an ordinary `PUT` retried after
-  a grant; it is recorded here because a failed deployment is the case that invites the retry.
+- ⚠ **An ordinary `PUT` retried after a grant can meet a cached refusal — found by
+  `DeploymentAuthorizationTests`.** Step 3 checks `MinimizeLatency` for every write that is not a child,
+  which `CheckGrain` answers from any cached entry with no TTL ([07 § Consistency](07-rebac-authorization.md));
+  a refusal caches a deny, and a grant written after it does not reach the retry's check. For a
+  deployment's children this is closed — their check is `FullyConsistent`, and the test's "grant the
+  right and rerun" control now passes — but the class stands for a direct `PUT`.
+- **A pass yields between children after `ReconcileDriver.PassBudget`** (`DeploymentDriver.Budget`), so a
+  rerun of a hundred no-op children is several passes rather than one grain turn of a hundred writes;
+  a single child's write is never interrupted
+  (`DeploymentDriverBudgetTests.APassThatHasUsedItsBudgetYieldsBetweenStepsAndTheNextResumesAtTheCursor`).
+- **What a template's expressions produce is capped** at `DeploymentLimits.MaxEvaluatedLength`
+  (4 MB, Azure's cap on an expanded template), charged per call as it is made. The input caps did not
+  bound it: variables are evaluated once and referenced any number of times, so `concat()` over them
+  doubles per link, and a 1.6 KB template described sixteen million characters in the gateway's
+  process at twenty links
+  (`DeploymentTemplateTests.AnOutputThatDoublesThroughItsVariablesIsRefusedBeforeItIsBuilt`).
 - **The first pass waits for the reminder**, as every operation's does (the timer the class remarks on
   `OperationGrain` owe), and a child's end moves its parent through the one-way notification; a
   twenty-resource deployment is therefore bounded by its children's reminders, not by its parent's.

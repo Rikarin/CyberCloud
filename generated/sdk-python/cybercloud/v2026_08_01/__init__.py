@@ -82,6 +82,7 @@ __all__ = [
     "DeploymentData",
     "DeploymentResource",
     "DeploymentWhatIfContent",
+    "DeploymentWhatIfResult",
     "DocumentDatabaseAccountData",
     "DocumentDatabaseAccountListKeysResult",
     "DocumentDatabaseAccountPreset",

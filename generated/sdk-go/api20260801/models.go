@@ -3400,6 +3400,18 @@ type DeploymentWhatIfContentProperties struct {
 	Template string `json:"template"`
 }
 
+// DeploymentWhatIfResult is what whatIf returns.
+type DeploymentWhatIfResult struct {
+	// The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.
+	Creates []string `json:"creates"`
+	// The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.
+	Modifies []string `json:"modifies"`
+	// The resources a deployment would leave as they are, in deployment order.
+	NoChanges []string `json:"noChanges"`
+	// Succeeded: the template evaluated and every resource was compared.
+	Status string `json:"status"`
+}
+
 // WidgetTier is the values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.
 type WidgetTier string
 

@@ -162,6 +162,58 @@ public static class Deployments {
         );
 
     /// <summary>
+    ///     The <see cref="WhatIfAction" /> answer: the verdict for each resource as three typed lists,
+    ///     and Azure's per-resource <c>changes</c> beside them.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Open, and the reason is the vocabulary rather than a choice.</b> Azure's what-if result
+    ///     is <c>changes</c>, an array of objects each holding a <c>delta</c> array of objects, and
+    ///     <see cref="SchemaKind.Array" /> refuses an array of objects. So the verdict — the part a
+    ///     caller branches on — is also given as three arrays of resource ids the registry can type,
+    ///     and <see cref="ResourceSchema.RejectsUnknownProperties" /> is off so the published schema
+    ///     admits <c>changes</c> rather than denying it is there. Before this the action declared no
+    ///     response at all, and the published <c>200</c> was an unconstrained object that no generated
+    ///     client could type; the Python and Go clients dropped the answer entirely.
+    /// </remarks>
+    public static ResourceSchema WhatIfResponse { get; } =
+        ResourceSchema.Of(
+            [
+                new("/status", SchemaKind.Text, true, Description: "Succeeded: the template evaluated and every resource was compared."),
+                new(
+                    WhatIfCreatesPointer,
+                    SchemaKind.Array,
+                    true,
+                    Description: "The resources a deployment would create, in deployment order. A resource the caller "
+                    + "cannot read is listed here, because that is the one answer that says nothing about it."
+                ) { ElementKind = SchemaKind.Text },
+                new(
+                    WhatIfModifiesPointer,
+                    SchemaKind.Array,
+                    true,
+                    Description: "The resources a deployment would change, in deployment order. Each one's property "
+                    + "delta is in 'changes'."
+                ) { ElementKind = SchemaKind.Text },
+                new(
+                    WhatIfNoChangesPointer,
+                    SchemaKind.Array,
+                    true,
+                    Description: "The resources a deployment would leave as they are, in deployment order."
+                ) { ElementKind = SchemaKind.Text }
+            ]
+        ) with {
+            RejectsUnknownProperties = false
+        };
+
+    /// <summary>In a <see cref="WhatIfResponse" />: the resources that would be created.</summary>
+    public const string WhatIfCreatesPointer = "/creates";
+
+    /// <summary>In a <see cref="WhatIfResponse" />: the resources that would be modified.</summary>
+    public const string WhatIfModifiesPointer = "/modifies";
+
+    /// <summary>In a <see cref="WhatIfResponse" />: the resources that would be left alone.</summary>
+    public const string WhatIfNoChangesPointer = "/noChanges";
+
+    /// <summary>
     ///     Declares the type. Called by <c>CyberCloud.Providers.Resources</c>' provider, and by a test
     ///     that needs the real declaration rather than a copy of it.
     /// </summary>
@@ -187,7 +239,14 @@ public static class Deployments {
             .ResourceType(TypePath)
             .ApiVersion(V2026, Schema2026)
             .Permissions("read", "write", "delete")
-            .Action(WhatIfAction, ActionKind.Post, "write", request: WhatIfRequest, entryPoint: WhatIfEntryPoint)
+            .Action(
+                WhatIfAction,
+                ActionKind.Post,
+                "write",
+                request: WhatIfRequest,
+                response: WhatIfResponse,
+                entryPoint: WhatIfEntryPoint
+            )
             .Display(
                 "Deployment",
                 "Deployments",
@@ -204,10 +263,23 @@ public static class Deployments {
 ///     can hold a gateway thread for as long as its author likes. The numbers are Azure's where Azure
 ///     has one — 800 resources, 256 parameters, 4 MB — scaled down to what one resource group
 ///     deployed in sequence can finish inside a sensible window.
+///     <para>
+///         ⚠ <b>The input caps do not bound the output.</b> Variables are evaluated once and may be
+///         referenced any number of times, so a chain of <c>concat()</c>s over them doubles at each
+///         link: a 1.6 KB template described sixteen million characters at twenty links, and at thirty
+///         it would have exhausted the gateway. <see cref="MaxEvaluatedLength" /> is the cap on what
+///         the expressions produce, and it is the one of these that is not about the input at all.
+///     </para>
 /// </remarks>
 public static class DeploymentLimits {
     /// <summary>The largest template, in characters.</summary>
     public const int MaxTemplateLength = 1_048_576;
+
+    /// <summary>
+    ///     The most characters one evaluation's expressions may produce between them — Azure's cap on
+    ///     a template after its expressions are expanded, 4 MB.
+    /// </summary>
+    public const int MaxEvaluatedLength = 4_194_304;
 
     /// <summary>The largest parameter document, in characters.</summary>
     public const int MaxParametersLength = 262_144;
@@ -317,7 +389,8 @@ public sealed record WhatIfChange(
 public sealed record DeploymentWhatIf(ImmutableArray<WhatIfChange> Changes) {
     /// <summary>
     ///     The response body — <c>{ "status": "Succeeded", "changes": [ … ] }</c>, Azure's shape with
-    ///     this platform's resource ids.
+    ///     this platform's resource ids, and the verdict again as the three typed lists
+    ///     <see cref="Deployments.WhatIfResponse" /> declares.
     /// </summary>
     /// <returns>The JSON text.</returns>
     public string ToJson() {
@@ -326,6 +399,21 @@ public sealed record DeploymentWhatIf(ImmutableArray<WhatIfChange> Changes) {
         using (var writer = new Utf8JsonWriter(stream)) {
             writer.WriteStartObject();
             writer.WriteString("status", "Succeeded");
+
+            foreach (var (pointer, changeType) in (ReadOnlySpan<(string, string)>) [
+                         (Deployments.WhatIfCreatesPointer, WhatIfChangeTypes.Create),
+                         (Deployments.WhatIfModifiesPointer, WhatIfChangeTypes.Modify),
+                         (Deployments.WhatIfNoChangesPointer, WhatIfChangeTypes.NoChange)
+                     ]) {
+                writer.WriteStartArray(pointer[1..]);
+
+                foreach (var change in Changes.Where(x => string.Equals(x.ChangeType, changeType, StringComparison.Ordinal))) {
+                    writer.WriteStringValue(change.ResourceId);
+                }
+
+                writer.WriteEndArray();
+            }
+
             writer.WriteStartArray("changes");
 
             foreach (var change in Changes) {

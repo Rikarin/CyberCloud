@@ -16846,7 +16846,7 @@
       "post": {
         "operationId": "CyberCloud_Resources_deployments_WhatIf",
         "summary": "whatIf a CyberCloud.Resources/deployments.",
-        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "description": "An action never creates. This one is served by the platform's IDeploymentManager rather than by a handler: it runs as the caller, and it answers for a name that does not exist yet rather than refusing it with a 404.",
         "requestBody": {
           "required": true,
           "content": {
@@ -16859,10 +16859,12 @@
         },
         "responses": {
           "200": {
-            "description": "The action's result. ⚠ Unconstrained: this action declares no response schema, so no generated surface can type it. Declare one on IResourceTypeBuilder.Action.",
+            "description": "The action's result.",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments.WhatIfResponse"
+                }
               }
             }
           },
@@ -16893,7 +16895,8 @@
         },
         "x-cybercloud-permission": "write",
         "x-cybercloud-secret": false,
-        "x-cybercloud-long-running": false
+        "x-cybercloud-long-running": false,
+        "x-cybercloud-entry-point": "IDeploymentManager"
       },
       "x-cybercloud-resource-type": "CyberCloud.Resources/deployments",
       "x-cybercloud-action": "whatIf"
@@ -27764,6 +27767,45 @@
           "properties"
         ],
         "title": "CyberCloud.Resources.deployments.WhatIfRequest",
+        "type": "object"
+      },
+      "CyberCloud.Resources.deployments.WhatIfResponse": {
+        "additionalProperties": true,
+        "description": "What CyberCloud.Resources/deployments/whatIf returns.",
+        "properties": {
+          "creates": {
+            "description": "The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "modifies": {
+            "description": "The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "noChanges": {
+            "description": "The resources a deployment would leave as they are, in deployment order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "description": "Succeeded: the template evaluated and every resource was compared.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "creates",
+          "modifies",
+          "noChanges",
+          "status"
+        ],
+        "title": "CyberCloud.Resources.deployments.WhatIfResponse",
         "type": "object"
       },
       "CyberCloud.Sample.widgets": {

@@ -158,6 +158,88 @@ public sealed class DeploymentTemplateTests {
     }
 
     [Fact]
+    public void AnOutputThatDoublesThroughItsVariablesIsRefusedBeforeItIsBuilt() {
+        // Thirty doublings of sixteen characters describe sixteen billion — an OutOfMemoryException in
+        // whichever process evaluates it, and the gateway is one. Each variable is under every input cap.
+        const int Links = 30;
+        var variables = new JsonObject { ["v0"] = "aaaaaaaaaaaaaaaa" };
+
+        for (var i = 1; i <= Links; i++) {
+            variables[$"v{i}"] = $"[concat(variables('v{i - 1}'), variables('v{i - 1}'))]";
+        }
+
+        var widget = Widget("a");
+        widget["properties"]!["label"] = $"[variables('v{Links}')]";
+        var template = Template(widget);
+        template["variables"] = variables;
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var refused = Evaluate(template);
+        clock.Stop();
+
+        refused.IsFailure.ShouldBeTrue();
+        refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        refused.Error.Message.ShouldContain($"more than {DeploymentLimits.MaxEvaluatedLength} characters");
+        refused.Error.Target.ShouldBe(Deployments.TemplatePointer);
+        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
+
+        // One large variable referenced many times is the same problem without concat().
+        var wide = Template(Widget("b"));
+        wide["variables"] = new JsonObject { ["big"] = new string('x', 100_000) };
+
+        for (var i = 0; i < 50; i++) {
+            wide["resources"]![0]!["properties"]![$"p{i}"] = "[variables('big')]";
+        }
+
+        Evaluate(wide).Error!.Message.ShouldContain("which is the cap");
+
+        // And a template well inside the cap is untouched by it: ten doublings is sixteen thousand.
+        variables = new JsonObject { ["v0"] = "aaaaaaaaaaaaaaaa" };
+
+        for (var i = 1; i <= 10; i++) {
+            variables[$"v{i}"] = $"[concat(variables('v{i - 1}'), variables('v{i - 1}'))]";
+        }
+
+        widget = Widget("c");
+        widget["properties"]!["label"] = "[variables('v10')]";
+        template = Template(widget);
+        template["variables"] = variables;
+
+        var plan = Evaluate(template).GetValueOrThrow();
+        JsonNode.Parse(plan.Resources[0].Body)!["properties"]!["label"]!.GetValue<string>().Length.ShouldBe(16 * 1024);
+    }
+
+    [Fact]
+    public void APatchIsCheckedAtStepTwoOnlyWhenItDecidesTheWholeTemplateAndItsParameters() {
+        var template = Template(Widget("[parameters('name')]"));
+        template["parameters"] = new JsonObject { ["name"] = new JsonObject { ["type"] = "string" } };
+
+        static System.Text.Json.JsonElement Body(JsonObject properties) =>
+            System.Text.Json.JsonSerializer.SerializeToElement(new JsonObject { ["properties"] = properties });
+
+        var validator = new DeploymentBodyValidator();
+
+        // A new template whose required parameter is already stored: the merged body deploys, and this
+        // patch cannot see the stored value — refusing it was the false 400.
+        validator.Validate(Scope, Body(new() { ["template"] = template.ToJsonString() }), WriteVerb.Patch)
+            .IsSuccess.ShouldBeTrue();
+
+        // Both halves in the patch decide the merged body, so it is checked, and refused, here.
+        var both = validator.Validate(
+            Scope,
+            Body(new() { ["template"] = template.ToJsonString(), ["parameters"] = "{}" }),
+            WriteVerb.Patch
+        );
+
+        both.IsFailure.ShouldBeTrue();
+        both.Error!.Message.ShouldContain("'name' has no value");
+
+        // A PUT is the whole body, so it is always checked.
+        validator.Validate(Scope, Body(new() { ["template"] = template.ToJsonString() }), WriteVerb.Put)
+            .IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
     public void AVariableThatReachesItselfIsRefused() {
         var template = Template(Widget("[variables('a')]"));
         template["variables"] = new JsonObject { ["a"] = "[variables('b')]", ["b"] = "[concat(variables('a'), 'x')]" };

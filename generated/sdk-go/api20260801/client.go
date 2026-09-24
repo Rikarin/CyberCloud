@@ -2136,9 +2136,13 @@ func (c *DeploymentClient) List(tenantID, subscriptionID, resourceGroupName stri
 }
 
 // WhatIf runs whatIf — permission 'write'.
-func (c *DeploymentClient) WhatIf(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content DeploymentWhatIfContent) error {
+func (c *DeploymentClient) WhatIf(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content DeploymentWhatIfContent) (*DeploymentWhatIfResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName) + "/whatIf"
-	return call(ctx, c.transport, "POST", path, content, nil)
+	var result DeploymentWhatIfResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // SampleProvider holds the resource types of CyberCloud.Sample.
