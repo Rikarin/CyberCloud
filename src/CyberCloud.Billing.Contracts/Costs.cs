@@ -112,7 +112,7 @@ public sealed record CostQueryResult {
     ///     not shared — while untiered meters cost the same either way. Like <see cref="Filtered" />,
     ///     it depends on the caller's access alone.
     /// </remarks>
-    [Id(7)]
+    [Id(8)]
     public bool PricedAlone { get; init; }
 }
 

@@ -378,17 +378,19 @@ and a route kind at the same line). The hunks read so far are two insertions at 
 resolution keeps both sides, the gateway's route tests say whether it was right, and the count above
 is re-run rather than taken from either branch.
 
-⚠ **#38 against master itself conflicts too, and the count after that merge is 42, not 40.** Master
-moved while this branch was reviewed: at `768020c` (2026-09-24) it has published
-`CyberCloud.Resources/deployments` (#39) and `CyberCloud.KeyVault/vaults` (#30), so master's own document
-counts 41, and the command above run over the tree `git merge-tree --write-tree master issue-38-billing`
-writes counts 42. The same `git merge-tree` conflicts in seven files: this file,
-`charts/bundle/bundle.yaml`, `ProviderRegistry`, `GatewayRoute`, `DispatchStage`, and the gateway tests'
-`Fakes` and `GatewayHarness`. ⚠ **The generated surfaces merge without a conflict and are still
-wrong.** `openapi/`, `generated/` and `portal/libs/api` auto-merge textually; they are output, so the
-merge runs `./build.sh Generate` and commits what it writes rather than the textual merge. The Vault
-row's "not one of the 40" is master's to keep or drop at that merge, and every count in this section
-moves to the re-run number together.
+⚠ **This branch's third-review commit, merged into master, conflicts in twelve files — and two of
+them are a wire-format decision, not prose.** Master moved while the review ran: at `98b5799`
+(2026-09-24) it holds #38 up to its second review (`c301aba`), #41's cost page, #46, #34 and #32,
+and its own document counts 42 types. Only this commit is left to merge, and `git merge-tree
+--write-tree master issue-38-billing` conflicts in `charts/bundle/bundle.yaml`, docs 22 and 24, every
+file under `openapi/`, `generated/` and `portal/libs/api` that the budget's scope description reaches,
+`Costs.cs` and `CostQueryGrain`. ⚠ **`CostQueryResult`'s `[Id(7)]` is master's `Granularity` (#41), so
+`PricedAlone` is `[Id(8)]` here**, and the resolution keeps both and renumbers neither. `CostQueryGrain`
+takes master's `Answer(grouping, granularity, …)` and this commit's order — net, decide the 404, price
+what the caller may read — and passes both `granularity` and `pricedAlone`. The generated surfaces are
+output: the merge runs `./build.sh Generate` and commits what it writes. Every count in this section
+moves to the re-run number together, which is 42 on master today and stays 42, because this commit
+publishes no type.
 
 ⚠ **Four branches recounted to 24 on the same day from the same 23, and none of them was right
 after the others merged.** #30 counted `Storage/accounts/fileShares`, #31 `Network/virtualNetworks/natGateways`,
