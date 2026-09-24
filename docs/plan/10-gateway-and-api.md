@@ -188,6 +188,23 @@ itself, behind the same seam. ⚠ The gateway never names `IResourceManager.Writ
 door a deployment's children go through as their recorded caller —
 `GatewayIsolationTests.NoGatewaySourceFileWritesAsARecordedCaller` reads this project's source for it.
 
+**The identity administration API is a sixth component behind the same door, under the third
+reserved namespace (#43, widened by #41):** `/tenants/{t}/providers/CyberCloud.Identity/` followed by
+`invitations`, `invitations/{id}`, `invitations/{id}/resend`, `members`, `members/{id}`,
+`applications`, `applications/{id}`, `applications/{id}/rotateSecret`, `sessions` or
+`sessions/{id}`, every id the `N` form and nothing else. Routed as `RouteKind.Identity` before the
+scope grammars and the `POST` branch — `…/resend` and `…/rotateSecret` would otherwise read as
+actions on a resource — and, under the namespace, that grammar alone: anything else is a `400` that
+lists the ten addresses. A `POST` on `invitations` reaches `IInvitationManager` as it did under #43;
+every other address reaches `IIdentityAdministration`, both owning their checks
+([11 § Sign-up and tenant creation](11-identity.md)). A verb an address doesn't take is a `405`
+with `Allow`, which makes this the fourth family to answer one. The two answers that return a
+client secret — the registration and the rotation — carry `Cache-Control: no-store`, a `secret: true`
+action's rule. ⚠ **Not in the generated document, #63's question asked a fifth time**, for the
+reason the resource graph's isn't: `portal/apps/portal/src/app/api/identity-admin.ts` is the portal's
+second hand-written client, beside `RoleAssignmentsApi` and on the same transport, and the fix is the
+same non-registry source.
+
 ## Request pipeline
 
 Order matters and each step is here for a named reason.

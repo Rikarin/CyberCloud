@@ -465,4 +465,27 @@ public static partial class IdentityLog {
         Message = "Invitation {InvitationId} into tenant {TenantId} accepted by user {UserId}."
     )]
     public static partial void InvitationAccepted(ILogger logger, Guid tenantId, Guid invitationId, Guid userId);
+
+    /// <summary>An invitation was mailed again under a new link. Issue #41.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant.</param>
+    /// <param name="invitationId">The invitation.</param>
+    /// <param name="sending">Which mail this was, the first counted as 1.</param>
+    [LoggerMessage(
+        EventId = 1150,
+        Level = LogLevel.Information,
+        Message = "Invitation {InvitationId} into tenant {TenantId} was resent as mail {Sending}."
+    )]
+    public static partial void InvitationResent(ILogger logger, Guid tenantId, Guid invitationId, int sending);
+
+    /// <summary>An invitation was revoked: its link opens nothing. Issue #41.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant.</param>
+    /// <param name="invitationId">The invitation.</param>
+    [LoggerMessage(
+        EventId = 1151,
+        Level = LogLevel.Information,
+        Message = "Invitation {InvitationId} into tenant {TenantId} was revoked."
+    )]
+    public static partial void InvitationRevoked(ILogger logger, Guid tenantId, Guid invitationId);
 }

@@ -833,3 +833,143 @@ sealed class RecordingInvitationManager : IInvitationManager {
         return Task.FromResult(OnInvite(request));
     }
 }
+
+/// <summary>
+///     An <see cref="IIdentityAdministration" /> that records every call and answers with canned
+///     objects, so the routing tests prove which call a verb and an address reach — and nothing
+///     about the check, which is <c>IdentityAdministrationTests</c>' in <c>CyberCloud.Isolation</c>.
+///     Issue #41.
+/// </summary>
+sealed class RecordingIdentityAdministration : IIdentityAdministration {
+    /// <summary>One call: which method, with what, on which id.</summary>
+    public sealed record Call(string Operation, IdentityAdministrationRequest Request, Guid Id, ApplicationDraft? Draft);
+
+    /// <summary>The canned id every item answer carries.</summary>
+    public static Guid ItemId { get; } = Guid.Parse("0a0b0c0d-0e0f-4000-8000-00000000abcd");
+
+    /// <summary>Every call, in order.</summary>
+    public ConcurrentQueue<Call> Calls { get; } = new();
+
+    /// <summary>What every call answers instead of its canned object, when set.</summary>
+    public Error? Refuse { get; set; }
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<MemberSnapshot>>> ListMembersAsync(IdentityAdministrationRequest request, CancellationToken cancellationToken = default) =>
+        Answer(nameof(ListMembersAsync), request, Guid.Empty, null, (IReadOnlyList<MemberSnapshot>)[Member(request)]);
+
+    /// <inheritdoc />
+    public Task<Result<MemberSnapshot>> RemoveMemberAsync(IdentityAdministrationRequest request, Guid userId, CancellationToken cancellationToken = default) =>
+        Answer(nameof(RemoveMemberAsync), request, userId, null, Member(request) with { UserId = userId, Status = "deprovisioned" });
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<InvitationSnapshot>>> ListInvitationsAsync(IdentityAdministrationRequest request, CancellationToken cancellationToken = default) =>
+        Answer(nameof(ListInvitationsAsync), request, Guid.Empty, null, (IReadOnlyList<InvitationSnapshot>)[Invitation(request, ItemId)]);
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> ResendInvitationAsync(IdentityAdministrationRequest request, Guid invitationId, CancellationToken cancellationToken = default) =>
+        Answer(nameof(ResendInvitationAsync), request, invitationId, null, Invitation(request, invitationId));
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> RevokeInvitationAsync(IdentityAdministrationRequest request, Guid invitationId, CancellationToken cancellationToken = default) =>
+        Answer(nameof(RevokeInvitationAsync), request, invitationId, null, Invitation(request, invitationId) with { Status = "revoked" });
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<ApplicationSnapshot>>> ListApplicationsAsync(IdentityAdministrationRequest request, CancellationToken cancellationToken = default) =>
+        Answer(nameof(ListApplicationsAsync), request, Guid.Empty, null, (IReadOnlyList<ApplicationSnapshot>)[Application(ItemId)]);
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationSnapshot>> GetApplicationAsync(IdentityAdministrationRequest request, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Answer(nameof(GetApplicationAsync), request, applicationId, null, Application(applicationId));
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationRegistered>> CreateApplicationAsync(IdentityAdministrationRequest request, ApplicationDraft draft, CancellationToken cancellationToken = default) =>
+        Answer(
+            nameof(CreateApplicationAsync),
+            request,
+            Guid.Empty,
+            draft,
+            new ApplicationRegistered { Application = Application(ItemId), ClientSecret = draft.IsPublicClient ? "" : "the-secret-shown-once" }
+        );
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationRegistered>> RotateApplicationSecretAsync(IdentityAdministrationRequest request, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Answer(
+            nameof(RotateApplicationSecretAsync),
+            request,
+            applicationId,
+            null,
+            new ApplicationRegistered { Application = Application(applicationId), ClientSecret = "the-rotated-secret" }
+        );
+
+    /// <inheritdoc />
+    public Task<Result> DeleteApplicationAsync(IdentityAdministrationRequest request, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Plain(nameof(DeleteApplicationAsync), request, applicationId);
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<SessionSnapshot>>> ListOwnSessionsAsync(IdentityAdministrationRequest request, CancellationToken cancellationToken = default) =>
+        Answer(
+            nameof(ListOwnSessionsAsync),
+            request,
+            Guid.Empty,
+            null,
+            (IReadOnlyList<SessionSnapshot>)[
+                new SessionSnapshot {
+                    SessionId = ItemId,
+                    ClientId = "cyc-portal",
+                    DeviceLabel = "Firefox on Windows",
+                    CreatedAt = DateTimeOffset.UnixEpoch,
+                    LastUsedAt = DateTimeOffset.UnixEpoch,
+                    Methods = ["password", "emailOtp"],
+                    IsCurrent = request.CurrentSessionId == ItemId
+                }
+            ]
+        );
+
+    /// <inheritdoc />
+    public Task<Result> RevokeOwnSessionAsync(IdentityAdministrationRequest request, Guid sessionId, CancellationToken cancellationToken = default) =>
+        Plain(nameof(RevokeOwnSessionAsync), request, sessionId);
+
+    Task<Result<T>> Answer<T>(string operation, IdentityAdministrationRequest request, Guid id, ApplicationDraft? draft, T value)
+        where T : notnull {
+        Calls.Enqueue(new(operation, request, id, draft));
+        return Task.FromResult(Refuse is { } error ? Result<T>.Failure(error) : Result<T>.Success(value));
+    }
+
+    Task<Result> Plain(string operation, IdentityAdministrationRequest request, Guid id) {
+        Calls.Enqueue(new(operation, request, id, null));
+        return Task.FromResult(Refuse is { } error ? Result.Failure(error) : Result.Success);
+    }
+
+    static MemberSnapshot Member(IdentityAdministrationRequest request) =>
+        new() {
+            UserId = ItemId,
+            Email = "member@contoso.example",
+            DisplayName = "A Member",
+            Status = "active",
+            CreatedAt = DateTimeOffset.UnixEpoch
+        };
+
+    static InvitationSnapshot Invitation(IdentityAdministrationRequest request, Guid id) =>
+        new() {
+            InvitationId = id,
+            TenantId = request.TenantId,
+            UserId = ItemId,
+            Email = "colleague@contoso.example",
+            Status = "pending",
+            ExpiresAt = DateTimeOffset.UnixEpoch.AddDays(7),
+            SentAt = DateTimeOffset.UnixEpoch,
+            Sendings = 1
+        };
+
+    static ApplicationSnapshot Application(Guid id) =>
+        new() {
+            ApplicationId = id,
+            ClientId = "4f1e2d3c-0000-4000-8000-000000000001",
+            DisplayName = "Acme dashboard",
+            RedirectUris = ["https://acme.example/cb"],
+            Scopes = ["openid", "profile"],
+            IsPublicClient = false,
+            CreatedAt = DateTimeOffset.UnixEpoch,
+            ClientSecretIssuedAt = DateTimeOffset.UnixEpoch
+        };
+}

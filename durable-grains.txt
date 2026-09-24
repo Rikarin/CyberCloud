@@ -388,3 +388,11 @@ CyberCloud.Identity.Grains.ConsentGrain
 # durable tier already, and an invitation that outlived a hot-tier flush while its user did not would
 # be the worse split.
 CyberCloud.Identity.Grains.InvitationGrain
+#
+# DirectoryIndexGrain is the list of a tenant's users, invitations or applications (#41, the identity
+# administration pages), and DURABLE because it is the only thing that can enumerate them: every one
+# is keyed by a random id, the email and client indexes are keyed by digests, and so "rebuildable by
+# scanning" means scanning the durable store — the incident-time operation the indexes above exist
+# to avoid. Its loss is a member no administrator can see, list or remove. Written once per created
+# object; read by an owner opening a page.
+CyberCloud.Identity.Grains.DirectoryIndexGrain

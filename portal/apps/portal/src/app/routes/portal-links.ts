@@ -87,6 +87,14 @@ export const links = {
     `${links.resourceGroup(subscriptionId, resourceGroup)}/terminal` +
     (console === undefined ? '' : `?console=${seg(console)}`),
 
+  /**
+   * The identity administration pages (#41) — tenant-wide, so no subscription in the path: the
+   * tenant is the token's, as everywhere here.
+   */
+  identityMembers: () => '/identity/members',
+  identityApplications: () => '/identity/applications',
+  identitySessions: () => '/identity/sessions',
+
   /** The operation view, and where to go once it succeeds. */
   operation: (operationId: string, then?: string) =>
     `/operations/${seg(operationId)}` + (then === undefined ? '' : `?then=${seg(then)}`)

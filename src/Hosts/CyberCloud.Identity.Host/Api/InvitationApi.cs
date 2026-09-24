@@ -47,7 +47,7 @@ public sealed record InvitationAcceptRequest(
 /// <param name="Found">Whether the link names an invitation. When false, <paramref name="Message" /> says why.</param>
 /// <param name="Email">The address invited — the account being created.</param>
 /// <param name="TenantName">The organisation.</param>
-/// <param name="Status"><c>pending</c>, <c>accepted</c>, <c>expired</c> or <c>withdrawn</c>.</param>
+/// <param name="Status"><c>pending</c>, <c>accepted</c>, <c>expired</c>, <c>withdrawn</c> or <c>revoked</c>.</param>
 /// <param name="Succeeded">Whether an accept made the person a member and signed them in.</param>
 /// <param name="PortalUrl">Where to go next — the portal, from its registration; empty when none is configured.</param>
 /// <param name="Message">What to render, verbatim.</param>
@@ -145,6 +145,7 @@ public sealed class InvitationApi(
             InvitationStatus.Expired => "This invitation has expired. Ask whoever sent it for a new one.",
             InvitationStatus.Withdrawn =>
                 "This invitation can no longer be used. If you have joined already, sign in; otherwise ask whoever sent it.",
+            InvitationStatus.Revoked => "This invitation was withdrawn by whoever sent it. Ask them if you should still join.",
             _ => string.Empty
         });
     }

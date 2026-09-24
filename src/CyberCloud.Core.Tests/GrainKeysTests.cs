@@ -690,6 +690,46 @@ public class GrainKeysTests {
     }
 
     [Fact]
+    public void TheDirectoryIndexIsOneKeyPerCollectionFromAClosedSet() {
+        GrainKeys.DirectoryIndex(GrainKeys.DirectoryUsers).ShouldBe("idx/dir/users");
+        GrainKeys.DirectoryIndex(GrainKeys.DirectoryInvitations).ShouldBe("idx/dir/invitations");
+        GrainKeys.DirectoryIndex(GrainKeys.DirectoryApplications).ShouldBe("idx/dir/applications");
+
+        foreach (var collection in GrainKeys.DirectoryCollections) {
+            var key = GrainKeys.DirectoryIndex(collection);
+            var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+            parsed.Kind.ShouldBe(GrainKeyKind.DirectoryIndex);
+            parsed.Name.ShouldBe(collection);
+            parsed.Digest.ShouldBeEmpty("the one idx/ shape whose payload is a name, not a digest");
+            parsed.ToString().ShouldBe(key);
+            GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+        }
+
+        // Closed: a fourth collection, a near-miss spelling and a digest in the name's place are
+        // refused rather than read as a list nobody writes to.
+        Should.Throw<ArgumentException>(static () => GrainKeys.DirectoryIndex("groups"));
+        GrainKeys.Parse("idx/dir/groups").IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("idx/dir/Users").IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("idx/dir/0123456789abcdef").IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("idx/dir/users/extra").IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void TheDirectoryIndexCollidesWithNoOtherShape() {
+        var directory = GrainKeys.DirectoryCollections.Select(GrainKeys.DirectoryIndex).ToArray();
+
+        foreach (var id in Corpus.ResourceIds(300, 4100)) {
+            foreach (var other in Corpus.EveryGrainKeyShapeFor(id)) {
+                directory.ShouldNotContain(other);
+            }
+
+            directory.ShouldNotContain(GrainKeys.Invitation(id.Id));
+            directory.ShouldNotContain(GrainKeys.ClientIndex(id.TenantId, id.Name));
+        }
+    }
+
+    [Fact]
     public void TheTwoIssue43ShapesCollideWithNoneOfTheOthers() {
         foreach (var id in Corpus.ResourceIds(300, 4300)) {
             var device = GrainKeys.DeviceAuthorization(id.Id.ToString("N")[..8].ToUpperInvariant());
@@ -1478,9 +1518,10 @@ public class GrainKeysTests {
     ///     twenty-nine on the day it merged beside #90's <see cref="GrainKeyKind.WatchIndex" /> and
     ///     #94's two, which is the drift the prose paragraph describes happening to itself; thirty-one
     ///     since #43's <see cref="GrainKeyKind.DeviceAuthorization" /> and
-    ///     <see cref="GrainKeyKind.Invitation" />.
+    ///     <see cref="GrainKeyKind.Invitation" />; thirty-two since #41's
+    ///     <see cref="GrainKeyKind.DirectoryIndex" />.
     /// </summary>
     [Fact]
-    public void TheClosedSetHasThirtyOneShapes() =>
-        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(31);
+    public void TheClosedSetHasThirtyTwoShapes() =>
+        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(32);
 }

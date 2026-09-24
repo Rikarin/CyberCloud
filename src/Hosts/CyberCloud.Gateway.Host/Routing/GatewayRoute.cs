@@ -138,17 +138,20 @@ enum RouteKind {
     ResourceGraphQuery,
 
     /// <summary>
-    ///     An invitation — <c>POST /tenants/{t}/providers/CyberCloud.Identity/invitations</c> with
-    ///     <c>{ "email": "…" }</c>. docs/plan/11 § Sign-up and tenant creation; issue #43, step 7.
+    ///     An address under <c>/tenants/{t}/providers/CyberCloud.Identity/</c> — the invitations of
+    ///     issue #43 and the members, applications and own sessions of issue #41.
+    ///     docs/plan/11 § The object model.
     /// </summary>
     /// <remarks>
     ///     ⚠ The resource graph's arrangement under a namespace of its own
-    ///     (<c>InvitationAddress.ProviderNamespace</c>): one grammar, asked before the scope and
-    ///     resource grammars and the <c>POST</c> branch, a <c>400</c> naming the address for
-    ///     anything else under it. Dispatched to <c>IInvitationManager</c>, which owns the
-    ///     <c>assignRole</c> check. <c>InvitationRoutingTests</c> pins the shape and the verb.
+    ///     (<c>IdentityAddress.ProviderNamespace</c>): one grammar, asked before the scope and
+    ///     resource grammars and the <c>POST</c> branch, a <c>400</c> listing the addresses for
+    ///     anything else under it. Dispatched by <c>IdentityDispatch</c>: a <c>POST</c> on the
+    ///     invitations collection to <c>IInvitationManager</c>, everything else to
+    ///     <c>IIdentityAdministration</c>, and both own their checks. <c>IdentityRoutingTests</c>
+    ///     pins the shapes and the verbs.
     /// </remarks>
-    Invitation,
+    Identity,
 
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
@@ -269,8 +272,8 @@ enum RouteKind {
 ///     The query address, for <see cref="RouteKind.ResourceGraphQuery" />. ⚠ Its tenant is the
 ///     <i>token's</i> too — the address carries nothing but a tenant, and that one is rebuilt.
 /// </param>
-/// <param name="Invitations">
-///     The invitations address, for <see cref="RouteKind.Invitation" />. ⚠ The token's tenant, rebuilt,
+/// <param name="Identity">
+///     The identity address, for <see cref="RouteKind.Identity" />. ⚠ The token's tenant, rebuilt,
 ///     as for <paramref name="ResourceGraph" />.
 /// </param>
 readonly record struct GatewayRoute(
@@ -285,7 +288,7 @@ readonly record struct GatewayRoute(
     RoleAssignmentCollectionId RoleAssignments = default,
     ScopeCollectionId Scopes = default,
     ResourceGraphAddress ResourceGraph = default,
-    InvitationAddress Invitations = default
+    IdentityAddress Identity = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -318,7 +321,7 @@ readonly record struct GatewayRoute(
             RouteKind.ScopeCollection => Scopes.Path,
             // The query answers a collection envelope and pages with a nextLink built from this.
             RouteKind.ResourceGraphQuery => ResourceGraph.Path,
-            RouteKind.Invitation => Invitations.Path,
+            RouteKind.Identity => Identity.Path,
             _ => ""
         };
 }
@@ -501,21 +504,29 @@ static class GatewayRouter {
             );
         }
 
-        // ── An invitation, under the third reserved namespace (#43). ─────────────────────────────
+        // ── The identity addresses, under the third reserved namespace (#43, #41). ─────────────
         //
-        // ⚠ THE RESOURCE GRAPH'S ARRANGEMENT, BELOW: one grammar, a 400 naming the address for any
-        // other path under the namespace, and before the POST branch so ResolveAction never reads the
-        // address as an action called `invitations`. POST only; anything else on the address is a 405
-        // that names the verb, answered by dispatch where the Allow header is written.
-        if (InvitationAddress.IsUnderNamespace(path)) {
-            var invitations = InvitationAddress.ParsePath(path);
+        // ⚠ THE RESOURCE GRAPH'S ARRANGEMENT, BELOW: one grammar, a 400 listing the addresses for any
+        // other path under the namespace, and before the POST branch so ResolveAction never reads
+        // `…/resend` or `…/rotateSecret` as an action on a resource. A verb an address doesn't take
+        // is a 405 that names the ones it does, answered by dispatch where the Allow header is
+        // written. ⚠ The tenant is the token's, rebuilt, as for every tenant-scoped address here.
+        if (IdentityAddress.IsUnderNamespace(path)) {
+            var identity = IdentityAddress.ParsePath(path);
 
-            if (invitations.TryGetError(out var invitationsError)) {
-                return Result<GatewayRoute>.Failure(invitationsError);
+            if (identity.TryGetError(out var identityError)) {
+                return Result<GatewayRoute>.Failure(identityError);
             }
 
             return Result<GatewayRoute>.Success(
-                new(RouteKind.Invitation, default, "", Guid.Empty, "", Invitations: new(tenantId))
+                new(
+                    RouteKind.Identity,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    Identity: identity.GetValueOrThrow() with { TenantId = tenantId }
+                )
             );
         }
 

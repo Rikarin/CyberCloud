@@ -97,6 +97,9 @@ sealed class GatewayHarness {
     /// <summary>The recording invitation manager stage 8 dispatches an invitation to (#43).</summary>
     public RecordingInvitationManager Invitations { get; } = new();
 
+    /// <summary>The recording identity administration stage 8 dispatches every other identity address to (#41).</summary>
+    public RecordingIdentityAdministration Identity { get; } = new();
+
     /// <summary>The operation reader, scripted so an LRO poll needs no cluster.</summary>
     public ScriptedOperationReader Operations { get; } = new();
 
@@ -171,7 +174,7 @@ sealed class GatewayHarness {
             new RateLimitStage(new GatewayRateLimiter(Counters)),
             new RouteStage(new OneTypeRegistry(), Options),
             new ValidateStage(Options),
-            new DispatchStage(Manager, Scopes, Roles, graph ?? Graph, Deployments, Invitations, Operations, Tickets, Options)
+            new DispatchStage(Manager, Scopes, Roles, graph ?? Graph, Deployments, Invitations, Identity, Operations, Tickets, Options)
         ];
 
         pipeline = new(Stages, NullLogger<GatewayPipeline>.Instance);
@@ -199,13 +202,15 @@ sealed class GatewayHarness {
     ///     is the shape docs/plan/06 § Platform administration needs and the reason no request header
     ///     can supply one.
     /// </param>
+    /// <param name="sessionId">The <c>sid</c> claim — the token session, or empty (#41).</param>
     public string Token(
         Guid tenantId,
         string subjectId = "user-1",
         string subjectType = "user",
-        string impersonatedBy = ""
+        string impersonatedBy = "",
+        string sessionId = ""
     ) =>
-        tokens.Issue(new(tenantId, subjectType, subjectId, "", impersonatedBy, Clock.UtcNow.AddMinutes(10)));
+        tokens.Issue(new(tenantId, subjectType, subjectId, "", impersonatedBy, Clock.UtcNow.AddMinutes(10), sessionId));
 
     /// <summary>The scope path of a tenant's <c>prod</c> group — the parent of <see cref="ResourcePath" />.</summary>
     /// <param name="tenantId">Which tenant's path to spell.</param>

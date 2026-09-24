@@ -82,6 +82,18 @@ public sealed class UserGrain(
                 );
         }
 
+        // ⚠ Listed before it exists — IDirectoryIndexGrain's remarks. A crash after this line leaves
+        // an id whose grain answers "not found", which a listing skips; the other order would leave
+        // a person no administrator can find. Issue #41.
+        var listed = await grains
+            .ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IDirectoryIndexGrain>(GrainKeys.DirectoryIndex(GrainKeys.DirectoryUsers))
+            .AddAsync(userId);
+
+        if (listed.TryGetError(out var unlisted)) {
+            return Result<UserProfile>.Failure(unlisted);
+        }
+
         state.State.Email = address;
         state.State.DisplayName = displayName ?? string.Empty;
         state.State.Status = status;

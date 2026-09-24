@@ -126,6 +126,10 @@ static class GatewayServiceCollectionExtensions {
         // refusing one, and an invite on a gateway that kept it would be checked and then refused.
         services.Replace(ServiceDescriptor.Singleton<IInvitationIssuer, GrainInvitationIssuer>());
 
+        // #41: the identity directory behind the administration API, Replace for the same reason —
+        // the manager TryAdds a refusing one, and every page would be checked and then refused.
+        services.Replace(ServiceDescriptor.Singleton<IIdentityDirectory, GrainIdentityDirectory>());
+
         // ⚠ THE SEAMS CyberCloud.Communication/services' SYNCHRONOUS ACTIONS HOLD, AND THIS HOST IS
         // WHERE THEY RUN. A synchronous action is served inside ResourceManagerService.ActionAsync,
         // in this process; `send`, `status`, `checkSuppression` and `listSuppressions` reach the

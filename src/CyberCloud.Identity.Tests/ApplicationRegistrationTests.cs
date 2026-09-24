@@ -109,6 +109,32 @@ public sealed class ApplicationRegistrationTests(IdentityCluster cluster) {
         created.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
     }
 
+    [Theory]
+    [InlineData("http://app.example.com/callback")]
+    [InlineData("javascript:alert(document.cookie)")]
+    [InlineData("data:text/html,<script>alert(1)</script>")]
+    [InlineData("vbscript:msgbox")]
+    [InlineData("myapp:/callback")]
+    public async Task ARedirectUriOAuthDoesNotAllowIsRefusedAtRegistration(string uri) {
+        // ⚠ #41's review: #94's check refused a relative URI and a fragment and let every one of
+        // these through, which mattered once an owner could register a client over HTTP. A plain
+        // http host carries the code in the clear; a script scheme runs it in the page.
+        var created = await cluster.Application(Guid.NewGuid()).CreateAsync(Valid() with { RedirectUris = [uri] });
+
+        created.IsSuccess.ShouldBeFalse($"'{uri}' was registered");
+        created.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+    }
+
+    [Theory]
+    [InlineData("http://127.0.0.1:8123/callback")]
+    [InlineData("http://[::1]:8123/callback")]
+    [InlineData("http://localhost:8123/callback")]
+    public async Task ANativeClientsLoopbackRedirectIsAllowedOverPlainHttp(string uri) {
+        var created = await cluster.Application(Guid.NewGuid()).CreateAsync(Valid($"loopback-{Guid.NewGuid():N}") with { RedirectUris = [uri] });
+
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+    }
+
     [Fact]
     public async Task ANativeClientsCustomSchemeIsStillAllowed() {
         // The counterpart the refusal above needs: OAuth 2.1 registers a native client with a

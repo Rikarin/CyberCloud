@@ -1,6 +1,5 @@
 using CyberCloud.Identity.Contracts;
 using CyberCloud.Authorization.Contracts;
-using CyberCloud.Core;
 using CyberCloud.Core.Resources;
 using CyberCloud.Identity.Host.Api;
 using CyberCloud.Identity.Host.RateLimiting;
@@ -427,13 +426,16 @@ public static class DegradedModeHandlers {
     ///         that reads the vault: it is a read, not a rotation, and it has to happen before either.
     ///     </para>
     /// </remarks>
-    /// <param name="secrets">The vault seam a confidential client's secret is checked through.</param>
+    /// <param name="secrets">
+    ///     Where a confidential client's secret is checked — the grain's digest for one the platform
+    ///     issued (#41), the vault seam for one a registration names.
+    /// </param>
     /// <param name="logger">Where the reason a confidential client was refused goes — the caller never sees it.</param>
     public sealed class ValidateTokenRequest(
         TokenApi api,
         IClientResolver clients,
         FirstPartyClients firstParty,
-        IClientSecretSeam secrets,
+        ClientSecretVerifier secrets,
         ILogger<ValidateTokenRequest> logger
     ) : IOpenIddictServerHandler<ValidateTokenRequestContext> {
         /// <summary>The refusal, verbatim, for a browser client's request from an origin that is not its own.</summary>
@@ -536,15 +538,15 @@ public static class DegradedModeHandlers {
                     return;
                 }
 
-                if (client.ClientSecretRef.IsEmpty) {
-                    RefuseClient(tenantId, grantName, "client-has-no-credential");
+                if (!ClientSecretVerifier.HasCredential(client)) {
+                    RefuseClient(tenantId, grantName, ClientSecretVerifier.NoCredential);
                     context.Reject(OpenIddictConstants.Errors.InvalidClient, ClientNotAuthenticated);
 
                     return;
                 }
 
                 var verified = await secrets.VerifyAsync(
-                    client.ClientSecretRef,
+                    client,
                     context.Request.ClientSecret,
                     context.CancellationToken
                 );
@@ -1251,7 +1253,7 @@ public static class DegradedModeHandlers {
     ///     confidential client — its secret.
     /// </summary>
     /// <param name="clients">The client resolver.</param>
-    /// <param name="secrets">The vault seam a confidential client's secret is checked through.</param>
+    /// <param name="secrets">Where a confidential client's secret is checked, issued or vaulted.</param>
     /// <remarks>
     ///     <para>
     ///         ⚠ <b>Refresh tokens only, and an access token is told so rather than quietly
@@ -1270,7 +1272,7 @@ public static class DegradedModeHandlers {
     ///         request that names none.
     ///     </para>
     /// </remarks>
-    public sealed class ValidateRevocationRequest(IClientResolver clients, IClientSecretSeam secrets)
+    public sealed class ValidateRevocationRequest(IClientResolver clients, ClientSecretVerifier secrets)
         : IOpenIddictServerHandler<ValidateRevocationRequestContext> {
         /// <summary>The registration.</summary>
         public static OpenIddictServerHandlerDescriptor Descriptor { get; } =
@@ -1321,9 +1323,7 @@ public static class DegradedModeHandlers {
                 return;
             }
 
-            var verified = string.IsNullOrEmpty(context.Request.ClientSecret) || client.ClientSecretRef.IsEmpty
-                ? Result<bool>.Success(false)
-                : await secrets.VerifyAsync(client.ClientSecretRef, context.Request.ClientSecret, context.CancellationToken);
+            var verified = await secrets.VerifyAsync(client, context.Request.ClientSecret, context.CancellationToken);
 
             if (!verified.IsSuccess || !verified.GetValueOrThrow()) {
                 context.Reject(OpenIddictConstants.Errors.InvalidClient, ValidateTokenRequest.ClientNotAuthenticated);

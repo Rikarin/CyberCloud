@@ -32,7 +32,8 @@ namespace CyberCloud.Identity.Grains;
 ///         nobody received, and it expires in seven days. Two pending links for one user are safe
 ///         because accepting either one makes the other <see cref="InvitationStatus.Withdrawn" />. A
 ///         retry that resumes needs the id to be an idempotency key the sender supplies, and that's
-///         owed with listing and revoking invitations.
+///         still owed. Listing and revoking landed with #41, so an owner can now see the stray
+///         pending link and revoke it rather than wait seven days.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Accept spends the link before it touches the user, and gives it back whenever the
@@ -116,6 +117,15 @@ public sealed class InvitationGrain(
             return Result<Invitation>.Failure(taken);
         }
 
+        // ⚠ Listed before it is written, for IDirectoryIndexGrain's reason. Issue #41.
+        var listed = await Tenant()
+            .GetGrain<IDirectoryIndexGrain>(GrainKeys.DirectoryIndex(GrainKeys.DirectoryInvitations))
+            .AddAsync(invitationId);
+
+        if (listed.TryGetError(out var unlisted)) {
+            return Result<Invitation>.Failure(unlisted);
+        }
+
         var now = clock.UtcNow;
 
         state.State = new() {
@@ -126,12 +136,84 @@ public sealed class InvitationGrain(
             Status = InvitationStatus.Pending,
             InvitedBy = request.InvitedBy,
             TenantName = request.TenantName,
-            CreatedAt = now
+            CreatedAt = now,
+            Sendings = 1,
+            SentAt = now
         };
 
         await state.WriteStateAsync();
 
         return await DeliverAsync(secret);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<Invitation>> ResendAsync(string secret) {
+        if (!Created) {
+            return Result<Invitation>.Failure(ErrorCode.ResourceNotFound, $"Invitation {invitationId:D} does not exist.");
+        }
+
+        if (string.IsNullOrEmpty(secret)) {
+            return Result<Invitation>.Failure(ErrorCode.InvalidRequestBody, "A resent invitation carries a new secret for its link.");
+        }
+
+        var status = (await ViewAsync()).Status;
+
+        if (status is not (InvitationStatus.Pending or InvitationStatus.Expired)) {
+            return Result<Invitation>.Failure(
+                ErrorCode.Conflict,
+                $"Invitation {invitationId:D} is {status.ToString().ToLowerInvariant()}, so nobody is waiting "
+                + "for its link. Invite the address again if they should still join."
+            );
+        }
+
+        if (state.State.Sendings >= InvitationPolicy.MaxSendings) {
+            return Result<Invitation>.Failure(
+                ErrorCode.QuotaExceeded,
+                $"Invitation {invitationId:D} has been sent {state.State.Sendings} times, the most one "
+                + "invitation is sent. If the mail isn't arriving, check the address; revoke this one "
+                + "and invite again to start over."
+            );
+        }
+
+        // ⚠ The new link is in force before the mail goes — IInvitationGrain.ResendAsync's remarks.
+        var now = clock.UtcNow;
+
+        state.State.SecretDigest = CredentialDigest.Sha256(secret);
+        state.State.ExpiresAt = now + InvitationPolicy.Lifetime;
+        state.State.Status = InvitationStatus.Pending;
+        state.State.Sendings++;
+        state.State.SentAt = now;
+
+        await state.WriteStateAsync();
+
+        IdentityLog.InvitationResent(logger, tenantId, invitationId, state.State.Sendings);
+
+        return await DeliverAsync(secret);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<Invitation>> RevokeAsync() {
+        if (!Created) {
+            return Result<Invitation>.Failure(ErrorCode.ResourceNotFound, $"Invitation {invitationId:D} does not exist.");
+        }
+
+        switch (state.State.Status) {
+            case InvitationStatus.Revoked:
+                return Result<Invitation>.Success(Snapshot());
+            case InvitationStatus.Accepted:
+                return Result<Invitation>.Failure(
+                    ErrorCode.Conflict,
+                    $"Invitation {invitationId:D} was accepted: the person is a member now. Removing a "
+                    + "member is DELETE on the member, not on the invitation."
+                );
+        }
+
+        state.State.Status = InvitationStatus.Revoked;
+        await state.WriteStateAsync();
+
+        IdentityLog.InvitationRevoked(logger, tenantId, invitationId);
+
+        return Result<Invitation>.Success(Snapshot());
     }
 
     /// <inheritdoc />
@@ -156,6 +238,7 @@ public sealed class InvitationGrain(
                     "This invitation has expired. Ask whoever sent it for a new one."
                 );
             case InvitationStatus.Withdrawn:
+            case InvitationStatus.Revoked:
                 return Withdrawn();
         }
 
@@ -266,7 +349,8 @@ public sealed class InvitationGrain(
                 Email = state.State.Email,
                 TenantName = state.State.TenantName,
                 Secret = secret,
-                ExpiresAt = state.State.ExpiresAt
+                ExpiresAt = state.State.ExpiresAt,
+                Sending = Math.Max(1, state.State.Sendings)
             }
         );
 
@@ -293,24 +377,38 @@ public sealed class InvitationGrain(
             InvitedBy = state.State.InvitedBy,
             TenantName = state.State.TenantName,
             AcceptedAt = state.State.AcceptedAt,
+            SentAt = state.State.SentAt == default ? state.State.CreatedAt : state.State.SentAt,
+            Sendings = Math.Max(1, state.State.Sendings),
             Status = state.State.Status == InvitationStatus.Pending && clock.UtcNow >= state.State.ExpiresAt
                 ? InvitationStatus.Expired
                 : state.State.Status
         };
 
     /// <summary>
-    ///     <see cref="Snapshot" />, with a pending invitation whose user is no longer
-    ///     <see cref="UserStatus.Invited" /> read as <see cref="InvitationStatus.Withdrawn" />.
+    ///     <see cref="Snapshot" />, with an unused invitation — pending or expired — whose user is no
+    ///     longer <see cref="UserStatus.Invited" /> read as <see cref="InvitationStatus.Withdrawn" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Read from the user on every call rather than stored here: the status is the user
-    ///     grain's, and a copy would go stale the moment an administrator suspended somebody without
-    ///     knowing an invitation existed.
+    ///     <para>
+    ///         ⚠ Read from the user on every call rather than stored here: the status is the user
+    ///         grain's, and a copy would go stale the moment an administrator suspended somebody
+    ///         without knowing an invitation existed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Expired is asked too, and Withdrawn wins over it.</b> The first cut asked only
+    ///         for Pending, so an invitation that had expired read <c>expired</c> after its user was
+    ///         removed or joined through another link, and <see cref="ResendAsync" /> — which resends
+    ///         an expired one on purpose — mailed a fresh link to a removed member. The link opened
+    ///         nothing, because <see cref="IUserGrain.AcceptInvitationAsync" /> checks Invited, but the
+    ///         mail went. #41's review found it by reading, and
+    ///         <c>InvitationExpiryTests.AnExpiredInvitationWhoseUserIsNoLongerInvitedIsWithdrawnAndNotResent</c>
+    ///         pins it.
+    ///     </para>
     /// </remarks>
     async Task<Invitation> ViewAsync() {
         var snapshot = Snapshot();
 
-        if (snapshot.Status != InvitationStatus.Pending) {
+        if (snapshot.Status is not (InvitationStatus.Pending or InvitationStatus.Expired)) {
             return snapshot;
         }
 

@@ -332,6 +332,13 @@ public sealed class IsolationCluster : IAsyncLifetime {
     public IInvitationManager Invitations { get; private set; } = null!;
 
     /// <summary>
+    ///     The identity administration API (#41), held the way the gateway holds it: the real
+    ///     <c>IdentityAdministrationService</c> and its checks over the real engine, and the gateway's
+    ///     own <c>GrainIdentityDirectory</c> over the real identity grains.
+    /// </summary>
+    public IIdentityAdministration Identity { get; private set; } = null!;
+
+    /// <summary>
     ///     Every invitation the silo mailed, as the delivery seam received it — so a test can follow
     ///     the link. ⚠ Static for <see cref="Vault" />'s reason: the silo resolves its own container.
     ///     The mail itself is <c>Identity.Host.Tests</c>' <c>InvitationsOverHttpTests</c>, against
@@ -768,6 +775,13 @@ public sealed class IsolationCluster : IAsyncLifetime {
             new GrainInvitationIssuer(cluster.GrainFactory),
             cluster.GrainFactory,
             NullLogger<InvitationService>.Instance
+        );
+
+        Identity = new IdentityAdministrationService(
+            new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
+            new GrainIdentityDirectory(cluster.GrainFactory),
+            cluster.GrainFactory,
+            NullLogger<IdentityAdministrationService>.Instance
         );
 
         // ⚠ The subscriptions and their groups are real records now, because step 1 of the write path

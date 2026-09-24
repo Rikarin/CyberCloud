@@ -55,17 +55,6 @@ public sealed class GrainInvitationIssuer(IGrainFactory grains) : IInvitationIss
             return Result<InvitationSnapshot>.Failure(refused);
         }
 
-        var invitation = created.GetValueOrThrow();
-
-        return Result<InvitationSnapshot>.Success(
-            new() {
-                InvitationId = invitation.InvitationId,
-                TenantId = invitation.TenantId,
-                UserId = invitation.UserId,
-                Email = invitation.Email,
-                Status = invitation.Status.ToString().ToLowerInvariant(),
-                ExpiresAt = invitation.ExpiresAt
-            }
-        );
+        return Result<InvitationSnapshot>.Success(GrainIdentityDirectory.Invitation(created.GetValueOrThrow()));
     }
 }

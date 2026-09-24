@@ -23,7 +23,7 @@ namespace CyberCloud.Identity.Host.Tests;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>The join nothing covered.</b> <c>InvitationRoutingTests</c> drives the gateway's
+///         ⚠ <b>The join nothing covered.</b> <c>IdentityRoutingTests</c> drives the gateway's
 ///         stages against a substituted <c>IInvitationManager</c>; <c>CyberCloud.Isolation</c>'s
 ///         <c>InvitationTests</c> call <c>InvitationService</c> in process with a caller the test
 ///         built; <see cref="InvitationsOverHttpTests" /> creates the invitation at the grain. Each
@@ -51,7 +51,7 @@ public sealed class InvitationThroughTheGatewayTests(MailpitIdentityHostFixture 
     /// <summary>The query every non-hub route requires — docs/plan/10 § Versioning.</summary>
     const string Version = "?api-version=2026-08-01";
 
-    static string Address => new InvitationAddress(Tenant).Path + Version;
+    static string Address => IdentityAddress.Invitations(Tenant).Path + Version;
 
     [Fact]
     public async Task AnOwnerSignedInFromCycInvitesThroughTheGatewayAndTheColleagueArrivesWithNoRole() {

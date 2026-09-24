@@ -108,7 +108,7 @@ portal/README.md § The Angular pin and § SSR isolation.
 | Network topology | `@xui/node-graph` — VPCs, subnets, endpoints, peerings. The one view that is genuinely better than a list | 0.5 |
 | Cloud terminal | `xterm.js` over a console's `connect` ([19](19-cloud-terminal-and-virtual-desktop.md)). ⚠ Landed as a routed page under the resource group — `subscriptions/{s}/resourceGroups/{g}/terminal`, `portal/apps/portal/src/pages/terminal` — not the dockable panel this row first said: a shell runs in a console resource, and a console has a group, so the page has a scope and a link can name a console. A dockable pane over the same `TerminalSession` is a later affordance, not a second terminal | 0.4 |
 | Access (ReBAC) | Role assignments, the effective-permissions explorer, "why does this user have access" | 0.6 |
-| Identity admin | Users, groups, apps, MFA, sign-in logs | 0.5 |
+| Identity admin | Users, groups, apps, MFA, sign-in logs. ⚠ Three of five landed with #41 as three routed pages under `/identity` — `portal/apps/portal/src/pages/identity` — sharing a tab strip: **members** (the tenant's users, the invite form, pending invitations with resend and revoke, remove), **applications** (tenant-registered OAuth clients: register with redirect URIs, public or confidential and scopes, the confidential client's secret shown once, rotate, delete), and **my sessions** (the signed-in person's own, with this one marked and a sign-out per row). Groups, MFA and sign-in logs are the owed list below | 0.5 |
 | Onboarding | Sign-up → tenant → first cluster → first resource, as a guided flow | 0.4 |
 | Webmail | [17](17-communication-and-email.md), counted there | — |
 
@@ -116,6 +116,39 @@ portal/README.md § The Angular pin and § SSR isolation.
 showing the path that grants a permission. Without it, an authorization system that supports nested
 groups and inheritance is unauditable, and the support cost of an unauditable authorization system is
 enormous.
+
+**Identity admin, as it landed (#41).** The three pages call the identity administration API at the
+gateway — `/tenants/{t}/providers/CyberCloud.Identity/…`, [10 § Shape](10-gateway-and-api.md) — through
+`IdentityAdminApi`, the portal's second hand-written client beside `RoleAssignmentsApi` and on the same
+transport, because the reserved namespace keeps the address out of the document the client is generated
+from. Every directory call needs Owner on the tenant (`assignRole`, fully consistent); the page shows the
+API's `403` or `404` rather than guessing at roles the token doesn't carry. The sessions page needs no
+role: the address names no user. ⚠ The client secret lives in one signal on the applications page and
+nowhere else — not a store, not the URL, not a blade title — and is dropped on a tenant switch and on
+deleting its application; a reload loses it, and the answer is Rotate. `identity-pages.spec.ts` and
+`identity-admin.spec.ts` drive the pages and the client against a recorded platform, axe included.
+
+⚠ **What identity admin still owes**, each named where the code stops:
+
+- **Groups.** `IGroupGrain` exists and membership is tuples ([11 § The object model](11-identity.md)), but
+  no HTTP surface creates a group, lists one or adds a member — so the page has nothing to call.
+- **MFA administration and sign-in logs.** Enrolment is the identity app's, per person; an owner can't
+  see or reset another member's factors. Sign-in logs wait on the authentication events of
+  [11 § Auditing](11-identity.md) reaching ClickHouse, which nothing writes yet.
+- **Editing a registration.** Redirect URIs and scopes are fixed at registration: `IApplicationGrain.UpdateAsync`
+  exists and no address reaches it. Delete and re-register is the workaround, and it changes the client id.
+- **Two live secrets.** Rotation kills the old secret in the same turn, so a server rotating in place is
+  refused between the rotation and its redeploy.
+- **Sign out everywhere.** One row at a time today; a cookie session's token sessions end at their next
+  refresh and stay listed until then.
+- **Paging, and "who is this".** Each list is one directory index read whole (capped at ten thousand);
+  a session shows its client id, not the application's display name; the members page doesn't hide
+  Remove on the owner's own row — the API's `409` is the refusal.
+- **A tenant from before #41 lists only the people added since** — the directory index can't be
+  backfilled from ids nothing recorded.
+- **`@xui/table` gives its cells no ARIA role**, so every `xui-th` and `xui-td` on these pages carries
+  `role="columnheader"` or `role="cell"` by hand; axe fails `aria-required-children` on any rendered row
+  without it. The fix is the library's, and until it lands the other pages' tables need the same.
 
 ## Admin app
 

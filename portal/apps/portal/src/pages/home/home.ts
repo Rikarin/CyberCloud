@@ -24,8 +24,12 @@ import { links } from '../../app/routes/portal-links';
     <p class="mt-4 text-sm">
       <a class="underline" [routerLink]="subscriptions" i18n="@@home.subscriptions">Subscriptions</a>
     </p>
+    <p class="mt-2 text-sm">
+      <a class="underline" [routerLink]="identity" i18n="@@home.identity">Members and applications</a>
+    </p>
   `
 })
 export class Home {
   protected readonly subscriptions = links.subscriptions();
+  protected readonly identity = links.identityMembers();
 }

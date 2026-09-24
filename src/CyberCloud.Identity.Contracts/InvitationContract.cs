@@ -47,9 +47,16 @@ namespace CyberCloud.Identity.Contracts;
 ///         person it names. Once that user is anything but <see cref="UserStatus.Invited" /> the
 ///         invitation reads <see cref="InvitationStatus.Withdrawn" /> and accepting it changes
 ///         nothing — <see cref="IUserGrain.AcceptInvitationAsync" /> checks the status in the same
-///         turn as it writes, so this holds against a race between two links too. Until listing and
-///         revoking invitations land, suspending or deprovisioning the invitee is how an owner
-///         withdraws one.
+///         turn as it writes, so this holds against a race between two links too.
+///     </para>
+///     <para>
+///         ⚠ <b>Resend mints a new link and kills the old one; revoke kills the link and keeps the
+///         user.</b> Issue #41. The grain keeps one secret digest, so <see cref="ResendAsync" />
+///         replaces it — the mail that went astray, or the one a colleague lost, opens nothing once
+///         a new one is sent — and restarts the seven days. <see cref="RevokeAsync" /> makes the
+///         invitation <see cref="InvitationStatus.Revoked" /> and leaves the invited user
+///         <see cref="UserStatus.Invited" />, so inviting the address again reuses that user, as it
+///         does after an expiry. Removing the person is the member API's, not this grain's.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>Durable, because an invitation outlives a hot-tier flush.</b> It lives seven days
@@ -114,6 +121,42 @@ public interface IInvitationGrain : IGrainWithStringKey {
     /// <summary>The invitation as it stands, for its sender and for a test.</summary>
     Task<Result<Invitation>> GetAsync();
 
+    /// <summary>
+    ///     Mails the invitation again under a new link, which replaces the old one and runs a fresh
+    ///     seven days. Issue #41.
+    /// </summary>
+    /// <param name="secret">
+    ///     The new link's secret. ⚠ A parameter, digested here and never stored, as
+    ///     <see cref="CreateAsync" /> takes one.
+    /// </param>
+    /// <returns>
+    ///     The invitation; <see cref="ErrorCode.ResourceNotFound" /> for one never created;
+    ///     <see cref="ErrorCode.Conflict" /> when it was accepted, revoked or withdrawn — nobody is
+    ///     waiting for the link. An expired invitation can be resent: that's the point of resending.
+    ///     ⚠ An expired one whose user is no longer invited reads withdrawn, not expired, so it is
+    ///     refused like any other withdrawn one. <see cref="ErrorCode.QuotaExceeded" /> once it has
+    ///     been sent <see cref="InvitationPolicy.MaxSendings" /> times.
+    ///     A delivery failure is the seam's refusal, with the new link already in force.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ The new secret is written before the mail goes. A failed mail leaves a link nobody
+    ///     received, and the old one dead — the sender resends again. The other order could mail a
+    ///     link the grain then failed to record, which is a mail that opens nothing.
+    /// </remarks>
+    Task<Result<Invitation>> ResendAsync(string secret);
+
+    /// <summary>
+    ///     Withdraws the invitation: its link opens nothing from now on. The invited user is left as
+    ///     it is. Issue #41.
+    /// </summary>
+    /// <returns>
+    ///     The invitation, now <see cref="InvitationStatus.Revoked" />, and the same answer for a
+    ///     repeat; <see cref="ErrorCode.ResourceNotFound" /> for one never created;
+    ///     <see cref="ErrorCode.Conflict" /> for one already accepted — the person is a member, and
+    ///     removing a member is a different act.
+    /// </returns>
+    Task<Result<Invitation>> RevokeAsync();
+
     /// <summary>Drops this activation.</summary>
     Task DeactivateAsync();
 }
@@ -125,6 +168,20 @@ public static class InvitationPolicy {
 
     /// <summary>The page an invitation link opens, under the identity app's base address.</summary>
     public const string PagePath = "/invitation";
+
+    /// <summary>
+    ///     How many times one invitation is mailed, the first sending included. Past it,
+    ///     <see cref="IInvitationGrain.ResendAsync" /> answers <see cref="ErrorCode.QuotaExceeded" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A count, not an interval. Each resend mails an address outside the tenant, and before
+    ///     #41's review nothing limited how often an owner could have the platform do it. An interval
+    ///     needs a clock the suites can move, and the harnesses resend in the instant they invite.
+    ///     Revoking and inviting again starts a new count, and that path is bounded by the
+    ///     invitation list's <see cref="DirectoryIndexPolicy.MaxEntries" />. A per-tenant rate on
+    ///     invitation mail is still owed (docs/plan/11).
+    /// </remarks>
+    public const int MaxSendings = 5;
 }
 
 /// <summary>What an invitation stands at.</summary>
@@ -136,14 +193,23 @@ public enum InvitationStatus {
     /// <summary>Used: the invitee is a member.</summary>
     Accepted = 1,
 
-    /// <summary>Past its seven days without being used.</summary>
+    /// <summary>
+    ///     Past its seven days without being used, with its user still <see cref="UserStatus.Invited" />.
+    ///     Otherwise it reads <see cref="Withdrawn" />, which is the more useful thing to know.
+    /// </summary>
     Expired = 2,
 
     /// <summary>
     ///     Unused, and no longer usable: the user it names is not <see cref="UserStatus.Invited" />
     ///     any more — a member through another link, suspended, or deprovisioned.
     /// </summary>
-    Withdrawn = 3
+    Withdrawn = 3,
+
+    /// <summary>
+    ///     Unused, and withdrawn by an owner through <see cref="IInvitationGrain.RevokeAsync" />.
+    ///     Stored, unlike <see cref="Withdrawn" />, which is read from the user on every call.
+    /// </summary>
+    Revoked = 4
 }
 
 /// <summary>What <see cref="IInvitationGrain.CreateAsync" /> is asked to create.</summary>
@@ -219,4 +285,15 @@ public sealed record InvitationDelivery {
 
     /// <summary>When the link stops working, for the body.</summary>
     public required DateTimeOffset ExpiresAt { get; init; }
+
+    /// <summary>
+    ///     Which mail of this invitation this is — 1 for the first, one more for every resend.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Part of the message's idempotency key from the second mail on. The key was the
+    ///     invitation id alone, which is right for a retry of one mail and wrong for a resend: the
+    ///     communication service would answer the resend with the first mail's receipt and send
+    ///     nothing.
+    /// </remarks>
+    public int Sending { get; init; } = 1;
 }
