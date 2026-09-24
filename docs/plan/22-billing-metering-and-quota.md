@@ -81,6 +81,14 @@ charge = quantity × unitPrice(meter, region, plan, tier) − discounts + commit
   (`RatingTests.PricingEveryHourSumsToPricingTheMonthlyAggregate`). The consequence: the free tier goes
   to whoever used the meter first that month. The ladder is per *subscription* because the usage ledger
   is, and a billing account with several subscriptions has one ladder per subscription.
+  ⚠ **So an hour's price says how much was used before it, and only a subscription reader sees that
+  ladder.** Priced over the whole subscription, 80 GiB of a group's egress cost nothing when it was the
+  month's first and 3.00 € when another group used 80 GiB earlier — a reader of one group dividing the
+  amount by the quantity would learn the other group's usage. The cost query and a resource-group budget
+  therefore price what their reader may see *on its own*, as if it were the subscription's only usage
+  (`CostQueryResult.PricedAlone`, `CostVisibilityTests.AGroupReadersFiguresDoNotMoveWithAnotherGroupsUsage`,
+  `BudgetTests.AResourceGroupBudgetIsPricedWithoutTheOtherGroupsTiers`). Untiered meters cost the same
+  either way; for a tiered one the figure is the group's cost alone, not the invoice's share of it.
 - **Commitments and reservations** (M3) are prepaid quantities consumed before on-demand.
 - **Free tier** per subscription per month, per meter, applied at rating so the portal can show
   "you have used 40 % of your free tier" rather than a surprise.
@@ -120,9 +128,9 @@ The single most effective thing for both customer satisfaction and support load:
 
 | Feature | Behaviour |
 |---|---|
-| **Near-real-time cost** | Current-period estimate updated hourly, broken down by resource group, resource, service and tag. ⚠ **Landed (#38) except by tag**: `POST {subscription or group}/providers/CyberCloud.CostManagement/query` with a period and `groupBy` of `resource`, `resourceGroup`, `resourceType`, `meter` or `day`, rated on read from the usage ledger. Every row is filtered by ReBAC inside the cost grain — a reader of one group sees that group's cost and a `filtered` flag, a stranger the absent subscription's 404 (`CostVisibilityTests`). The namespace is reserved like the resource graph's, because on a group the address is also a collection path |
+| **Near-real-time cost** | Current-period estimate updated hourly, broken down by resource group, resource, service and tag. ⚠ **Landed (#38) except by tag**: `POST {subscription or group}/providers/CyberCloud.CostManagement/query` with a period and `groupBy` of `resource`, `resourceGroup`, `resourceType`, `meter` or `day`, rated on read from the usage ledger. Every row is filtered by ReBAC inside the cost grain — a reader of one group sees that group's cost, priced on its own (`pricedAlone`, [§ Rating](#rating)), and a `filtered` flag; a stranger gets the absent subscription's 404, decided before anything is priced, so a failure to price says nothing to them either (`CostVisibilityTests`). The namespace is reserved like the resource graph's, because on a group the address is also a collection path |
 | **Per-resource cost** | On every resource blade. "This database costs €4.10/day" answers the question at the point it is asked |
-| **Budgets and alerts** | Threshold at 50/80/100/forecast, delivered via [17](17-communication-and-email.md). ⚠ **Landed (#38)** as `CyberCloud.Billing/budgets`: thresholds are two arrays of percentages, on the actual and on the forecast, each firing once per period through a `CyberCloud.Communication/services` resource in the budget's own resource group — another group's service would send, on its own spend limits, for someone who may not use it ([§ What is owed](#what-is-owed), `budget-service-grant`). A budget covers its resource group; `scope: subscription` covers the subscription once the budget itself has been granted `reader` there — `reader-resource-{budget GUID}`, the resource-as-principal grant #90 introduced — because anyone who can write in one group can create a budget, and a subscription's spend is not theirs to read by default |
+| **Budgets and alerts** | Threshold at 50/80/100/forecast, delivered via [17](17-communication-and-email.md). ⚠ **Landed (#38)** as `CyberCloud.Billing/budgets`: thresholds are two arrays of percentages, on the actual and on the forecast, each firing once per period through a `CyberCloud.Communication/services` resource in the budget's own resource group — another group's service would send, on its own spend limits, for someone who may not use it ([§ What is owed](#what-is-owed), `budget-service-grant`). An alert recorded and not yet sent when an evaluation ended is sent by the next one, under the same idempotency key (`BudgetTests.AnAlertRecordedBeforeACrashIsSentOnTheNextEvaluation`). A budget covers its resource group; `scope: subscription` covers the subscription once the budget itself has been granted `reader` there — `reader-resource-{budget GUID}`, the resource-as-principal grant #90 introduced — because anyone who can write in one group can create a budget, and a subscription's spend is not theirs to read by default |
 | **Forecast** | Linear on the trailing 7 days. ⚠ Deliberately simple and labelled an estimate — a clever forecast that is wrong is worse than a simple one that is honestly bounded |
 | **Cost by tag** | Which is why tags are M1 in [06](06-tenancy-and-resource-model.md) |
 | **Export** | Daily CSV/Parquet to the tenant's bucket. Big customers reconcile in their own systems and will not use our UI |
@@ -156,8 +164,14 @@ than silently skipped (`InvoicingTests.TwoAccountsFinalizingGetConsecutiveNumber
 it is on disk.** Both grains re-read their state before the first call after one that threw, rather
 than answer a retry from memory a failed write left ahead of storage — the first version did, and two
 faults together gave two invoices one number (`InvoicingTests.ANumberWhoseWriteFailedIsNeverAnsweredFromMemory`).
-Confirming forgets the document's key, so the singleton's state is what is in flight, not every
-document ever numbered; and a month is finalized only after the month before it, since the first
+A document is **dated by the instant its number was allocated**, which the numbering grain records
+with the number and gives back on a retry, so dates run in the order of the numbers even when a
+finalization is retried after a later invoice took the next one
+(`InvoicingTests.AnInvoiceRetriedAfterALaterOneKeepsTheDateItsNumberWasTakenAt`). A credit-note request
+id reused for a different credit is refused, not answered with the earlier note
+(`InvoicingTests.ARequestIdReusedForADifferentCreditIsRefusedAndIssuesNothing`). Confirming forgets
+the document's key, so the singleton's state is what is in flight, not every document ever
+numbered; and a month is finalized only after the month before it, since the first
 attach, and never after a later one, so numbers follow months
 (`InvoicingTests.AMonthIsNotFinalizedPastAnUnfinalizedOneOrAfterALaterOne`). The issuer is configuration
 (`CyberCloud:Billing:Issuer`) with no default: a silo without one prices costs and budgets and refuses to
@@ -209,7 +223,7 @@ where a seam exists, its default refuses and says which of these it is waiting f
 
 | Id | What | Why it is not here |
 |---|---|---|
-| `storage-is-declared-not-observed` | `StorageGbMonths` and `BackupGbMonths` are rated on the size a resource's **desired body** declares (`MeterDerivation` — for a storage account, `volumeServers × storage.size + 10Gi`), not a measurement. **The error is exact and one-sided per case:** while a claim's expansion is pending, and for as long as it keeps failing (a storage class without `allowVolumeExpansion`), the line bills the declared size over the smaller volume that exists — **billed high** by the difference, per hour; after a shrink, which Kubernetes refuses for a claim, the body says less than the volume holds — **billed low** by the difference, indefinitely. The API server's respelling of a quantity (`102400Mi` → `100Gi`) is the same number and costs nothing. Every such line carries `DeclaredQuantity` and the invoice prints why (`InvoiceBuilder.DeclaredQuantityNote`) | Fixing it is an observation: the claim's `status.capacity` read back per sample, which the sampler cannot do while it has no source (next row). A difference found is corrected by credit note |
+| `storage-is-declared-not-observed` | `StorageGbMonths` is rated on the size a resource's **desired body** declares (`MeterDerivation` — for a storage account, `volumeServers × storage.size + 10Gi`), not a measurement. **The error is exact and one-sided per case:** while a claim's expansion is pending, and for as long as it keeps failing (a storage class without `allowVolumeExpansion`), the line bills the declared size over the smaller volume that exists — **billed high** by the difference, per hour; after a shrink, which Kubernetes refuses for a claim, the body says less than the volume holds — **billed low** by the difference, indefinitely. The API server's respelling of a quantity (`102400Mi` → `100Gi`) is the same number and costs nothing. Every such line carries `DeclaredQuantity` and the invoice prints why (`InvoiceBuilder.DeclaredQuantityNote`). ⚠ `BackupGbMonths` is not one of them: it shares the storage quota family, the sampler accrues only a family's first meter, and a backup reaches the ledger as its provider's own emission — which no provider makes yet | Fixing it is an observation: the claim's `status.capacity` read back per sample, which the sampler cannot do while it has no source (next row). A difference found is corrected by credit note |
 | `the-sampler-has-no-source` | `IMeteredResourceSource`'s only implementation refuses, so no production silo samples anything and the usage ledger stays empty | The intended source is the resource-graph projection (#54), filtered to a subscription and joined to the committed quota draws |
 | `vies-validation` | A VAT number is checked for shape only, and `TaxQuote.VatIdCheck` says `format`. Reverse-charging a number VIES would reject leaves the issuer liable for the VAT | The VIES `checkVatNumber` call is network no test here may have, and its availability windows need a retry policy and a recorded consultation number per invoice |
 | `vat-rates-are-a-committed-table` | The EU standard rates are a dated table as known on 2026-09-23 | A rate change is a new row today; a feed, or the tax service that replaces this default, is the durable answer |

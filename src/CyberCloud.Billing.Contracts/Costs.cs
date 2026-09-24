@@ -99,6 +99,21 @@ public sealed record CostQueryResult {
     /// </summary>
     [Id(6)]
     public bool Filtered { get; init; }
+
+    /// <summary>
+    ///     Whether the amounts were priced over what the caller may read alone, as if it were the
+    ///     subscription's only usage, because the caller may not read the whole subscription.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Tiers are climbed per subscription, so the invoice's price for an hour depends on everyone's
+    ///     usage before it. Shown to someone who may read one group, that price would say how much the
+    ///     other groups used; priced alone, it says nothing about them. The cost of tiered meters can
+    ///     then differ from the invoice's share of it — the free tier counted once for this caller,
+    ///     not shared — while untiered meters cost the same either way. Like <see cref="Filtered" />,
+    ///     it depends on the caller's access alone.
+    /// </remarks>
+    [Id(7)]
+    public bool PricedAlone { get; init; }
 }
 
 /// <summary>
@@ -117,7 +132,13 @@ public sealed record CostQueryResult {
 ///         group in the answer is checked for <c>read</c>, then each resource in a group that was
 ///         not; what is left is the answer. A caller who may read nothing in scope gets
 ///         <see cref="ErrorCode.ResourceNotFound" /> with the same sentence an absent subscription
-///         gets — docs/plan/07 § The enforcement seam's "404, never 403".
+///         gets — docs/plan/07 § The enforcement seam's "404, never 403" — and gets it before any
+///         failure to price the scope could say otherwise.
+///     </para>
+///     <para>
+///         ⚠ <b>Only a subscription reader sees the subscription's tier ladder.</b> Anyone else's
+///         answer is priced over what they may read alone (<see cref="CostQueryResult.PricedAlone" />),
+///         so no figure in it moves with usage they may not see.
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Billing.ICostQueryGrain")]

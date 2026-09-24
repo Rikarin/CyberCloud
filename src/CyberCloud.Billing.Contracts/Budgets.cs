@@ -131,7 +131,10 @@ public sealed record BudgetAlert {
     [Id(4)]
     public decimal Figure { get; init; }
 
-    /// <summary>Per recipient: sent, or refused and why. Empty until the send has been attempted.</summary>
+    /// <summary>
+    ///     Per recipient: sent, or refused and why. Empty until a send has finished, and an alert an
+    ///     evaluation recorded and didn't get to send is sent by the next one.
+    /// </summary>
     [Id(5)]
     public string Notification { get; init; } = string.Empty;
 }

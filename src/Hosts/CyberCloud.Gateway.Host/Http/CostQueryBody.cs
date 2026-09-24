@@ -85,6 +85,7 @@ sealed record CostQueryBody(DateTimeOffset From, DateTimeOffset To, CostGrouping
             writer.WriteString("groupBy", GroupingValues[(int)answer.Grouping - 1]);
             writer.WriteNumber("total", answer.Total);
             writer.WriteBoolean("filtered", answer.Filtered);
+            writer.WriteBoolean("pricedAlone", answer.PricedAlone);
             writer.WritePropertyName("rows");
             writer.WriteStartArray();
 

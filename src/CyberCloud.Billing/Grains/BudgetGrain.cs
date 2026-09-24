@@ -5,6 +5,7 @@ using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Time;
 using Orleans.Multitenant;
 using Microsoft.Extensions.Logging;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
 
@@ -22,13 +23,18 @@ namespace CyberCloud.Billing.Grains;
 ///     <para>
 ///         ⚠
 ///         <b>
-///             The order inside a fire is the alert evaluator's: record, write, send, record, write.
+///             The order inside a fire is the alert evaluator's: record, write, send, record, write —
+///             and an alert written with no outcome is sent again on the next evaluation.
 ///         </b> A threshold's alert is written <i>before</i> the send, so a silo that dies between the
-///         two finds the alert on the next activation and does not fire it again; what it loses is the
-///         outcome text. Sending first would page twice on the same crash. The idempotency key —
-///         budget, period, kind, percentage, recipient — is the second defence, and it is a function of
-///         the period so that next month's crossing is a new message and a retry of this month's is
-///         not (<c>IMessageSender</c>'s remarks on why a clock reading is the wrong key).
+///         two finds the alert on the next activation and does not fire the threshold again. The alert
+///         it finds has an empty <see cref="BudgetAlert.Notification" />, though, and nobody was told:
+///         <see cref="RedriveAsync" /> sends every such alert before any new threshold is looked at
+///         (<c>BudgetTests.AnAlertRecordedBeforeACrashIsSentOnTheNextEvaluation</c>). That is safe to
+///         repeat because the idempotency key — budget, period, kind, percentage, recipient — is a
+///         function of the alert and not of the attempt, so a send that did reach the sending module
+///         before the crash is answered, not sent twice (<c>IMessageSender</c>'s remarks on why a
+///         clock reading is the wrong key). Sending before the write instead would page twice on the
+///         same crash whenever the sending module's record of the key was gone.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -155,6 +161,8 @@ public sealed class BudgetGrain(
         state.State.LastEvaluatedAt = now;
         state.State.LastError = string.Empty;
 
+        await RedriveAsync(spec, currency);
+
         var fired = 0;
 
         foreach (var threshold in spec.Thresholds.OrderBy(static x => x.Kind).ThenBy(static x => x.Percent)) {
@@ -248,7 +256,10 @@ public sealed class BudgetGrain(
         var trailingFrom = now - ForecastWindow;
         var from = trailingFrom < periodStart ? trailingFrom : periodStart;
 
-        var rated = await pricing.RateAsync(tenantId, spec.SubscriptionId, from, now);
+        var rated = spec.Scope == BudgetScope.Subscription
+            ? await pricing.RateAsync(tenantId, spec.SubscriptionId, from, now)
+            : await GroupAloneAsync(spec, from, now);
+
         if (rated.TryGetError(out var rateError)) {
             return Result<(string, decimal, decimal)>.Failure(rateError);
         }
@@ -285,6 +296,27 @@ public sealed class BudgetGrain(
             (currency,
                 MoneyRounding.Round(actual, currency).GetValueOrThrow(),
                 MoneyRounding.Round(forecast, currency).GetValueOrThrow())
+        );
+    }
+
+    /// <summary>The group's usage, priced as if it were the subscription's only usage.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Not the subscription's ladder, for the reason the cost query gives.</b> A group budget
+    ///     is read by whoever may read its group, and its figure priced over the whole subscription
+    ///     would tell them how much of the free tier the other groups used first —
+    ///     <see cref="Pricing.Rating.PriceMonth" />'s remarks. It's the figure a reader of the group
+    ///     gets from the cost query (<c>CostQueryResult.PricedAlone</c>), so the two agree.
+    /// </remarks>
+    async Task<Result<ImmutableArray<RatedHour>>> GroupAloneAsync(BudgetSpec spec, DateTimeOffset from, DateTimeOffset to) {
+        var netted = await pricing.NetAsync(tenantId, spec.SubscriptionId, from, to);
+        if (netted.TryGetError(out var readError)) {
+            return Result<ImmutableArray<RatedHour>>.Failure(readError);
+        }
+
+        return pricing.Price(
+            [.. netted.GetValueOrThrow().Where(x => string.Equals(x.ResourceGroup, spec.ResourceGroup, StringComparison.OrdinalIgnoreCase))],
+            from,
+            to
         );
     }
 
@@ -328,6 +360,38 @@ public sealed class BudgetGrain(
         }
     }
 
+    /// <summary>Sends every alert that was recorded and never sent, and records what the sending module said.</summary>
+    /// <param name="spec">The budget as it is now: its service and recipients are the ones told.</param>
+    /// <param name="currency">The figures' currency.</param>
+    /// <remarks>
+    ///     An empty <see cref="BudgetAlert.Notification" /> means the evaluation that recorded the alert
+    ///     ended before the send — the type's remarks. Every outcome <see cref="NotifyAsync" /> returns
+    ///     is non-empty, a refusal included, so an alert is re-driven until one attempt has finished
+    ///     and never after.
+    /// </remarks>
+    async Task RedriveAsync(BudgetSpec spec, string currency) {
+        for (var i = 0; i < state.State.Alerts.Count; i++) {
+            var alert = state.State.Alerts[i];
+            if (alert.Notification.Length > 0) {
+                continue;
+            }
+
+            var (_, periodEnd) = PeriodOf(spec.Period, alert.PeriodStart);
+            var outcome = await NotifyAsync(spec, alert, currency, periodEnd);
+            state.State.Alerts[i] = alert with { Notification = outcome };
+
+            logger.LogInformation(
+                "Budget {Budget} in tenant {Tenant} re-drove the {Percent} % {Kind} alert of {Period:yyyy-MM-dd}, which an earlier evaluation recorded and did not send: {Outcome}",
+                budgetId,
+                tenantId,
+                alert.Percent,
+                alert.Kind,
+                alert.PeriodStart,
+                outcome
+            );
+        }
+    }
+
     bool HasFired(DateTimeOffset periodStart, BudgetThreshold threshold) =>
         state.State.Alerts.Any(x => x.PeriodStart == periodStart && x.Kind == threshold.Kind && x.Percent == threshold.Percent);
 
@@ -348,6 +412,10 @@ public sealed class BudgetGrain(
             || service.SubscriptionId != spec.SubscriptionId
             || !string.Equals(service.ResourceGroup, spec.ResourceGroup, StringComparison.OrdinalIgnoreCase)) {
             return $"not sent: '{spec.Notification.ServicePath}' is not a sending service in this budget's resource group";
+        }
+
+        if (spec.Notification.Recipients.Length == 0) {
+            return "not sent: the budget names no recipients";
         }
 
         var serviceId = CommunicationGrainKeys.ResourceIdFor(service.TenantId, service.CanonicalPath);
