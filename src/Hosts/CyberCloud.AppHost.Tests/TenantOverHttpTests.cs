@@ -524,6 +524,119 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
             HttpStatusCode.NotFound,
             "the deleted group's assignment is back on the group re-created under its name: " + residue.Body
         );
+
+        // ── Step 9: a just-in-time role assignment (#49), across the process boundary. ──────────
+        await AJustInTimeGrantCrossesTheProcessBoundaryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    ///     Step 9: a role assignment with an end (issue #49), granted, read, listed, shortened and
+    ///     revoked over HTTP.
+    /// </summary>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>This is here for the process boundary, not for the expiry.</b> The gateway built
+    ///         here is an Orleans client, and <c>RoleAssignmentService</c> runs in it: the tuple it
+    ///         writes carries <c>ExpiresOn</c> into a silo process, and the row it reads back carries
+    ///         it out. #39's refused type got past every test because a <c>TestCluster</c>'s client and
+    ///         silos share one type manifest, and every other #49 test runs in one. Whether the grant
+    ///         ends on time is <c>test/CyberCloud.Isolation</c>'s question, where the test owns the
+    ///         clock. These silos read the machine's.
+    ///     </para>
+    ///     <para>
+    ///         A step of the one story rather than a test of its own, for the reason the class gives:
+    ///         the story's tenant, token and gateway are what this needs, and a second test would
+    ///         bring them all up again.
+    ///     </para>
+    /// </remarks>
+    async Task AJustInTimeGrantCrossesTheProcessBoundaryAsync(CancellationToken cancellationToken) {
+        var assignment = RoleAssignmentId.OnScope(
+            ScopeId.Group(Tenant, Subscription, ResourceGroup),
+            new(Relations.Reader, SubjectTypes.ServicePrincipal, ServicePrincipal.ToString("N", CultureInfo.InvariantCulture))
+        );
+
+        // Whole seconds, so the instant the platform renders compares equal to the one sent.
+        var now = DateTimeOffset.UtcNow;
+        var twoHours = new DateTimeOffset(now.Ticks - now.Ticks % TimeSpan.TicksPerSecond, TimeSpan.Zero).AddHours(2);
+        var oneHour = twoHours.AddHours(-1);
+
+        var granted = await PutAsync(assignment.Path, ExpiresOnBody(twoHours), cancellationToken);
+
+        granted.Status.ShouldBe(
+            HttpStatusCode.Created,
+            "the tenant's owner could not grant a role with an end: " + granted.Body
+        );
+        ExpiresOnOf(granted.Body).ShouldBe(twoHours);
+
+        var read = await GetAsync(assignment.Path, cancellationToken);
+
+        read.Status.ShouldBe(HttpStatusCode.OK, "the grant just made is not readable: " + read.Body);
+        ExpiresOnOf(read.Body)
+            .ShouldBe(twoHours, "the end did not come back out of the silo process. Body: " + read.Body);
+
+        var listed = await GetAsync(RoleAssignmentCollectionId.Of(assignment).Path, cancellationToken);
+
+        listed.Status.ShouldBe(HttpStatusCode.OK, "the assignment collection is not readable: " + listed.Body);
+        Json(listed.Body)
+            .GetProperty("value")
+            .EnumerateArray()
+            .Where(x => x.GetProperty("id").GetString() == assignment.Path)
+            .Select(static x => ExpiresOnOf(x.GetRawText()))
+            .ShouldBe([twoHours], "the collection did not carry the grant with its end. Body: " + listed.Body);
+
+        // The envelope the GET rendered, sent back unchanged as the PUT, keeps the end it shows.
+        var sentBack = await PutAsync(assignment.Path, read.Body, cancellationToken);
+
+        sentBack.Status.ShouldBe(HttpStatusCode.OK, "a GET sent back as a PUT was refused: " + sentBack.Body);
+        ExpiresOnOf(sentBack.Body)
+            .ShouldBe(twoHours, "a GET sent back as a PUT changed the grant's end. Body: " + sentBack.Body);
+
+        // ⚠ A closer end is the write that fences the check caches. Inside the notice it is refused,
+        // and the refusal is a silo's, returned through the client as a 400.
+        var tooSoon = await PutAsync(assignment.Path, ExpiresOnBody(DateTimeOffset.UtcNow.AddSeconds(20)), cancellationToken);
+
+        tooSoon.Status.ShouldBe(
+            HttpStatusCode.BadRequest,
+            "an end closer than TupleExpiry.ShorteningNotice was accepted: " + tooSoon.Body
+        );
+
+        // ⚠ The code alone doesn't say whose refusal this is: the gateway refuses a body's shape with
+        // the same one. Only the tuple store names the notice, so the message is what places it in
+        // the silo.
+        var notice = Json(tooSoon.Body).GetProperty("error");
+        notice.GetProperty("code").GetString().ShouldBe(CyberCloud.Core.ErrorCode.InvalidRequestBody.Value);
+        notice.GetProperty("message")
+            .GetString()
+            .ShouldNotBeNull()
+            .ShouldContain(
+                "less than "
+                + TupleExpiry.ShorteningNotice.TotalSeconds.ToString(CultureInfo.InvariantCulture)
+                + " seconds from now",
+                Case.Sensitive,
+                "the 400 is not the tuple store's shortening refusal. Body: " + tooSoon.Body
+            );
+
+        var shortened = await PutAsync(assignment.Path, ExpiresOnBody(oneHour), cancellationToken);
+
+        shortened.Status.ShouldBe(HttpStatusCode.OK, "a shortening with an hour's notice was refused: " + shortened.Body);
+        ExpiresOnOf((await GetAsync(assignment.Path, cancellationToken)).Body).ShouldBe(oneHour);
+
+        var revoked = await DeleteAsync(assignment.Path, cancellationToken);
+
+        revoked.Status.ShouldBe(HttpStatusCode.NoContent, "the grant could not be revoked: " + revoked.Body);
+        (await GetAsync(assignment.Path, cancellationToken)).Status.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    static string ExpiresOnBody(DateTimeOffset expiresOn) =>
+        $$"""{"{{RoleAssignmentBodyProperties.ExpiresOn}}":"{{expiresOn.ToString("O", CultureInfo.InvariantCulture)}}"}""";
+
+    static DateTimeOffset? ExpiresOnOf(string body) {
+        var value = Json(body).GetProperty("properties").GetProperty(RoleAssignmentBodyProperties.ExpiresOn);
+
+        return value.ValueKind == JsonValueKind.Null
+            ? null
+            : DateTimeOffset.Parse(value.GetString()!, CultureInfo.InvariantCulture);
     }
 
     // ── Polling ──────────────────────────────────────────────────────────────────────────────────
