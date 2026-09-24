@@ -15,12 +15,13 @@ machine `web-0` clones into `web-root-0`: VirtualMachines.RootDataVolumeName, in
 {{- end -}}
 
 {{/*
-The one cloud-init Secret every machine mounts — `{name}-cloud-init`, key `userdata`, rendered by the
-reconciler from the resolved handle. ⚠ `nameGeneration.appendIndexToSecretRefs` is left off: the user
+The one cloud-init Secret every machine mounts — `{name}-cloud-init-set`, key `userdata`, rendered by the
+reconciler from the resolved handle. ⚠ Not a machine's `{name}-cloud-init`: a machine and a set of one name
+in one resource group would write one Secret under one field manager (VirtualMachineScaleSets.CloudInitSecretName). ⚠ `nameGeneration.appendIndexToSecretRefs` is left off: the user
 data is one value for the whole set.
 */}}
 {{- define "virtual-machine-scale-set.cloudInitSecret" -}}
-{{- printf "%s-cloud-init" (include "virtual-machine-scale-set.objectName" .) -}}
+{{- printf "%s-cloud-init-set" (include "virtual-machine-scale-set.objectName" .) -}}
 {{- end -}}
 
 {{/*

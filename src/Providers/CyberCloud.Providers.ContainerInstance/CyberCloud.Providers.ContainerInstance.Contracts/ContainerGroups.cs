@@ -631,11 +631,17 @@ public static partial class ContainerGroups {
         var path = spelled[..hash];
         var prefix = TenantVaultPrefix(tenantId);
 
-        if (!path.StartsWith(prefix, StringComparison.Ordinal) || path.Length == prefix.Length) {
+        // ⚠ SecretRef.IsConfinedTo AND NOT StartsWith, WHICH THIS PARSER FIRST USED. #28's review found
+        // `tenants/{mine}/../{theirs}/db#password` passing the prefix check here: the resolver's HTTP
+        // client collapses the dot segments, so the platform's one token read tenant B's value into
+        // tenant A's Secret, a container printed it, and `logs` handed it back. The rule is the one
+        // VirtualMachines.ParseCloudInitRef and the mailbox parser read since #34's and #30's reviews.
+        if (!SecretRef.IsConfinedTo(path, prefix)) {
             return Result<SecretRef>.Failure(
                 ErrorCode.AuthorizationFailed,
                 $"{target} names '{path}', which is not under your tenant's vault prefix '{prefix}'. A "
-                + "container group can only be given a value your own tenant holds.",
+                + "container group can only be given a value your own tenant holds, and the path may not "
+                + "contain an empty, '.' or '..' segment.",
                 target
             );
         }

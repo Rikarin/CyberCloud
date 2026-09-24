@@ -2386,8 +2386,20 @@ attached to and a child shares its parent's lifetime by construction.
 - **⚠ SCALE-IN IS NOT DONE WHEN `readyReplicas` SAYS SO.** Scaled from two to one, the pool read
   `readyReplicas: 1, replicas: 2` for the minute the second machine took to stop, so a set converges
   only when the current count equals the ask too.
+- **⚠ CORRECTED BY #28's REVIEW: REUSING THE MACHINE'S RENDER REUSED ITS SECRET'S NAME.** A machine
+  `web` and a set `web` in one resource group both wrote `web-cloud-init` under the one Compute field
+  manager, so neither apply conflicted: each pass overwrote the other's user data, and the set's
+  delete removed the machine's. The set's Secret is `{set}-cloud-init-set`, a suffix no machine's
+  Secret can end in, and
+  `VirtualMachineScaleSetTests.AMachineAndASetOfOneNameKeepTheirOwnCloudInitAndTheSetsDeleteLeavesTheMachines`
+  holds it. A field manager per provider makes every same-provider name collision silent; the root
+  disks' is still open (`instance-names-share-the-machines-namespace`).
 
-### What the nineteenth provider measured
+### What the container groups measured (#28, 2026-09-23)
+
+⚠ Headed by its type rather than an ordinal: this section and `CyberCloud.KeyVault`'s below were both
+"the nineteenth provider" once #28's review merged them, and a count of namespaces is
+`HostCompositionTests`' job, not a heading's.
 
 `CyberCloud.ContainerInstance/containerGroups`, [13 § Container Instances](../../docs/plan/13-compute-vm-containers.md),
 M2 · 0.8 EM, #28 — one or more containers as one pod, and a provider namespace of its own.
@@ -2411,6 +2423,14 @@ M2 · 0.8 EM, #28 — one or more containers as one pod, and a provider namespac
 - **⚠ THREE RULES SPELLED A SECOND TIME, EACH HELD TO ITS OWNER.** The tenant vault prefix (Compute's
   cloud-init), a subnet's object name and a public address's; `ContainerGroupSpellingTests` compares
   them across the family boundary rule 2 forbids crossing in shipped code.
+- **⚠ CORRECTED BY #28's REVIEW: THE PREFIX WAS SPELLED AGAIN, AND THE CHECK ON IT WAS THE OLD ONE.**
+  `ContainerGroups.ParseSecretRef` refused a path with `StartsWith(prefix)`, the check #34's review had
+  already replaced everywhere else, so `tenants/{mine}/../{theirs}/db#password` in `secureEnvironment`
+  reached another tenant's value — and here the value does not stop at a guest: a container prints it
+  and `logs` returns it. It reads `SecretRef.IsConfinedTo` now, and
+  `ContainerGroupReconcilerTests.APathThatStartsWithTheTenantsPrefixAndLeavesItIsRefusedBeforeItIsResolved`
+  holds five spellings to it. Spelling the prefix again was the right call for rule 2; spelling the
+  *check* again was not, and the spelling test compared only the prefix.
 
 ### What the nineteenth provider measured
 

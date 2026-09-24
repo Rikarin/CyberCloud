@@ -132,6 +132,41 @@ public sealed class ContainerGroupReconcilerTests {
         connection.Applied.ShouldBeEmpty();
     }
 
+    [Theory]
+    [InlineData("secure", "tenants/{a}/../{b}/db")]
+    [InlineData("registry", "tenants/{a}/../{b}/db")]
+    [InlineData("secure", "tenants/{a}/../../platform/CyberCloud.KeyVault/vaults/x")]
+    [InlineData("secure", "tenants/{a}//db")]
+    [InlineData("secure", "tenants/{a}/./db")]
+    public async Task APathThatStartsWithTheTenantsPrefixAndLeavesItIsRefusedBeforeItIsResolved(string where, string spelled) {
+        // ⚠ #28's review: the parser checked StartsWith alone, and each of these starts with tenant A's
+        // prefix. The resolver's client collapses `..`, so the first reads tenant B's `db` with the
+        // platform's token — and a container prints what it was given, which `logs` returns.
+        var connection = new GroupConnection();
+        var path = spelled.Replace("{a}", Groups.TenantA.ToString("D")).Replace("{b}", Groups.TenantB.ToString("D"));
+        var vault = new SeededSecrets(
+            (Groups.VaultPath("db", Groups.TenantB), "password", "tenant-b's"),
+            (path, "password", "whatever the collapsed path reaches")
+        );
+        using var body = Groups.Body(
+            where == "secure"
+                ? ContainerGroups.Body(Groups.ClusterId, secureEnvironment: ["STOLEN=" + path + "#password"])
+                : ContainerGroups.Body(
+                    Groups.ClusterId,
+                    registryServer: "registry.example.com",
+                    registryUsername: "admin",
+                    registryPassword: path + "#password"
+                )
+        );
+
+        var outcome = await Groups.Reconcile(connection, Groups.Address("web"), body, vault);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed, outcome.Error?.Message);
+        outcome.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+        vault.Resolves.ShouldBe(0, $"'{path}' was resolved before it was refused");
+        connection.Applied.ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task APendingPodIsInProgressWithTheKubeletsReasonAndARunningOneConverges() {
         var connection = new GroupConnection();

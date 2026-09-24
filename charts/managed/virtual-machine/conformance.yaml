@@ -242,6 +242,16 @@ owed:
       branch a harness with a derived CRD stub and no KubeVirt lands on, the same branch
       charts/managed/kubernetes records under this id. A real cluster writes a printable status
       within seconds, and the reconciler follows it; the shared suites never see that branch.
+  - id: a-status-write-is-a-move-to-the-precondition
+    says: >
+      Recorded by #28's review, not measured. `metadata.resourceVersion` moves on every write to the
+      object, including KubeVirt's own writes to `status`, so the lock that closed
+      `the-power-state-cannot-lose-a-race` also refuses a pass, or a start, stop or scale, whose read
+      was followed by nothing but a status update. The cost is one lost pass (InProgress, read again
+      in two seconds) or one of the power handler's three attempts. A machine or pool whose status
+      churns faster than a read-then-apply round trip would fail an action with OperationInProgress
+      rather than undo it. No run has seen that, and a lock on `metadata.generation`, which status
+      does not move, is not something server-side apply offers.
   - id: no-recovery-window
     says: >
       No SupportsSoftDelete, and the reason is a disk's: a machine's teardown detaches its disks and

@@ -242,6 +242,61 @@ public sealed class VirtualMachineScaleSetTests {
     }
 
     [Fact]
+    public async Task AMachineAndASetOfOneNameKeepTheirOwnCloudInitAndTheSetsDeleteLeavesTheMachines() {
+        // ⚠ #28's review: both types wrote `{name}-cloud-init` under the one Compute field manager, so the
+        // two applies overwrote each other without a conflict, and the set's delete — which removes its
+        // Secret whether or not its body names cloud-init — removed the machine's user data.
+        var connection = new RecordingConnection();
+        var machine = Compute.Machine("web");
+        var set = Set("web");
+        var ns = ReconcileDriver.NamespaceFor(set);
+        ReconcileDriver.NamespaceFor(machine).ShouldBe(ns, "the two are in one resource group");
+        var vault = new SeededSecrets(
+            (Compute.VaultPath("vm"), "userdata", "#cloud-config machine"),
+            (Compute.VaultPath("set"), "userdata", "#cloud-config set")
+        );
+        using var machineBody = JsonDocument.Parse(VirtualMachines.Body(Compute.ClusterId, cloudInit: Compute.VaultPath("vm") + "#userdata"));
+        using var setBody = JsonDocument.Parse(VirtualMachineScaleSets.Body(Compute.ClusterId, cloudInit: Compute.VaultPath("set") + "#userdata"));
+        using var bareSet = JsonDocument.Parse(VirtualMachineScaleSets.Body(Compute.ClusterId));
+
+        await new VirtualMachineReconciler(new FixedClock()).ReconcileAsync(
+            Compute.Context(connection, machine, machineBody.RootElement, vault),
+            TestContext.Current.CancellationToken
+        );
+        var outcome = await new VirtualMachineScaleSetReconciler(new FixedClock()).ReconcileAsync(
+            Compute.Context(connection, set, setBody.RootElement, vault),
+            TestContext.Current.CancellationToken
+        );
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Converged, outcome.Error?.Message);
+
+        UserData(connection, VirtualMachines.CloudInitSecretRef(ns, "web")).ShouldBe("#cloud-config machine");
+        UserData(connection, VirtualMachineScaleSets.CloudInitSecretRef(ns, "web")).ShouldBe("#cloud-config set");
+        VirtualMachineScaleSets.CloudInitSecretName("web").ShouldNotBe(VirtualMachines.CloudInitSecretName("web"));
+
+        var pool = JsonNode.Parse(connection.Objects[RecordingConnection.Key(VirtualMachineScaleSets.PoolRef(ns, "web"))])!;
+        pool["spec"]!["virtualMachineTemplate"]!["spec"]!["template"]!["spec"]!["volumes"]!.AsArray()
+            .Select(static x => x!["cloudInitNoCloud"]?["secretRef"]?["name"]?.GetValue<string>())
+            .OfType<string>()
+            .ShouldBe(["web-cloud-init-set"], "every machine of the set mounts the set's Secret");
+
+        // A set whose body names no cloud-init still deletes its own Secret name — and not the machine's.
+        var deleted = await new VirtualMachineScaleSetReconciler(new FixedClock()).DeleteAsync(
+            Compute.Context(connection, set, bareSet.RootElement),
+            TestContext.Current.CancellationToken
+        );
+
+        deleted.Kind.ShouldBe(ReconcileOutcomeKind.Converged, deleted.Error?.Message);
+        connection.Deleted.ShouldNotContain(VirtualMachines.CloudInitSecretRef(ns, "web"));
+        UserData(connection, VirtualMachines.CloudInitSecretRef(ns, "web")).ShouldBe("#cloud-config machine");
+    }
+
+    static string UserData(RecordingConnection connection, ObjectRef secret) {
+        var read = connection.GetAsync(secret, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+        read.IsSuccess.ShouldBeTrue($"'{secret}' is not there");
+        return KubeSecret.Value(read.GetValueOrThrow(), VirtualMachines.CloudInitKey).GetValueOrThrow();
+    }
+
+    [Fact]
     public async Task TheDeleteIsForegroundSoTheMachinesGoBeforeThePoolDoes() {
         var connection = new RecordingConnection();
         var address = Set("web");

@@ -22,7 +22,8 @@ namespace CyberCloud.Providers.Compute;
 ///         ⚠ <b>The machine half is the machine reconciler's, by construction.</b> The image gate is
 ///         <see cref="ImageGate" />, the cloud-init handle is parsed by
 ///         <see cref="VirtualMachines.ParseCloudInitRef" /> under the same tenant prefix and resolved into
-///         the same <c>{name}-cloud-init</c> Secret, and the pool's machine template is
+///         the same document under the set's own name (<see cref="VirtualMachineScaleSets.CloudInitSecretName" />
+///         says why it is not the machine's), and the pool's machine template is
 ///         <see cref="VirtualMachines.VirtualMachineJson" />'s spec. What is this type's own: the name
 ///         bound (<see cref="VirtualMachineScaleSets.NameProblem" />), the replica clamp, and a
 ///         <c>Converged</c> that follows the pool's <c>readyReplicas</c>.
@@ -121,7 +122,7 @@ public sealed class VirtualMachineScaleSetReconciler(IClock clock) : IResourceRe
                     context,
                     cluster,
                     KubeSecret.Kind,
-                    VirtualMachines.CloudInitSecretJson(name, userData),
+                    VirtualMachineScaleSets.CloudInitSecretJson(name, userData),
                     [],
                     string.Empty,
                     cancellationToken
@@ -146,7 +147,7 @@ public sealed class VirtualMachineScaleSetReconciler(IClock clock) : IResourceRe
 
         // ── Clause 4. Everything above this line is a claim; this is the reading. ──────────────
         if (userData is not null) {
-            var secret = await cluster.GetAsync(VirtualMachines.CloudInitSecretRef(ns, name), cancellationToken);
+            var secret = await cluster.GetAsync(VirtualMachineScaleSets.CloudInitSecretRef(ns, name), cancellationToken);
 
             if (secret.TryGetError(out var secretReadError)) {
                 return secretReadError.Code == ErrorCode.ResourceNotFound
@@ -225,7 +226,7 @@ public sealed class VirtualMachineScaleSetReconciler(IClock clock) : IResourceRe
         foreach (var (kind, json, policy) in new[] {
                      (VirtualMachineScaleSets.PoolKind,
                          VirtualMachineScaleSets.PoolJson(ns, name, context.Desired, 0), CascadePolicy.Foreground),
-                     (KubeSecret.Kind, VirtualMachines.CloudInitSecretJson(name, string.Empty), CascadePolicy.Background)
+                     (KubeSecret.Kind, VirtualMachineScaleSets.CloudInitSecretJson(name, string.Empty), CascadePolicy.Background)
                  }) {
             var deleted = await KubeCommand.For(cluster)
                 .WithTenantId(context.Id.TenantId)
@@ -242,7 +243,7 @@ public sealed class VirtualMachineScaleSetReconciler(IClock clock) : IResourceRe
         }
 
         foreach (var target in new[] {
-                     VirtualMachineScaleSets.PoolRef(ns, name), VirtualMachines.CloudInitSecretRef(ns, name)
+                     VirtualMachineScaleSets.PoolRef(ns, name), VirtualMachineScaleSets.CloudInitSecretRef(ns, name)
                  }) {
             var read = await cluster.GetAsync(target, cancellationToken);
 

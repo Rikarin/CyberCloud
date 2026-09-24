@@ -13,8 +13,9 @@ chart: virtual-machine-scale-set
 
 # Objects the reconciler must have applied once the resource reports Succeeded.
 #
-# ⚠ ONE POOL, AND WHEN THE BODY NAMES CLOUD-INIT, ONE SECRET EVERY MACHINE MOUNTS — `{name}-cloud-init`,
-# the reconciler's, as the machine's is. The machines and their root disks are the pool controller's:
+# ⚠ ONE POOL, AND WHEN THE BODY NAMES CLOUD-INIT, ONE SECRET EVERY MACHINE MOUNTS — `{name}-cloud-init-set`,
+# the reconciler's, as the machine's is, and named apart from a machine's `{name}-cloud-init` since #28's
+# review found a machine and a set of one name writing one Secret. The machines and their root disks are the pool controller's:
 # created from the template, owned by the pool, garbage-collected with it, and not counted.
 renders:
   - group: pool.kubevirt.io
@@ -123,6 +124,11 @@ owed:
       The pool names machines `{set}-{index}`, which is the space a standalone machine's name lives in:
       a `virtualMachines` resource called `web-0` and a set called `web` in one resource group both want
       the object `web-0`. Nothing refuses the pair; closing it is the reader a same-group name check needs.
+      ⚠ The root disks share a space too (#28's review): the pool indexes `{set}-root` into
+      `{set}-root-{index}`, and a `disks` or `images` resource's DataVolume is its own name, so a disk
+      called `web-root-0` and a set called `web` want one DataVolume. The cloud-init Secret no longer
+      does: it was `{set}-cloud-init`, a machine `web`'s own name, written by both under one field
+      manager, and is `{set}-cloud-init-set` now (VirtualMachineScaleSets.CloudInitSecretName).
   - id: no-per-instance-power-actions
     says: >
       The replica count is the switch: there is no start, stop or restart of one machine of a set, and a

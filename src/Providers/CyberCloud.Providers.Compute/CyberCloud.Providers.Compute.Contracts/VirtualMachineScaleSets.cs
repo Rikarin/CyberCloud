@@ -110,6 +110,36 @@ public static class VirtualMachineScaleSets {
     public static string InstanceName(string name, int index) =>
         ObjectNameOf(name) + "-" + index.ToString(CultureInfo.InvariantCulture);
 
+    /// <summary>The Secret a set's resolved cloud-init becomes — one for every machine: <c>{set}-cloud-init-set</c>.</summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <remarks>
+    ///     ⚠
+    ///     <b>
+    ///         NOT <see cref="VirtualMachines.CloudInitSecretName" />, WHICH THIS TYPE FIRST SHARED, AND
+    ///         THE REASON IS A MACHINE OF THE SAME NAME.
+    ///     </b> #28's review: a <c>virtualMachines</c> resource <c>web</c> and a set <c>web</c> in one
+    ///     resource group both wrote <c>web-cloud-init</c>, under one field manager
+    ///     (<c>cybercloud/CyberCloud.Compute</c>), so neither apply conflicted — each overwrote the other's
+    ///     user data and labels on every pass, and the set's delete, which removes the Secret whether or
+    ///     not its body names cloud-init, removed the machine's. A machine's Secret always ends in
+    ///     <c>-cloud-init</c> and this one never does, so no two names of the two types can meet.
+    /// </remarks>
+    public static string CloudInitSecretName(string name) => ObjectNameOf(name) + "-cloud-init-set";
+
+    /// <summary>The cloud-init Secret a set owns when its body names user data.</summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The resource's own name.</param>
+    public static ObjectRef CloudInitSecretRef(string ns, string name) => KubeSecret.Ref(ns, CloudInitSecretName(name));
+
+    /// <summary>The cloud-init Secret a set's resolved handle becomes — the machine's document under the set's name.</summary>
+    /// <param name="name">The resource's own name.</param>
+    /// <param name="userData">The resolved user data.</param>
+    public static string CloudInitSecretJson(string name, string userData) {
+        var secret = JsonNode.Parse(VirtualMachines.CloudInitSecretJson(name, userData))!;
+        secret["metadata"]!["name"] = CloudInitSecretName(name);
+        return secret.ToJsonString();
+    }
+
     /// <summary>The longest resource name a set may have.</summary>
     /// <remarks>
     ///     ⚠ Sixty, not <see cref="ResourceNaming.MaxLength" />. An instance is <c>{name}-{index}</c>
@@ -381,7 +411,7 @@ public static class VirtualMachineScaleSets {
     ///         <c>spec</c> becomes <c>virtualMachineTemplate.spec</c> at <see cref="VirtualMachines.RunAlways" />,
     ///         so the root disk is a <c>dataVolumeTemplates</c> entry named <c>{set}-root</c> — which the
     ///         pool controller suffixes with each instance's index, giving every machine a clone of its
-    ///         own — and cloud-init is the one Secret, <c>{set}-cloud-init</c>, which every machine
+    ///         own — and cloud-init is the one Secret, <see cref="CloudInitSecretName" />, which every machine
     ///         mounts: <c>nameGeneration.appendIndexToSecretRefs</c> is left off because the user data
     ///         is one value.
     ///     </para>
@@ -395,6 +425,13 @@ public static class VirtualMachineScaleSets {
         var machine = JsonNode.Parse(VirtualMachines.VirtualMachineJson(ns, objectName, desired, VirtualMachines.RunAlways))!;
         var machineSpec = machine["spec"]!.AsObject();
         machine.AsObject().Remove("spec");
+
+        // The set's own cloud-init Secret rather than the machine's — CloudInitSecretName says why.
+        foreach (var volume in (machineSpec["template"]?["spec"]?["volumes"] as JsonArray ?? []).OfType<JsonObject>()) {
+            if (volume["cloudInitNoCloud"]?["secretRef"] is JsonObject secretRef) {
+                secretRef["name"] = CloudInitSecretName(name);
+            }
+        }
 
         var selector = new JsonObject { [NameLabel] = NameLabelValue, [InstanceLabel] = objectName };
 

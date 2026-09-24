@@ -38,7 +38,15 @@ namespace CyberCloud.Providers.ContainerInstance;
 /// <param name="clock">Stamps <c>readAt</c>. The handler's only field, and it is not mutable.</param>
 public sealed class ContainerGroupActionHandler(IClock clock) : IResourceActionHandler {
     /// <summary>How long a restart waits for the old pod to be gone.</summary>
-    public static readonly TimeSpan RestartBudget = TimeSpan.FromSeconds(45);
+    /// <remarks>
+    ///     ⚠ <b>Inside the dispatcher's budget, which it was not.</b> <c>ActionDispatcher</c> cancels a
+    ///     handler at <c>ReconcileDriver.PassBudget</c> (30 s) and answers <c>InternalError</c>, "abandoned".
+    ///     This read 45 s, so a pod that took longer than 30 s to go never reached the retryable
+    ///     <see cref="ErrorCode.OperationInProgress" /> below — #28's review. Twenty is the ten-second
+    ///     grace period (<see cref="ContainerGroups.TerminationGracePeriodSeconds" />) twice over, and
+    ///     leaves ten for the apply and the read after it.
+    /// </remarks>
+    public static readonly TimeSpan RestartBudget = TimeSpan.FromSeconds(20);
 
     /// <inheritdoc />
     public ResourceTypeName Type => ContainerGroups.Type;

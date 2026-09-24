@@ -88,6 +88,14 @@ public sealed class ContainerGroupActionTests {
     }
 
     [Fact]
+    public void ARestartGivesUpInsideTheDispatchersBudgetSoItsOwnAnswerIsTheOneReturned() {
+        // ⚠ #28's review: the wait was 45 s and the dispatcher cancels at 30, so a slow pod came back as
+        // the dispatcher's InternalError rather than this handler's retryable OperationInProgress.
+        (ContainerGroupActionHandler.RestartBudget + TimeSpan.FromSeconds(5)).ShouldBeLessThan(ReconcileDriver.PassBudget);
+        ContainerGroupActionHandler.RestartBudget.ShouldBeGreaterThan(TimeSpan.FromSeconds(ContainerGroups.TerminationGracePeriodSeconds));
+    }
+
+    [Fact]
     public void OneHandlerServesBothActionsAndNeitherIsLongRunning() {
         var registry = CyberCloud.ResourceManager.Registry.ProviderRegistry.Build([new ContainerInstanceProvider()]);
         registry.TryGetType(ContainerGroups.Type, out var registration).ShouldBeTrue();

@@ -129,8 +129,10 @@ public interface IKubeApiClient : IDisposable {
         CancellationToken cancellationToken = default
     ) =>
         Task.FromResult(
+            // InternalError, as IKubeClusterConnection's default says: a client that cannot read a log
+            // is the platform's gap and not the caller's body (#28's review; it read InvalidRequestBody).
             Result<string>.Failure(
-                ErrorCode.InvalidRequestBody,
+                ErrorCode.InternalError,
                 $"This client ({GetType().Name}) cannot read a pod's log, so the logs of '{pod}' were not "
                 + "read. It fails rather than answering an empty log, which would say the container wrote "
                 + "nothing."
