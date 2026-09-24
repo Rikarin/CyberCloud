@@ -203,10 +203,9 @@ rule is one instance however many series offend, the schema having no array of o
 per-series shape is the api-version that grows the tree. ⚠ **This paragraph used to end by naming
 three nouns of #32's four this did not take; two of them landed on 2026-09-17** — `collectors` above
 and managed Grafana below, each a resource type with a chart of its own. The App Insights-shaped views
-are the one noun left, undesigned and unpriced by this document, and recorded as
-`charts/managed/monitor-workspace/conformance.yaml § owed`,
-`observability-app-insights-views-not-landed`, so the row's ◐ still has an entry behind it and not
-only a sentence.
+were the one noun left, undesigned and unpriced by this document; they landed on 2026-09-23 as
+[§ Application views](#application-views--cybercloudmonitorworkspacescomponents--m2) and the owed row
+that stood for them is gone.
 
 ## Managed Grafana — `CyberCloud.Dashboard/grafanas` · M2 · 0.8 EM
 
@@ -381,6 +380,68 @@ AppHost's gateway reads the region's ClickHouse and has no VictoriaMetrics, no c
 gateway, and a region's vmselect has no TLS to satisfy an `https` endpoint
 (`explorers-are-wired-on-a-laptop-only`). The alert evaluator's query seam is still the refusing default
 (`alert-rules-query-seam-is-refusing`), though the stores it would use now exist.
+
+## Application views — `CyberCloud.Monitor/workspaces/components` · M2
+
+[01](01-azure-parity-catalogue.md)'s row is *"Application Insights | ⊂ workspaces | M2 | OTLP ingest,
+a per-tenant ClickHouse database, and the trace/exception views"*, with no estimate; this section is
+the design that row never had, written as it landed (2026-09-23, #32's fourth noun).
+
+```
+CyberCloud.Monitor/workspaces/{workspace}/components/{name}
+  ├─ clusterId — the cluster the connection string is published in (its collector's)
+  ├─ collector — a sibling collector's NAME; protocol (http/protobuf | grpc)
+  ├─ action: listConnectionString → OTEL_EXPORTER_OTLP_ENDPOINT, _PROTOCOL, OTEL_RESOURCE_ATTRIBUTES
+  └─ actions, each POST {timespanMinutes ≤ 1440, top ≤ 100}:
+       requests       — server/consumer spans by service and operation: count, failures, rate/min,
+                        failure rate, exact p50/p95/p99
+       dependencies   — client/producer spans by caller, type (db|http|messaging|rpc|other), target, name
+       exceptions     — `exception` span events and log records carrying exception.type, by type
+       applicationMap — nodes, and edges where a span's parent is in another service
+       transaction    — POST {traceId, timespanMinutes ≤ 10080}: one trace's spans and logs, in order
+```
+
+**A component is a lens, not a store.** The workspace is the tenancy — one ClickHouse database; a
+component names the slice one application writes, every span and log record whose resource carries
+`service.namespace` equal to the component's name, and its connection string sets exactly that. One
+object is rendered: a `ConfigMap` holding the three `OTEL_*` variables, so a pod is wired with
+`envFrom`. ⚠ The namespace is the client's assertion — it separates applications, not tenants
+(`charts/managed/monitor-component/conformance.yaml § owed`, `the-namespace-is-the-clients-assertion`).
+
+⚠ **The tenant boundary is the database, and the database comes from the platform's index.** A view
+runs on the request path — the gateway's process, like every synchronous action — and reads
+`ws_{guid:N}` of the workspace's GUID. A child's reconcile pass never learns its parent's GUID, so the
+action path now carries it: `ResourceManagerService` resolves the parent through the tenant's own
+index on every action and hands it to the handler as `ActionContext.Parent`
+(`ActionParentTests`). The workspace's row `ConfigMap` also names the database and was rejected as the
+source: it lives in a namespace of a cluster the tenant may administer, and a rewritten row would be a
+read of another tenant's telemetry.
+
+⚠ **Every statement is the platform's and every value is bound.** The views' SQL is constants in
+`ComponentViews`; the window, the row limit, the namespace and a trace id (held to 32 hex digits by the
+schema) are `{name:Type}` parameters; the database is the request's `database=` setting, never text in a
+statement. Five settings ride on every query — `readonly=2`, `max_execution_time`, `max_rows_to_read`,
+`max_memory_usage`, and unquoted 64-bit integers — and ClickHouse's own words go to the log, never to
+the caller: a budget refusal is a `400` naming it, an unprovisioned workspace a `409`, anything else a
+bare `500`. The percentiles are exact (`quantileExact`: position ⌊level × n⌋, no interpolation), which is
+what the look-back cap and `max_memory_usage` pay for. **Columns, not rows**: the schema has no array of
+objects, so each view is parallel arrays a chart can take as series.
+
+⚠ **Proved against the real thing.** `ComponentViewsAgainstClickHouseTests` emits OTLP, the pinned
+collector running the configuration `MonitorCollectors.CollectorConfig` renders exports it into a real
+ClickHouse, and every view's numbers are asserted through the real manager, dispatcher and handler —
+including that a component sees only its namespace and another tenant's component only its own
+database. `MonitorComponentViewsOverHttpTests` puts the gateway's stages on a real socket in front of the
+same manager: the owner's view answers `200` with its numbers, another tenant's caller gets `404` and the
+store is never asked. And the tables: `MonitorTelemetrySchema` holds the four statements the exporter
+itself creates with `create_schema: true` — measured, not recalled — and
+`ComponentViewsAgainstClickHouseTests.ThePlatformsTablesAreTheExportersShape` compares every column,
+key and index. ⚠ **Nothing in production runs them yet**, so a view on a real workspace answers `409`
+naming `collector-clickhouse-tables-are-the-exporters-shape`; the store the gateway reads is
+`CyberCloud:Monitor:Telemetry`, the refusing default until a region sets it, with one read credential
+for every workspace (`one-read-credential-for-every-workspace`). The portal's pages over the five
+views are #41's (`portal-views-are-not-built`); `cyc monitor component requests|dependencies|exceptions|application-map|transaction`
+are generated from the declaration like every other verb.
 
 ## What the platform monitors about itself
 

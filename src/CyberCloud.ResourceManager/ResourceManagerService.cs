@@ -2065,6 +2065,12 @@ public sealed class ResourceManagerService(
 
         using var body = JsonDocument.Parse(string.IsNullOrWhiteSpace(request.Body) ? "{}" : request.Body);
 
+        // ⚠ THE PARENT'S GUID, FROM THE INDEX, FOR A HANDLER THAT DERIVES SOMETHING FROM IT. One more
+        // read through the same tenant-qualified factory step 1 used; a parent that no longer resolves
+        // is passed as null rather than refused here, because an action that never reads it must not
+        // start failing for it. ActionContext.Parent says why the handler cannot get this elsewhere.
+        var parentId = await ParentIdOf(target);
+
         var invoked = await actions.InvokeAsync(
             target.Id,
             target.Registration,
@@ -2076,6 +2082,7 @@ public sealed class ResourceManagerService(
             // IResourceCreator for why an action may create and a reconciler may not.
             new CallerResourceCreator(this, target.Id, request.Caller),
             request.Caller,
+            parentId != Guid.Empty ? target.Id.Parent?.WithId(parentId) : null,
             cancellationToken
         );
 

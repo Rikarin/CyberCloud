@@ -58,9 +58,14 @@ assertions:
   - id: an-export-lands-in-the-workspace
     says: >
       A span, a log record and a metric sent to the endpoint listEndpoints returned appear in the
-      workspace's stores under ITS accountID and ITS database and nobody else's. ⚠ Provable only
-      against a real VictoriaMetrics and ClickHouse, which the cluster-backed suite does not have —
-      the same wall charts/managed/monitor-workspace's `metrics-round-trip` is behind.
+      workspace's stores under ITS accountID and ITS database and nobody else's. ◐ THE CLICKHOUSE
+      HALF IS ASSERTED (2026-09-23, #32): ComponentViewsAgainstClickHouseTests runs the pinned image
+      with the configuration MonitorCollectors.CollectorConfig renders — one line changed, the query
+      host for the container's address — against a real ClickHouse on a Docker network, and the spans
+      and log records the test emitted land in the workspace's database and the other workspace's
+      collector's in the other's. Not on a kubelet, and not through `telemetry.cybercloud.svc`. The
+      metrics half is still provable only against a real VictoriaMetrics — the wall
+      charts/managed/monitor-workspace's `metrics-round-trip` is behind.
   - id: a-receiver-switched-off-stops-listening
     says: >
       A PUT turning one protocol off removes its port from the Service and the container, and the
@@ -120,13 +125,25 @@ owed:
     says: >
       The clickhouse exporter runs with `create_schema: false` and writes to tables named
       `otel_logs` and `otel_traces` in the workspace's database, in the shape upstream's exporter
-      expects. Nothing in this repository creates that database or those tables —
+      expects. Since 2026-09-23 (#32) that shape is written down — MonitorTelemetrySchema holds the four
+      statements the exporter itself runs with create_schema on, and
+      ComponentViewsAgainstClickHouseTests.ThePlatformsTablesAreTheExportersShape compares every
+      column, key and index against the exporter's own — but nothing in production RUNS them —
       charts/managed/monitor-workspace records `clickhouse-ttl-is-published-not-applied` for the
       same reason — so every export of logs and traces lands in the exporter's retry queue until the
-      ingest host's schema step exists. The metrics half is different: the prometheusremotewrite
-      exporter writes into a VictoriaMetrics account that needs no schema and answers the moment
-      vmauth resolves the VMUser.
-    closes: The ingest host's schema step creating the database and the exporter's two tables, with the retention TTL the workspace's row publishes.
+      ingest host's schema step exists, and a component's views answer 409 naming this id. The
+      metrics half is different: the prometheusremotewrite exporter writes into a VictoriaMetrics
+      account that needs no schema and answers the moment vmauth resolves the VMUser.
+    closes: The ingest host's schema step running MonitorTelemetrySchema.Statements for the workspace's database, with the retention TTL the workspace's row publishes.
+  - id: exporter-username-is-not-tenant-unique
+    says: >
+      The clickhouse exporter authenticates as `monitor-{workspace}` — the workspace's VMUser name,
+      unique in its namespace and nowhere else. ClickHouse users are global to the server, so two
+      tenants' workspaces called `prod` present the same username to the region's ClickHouse, and
+      ComponentViewsAgainstClickHouseTests had to grant one user both workspaces' databases to run the
+      rendered configuration for two tenants. Harmless while nothing provisions ClickHouse users; a
+      store that did, per workspace, would find the second tenant's name taken.
+    closes: A username derived from the workspace's GUID (the accountID, or the database name) in both the rendered configuration and whatever mints the ClickHouse user.
   - id: the-endpoints-are-named-not-resolved
     says: >
       `ingest.cybercloud.svc` and `telemetry.cybercloud.svc` are MonitorWorkspaces.IngestHost and

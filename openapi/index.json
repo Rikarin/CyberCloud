@@ -622,6 +622,19 @@
       }
     },
     {
+      "type": "CyberCloud.Monitor/workspaces/components",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Application component",
+        "plural": "Application components",
+        "alias": "component",
+        "summary": "An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Network/publicIpAddresses",
       "apiVersions": [
         "2026-08-01"

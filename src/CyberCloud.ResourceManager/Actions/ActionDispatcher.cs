@@ -77,6 +77,10 @@ public sealed class ActionDispatcher(
     ///     default — see <see cref="IResourceCreator" />.
     /// </param>
     /// <param name="caller">Who invoked it, handed to the handler as <see cref="ActionContext.Caller" />.</param>
+    /// <param name="parent">
+    ///     The resource's parent with its GUID resolved, or <see langword="null" /> — see
+    ///     <see cref="ActionContext.Parent" />.
+    /// </param>
     /// <param name="cancellationToken">Cancels the invocation.</param>
     /// <returns>The response JSON, or a failure.</returns>
     public async Task<Result<string>> InvokeAsync(
@@ -87,6 +91,7 @@ public sealed class ActionDispatcher(
         JsonElement body,
         IResourceCreator? creator = null,
         CallerContext? caller = null,
+        ResourceId? parent = null,
         CancellationToken cancellationToken = default
     ) {
         ArgumentNullException.ThrowIfNull(registration);
@@ -175,7 +180,8 @@ public sealed class ActionDispatcher(
                 // dispatcher that serves no connected cluster.
                 Agents = agents ?? new UnavailableAgentTunnels(),
                 Creator = creator ?? new RefusingResourceCreator(),
-                Caller = caller ?? new()
+                Caller = caller ?? new(),
+                Parent = parent
             };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

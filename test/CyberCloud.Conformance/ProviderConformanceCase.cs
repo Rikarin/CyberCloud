@@ -1,4 +1,5 @@
 using CyberCloud.ResourceManager.Conformance;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Immutable;
 
 namespace CyberCloud.Conformance;
@@ -643,6 +644,23 @@ public interface IProviderCaseSource {
     ///     </para>
     /// </remarks>
     static virtual void ConfigureSilo(ISiloBuilder silo) { }
+
+    /// <summary>
+    ///     What the <i>dispatcher's</i> container must hold for this case's synchronous handlers to
+    ///     reach the world a suite built for them — the client-side half of
+    ///     <see cref="ConfigureSilo" />. Nothing, for every case before
+    ///     <c>CyberCloud.Monitor/workspaces/components</c>.
+    /// </summary>
+    /// <param name="services">The container <c>ActionDispatcher</c> resolves handlers from.</param>
+    /// <remarks>
+    ///     ⚠ <b>A synchronous action runs inside <c>ResourceManagerService</c>, not in the silo</b>,
+    ///     so what a handler holds is registered in the container the harness builds for the
+    ///     dispatcher — the gateway's, in production. A clusterless case gets there through
+    ///     <see cref="IConvergedModule.ConfigureHandlers" />; a cluster-backed case whose views read a
+    ///     store the suite started (the component's ClickHouse) gets there through this. Registered
+    ///     after the harness's own doubles, so a case can replace one.
+    /// </remarks>
+    static virtual void ConfigureHandlers(IServiceCollection services) { }
 
     /// <summary>
     ///     Resources of <b>other</b> providers that must exist before this case's own resource can

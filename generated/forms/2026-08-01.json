@@ -7796,6 +7796,239 @@
         }
       ]
     },
+    "CyberCloud.Monitor/workspaces/components": {
+      "resourceType": "CyberCloud.Monitor/workspaces/components",
+      "apiVersion": "2026-08-01",
+      "title": "Application component",
+      "plural": "Application components",
+      "summary": "An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.",
+      "overrideKey": "CyberCloud.Monitor/workspaces/components@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/collector",
+        "/properties/protocol",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the component is billed in — its workspace's.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Application component to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The component's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Application component to change it."
+        },
+        {
+          "jsonPointer": "/properties/collector",
+          "name": "collector",
+          "label": "Collector",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.",
+          "maxLength": 63,
+          "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+          "default": "gateway",
+          "placeholder": "gateway"
+        },
+        {
+          "jsonPointer": "/properties/protocol",
+          "name": "protocol",
+          "label": "Protocol",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Which OTLP protocol the connection string names. The collector must have that receiver on.",
+          "choices": [
+            {
+              "value": "grpc",
+              "label": "Grpc"
+            },
+            {
+              "value": "http/protobuf",
+              "label": "Http/protobuf"
+            }
+          ],
+          "default": "http/protobuf"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "applicationMap",
+          "label": "Application map",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "dependencies",
+          "label": "Dependencies",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "exceptions",
+          "label": "Exceptions",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "listConnectionString",
+          "label": "List connection string",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "requests",
+          "label": "Requests",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "transaction",
+          "label": "Transaction",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/traceId",
+              "name": "traceId",
+              "label": "Trace id",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        }
+      ]
+    },
     "CyberCloud.Network/publicIpAddresses": {
       "resourceType": "CyberCloud.Network/publicIpAddresses",
       "apiVersion": "2026-08-01",

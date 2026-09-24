@@ -3732,6 +3732,247 @@ type OpenTelemetryCollectorListEndpointsResult struct {
 	Workspace string `json:"workspace"`
 }
 
+// ApplicationComponentProtocol is the values /properties/protocol accepts. ⚠ Closed: the write path refuses anything else.
+type ApplicationComponentProtocol string
+
+const (
+	ApplicationComponentProtocolGrpc         ApplicationComponentProtocol = "grpc"
+	ApplicationComponentProtocolHttpProtobuf ApplicationComponentProtocol = "http/protobuf"
+)
+
+// ApplicationComponentData is Application component: the body a caller writes. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.
+type ApplicationComponentData struct {
+	// The region the component is billed in — its workspace's.
+	Location string `json:"location"`
+	// The component's own settings.
+	Properties *ApplicationComponentProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// ApplicationComponentProperties is The component's own settings.
+type ApplicationComponentProperties struct {
+	// The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.
+	ClusterID string `json:"clusterId"`
+	// The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.
+	Collector string `json:"collector"`
+	// Which OTLP protocol the connection string names. The collector must have that receiver on.
+	Protocol *ApplicationComponentProtocol `json:"protocol,omitempty"`
+}
+
+// ApplicationComponentResource is one Application component, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type ApplicationComponentResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data ApplicationComponentData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *ApplicationComponentResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// ApplicationComponentApplicationMapContent is the parameters of applicationMap.
+type ApplicationComponentApplicationMapContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The most rows to return, busiest first.
+	Top *int64 `json:"top,omitempty"`
+}
+
+// ApplicationComponentApplicationMapResult is what applicationMap returns.
+type ApplicationComponentApplicationMapResult struct {
+	// Per edge: spans in the target whose parent span is in the source, in the window.
+	EdgeCalls []int64 `json:"edgeCalls"`
+	// Per edge: those whose status is Error.
+	EdgeFailures []int64 `json:"edgeFailures"`
+	// Per edge: the target span's 95th percentile duration, in milliseconds.
+	EdgeP95Ms []float64 `json:"edgeP95Ms"`
+	// Per edge: the calling service.
+	EdgeSources []string `json:"edgeSources"`
+	// Per edge: the called service.
+	EdgeTargets []string `json:"edgeTargets"`
+	// Per node: requests it failed.
+	NodeFailures []int64 `json:"nodeFailures"`
+	// Per node: requests it served in the window.
+	NodeRequests []int64 `json:"nodeRequests"`
+	// Per node: a service in the component.
+	Nodes []string `json:"nodes"`
+	// The window the view read, in minutes, ending when it was asked.
+	TimespanMinutes int64 `json:"timespanMinutes"`
+}
+
+// ApplicationComponentDependenciesContent is the parameters of dependencies.
+type ApplicationComponentDependenciesContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The most rows to return, busiest first.
+	Top *int64 `json:"top,omitempty"`
+}
+
+// ApplicationComponentDependenciesResult is what dependencies returns.
+type ApplicationComponentDependenciesResult struct {
+	// Per row: calls in the window.
+	Counts []int64 `json:"counts"`
+	// How many of them failed.
+	Failed int64 `json:"failed"`
+	// Per row: failures over calls, 0 to 1.
+	FailureRate []float64 `json:"failureRate"`
+	// Per row: failed calls.
+	Failures []int64 `json:"failures"`
+	// Per row: the client span's name.
+	Names []string `json:"names"`
+	// Per row: the median duration, in milliseconds.
+	P50Ms []float64 `json:"p50Ms"`
+	// Per row: the 95th percentile duration, in milliseconds.
+	P95Ms []float64 `json:"p95Ms"`
+	// Per row: the 99th percentile duration, in milliseconds.
+	P99Ms []float64 `json:"p99Ms"`
+	// Per row: the service that made the call.
+	Services []string `json:"services"`
+	// Per row: what was called — peer.service, else server.address, else the database or messaging system; empty when the span names none.
+	Targets []string `json:"targets"`
+	// The window the view read, in minutes, ending when it was asked.
+	TimespanMinutes int64 `json:"timespanMinutes"`
+	// Every outgoing call in the window, not only the rows below.
+	Total int64 `json:"total"`
+	// Per row: db, http, messaging, rpc or other, from the span's attributes.
+	Types []string `json:"types"`
+}
+
+// ApplicationComponentExceptionsContent is the parameters of exceptions.
+type ApplicationComponentExceptionsContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The most rows to return, busiest first.
+	Top *int64 `json:"top,omitempty"`
+}
+
+// ApplicationComponentExceptionsResult is what exceptions returns.
+type ApplicationComponentExceptionsResult struct {
+	// Per row: occurrences in the window.
+	Counts []int64 `json:"counts"`
+	// Per row: how many were an `exception` event on a span; the rest were log records carrying exception.type.
+	FromSpans []int64 `json:"fromSpans"`
+	// Per row: the latest occurrence.
+	LastSeen []string `json:"lastSeen"`
+	// Per row: the most recent exception.message of that type.
+	Messages []string `json:"messages"`
+	// Per row: the service that raised it.
+	Services []string `json:"services"`
+	// The window the view read, in minutes, ending when it was asked.
+	TimespanMinutes int64 `json:"timespanMinutes"`
+	// Every exception in the window, from spans and from logs, not only the rows below.
+	Total int64 `json:"total"`
+	// Per row: exception.type.
+	Types []string `json:"types"`
+}
+
+// ApplicationComponentListConnectionStringResultOtlpProtocol is the values /otlpProtocol accepts. ⚠ Closed: the write path refuses anything else.
+type ApplicationComponentListConnectionStringResultOtlpProtocol string
+
+const (
+	ApplicationComponentListConnectionStringResultOtlpProtocolGrpc         ApplicationComponentListConnectionStringResultOtlpProtocol = "grpc"
+	ApplicationComponentListConnectionStringResultOtlpProtocolHttpProtobuf ApplicationComponentListConnectionStringResultOtlpProtocol = "http/protobuf"
+)
+
+// ApplicationComponentListConnectionStringResult is what listConnectionString returns.
+type ApplicationComponentListConnectionStringResult struct {
+	// The ConfigMap in the component's namespace carrying the three variables, for a pod's envFrom.
+	ConfigMap string `json:"configMap"`
+	// The three variables as one Key=Value;… line, for a configuration that takes a single string.
+	ConnectionString string `json:"connectionString"`
+	// OTEL_EXPORTER_OTLP_ENDPOINT: the collector's in-cluster URL.
+	OtlpEndpoint string `json:"otlpEndpoint"`
+	// OTEL_EXPORTER_OTLP_PROTOCOL.
+	OtlpProtocol ApplicationComponentListConnectionStringResultOtlpProtocol `json:"otlpProtocol"`
+	// OTEL_RESOURCE_ATTRIBUTES: the service.namespace the views filter on.
+	ResourceAttributes string `json:"resourceAttributes"`
+}
+
+// ApplicationComponentRequestsContent is the parameters of requests.
+type ApplicationComponentRequestsContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The most rows to return, busiest first.
+	Top *int64 `json:"top,omitempty"`
+}
+
+// ApplicationComponentRequestsResult is what requests returns.
+type ApplicationComponentRequestsResult struct {
+	// Per row: requests in the window.
+	Counts []int64 `json:"counts"`
+	// How many of them failed — a span whose status is Error.
+	Failed int64 `json:"failed"`
+	// Per row: failures over requests, 0 to 1.
+	FailureRate []float64 `json:"failureRate"`
+	// Per row: failed requests.
+	Failures []int64 `json:"failures"`
+	// Per row: the operation — the server span's name.
+	Operations []string `json:"operations"`
+	// Per row: the median duration, in milliseconds.
+	P50Ms []float64 `json:"p50Ms"`
+	// Per row: the 95th percentile duration, in milliseconds.
+	P95Ms []float64 `json:"p95Ms"`
+	// Per row: the 99th percentile duration, in milliseconds.
+	P99Ms []float64 `json:"p99Ms"`
+	// Per row: requests per minute over the window.
+	RatePerMinute []float64 `json:"ratePerMinute"`
+	// Per row: the service that served the operation.
+	Services []string `json:"services"`
+	// The window the view read, in minutes, ending when it was asked.
+	TimespanMinutes int64 `json:"timespanMinutes"`
+	// Every request in the window, across every operation, not only the rows below.
+	Total int64 `json:"total"`
+}
+
+// ApplicationComponentTransactionContent is the parameters of transaction.
+type ApplicationComponentTransactionContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it.
+	TraceID string `json:"traceId"`
+}
+
+// ApplicationComponentTransactionResult is what transaction returns.
+type ApplicationComponentTransactionResult struct {
+	// Per span: how long it took, in milliseconds.
+	DurationsMs []float64 `json:"durationsMs"`
+	// Per span: Server, Client, Internal, Producer or Consumer.
+	Kinds []string `json:"kinds"`
+	// Per log record: its body, cut at 2048 characters.
+	LogBodies []string `json:"logBodies"`
+	// How many log records of the trace are returned.
+	LogCount int64 `json:"logCount"`
+	// Per log record: its severity text.
+	LogSeverities []string `json:"logSeverities"`
+	// Per log record: the span it was written under.
+	LogSpanIds []string `json:"logSpanIds"`
+	// Per log record: when, oldest first.
+	LogTimes []string `json:"logTimes"`
+	// Per span: its name.
+	Names []string `json:"names"`
+	// Per span: its parent's id, empty for the root.
+	ParentSpanIds []string `json:"parentSpanIds"`
+	// Per span: the service that recorded it.
+	Services []string `json:"services"`
+	// How many spans are returned.
+	SpanCount int64 `json:"spanCount"`
+	// Per span: its id.
+	SpanIds []string `json:"spanIds"`
+	// Per span: when it started, oldest first.
+	Starts []string `json:"starts"`
+	// Per span: Unset, Ok or Error.
+	Statuses []string `json:"statuses"`
+	// The trace that was read.
+	TraceID string `json:"traceId"`
+	// Whether the trace has more spans or log records than a transaction returns.
+	Truncated bool `json:"truncated"`
+}
+
 // PublicIPAddressData is Public IP address: the body a caller writes. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.
 type PublicIPAddressData struct {
 	// The region the address is allocated in. ⚠ It must be a region whose operator has an external pool — nothing checks that, and an address in a region with none never becomes ready.

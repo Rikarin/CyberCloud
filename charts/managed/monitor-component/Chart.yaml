@@ -1,0 +1,40 @@
+# An application inside a monitor workspace — docs/plan/16 § Application views, issue #32's fourth
+# noun, and docs/plan/01's "Application Insights | ⊂ workspaces".
+#
+# ⚠ ONE ConfigMap, AND IT IS THE CONNECTION STRING. The three standard OTEL_* variables — the named
+# collector's in-cluster endpoint, its protocol, and `service.namespace` set to the component's name — so
+# a pod is wired by `envFrom` naming this one object. The five views (requests, dependencies,
+# exceptions, applicationMap, transaction) render nothing here: they are actions that read the
+# workspace's ClickHouse database from the gateway's process, and no chart can describe a read.
+#
+# ⚠ IT IS UNDER charts/managed/ AND WRAPS NO OPERATOR AND NO IMAGE, which the workspace's own chart
+# established is allowed: `Build.Charts` requires SOURCE, conformance.yaml and both cybercloud.io/*
+# annotations, and this chart owes all three.
+apiVersion: v2
+name: monitor-component
+description: An application inside a monitor workspace — the connection string its SDKs send through a collector, as a ConfigMap a pod can envFrom.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# No upstream software is deployed, so the app version is the api-version the chart renders for.
+appVersion: "2026-08-01"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - observability
+  - opentelemetry
+  - application
+
+home: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Monitor/workspaces/components
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

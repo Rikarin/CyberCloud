@@ -77,6 +77,33 @@ public readonly record struct ActionContext(
     public CallerContext Caller { get; init; } = new();
 
     /// <summary>
+    ///     The resource's parent with its GUID resolved, or <see langword="null" /> for a top-level
+    ///     resource and for a child whose parent no longer resolves.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The action path learns the parent's GUID and the reconcile path still doesn't,
+    ///             and the difference is who resolves it.
+    ///         </b> A reconcile pass runs from a reminder with the address it was written at;
+    ///         an action runs on the request path, where <c>ResourceManagerService</c> already reads
+    ///         the tenant's index for the resource itself, so the parent is one more read through the
+    ///         same tenant-qualified factory. A handler that needs a fact the platform derives from the
+    ///         parent's GUID — <c>CyberCloud.Monitor/workspaces/components</c> reads the workspace's
+    ///         ClickHouse database, which is <c>ws_{guid:N}</c> — gets it from the index rather than
+    ///         from an object in the tenant's namespace, which a tenant who administers that cluster
+    ///         could rewrite to name another tenant's database.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The immediate parent only</b>, as the create path checks it. A dispatcher built by a
+    ///         test with no parent leaves this <see langword="null" />, and a handler that needs it
+    ///         refuses by name.
+    ///     </para>
+    /// </remarks>
+    public ResourceId? Parent { get; init; }
+
+    /// <summary>
     ///     Creates another resource in this resource's group, as the <b>caller</b> of this action,
     ///     through the whole write path. docs/plan/08 § What the resource manager deliberately does not
     ///     do, "An action may create, as its caller".

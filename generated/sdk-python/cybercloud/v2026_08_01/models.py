@@ -8165,6 +8165,592 @@ class OpenTelemetryCollectorListEndpointsResult:
         return wire
 
 
+ApplicationComponentProtocol = Literal["grpc", "http/protobuf"]
+"""The values /properties/protocol accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ApplicationComponentData:
+    """Application component. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The component's own settings."""
+
+        # The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.
+        cluster_id: str
+        # The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.
+        collector: str
+        # Which OTLP protocol the connection string names. The collector must have that receiver on.
+        protocol: Optional[ApplicationComponentProtocol] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ApplicationComponentData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                collector=wire["collector"],
+                protocol=wire.get("protocol"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["collector"] = self.collector
+            if self.protocol is not None:
+                wire["protocol"] = self.protocol
+            return wire
+
+    # The region the component is billed in — its workspace's.
+    location: str
+    # The component's own settings.
+    properties: Optional[ApplicationComponentData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ApplicationComponentData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ApplicationComponentResource:
+    """One Application component, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ApplicationComponentData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ApplicationComponentData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class ApplicationComponentApplicationMapContent:
+    """The parameters of applicationMap."""
+
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+    # The most rows to return, busiest first.
+    top: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentApplicationMapContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            timespan_minutes=wire.get("timespanMinutes"),
+            top=wire.get("top"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        if self.top is not None:
+            wire["top"] = self.top
+        return wire
+
+
+@dataclass
+class ApplicationComponentApplicationMapResult:
+    """What applicationMap returns."""
+
+    # Per edge: spans in the target whose parent span is in the source, in the window.
+    edge_calls: List[int]
+    # Per edge: those whose status is Error.
+    edge_failures: List[int]
+    # Per edge: the target span's 95th percentile duration, in milliseconds.
+    edge_p95_ms: List[float]
+    # Per edge: the calling service.
+    edge_sources: List[str]
+    # Per edge: the called service.
+    edge_targets: List[str]
+    # Per node: requests it failed.
+    node_failures: List[int]
+    # Per node: requests it served in the window.
+    node_requests: List[int]
+    # Per node: a service in the component.
+    nodes: List[str]
+    # The window the view read, in minutes, ending when it was asked.
+    timespan_minutes: int
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentApplicationMapResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            edge_calls=wire["edgeCalls"],
+            edge_failures=wire["edgeFailures"],
+            edge_p95_ms=wire["edgeP95Ms"],
+            edge_sources=wire["edgeSources"],
+            edge_targets=wire["edgeTargets"],
+            node_failures=wire["nodeFailures"],
+            node_requests=wire["nodeRequests"],
+            nodes=wire["nodes"],
+            timespan_minutes=wire["timespanMinutes"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["edgeCalls"] = self.edge_calls
+        wire["edgeFailures"] = self.edge_failures
+        wire["edgeP95Ms"] = self.edge_p95_ms
+        wire["edgeSources"] = self.edge_sources
+        wire["edgeTargets"] = self.edge_targets
+        wire["nodeFailures"] = self.node_failures
+        wire["nodeRequests"] = self.node_requests
+        wire["nodes"] = self.nodes
+        wire["timespanMinutes"] = self.timespan_minutes
+        return wire
+
+
+@dataclass
+class ApplicationComponentDependenciesContent:
+    """The parameters of dependencies."""
+
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+    # The most rows to return, busiest first.
+    top: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentDependenciesContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            timespan_minutes=wire.get("timespanMinutes"),
+            top=wire.get("top"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        if self.top is not None:
+            wire["top"] = self.top
+        return wire
+
+
+@dataclass
+class ApplicationComponentDependenciesResult:
+    """What dependencies returns."""
+
+    # Per row: calls in the window.
+    counts: List[int]
+    # How many of them failed.
+    failed: int
+    # Per row: failures over calls, 0 to 1.
+    failure_rate: List[float]
+    # Per row: failed calls.
+    failures: List[int]
+    # Per row: the client span's name.
+    names: List[str]
+    # Per row: the median duration, in milliseconds.
+    p50_ms: List[float]
+    # Per row: the 95th percentile duration, in milliseconds.
+    p95_ms: List[float]
+    # Per row: the 99th percentile duration, in milliseconds.
+    p99_ms: List[float]
+    # Per row: the service that made the call.
+    services: List[str]
+    # Per row: what was called — peer.service, else server.address, else the database or messaging system; empty when the span names none.
+    targets: List[str]
+    # The window the view read, in minutes, ending when it was asked.
+    timespan_minutes: int
+    # Every outgoing call in the window, not only the rows below.
+    total: int
+    # Per row: db, http, messaging, rpc or other, from the span's attributes.
+    types: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentDependenciesResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            counts=wire["counts"],
+            failed=wire["failed"],
+            failure_rate=wire["failureRate"],
+            failures=wire["failures"],
+            names=wire["names"],
+            p50_ms=wire["p50Ms"],
+            p95_ms=wire["p95Ms"],
+            p99_ms=wire["p99Ms"],
+            services=wire["services"],
+            targets=wire["targets"],
+            timespan_minutes=wire["timespanMinutes"],
+            total=wire["total"],
+            types=wire["types"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["counts"] = self.counts
+        wire["failed"] = self.failed
+        wire["failureRate"] = self.failure_rate
+        wire["failures"] = self.failures
+        wire["names"] = self.names
+        wire["p50Ms"] = self.p50_ms
+        wire["p95Ms"] = self.p95_ms
+        wire["p99Ms"] = self.p99_ms
+        wire["services"] = self.services
+        wire["targets"] = self.targets
+        wire["timespanMinutes"] = self.timespan_minutes
+        wire["total"] = self.total
+        wire["types"] = self.types
+        return wire
+
+
+@dataclass
+class ApplicationComponentExceptionsContent:
+    """The parameters of exceptions."""
+
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+    # The most rows to return, busiest first.
+    top: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentExceptionsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            timespan_minutes=wire.get("timespanMinutes"),
+            top=wire.get("top"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        if self.top is not None:
+            wire["top"] = self.top
+        return wire
+
+
+@dataclass
+class ApplicationComponentExceptionsResult:
+    """What exceptions returns."""
+
+    # Per row: occurrences in the window.
+    counts: List[int]
+    # Per row: how many were an `exception` event on a span; the rest were log records carrying exception.type.
+    from_spans: List[int]
+    # Per row: the latest occurrence.
+    last_seen: List[str]
+    # Per row: the most recent exception.message of that type.
+    messages: List[str]
+    # Per row: the service that raised it.
+    services: List[str]
+    # The window the view read, in minutes, ending when it was asked.
+    timespan_minutes: int
+    # Every exception in the window, from spans and from logs, not only the rows below.
+    total: int
+    # Per row: exception.type.
+    types: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentExceptionsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            counts=wire["counts"],
+            from_spans=wire["fromSpans"],
+            last_seen=wire["lastSeen"],
+            messages=wire["messages"],
+            services=wire["services"],
+            timespan_minutes=wire["timespanMinutes"],
+            total=wire["total"],
+            types=wire["types"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["counts"] = self.counts
+        wire["fromSpans"] = self.from_spans
+        wire["lastSeen"] = self.last_seen
+        wire["messages"] = self.messages
+        wire["services"] = self.services
+        wire["timespanMinutes"] = self.timespan_minutes
+        wire["total"] = self.total
+        wire["types"] = self.types
+        return wire
+
+
+ApplicationComponentListConnectionStringResultOtlpProtocol = Literal["grpc", "http/protobuf"]
+"""The values /otlpProtocol accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ApplicationComponentListConnectionStringResult:
+    """What listConnectionString returns."""
+
+    # The ConfigMap in the component's namespace carrying the three variables, for a pod's envFrom.
+    config_map: str
+    # The three variables as one Key=Value;… line, for a configuration that takes a single string.
+    connection_string: str
+    # OTEL_EXPORTER_OTLP_ENDPOINT: the collector's in-cluster URL.
+    otlp_endpoint: str
+    # OTEL_EXPORTER_OTLP_PROTOCOL.
+    otlp_protocol: ApplicationComponentListConnectionStringResultOtlpProtocol
+    # OTEL_RESOURCE_ATTRIBUTES: the service.namespace the views filter on.
+    resource_attributes: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentListConnectionStringResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            config_map=wire["configMap"],
+            connection_string=wire["connectionString"],
+            otlp_endpoint=wire["otlpEndpoint"],
+            otlp_protocol=wire["otlpProtocol"],
+            resource_attributes=wire["resourceAttributes"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["configMap"] = self.config_map
+        wire["connectionString"] = self.connection_string
+        wire["otlpEndpoint"] = self.otlp_endpoint
+        wire["otlpProtocol"] = self.otlp_protocol
+        wire["resourceAttributes"] = self.resource_attributes
+        return wire
+
+
+@dataclass
+class ApplicationComponentRequestsContent:
+    """The parameters of requests."""
+
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+    # The most rows to return, busiest first.
+    top: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentRequestsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            timespan_minutes=wire.get("timespanMinutes"),
+            top=wire.get("top"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        if self.top is not None:
+            wire["top"] = self.top
+        return wire
+
+
+@dataclass
+class ApplicationComponentRequestsResult:
+    """What requests returns."""
+
+    # Per row: requests in the window.
+    counts: List[int]
+    # How many of them failed — a span whose status is Error.
+    failed: int
+    # Per row: failures over requests, 0 to 1.
+    failure_rate: List[float]
+    # Per row: failed requests.
+    failures: List[int]
+    # Per row: the operation — the server span's name.
+    operations: List[str]
+    # Per row: the median duration, in milliseconds.
+    p50_ms: List[float]
+    # Per row: the 95th percentile duration, in milliseconds.
+    p95_ms: List[float]
+    # Per row: the 99th percentile duration, in milliseconds.
+    p99_ms: List[float]
+    # Per row: requests per minute over the window.
+    rate_per_minute: List[float]
+    # Per row: the service that served the operation.
+    services: List[str]
+    # The window the view read, in minutes, ending when it was asked.
+    timespan_minutes: int
+    # Every request in the window, across every operation, not only the rows below.
+    total: int
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentRequestsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            counts=wire["counts"],
+            failed=wire["failed"],
+            failure_rate=wire["failureRate"],
+            failures=wire["failures"],
+            operations=wire["operations"],
+            p50_ms=wire["p50Ms"],
+            p95_ms=wire["p95Ms"],
+            p99_ms=wire["p99Ms"],
+            rate_per_minute=wire["ratePerMinute"],
+            services=wire["services"],
+            timespan_minutes=wire["timespanMinutes"],
+            total=wire["total"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["counts"] = self.counts
+        wire["failed"] = self.failed
+        wire["failureRate"] = self.failure_rate
+        wire["failures"] = self.failures
+        wire["operations"] = self.operations
+        wire["p50Ms"] = self.p50_ms
+        wire["p95Ms"] = self.p95_ms
+        wire["p99Ms"] = self.p99_ms
+        wire["ratePerMinute"] = self.rate_per_minute
+        wire["services"] = self.services
+        wire["timespanMinutes"] = self.timespan_minutes
+        wire["total"] = self.total
+        return wire
+
+
+@dataclass
+class ApplicationComponentTransactionContent:
+    """The parameters of transaction."""
+
+    # The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it.
+    trace_id: str
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentTransactionContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            trace_id=wire["traceId"],
+            timespan_minutes=wire.get("timespanMinutes"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["traceId"] = self.trace_id
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        return wire
+
+
+@dataclass
+class ApplicationComponentTransactionResult:
+    """What transaction returns."""
+
+    # Per span: how long it took, in milliseconds.
+    durations_ms: List[float]
+    # Per span: Server, Client, Internal, Producer or Consumer.
+    kinds: List[str]
+    # Per log record: its body, cut at 2048 characters.
+    log_bodies: List[str]
+    # How many log records of the trace are returned.
+    log_count: int
+    # Per log record: its severity text.
+    log_severities: List[str]
+    # Per log record: the span it was written under.
+    log_span_ids: List[str]
+    # Per log record: when, oldest first.
+    log_times: List[str]
+    # Per span: its name.
+    names: List[str]
+    # Per span: its parent's id, empty for the root.
+    parent_span_ids: List[str]
+    # Per span: the service that recorded it.
+    services: List[str]
+    # How many spans are returned.
+    span_count: int
+    # Per span: its id.
+    span_ids: List[str]
+    # Per span: when it started, oldest first.
+    starts: List[str]
+    # Per span: Unset, Ok or Error.
+    statuses: List[str]
+    # The trace that was read.
+    trace_id: str
+    # Whether the trace has more spans or log records than a transaction returns.
+    truncated: bool
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentTransactionResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            durations_ms=wire["durationsMs"],
+            kinds=wire["kinds"],
+            log_bodies=wire["logBodies"],
+            log_count=wire["logCount"],
+            log_severities=wire["logSeverities"],
+            log_span_ids=wire["logSpanIds"],
+            log_times=wire["logTimes"],
+            names=wire["names"],
+            parent_span_ids=wire["parentSpanIds"],
+            services=wire["services"],
+            span_count=wire["spanCount"],
+            span_ids=wire["spanIds"],
+            starts=wire["starts"],
+            statuses=wire["statuses"],
+            trace_id=wire["traceId"],
+            truncated=wire["truncated"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["durationsMs"] = self.durations_ms
+        wire["kinds"] = self.kinds
+        wire["logBodies"] = self.log_bodies
+        wire["logCount"] = self.log_count
+        wire["logSeverities"] = self.log_severities
+        wire["logSpanIds"] = self.log_span_ids
+        wire["logTimes"] = self.log_times
+        wire["names"] = self.names
+        wire["parentSpanIds"] = self.parent_span_ids
+        wire["services"] = self.services
+        wire["spanCount"] = self.span_count
+        wire["spanIds"] = self.span_ids
+        wire["starts"] = self.starts
+        wire["statuses"] = self.statuses
+        wire["traceId"] = self.trace_id
+        wire["truncated"] = self.truncated
+        return wire
+
+
 @dataclass
 class PublicIPAddressData:
     """Public IP address. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic. The body a caller writes."""
@@ -11458,6 +12044,21 @@ __all__ = [
     "OpenTelemetryCollectorData",
     "OpenTelemetryCollectorResource",
     "OpenTelemetryCollectorListEndpointsResult",
+    "ApplicationComponentProtocol",
+    "ApplicationComponentData",
+    "ApplicationComponentResource",
+    "ApplicationComponentApplicationMapContent",
+    "ApplicationComponentApplicationMapResult",
+    "ApplicationComponentDependenciesContent",
+    "ApplicationComponentDependenciesResult",
+    "ApplicationComponentExceptionsContent",
+    "ApplicationComponentExceptionsResult",
+    "ApplicationComponentListConnectionStringResultOtlpProtocol",
+    "ApplicationComponentListConnectionStringResult",
+    "ApplicationComponentRequestsContent",
+    "ApplicationComponentRequestsResult",
+    "ApplicationComponentTransactionContent",
+    "ApplicationComponentTransactionResult",
     "PublicIPAddressData",
     "PublicIPAddressResource",
     "PublicIPAddressShowAllocationResult",

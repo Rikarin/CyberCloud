@@ -8431,6 +8431,517 @@ public sealed partial class OpenTelemetryCollectorCollection {
     public partial AsyncPageable<OpenTelemetryCollectorResource> GetAllAsync(string workspacesName, CancellationToken cancellationToken = default);
 }
 
+/// <summary>The values /properties/protocol accepts. ⚠ Closed: the write path refuses anything else.</summary>
+public enum ApplicationComponentProtocol {
+    /// <summary>Never assigned. Not a value the API accepts.</summary>
+    Unknown = 0,
+
+    /// <summary>grpc</summary>
+    [JsonStringEnumMemberName("grpc")]
+    Grpc = 1,
+
+    /// <summary>http/protobuf</summary>
+    [JsonStringEnumMemberName("http/protobuf")]
+    HttpProtobuf = 2
+}
+
+/// <summary>The body of a CyberCloud.Monitor/workspaces/components.</summary>
+/// <remarks>An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.</remarks>
+public sealed partial class ApplicationComponentData {
+
+    /// <summary>The region the component is billed in — its workspace's.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The component's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The component's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.</summary>
+        /// <remarks>Required on a create. Defaults to "gateway" when left unset.</remarks>
+        [JsonPropertyName("collector")]
+        public required string Collector { get; set; }
+
+        /// <summary>Which OTLP protocol the connection string names. The collector must have that receiver on.</summary>
+        /// <remarks>Defaults to "http/protobuf" when left unset.</remarks>
+        [JsonPropertyName("protocol")]
+        public ApplicationComponentProtocol? Protocol { get; set; }
+    }
+}
+
+/// <summary>One Application component, as the API returns it, and the operations on it.</summary>
+public sealed partial class ApplicationComponentResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required ApplicationComponentData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<ApplicationComponentResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<ApplicationComponentResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        ApplicationComponentData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of applicationMap.</summary>
+    public sealed partial class ApplicationMapContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The most rows to return, busiest first.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+    }
+
+    /// <summary>What applicationMap returns.</summary>
+    public sealed partial class ApplicationMapResult {
+
+        /// <summary>Per edge: spans in the target whose parent span is in the source, in the window.</summary>
+        [JsonPropertyName("edgeCalls")]
+        public IList<long> EdgeCalls { get; set; } = new List<long>();
+
+        /// <summary>Per edge: those whose status is Error.</summary>
+        [JsonPropertyName("edgeFailures")]
+        public IList<long> EdgeFailures { get; set; } = new List<long>();
+
+        /// <summary>Per edge: the target span's 95th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("edgeP95Ms")]
+        public IList<double> EdgeP95Ms { get; set; } = new List<double>();
+
+        /// <summary>Per edge: the calling service.</summary>
+        [JsonPropertyName("edgeSources")]
+        public IList<string> EdgeSources { get; set; } = new List<string>();
+
+        /// <summary>Per edge: the called service.</summary>
+        [JsonPropertyName("edgeTargets")]
+        public IList<string> EdgeTargets { get; set; } = new List<string>();
+
+        /// <summary>Per node: requests it failed.</summary>
+        [JsonPropertyName("nodeFailures")]
+        public IList<long> NodeFailures { get; set; } = new List<long>();
+
+        /// <summary>Per node: requests it served in the window.</summary>
+        [JsonPropertyName("nodeRequests")]
+        public IList<long> NodeRequests { get; set; } = new List<long>();
+
+        /// <summary>Per node: a service in the component.</summary>
+        [JsonPropertyName("nodes")]
+        public IList<string> Nodes { get; set; } = new List<string>();
+
+        /// <summary>The window the view read, in minutes, ending when it was asked.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public required long TimespanMinutes { get; set; }
+    }
+
+    /// <summary>ApplicationMap. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ApplicationMapResult>> ApplicationMapAsync(
+        ApplicationMapContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of dependencies.</summary>
+    public sealed partial class DependenciesContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The most rows to return, busiest first.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+    }
+
+    /// <summary>What dependencies returns.</summary>
+    public sealed partial class DependenciesResult {
+
+        /// <summary>Per row: calls in the window.</summary>
+        [JsonPropertyName("counts")]
+        public IList<long> Counts { get; set; } = new List<long>();
+
+        /// <summary>How many of them failed.</summary>
+        [JsonPropertyName("failed")]
+        public required long Failed { get; set; }
+
+        /// <summary>Per row: failures over calls, 0 to 1.</summary>
+        [JsonPropertyName("failureRate")]
+        public IList<double> FailureRate { get; set; } = new List<double>();
+
+        /// <summary>Per row: failed calls.</summary>
+        [JsonPropertyName("failures")]
+        public IList<long> Failures { get; set; } = new List<long>();
+
+        /// <summary>Per row: the client span's name.</summary>
+        [JsonPropertyName("names")]
+        public IList<string> Names { get; set; } = new List<string>();
+
+        /// <summary>Per row: the median duration, in milliseconds.</summary>
+        [JsonPropertyName("p50Ms")]
+        public IList<double> P50Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the 95th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("p95Ms")]
+        public IList<double> P95Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the 99th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("p99Ms")]
+        public IList<double> P99Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the service that made the call.</summary>
+        [JsonPropertyName("services")]
+        public IList<string> Services { get; set; } = new List<string>();
+
+        /// <summary>Per row: what was called — peer.service, else server.address, else the database or messaging system; empty when the span names none.</summary>
+        [JsonPropertyName("targets")]
+        public IList<string> Targets { get; set; } = new List<string>();
+
+        /// <summary>The window the view read, in minutes, ending when it was asked.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public required long TimespanMinutes { get; set; }
+
+        /// <summary>Every outgoing call in the window, not only the rows below.</summary>
+        [JsonPropertyName("total")]
+        public required long Total { get; set; }
+
+        /// <summary>Per row: db, http, messaging, rpc or other, from the span's attributes.</summary>
+        [JsonPropertyName("types")]
+        public IList<string> Types { get; set; } = new List<string>();
+    }
+
+    /// <summary>Dependencies. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<DependenciesResult>> DependenciesAsync(
+        DependenciesContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of exceptions.</summary>
+    public sealed partial class ExceptionsContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The most rows to return, busiest first.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+    }
+
+    /// <summary>What exceptions returns.</summary>
+    public sealed partial class ExceptionsResult {
+
+        /// <summary>Per row: occurrences in the window.</summary>
+        [JsonPropertyName("counts")]
+        public IList<long> Counts { get; set; } = new List<long>();
+
+        /// <summary>Per row: how many were an `exception` event on a span; the rest were log records carrying exception.type.</summary>
+        [JsonPropertyName("fromSpans")]
+        public IList<long> FromSpans { get; set; } = new List<long>();
+
+        /// <summary>Per row: the latest occurrence.</summary>
+        [JsonPropertyName("lastSeen")]
+        public IList<DateTimeOffset> LastSeen { get; set; } = new List<DateTimeOffset>();
+
+        /// <summary>Per row: the most recent exception.message of that type.</summary>
+        [JsonPropertyName("messages")]
+        public IList<string> Messages { get; set; } = new List<string>();
+
+        /// <summary>Per row: the service that raised it.</summary>
+        [JsonPropertyName("services")]
+        public IList<string> Services { get; set; } = new List<string>();
+
+        /// <summary>The window the view read, in minutes, ending when it was asked.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public required long TimespanMinutes { get; set; }
+
+        /// <summary>Every exception in the window, from spans and from logs, not only the rows below.</summary>
+        [JsonPropertyName("total")]
+        public required long Total { get; set; }
+
+        /// <summary>Per row: exception.type.</summary>
+        [JsonPropertyName("types")]
+        public IList<string> Types { get; set; } = new List<string>();
+    }
+
+    /// <summary>Exceptions. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ExceptionsResult>> ExceptionsAsync(
+        ExceptionsContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /otlpProtocol accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum ListConnectionStringResultOtlpProtocol {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>grpc</summary>
+        [JsonStringEnumMemberName("grpc")]
+        Grpc = 1,
+
+        /// <summary>http/protobuf</summary>
+        [JsonStringEnumMemberName("http/protobuf")]
+        HttpProtobuf = 2
+    }
+
+    /// <summary>What listConnectionString returns.</summary>
+    public sealed partial class ListConnectionStringResult {
+
+        /// <summary>The ConfigMap in the component's namespace carrying the three variables, for a pod's envFrom.</summary>
+        [JsonPropertyName("configMap")]
+        public required string ConfigMap { get; set; }
+
+        /// <summary>The three variables as one Key=Value;… line, for a configuration that takes a single string.</summary>
+        [JsonPropertyName("connectionString")]
+        public required string ConnectionString { get; set; }
+
+        /// <summary>OTEL_EXPORTER_OTLP_ENDPOINT: the collector's in-cluster URL.</summary>
+        [JsonPropertyName("otlpEndpoint")]
+        public required string OtlpEndpoint { get; set; }
+
+        /// <summary>OTEL_EXPORTER_OTLP_PROTOCOL.</summary>
+        [JsonPropertyName("otlpProtocol")]
+        public required ListConnectionStringResultOtlpProtocol OtlpProtocol { get; set; }
+
+        /// <summary>OTEL_RESOURCE_ATTRIBUTES: the service.namespace the views filter on.</summary>
+        [JsonPropertyName("resourceAttributes")]
+        public required string ResourceAttributes { get; set; }
+    }
+
+    /// <summary>ListConnectionString. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<ListConnectionStringResult>> ListConnectionStringAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of requests.</summary>
+    public sealed partial class RequestsContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The most rows to return, busiest first.</summary>
+        [JsonPropertyName("top")]
+        public long? Top { get; set; }
+    }
+
+    /// <summary>What requests returns.</summary>
+    public sealed partial class RequestsResult {
+
+        /// <summary>Per row: requests in the window.</summary>
+        [JsonPropertyName("counts")]
+        public IList<long> Counts { get; set; } = new List<long>();
+
+        /// <summary>How many of them failed — a span whose status is Error.</summary>
+        [JsonPropertyName("failed")]
+        public required long Failed { get; set; }
+
+        /// <summary>Per row: failures over requests, 0 to 1.</summary>
+        [JsonPropertyName("failureRate")]
+        public IList<double> FailureRate { get; set; } = new List<double>();
+
+        /// <summary>Per row: failed requests.</summary>
+        [JsonPropertyName("failures")]
+        public IList<long> Failures { get; set; } = new List<long>();
+
+        /// <summary>Per row: the operation — the server span's name.</summary>
+        [JsonPropertyName("operations")]
+        public IList<string> Operations { get; set; } = new List<string>();
+
+        /// <summary>Per row: the median duration, in milliseconds.</summary>
+        [JsonPropertyName("p50Ms")]
+        public IList<double> P50Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the 95th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("p95Ms")]
+        public IList<double> P95Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: the 99th percentile duration, in milliseconds.</summary>
+        [JsonPropertyName("p99Ms")]
+        public IList<double> P99Ms { get; set; } = new List<double>();
+
+        /// <summary>Per row: requests per minute over the window.</summary>
+        [JsonPropertyName("ratePerMinute")]
+        public IList<double> RatePerMinute { get; set; } = new List<double>();
+
+        /// <summary>Per row: the service that served the operation.</summary>
+        [JsonPropertyName("services")]
+        public IList<string> Services { get; set; } = new List<string>();
+
+        /// <summary>The window the view read, in minutes, ending when it was asked.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public required long TimespanMinutes { get; set; }
+
+        /// <summary>Every request in the window, across every operation, not only the rows below.</summary>
+        [JsonPropertyName("total")]
+        public required long Total { get; set; }
+    }
+
+    /// <summary>Requests. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<RequestsResult>> RequestsAsync(
+        RequestsContent content,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The parameters of transaction.</summary>
+    public sealed partial class TransactionContent {
+
+        /// <summary>How far back to read, in minutes, ending now.</summary>
+        [JsonPropertyName("timespanMinutes")]
+        public long? TimespanMinutes { get; set; }
+
+        /// <summary>The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it.</summary>
+        [JsonPropertyName("traceId")]
+        public required string TraceId { get; set; }
+    }
+
+    /// <summary>What transaction returns.</summary>
+    public sealed partial class TransactionResult {
+
+        /// <summary>Per span: how long it took, in milliseconds.</summary>
+        [JsonPropertyName("durationsMs")]
+        public IList<double> DurationsMs { get; set; } = new List<double>();
+
+        /// <summary>Per span: Server, Client, Internal, Producer or Consumer.</summary>
+        [JsonPropertyName("kinds")]
+        public IList<string> Kinds { get; set; } = new List<string>();
+
+        /// <summary>Per log record: its body, cut at 2048 characters.</summary>
+        [JsonPropertyName("logBodies")]
+        public IList<string> LogBodies { get; set; } = new List<string>();
+
+        /// <summary>How many log records of the trace are returned.</summary>
+        [JsonPropertyName("logCount")]
+        public required long LogCount { get; set; }
+
+        /// <summary>Per log record: its severity text.</summary>
+        [JsonPropertyName("logSeverities")]
+        public IList<string> LogSeverities { get; set; } = new List<string>();
+
+        /// <summary>Per log record: the span it was written under.</summary>
+        [JsonPropertyName("logSpanIds")]
+        public IList<string> LogSpanIds { get; set; } = new List<string>();
+
+        /// <summary>Per log record: when, oldest first.</summary>
+        [JsonPropertyName("logTimes")]
+        public IList<DateTimeOffset> LogTimes { get; set; } = new List<DateTimeOffset>();
+
+        /// <summary>Per span: its name.</summary>
+        [JsonPropertyName("names")]
+        public IList<string> Names { get; set; } = new List<string>();
+
+        /// <summary>Per span: its parent's id, empty for the root.</summary>
+        [JsonPropertyName("parentSpanIds")]
+        public IList<string> ParentSpanIds { get; set; } = new List<string>();
+
+        /// <summary>Per span: the service that recorded it.</summary>
+        [JsonPropertyName("services")]
+        public IList<string> Services { get; set; } = new List<string>();
+
+        /// <summary>How many spans are returned.</summary>
+        [JsonPropertyName("spanCount")]
+        public required long SpanCount { get; set; }
+
+        /// <summary>Per span: its id.</summary>
+        [JsonPropertyName("spanIds")]
+        public IList<string> SpanIds { get; set; } = new List<string>();
+
+        /// <summary>Per span: when it started, oldest first.</summary>
+        [JsonPropertyName("starts")]
+        public IList<DateTimeOffset> Starts { get; set; } = new List<DateTimeOffset>();
+
+        /// <summary>Per span: Unset, Ok or Error.</summary>
+        [JsonPropertyName("statuses")]
+        public IList<string> Statuses { get; set; } = new List<string>();
+
+        /// <summary>The trace that was read.</summary>
+        [JsonPropertyName("traceId")]
+        public required string TraceId { get; set; }
+
+        /// <summary>Whether the trace has more spans or log records than a transaction returns.</summary>
+        [JsonPropertyName("truncated")]
+        public required bool Truncated { get; set; }
+    }
+
+    /// <summary>Transaction. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<TransactionResult>> TransactionAsync(
+        TransactionContent content,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Application components in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class ApplicationComponentCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Monitor/workspaces/components";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Monitor/workspaces/{workspacesName}/components";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Application component.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<ApplicationComponentResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string workspacesName, string name,
+        ApplicationComponentData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Application component by name.</summary>
+    public partial Task<Response<ApplicationComponentResource>> GetAsync(string workspacesName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Application components in one parent, paged.</summary>
+    public partial AsyncPageable<ApplicationComponentResource> GetAllAsync(string workspacesName, CancellationToken cancellationToken = default);
+}
+
 /// <summary>The body of a CyberCloud.Network/publicIpAddresses.</summary>
 /// <remarks>A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.</remarks>
 public sealed partial class PublicIPAddressData {
