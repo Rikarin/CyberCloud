@@ -325,3 +325,20 @@ owed:
       files it under CyberCloud.Monitor at M3, "Flow logs from Cilium/Hubble", and that is where it
       belongs. ⚠ The one flow-shaped signal a tenant can be given today without any of that is the
       `private` subnet's drop log, and it is on the wrong side of the tenant boundary.
+      ⚠ UPDATED 2026-09-23 (#31), TWO READINGS AND ONE THING THAT NOW EXISTS. (5) KUBE-OVN'S FIRST
+      FLOW-SHAPED FEATURE POSTDATES THE PINNED RELEASE AND DOES NOT REACH A TENANT. v1.16.7 — not
+      v1.16.2, which charts/bundle/kube-ovn/component.yaml pins, where pkg/ovs/ovs-vswitch-acl-sampling.go
+      does not exist — adds `--enable-acl-sampling`, flagged "Enable experimental ACL sampling for
+      NetworkPolicy events" and off by default: OVN `Sample` rows on NetworkPolicy ACLs (1% of allows,
+      100% of default denies), delivered on each node through a psample group on br-int and read by
+      the `kube-ovn-acl-sample` debug command. NetworkPolicy ACLs are what ENABLE_NP=false removes and
+      a security group's ACLs are not sampled, so on this platform it would sample nothing; and it is a
+      per-node kernel channel, not an exporter. (6) HUBBLE IS STILL UNMEASURED, FOR THE SAME REASON AS
+      BEFORE: no harness here carries Cilium, and Hubble reports the flows of endpoints Cilium manages
+      — whether a pod attached to a Kube-OVN tenant switch is one is the question no run has answered.
+      (7) WHAT A TENANT HAS NOW: charts/managed/application-gateway's proxy writes one line per request
+      on its stdout — client address and port, listener, pool and member, the five timings, status,
+      bytes, request line, Host and the WAF's action, anomaly score and matched rule ids — which
+      ApplicationGatewayTrafficConformance reads on the real k3s. That is an L7 flow log for traffic
+      THROUGH a gateway and nothing else, collected where docs/plan/16's collector already reads, and it
+      is the one tenant-visible flow record this platform produces.

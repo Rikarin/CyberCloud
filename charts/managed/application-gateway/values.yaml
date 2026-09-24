@@ -1,0 +1,140 @@
+# An application gateway and WAF inside a tenant's virtual network — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from ApplicationGateways.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. ADR-010 § Which end authors the schema: "The C#
+# ResourceSchema is authored. The chart's @param annotations are generated from it and diffed."
+# Editing a generated row here is undone on the next run and fails the build in between; add the
+# field in C# instead.
+#
+# ⚠ EVERY LIST IS A LIST OF PATTERNED STRINGS — `host/path=pool`, `pool=target:port` — because a
+# SchemaProperty array element is a scalar. The grammars are closed: no element reaches haproxy.cfg or
+# Coraza's SecLang as text the tenant wrote, only as values out of a character class that cannot close
+# a quote or start a line.
+#
+# ⚠ WHAT THIS CHART CANNOT DO THAT THE RECONCILER DOES. A pool member that is a virtual machine's
+# resource id is resolved to an address through the cross-resource view (#90), which a `helm install`
+# does not have — the chart renders such a member as a comment. And a certificate is a vault handle
+# the reconciler resolves into the `{name}-tls` Secret; the chart mounts that Secret and expects it to
+# exist.
+
+## @param subnet {string} The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.
+## @required
+## @immutable
+## @length ..63
+## @pattern [a-z0-9]([-a-z0-9]*[a-z0-9])?
+## @example "web"
+## @widget subnet
+subnet: web
+
+## @param frontend {object} The address clients connect to.
+frontend:
+  ## @param v4 {string} The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.
+  ## @required
+  ## @immutable
+  ## @pattern (\d{1,3}\.){3}\d{1,3}
+  ## @example "10.20.1.20"
+  ## @widget cidr
+  v4: "10.20.1.20"
+  ## @param v6 {string} The IPv6 address the gateway also answers on, or empty. Lower case only.
+  ## @immutable
+  ## @pattern ([0-9A-Fa-f:.]+)?
+  ## @example "fd00:20:1::20"
+  ## @widget cidr
+  v6: ""
+
+## @param listeners {object} The HTTP listener, and the HTTPS listener when a certificate is given.
+listeners:
+  ## @param httpPort {integer} The port plain HTTP is served on.
+  ## @required
+  ## @range 1..65535
+  httpPort: 80
+  ## @param httpsPort {integer} The port HTTPS is served on. Used only when a certificate is given.
+  ## @range 1..65535
+  httpsPort: 443
+  ## @param certificate {string} A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.
+  ## @length ..512
+  ## @pattern ([^#@\s]+#[^#@\s]+(@[^#@\s]+)?)?
+  ## @widget secret-ref
+  certificate: ""
+
+## @param routingRules {array} Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.
+## @required
+## @example ["shop.example.com/api=api","*/=web"]
+routingRules: ["*/=web"]
+
+## @param backendPools {array} The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. An address is written in its usual form (10.0.0.1, not 10.1) and may not be loopback, link-local, multicast or the gateway's own. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.
+## @required
+## @example ["web=10.20.1.11:8080","web=10.20.1.12:8080"]
+backendPools: ["web=10.20.1.11:8080"]
+
+## @param health {object} How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off.
+health:
+  ## @param path {string} The path every member is probed on.
+  ## @pattern /[A-Za-z0-9._~/-]{0,200}
+  path: "/"
+  ## @param intervalSeconds {integer} How often each member is probed.
+  ## @range 2..60
+  intervalSeconds: 5
+  ## @param unhealthyAfter {integer} How many failed probes take a member out of its pool.
+  ## @range 1..10
+  unhealthyAfter: 3
+  ## @param healthyAfter {integer} How many successful probes put a member back.
+  ## @range 1..10
+  healthyAfter: 2
+
+## @param waf {object} The web application firewall: the OWASP Core Rule Set on Coraza.
+waf:
+  ## @param mode {string} prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.
+  ## @enum detection | off | prevention
+  mode: prevention
+  ## @param crsVersion {string} The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.
+  ## @enum 4.25
+  crsVersion: "4.25"
+  ## @param paranoiaLevel {integer} The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.
+  ## @range 1..4
+  paranoiaLevel: 1
+  ## @param exclusions {array} Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).
+  ## @example ["942100:ARGS:password"]
+  exclusions: []
+  ## @param customRules {array} Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. A host is matched in any case and with any port; a path after percent-decoding and resolving //, . and .. segments. ⚠ allow skips the rule set for that request entirely.
+  ## @example ["deny ip 203.0.113.0/24"]
+  customRules: []
+
+## @param limits {object} What the gateway refuses rather than passes on.
+limits:
+  ## @param maxConnections {integer} How many client connections the gateway accepts at once.
+  ## @range 10..100000
+  maxConnections: 2000
+
+## @param sizing {object} CPU and memory for the proxy and the firewall, each.
+sizing:
+  ## @param preset {string} How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.
+  ## @enum c1.large | c1.medium | c1.small
+  ## @widget cozy-preset
+  preset: c1.small
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Network/virtualNetworks/applicationGateways
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+  ## @param virtualNetwork {string} The parent virtual network's name, which is a component of the Subnet object the gateway pod is annotated onto.
+  virtualNetwork: net
+  ## @param namespace {string} The resource's own namespace, which is the first component of that same Subnet object's name.
+  namespace: ""
+
+## @param nameOverride {string} Replace the generated object-name stem. Empty means derive it from the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

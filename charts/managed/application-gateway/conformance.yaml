@@ -1,0 +1,238 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Network/virtualNetworks/applicationGateways. This
+# file is data: `Build.Charts` checks that it is present, non-empty, and names the same resource type
+# as Chart.yaml.
+
+resourceType: CyberCloud.Network/virtualNetworks/applicationGateways
+apiVersion: "2026-08-01"
+chart: application-gateway
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ TWO ALWAYS, AND A THIRD — the `{name}-tls` Secret — ONLY WHEN THE BODY NAMES A CERTIFICATE. The
+# shared suite asserts ownership over the two; the Secret is in the teardown list and in
+# ApplicationGatewayTrafficConformance's HTTPS assertion.
+renders:
+  - group: ""
+    version: v1
+    kind: ConfigMap
+    count: 1
+    clusterScoped: false
+  - group: apps
+    version: v1
+    kind: Deployment
+    count: 1
+    clusterScoped: false
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.network_virtualnetworks_applicationgateways
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: a-request-is-routed-by-host-and-path
+    says: >
+      A request reaches the pool its Host header and path name, first matching rule first, and a request
+      no rule matches is a 404 rather than a guess. ApplicationGatewayTrafficConformance sends three
+      requests through a real gateway pod on a real k3s to two real backend pods and reads which one
+      answered: a host rule, a path rule on whole segments (`/b/x` routes, `/bee` does not), and the
+      catch-all. NetworkApplicationGatewayTests pins the rendered ACLs, including the lower-cased,
+      port-stripped Host they compare against.
+  - id: prevention-blocks-and-detection-logs
+    says: >
+      In prevention mode a SQL-injection probe (`?id=1' OR '1'='1`) is answered 403 by the gateway and
+      never reaches a backend; in detection mode the same probe reaches the backend and the gateway's
+      own log line carries `waf-rules:942100,…` while the agent logs `"rule_id":942100`. Proven on the
+      real k3s, both modes, by ApplicationGatewayTrafficConformance — the mode change is a PUT, which is
+      also this type's rollout: the pod template's config checksum changes and the pod is recreated.
+  - id: an-unanswering-firewall-is-a-503-in-prevention-mode
+    says: >
+      When the agent does not answer — down, or slower than the 500 ms SPOE processing timeout —
+      prevention answers 503 and the readiness monitor reports the pod unready; detection passes the
+      request. Passing it in prevention would make "the firewall was slow" a bypass. Measured in Docker
+      against both pinned images before the chart was written (SOURCE); pinned in the rendered
+      configuration by NetworkApplicationGatewayTests; and since #31's review held on the real k3s by
+      ApplicationGatewayTrafficConformance, which runs the gateway's own pod template without its agent
+      container and reads a 503, a 503 from the monitor port and a pod the kubelet does not keep ready.
+      ⚠ Not "never ready": HAProxy starts a checked server UP, so until the agent's server has failed
+      three 2-second checks the monitor answers 200, and a kubelet probe inside that window counts the
+      pod ready for the three failed probes it then takes to undo it — measured on the second k3s run.
+      Requests are 503 throughout; only showRouting's readyReplicas can be briefly wrong.
+  - id: a-member-that-fails-its-probe-leaves-its-pool
+    says: >
+      Every member is probed with an HTTP GET on `health.path`, and `unhealthyAfter` failures take it out:
+      ApplicationGatewayTrafficConformance deletes the one backend pod of a pool on the real k3s and reads
+      the pool's 503 and the proxy's own `pool-b/m2 is DOWN`.
+  - id: a-custom-deny-holds-for-every-spelling-of-what-it-names
+    says: >
+      A `host` rule matches the Host header lower-cased and with any trailing dot or port — the name
+      routing reads — and a `path` rule matches the request target percent-decoded with `//`, `.` and `..`
+      resolved, rather than REQUEST_FILENAME, which coraza-spoa derives with Go's url.Parse and which
+      reads `//secret/x` as an authority. Until #31's review `SHOP.example.com`, `shop.example.com:80` and
+      `//secret` evaded a deny and were routed. ApplicationGatewayTrafficConformance sends nine spellings
+      through the real agent and reads the custom rule's id on each 403's own access line.
+  - id: a-config-change-restarts-the-gateway
+    says: >
+      Every file both processes read is hashed onto the pod template, so a changed rule, member or
+      policy is a rollout rather than an apply that converges and changes nothing — charts/managed/haproxy's
+      `a-config-change-restarts-the-proxy`, for two processes.
+  - id: the-gateway-is-inside-the-tenants-network
+    says: >
+      The pod carries `ovn.kubernetes.io/logical_switch: {namespace}-{network}-{subnet}` and
+      `ovn.kubernetes.io/ip_pool: {frontend}`, with the network read off the resource's address. ⚠ The
+      k3s the cluster-backed classes start runs flannel and no Kube-OVN, so the pod lands on the pod
+      network and the annotations are asserted as written rather than as obeyed — #95's lane.
+  - id: the-firewall-is-reachable-only-from-its-own-proxy
+    says: >
+      The agent binds 127.0.0.1:9000, so nothing on the tenant's network can speak SPOP to it; a listener
+      on 9000 or on the readiness port 8405 is refused before anything is applied.
+  - id: a-certificate-is-a-vault-handle-under-the-tenants-own-prefix
+    says: >
+      `listeners.certificate` is `path#field`, resolved on every pass into the `{name}-tls` Secret the
+      proxy mounts, its hash on the pod template so a rotation is a rollout; a path outside
+      `tenants/{tenantId}/` — or one that starts inside it and climbs out through an empty, `.` or `..`
+      segment, which `SecretRef.IsConfinedTo` refuses since #31's review — is refused with
+      AuthorizationFailed before the resolver is asked, a value
+      without a certificate and a private key is refused rather than crashing the proxy, and removing
+      the certificate deletes the Secret. NetworkApplicationGatewayTests against a seeded resolver;
+      ApplicationGatewayTrafficConformance serves HTTPS from a certificate in the harness vault.
+  - id: a-machine-member-resolves-through-the-cross-resource-view
+    says: >
+      A pool member naming a CyberCloud.Compute/virtualMachines resource id is resolved through
+      ReconcileContext.View (#90) to the address KubeVirt reports on its VirtualMachineInstance, and the
+      resolution is recorded in the ConfigMap so a drift scan re-renders without a view. A machine the
+      gateway was not granted read on, or that is not running, is left out and named by `showRouting`;
+      one in another network, resource group or cluster is refused terminally.
+      NetworkApplicationGatewayTests, against a view that answers — no k3s here runs KubeVirt beside
+      this provider.
+  - id: a-gateway-and-a-load-balancer-of-one-name-are-two-sets-of-objects
+    says: >
+      The gateway's ConfigMap, Deployment and Secret are `{network}.{name}` and the load balancer's
+      `{network}-{name}`, and a resource name holds no dot, so no gateway and balancer in one namespace
+      share an object. Until #31's review both were `{network}-{name}` under one field manager: the second
+      apply took the first's objects over and the gateway's teardown deleted the balancer's pod. And the
+      platform's delete (OwnedDelete, which ClusterConnectionGrain runs) refuses an object labelled for
+      another resource. ApplicationGatewayBesideALoadBalancerConformance converges both on the real k3s,
+      reaches for the balancer's Deployment on the gateway's behalf and is refused, and tears the gateway
+      down with the balancer's objects still there.
+  - id: a-pool-member-is-an-address-as-written-and-not-the-pod-itself
+    says: >
+      A member address must be spelled as the address is written (`10.1`, `0x0a.0.0.1` and a zone are
+      refused naming the canonical form, because the spelling is what HAProxy is given) and may not be
+      loopback — the gateway's own pod, whose agent is on 127.0.0.1:9000 — link-local (169.254.169.254
+      included), unspecified, multicast or the frontend. A machine's address, which its guest agent
+      reports, is held to the same rule. NetworkApplicationGatewayTests.
+  - id: the-configured-routing-is-readable
+    says: >
+      `POST …/showRouting` returns the listeners, the rules in evaluation order, every member with a
+      machine's resolved address, the members left out, the firewall policy and how many gateway pods are
+      ready.
+
+# Meters the type must emit.
+#
+# ⚠ COMPUTE TWICE WHEN THE FIREWALL IS ON: the preset sizes each container and the pod runs two unless
+# `waf.mode` is off. NO `storageGb` (read-only roots; the agent's /tmp is a bounded emptyDir) and NO
+# `publicIps` (the frontend is a private address of the tenant's own subnet).
+meters:
+  - vcpu
+  - memoryGb
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: nothing-can-be-reached-from-outside-the-vpc
+    says: >
+      The gateway answers on a PRIVATE address inside the tenant's subnet. Publishing it needs an inbound
+      attachment — an OvnFip or OvnDnatRule naming a publicIpAddresses resource — which nothing renders
+      yet: charts/managed/kube-ovn-eip's `only-a-nat-gateway-can-be-given-an-address` and
+      charts/managed/haproxy's `nothing-can-be-reached-from-outside-the-vpc`. Until then this is an L7
+      proxy and firewall private to the VPC, in front of workloads in the same VPC.
+  - id: one-gateway-is-a-single-point-of-failure
+    says: >
+      One replica, Recreate, for charts/managed/haproxy's `one-proxy-is-a-single-point-of-failure` and
+      `a-config-change-drops-connections` — a pinned address has one holder, and the thing that would
+      share a VIP between two pods is the OVN load balancer ADR-019 turns off. Every change to the
+      resource restarts the gateway and cuts open connections.
+  - id: routing-is-unproven-inside-a-real-vpc
+    says: >
+      The traffic assertions run on k3s with flannel: the pod is on the pod network, reaches its backend
+      pods by pod address, and the two Kube-OVN annotations are carried but obeyed by nothing. That a
+      gateway on a tenant subnet reaches workloads on the same OVN logical switch is reasoned from
+      Kube-OVN's annotation handling and charts/managed/haproxy's reading, and waits for the lane with a
+      real Kube-OVN (#95).
+  - id: large-bodies-are-inspected-up-to-the-buffer
+    says: >
+      `option http-buffer-request` hands the agent what fits in HAProxy's request buffer (`tune.bufsize`,
+      16 KiB by default), so the part of a larger body past it is not inspected. Coraza's own
+      SecRequestBodyLimit is far above that, so the proxy is the bound. Raising it is a global tuning
+      decision with a per-connection memory cost, and nothing here raises it.
+  - id: responses-are-not-inspected
+    says: >
+      The agent is configured with `response_check: false` and only the request message is sent, so the
+      CRS's RESPONSE-* rules (data leakage) never run. Turning them on is coraza-spoa's `coraza-res`
+      message and a transaction cache per pod — and HAProxy buffering every response body to hand it
+      over.
+  - id: member-health-is-not-observable
+    says: >
+      `showRouting` reports what the gateway was configured with and whether the pod is ready, not which
+      members HAProxy currently believes are up — that is on a socket inside the pod, and ActionContext
+      has no exec seam. charts/managed/haproxy's `backend-health-is-not-observable`, for the same reason.
+  - id: machine-members-are-resolved-one-by-one
+    says: >
+      Each machine member is a view read, a rendered-objects listing and a VirtualMachineInstance read,
+      sequentially, inside the 30-second reconcile budget; a gateway at the 64-entry limit of machines
+      could approach it. And a machine whose address changes is noticed on the gateway's next pass, not
+      before: IResourceWatch would deliver the change, and what starts a pass on a converged resource is
+      still owed on IResourceWatch itself (docs/plan/08). Kube-OVN keeps a KubeVirt machine's address
+      across restarts, which is what makes the gap narrow rather than closed.
+  - id: container-groups-are-not-a-type
+    says: >
+      docs/plan/14 names container groups as pool members, and
+      CyberCloud.ContainerInstance/containerGroups is not a published type; a member naming one — or any
+      type but a virtual machine — is refused by name. A second type is a second resolver in
+      ApplicationGatewayReconciler, reading whatever that type's rendered pod reports.
+  - id: header-rewrites-and-rate-limits
+    says: >
+      docs/plan/14 lists header rewrites and rate limits. Neither is in 2026-08-01: a rewrite is a
+      grammar of its own (which header, set or delete, on which rule) and a rate limit is a stick table
+      whose semantics with one replica — per gateway, not per client fleet — need writing down before
+      they are offered.
+  - id: acme-certificates
+    says: >
+      A certificate is a vault handle the tenant has already filled. docs/plan/14's cert-manager and ACME
+      path needs an HTTP-01 or DNS-01 challenge to be answerable, and neither is from inside a private
+      VPC with no inbound address and no DNS zone type.
+  - id: one-crs-version
+    says: >
+      The CRS is compiled into the agent image (`@owasp_crs/*.conf` is an embedded file system), so
+      `crsVersion` offers the one the pinned image carries — 4.25. A second version is a second pinned
+      agent digest and a second value, and a CRS upgrade is a digest bump in this repository, which no
+      job does yet: charts/managed/haproxy's `the-image-is-a-tag-and-not-a-digest` in the other direction.
+  - id: element-grammar-is-checked-after-202
+    says: >
+      Each list's element grammar — `host/path=pool`, `pool=target:port`, an exclusion, a custom rule — is
+      ApplicationGateways.BodyProblem's, run by the reconciler before anything is applied, so a malformed
+      element is a 202 and then a terminal InvalidRequestBody naming the element, rather than a 400. The
+      registry would carry it: SchemaProperty applies a Pattern per element on an array and
+      ResourceSchema.Validate enforces it. What refuses it is ADR-012's fifth surface, which cannot say a
+      per-element pattern in a chart's values.schema.json and fails the registration —
+      charts/managed/kafka's `cidr-shape-is-unenforced`, the same gap, which closes for both with one case
+      in ChartAnnotationEmitter and one in Build.Charts' Validate. ⚠ Nothing malformed is rendered: every value that reaches HAProxy's
+      configuration or SecLang has passed one of the four grammars. Cited by ApplicationGateways' Grammar
+      record, which named this row before #31's review found it missing.
+  - id: grafana-dashboard
+    says: >
+      docs/plan/12 § The pattern, once, piece 6. The agent exposes Prometheus metrics (coraza-spoa's
+      metrics.go) and HAProxy has its built-in exporter; neither is bound, for charts/managed/haproxy's
+      `grafana-dashboard` reason — whose metrics a tenant's gateway emits is a decision not yet taken.

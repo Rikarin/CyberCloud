@@ -1,0 +1,56 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# Nothing was forked. corazawaf/charts publishes a coraza-spoa chart, and it deploys the agent as its
+# own Deployment behind a Service for an HAProxy somewhere else to reach — which is the shape this
+# platform cannot use: a tenant VPC has no Service (ENABLE_LB=false, ADR-019), and the agent must
+# answer on the proxy's own loopback so nothing on the tenant's network can speak SPOP to it. So the
+# objects are written here and the only things taken from upstream are the two images.
+
+vendored: none
+upstream: https://github.com/corazawaf/coraza-spoa
+
+# The images this chart runs, unmodified, each pinned by tag AND digest (templates/_helpers.tpl).
+image: docker.io/library/haproxy:3.2.23-alpine
+image-digest: sha256:5961c68bc8a81c5124d0a98ab20f81b74717d6afe596e805977d9cf84c126222
+waf-image: ghcr.io/corazawaf/coraza-spoa:0.7.3
+waf-image-digest: sha256:2d262d2eb34eb3efa1d2e4a164903c446beeee69877b7e693d46040b3fee38c2
+
+# ⚠ LICENCE. HAProxy is GPL-2.0-or-later and runs unmodified in its own container — ADR-011's ClamAV
+# row, the reading charts/managed/haproxy already ships on. Coraza SPOA (its image labels
+# org.opencontainers.image.licenses: Apache-2.0), Coraza v3 and the OWASP CRS it embeds through
+# corazawaf/coraza-coreruleset are Apache-2.0. No SSPL, BUSL or AGPL component is involved, so
+# build/Build.Licence.cs § LicenceExceptions needs no entry — and, as charts/managed/grafana's
+# `licence-scan-does-not-read-workload-images` records, that scan does not read a managed chart's
+# images yet in any case.
+licence: GPL-2.0-or-later (proxy, separate container) and Apache-2.0 (WAF agent and rule set)
+
+# ── What was read, and where ─────────────────────────────────────────────────────────────────────
+#
+# ⚠ THE DIGESTS WERE RESOLVED AGAINST THE REGISTRIES on 2026-09-23. registry-1.docker.io answered
+# `library/haproxy:3.2.23-alpine` and `:3.2-alpine` with the same index digest above; ghcr.io answered
+# `corazawaf/coraza-spoa:0.7.3` with the index above (linux/amd64 and linux/arm64 plus attestations).
+#
+# ⚠ THE AGENT IMAGE, read from its config blob: `User: "0"`, `Cmd: ["/coraza-spoa", "--config",
+# "/config.yaml"]`, NO Entrypoint, on a distroless static Debian 13 base. So the pod sets
+# `runAsUser: 65532` (distroless's non-root uid) and starts the agent with `command`, never `args` —
+# `args` would replace the binary, measured: `exec: "--config": executable file not found in $PATH`.
+#
+# ⚠ THE PAIRING IS TESTED UPSTREAM. coraza-spoa v0.7.3's .github/workflows/ftw.yaml runs the OWASP CRS
+# regression suite (go-ftw) through haproxy:2.8, 3.0 and 3.2-alpine on every push. 3.4 is not in that
+# matrix, which is why this type offers no HAProxy line and pins 3.2. Its go.mod requires
+# coraza/v3 v3.7.0 and coraza-coreruleset/v4 v4.25.0 — the CRS version the body offers.
+#
+# ⚠ THE CONFIGURATION SHAPES ARE THE AGENT'S OWN, from example/haproxy/coraza.cfg and
+# example/coraza-spoa.yaml at v0.7.3: the SPOE message's arguments "are required to be in this
+# order"; the YAML is decoded with KnownFields(true), so an unknown key stops the agent; the
+# recommended Coraza file sets `SecRuleEngine DetectionOnly`, so the mode line comes after it; and the
+# README allocates custom rule ids — 100000-189999 for allow-lists, which the agent does not count as
+# attacks, and 190000-199999 for custom denies, which it does.
+#
+# ⚠ MEASURED IN DOCKER BEFORE THE CHART WAS WRITTEN, with both pinned images in one network namespace
+# as the pod runs them (uid 99 and 65532, read-only root file systems): a Host rule and a path rule
+# each reached their own backend; in prevention a `?id=1' OR '1'='1` probe was 403 with
+# `waf-rules:942100,949110` on the proxy's log line and `"rule_id":942100` on the agent's; in detection
+# the same probe was 200 with the same two rule ids logged; the HTTPS listener served a PEM bundle
+# from the Secret path; and with the agent stopped, prevention answered 503 and the readiness monitor
+# went 503 with it.

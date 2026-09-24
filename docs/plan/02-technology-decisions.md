@@ -984,6 +984,14 @@ listener isolation and a Coraza WAF filter chain, and a shared Cilium-managed En
 to put both. ⚠ This is worth a measured comparison before the M2 application-gateway work rather than
 a decision taken here — it is the one place where "use Cilium for that too" may also be right.
 
+> ⚠ **Decided by #31 (2026-09-23), and the answer was neither.** The tenant application gateway runs on
+> **HAProxy with Coraza SPOA**, one pod per gateway on the tenant's subnet, rendered by the platform —
+> [14 § Application gateway](14-networking.md) holds the four readings. The comparison asked for above
+> came out against both Envoy options for reasons this ADR already names: Cilium's Envoy is shared
+> per node, and Envoy Gateway is a controller the bundle does not carry, owning a proxy pod the
+> platform has to annotate onto a tenant subnet. Envoy Gateway stays the named choice for *platform*
+> ingress, which that decision does not touch.
+
 ### ADR-020 — Talos Linux is the node OS on every machine this platform owns
 
 **Decision, 2026-08-20.** The physical fleet runs **Talos Linux**: an immutable, API-managed Kubernetes

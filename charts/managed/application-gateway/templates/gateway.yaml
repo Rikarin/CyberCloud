@@ -1,0 +1,152 @@
+{{/*
+An application gateway — docs/plan/14 § Application gateway: one pod on the tenant's subnet running
+HAProxy and, unless the firewall is off, the Coraza agent on the pod's loopback, both reading one
+ConfigMap. In the order the reconciler applies them: the configuration, then the pod.
+
+⚠ NO Service, for charts/managed/haproxy's reason: inside a tenant VPC the OVN load balancer that
+would serve one is off (ADR-019's ENABLE_LB=false), so the pod's own pinned address is the frontend.
+*/}}
+{{- $waf := ne .Values.waf.mode "off" -}}
+{{- $tls := ne (.Values.listeners.certificate | default "") "" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "appgw.objectName" . }}
+  labels:
+    {{- include "appgw.platformLabels" . | nindent 4 }}
+data:
+  haproxy.cfg: |
+    {{- include "appgw.haproxyConfig" . | nindent 4 }}
+  {{- if $waf }}
+  coraza.cfg: |
+    {{- include "appgw.spoeConfig" . | nindent 4 }}
+  coraza-spoa.yaml: |
+    {{- include "appgw.wafConfig" . | nindent 4 }}
+  {{- end }}
+  {{/* ⚠ What resource-id members resolved to. A chart install resolves none. */}}
+  resolved-members.json: "{}"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "appgw.objectName" . }}
+  labels:
+    {{- include "appgw.platformLabels" . | nindent 4 }}
+spec:
+  {{/* ⚠ One, and Recreate: a pinned address has one holder — charts/managed/haproxy's reasons. */}}
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "appgw.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "appgw.selectorLabels" . | nindent 8 }}
+      annotations:
+        ovn.kubernetes.io/logical_switch: {{ include "appgw.logicalSwitch" . | quote }}
+        ovn.kubernetes.io/ip_pool: {{ include "appgw.addressPool" . | quote }}
+        {{/*
+          ⚠ WITHOUT THIS LINE A CONFIGURATION CHANGE IS A NO-OP THAT REPORTS SUCCESS: HAProxy reads
+          its file once. `sha256:` + hex, KubeLabels.ReconcileHash's spelling, over the same text the
+          reconciler hashes.
+        */}}
+        cybercloud.io/gateway-config: {{ printf "sha256:%s" (include "appgw.configHash" .) | quote }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        {{/* ⚠ Per-container users: HAProxy's image user is 99 and the agent's distroless non-root is 65532. */}}
+        runAsNonRoot: true
+        # ⚠ The Secret volume is root-owned and HAProxy is uid 99: fsGroup 99 plus 0440 is what lets it read tls.pem.
+        fsGroup: 99
+        seccompProfile:
+          type: RuntimeDefault
+        sysctls:
+          - name: net.ipv4.ip_unprivileged_port_start
+            value: "0"
+      containers:
+        - name: haproxy
+          image: {{ include "appgw.proxyImage" . | quote }}
+          securityContext:
+            runAsUser: 99
+            runAsGroup: 99
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: {{ .Values.listeners.httpPort }}
+              protocol: TCP
+            {{- if $tls }}
+            - name: https
+              containerPort: {{ .Values.listeners.httpsPort }}
+              protocol: TCP
+            {{- end }}
+          {{/*
+            ⚠ THE MONITOR FRONTEND, NOT THE LISTENER: it reports the pod unready while the WAF agent is
+            down, which in prevention mode is a gateway answering 503 to everything.
+          */}}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8405
+            periodSeconds: 5
+          resources:
+            {{- include "appgw.resources" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/etc/haproxy
+              readOnly: true
+            {{- if $tls }}
+            - name: tls
+              mountPath: /etc/cybercloud/tls
+              readOnly: true
+            {{- end }}
+        {{- if $waf }}
+        - name: waf
+          image: {{ include "appgw.wafImage" . | quote }}
+          {{/*
+            ⚠ `command`, NEVER `args`: the image has a Cmd and no Entrypoint, so `args` would replace the
+            binary — measured, `exec: "--config": executable file not found in $PATH`.
+          */}}
+          command:
+            - /coraza-spoa
+            - --config
+            - /etc/coraza-spoa/coraza-spoa.yaml
+          securityContext:
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            {{- include "appgw.resources" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/coraza-spoa
+              readOnly: true
+            {{/* ⚠ Coraza spills a body past its in-memory limit to /tmp, and the root is read-only. */}}
+            - name: tmp
+              mountPath: /tmp
+        {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "appgw.objectName" . }}
+        {{- if $tls }}
+        - name: tls
+          secret:
+            secretName: {{ printf "%s-tls" (include "appgw.objectName" .) }}
+            defaultMode: 288
+        {{- end }}
+        {{- if $waf }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        {{- end }}

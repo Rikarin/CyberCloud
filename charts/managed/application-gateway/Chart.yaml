@@ -1,0 +1,46 @@
+# The tenant application gateway and WAF — docs/plan/14 § Application gateway, "M2 · 2.0 EM".
+#
+# ⚠ HAPROXY AND CORAZA SPOA, NOT THE ENVOY GATEWAY docs/plan/14 FIRST NAMED. The decision and the
+# four readings behind it are in that section: the bundle carries no Gateway API controller, a
+# controller-managed Envoy is a pod this platform does not template, Envoy Gateway reaches a bare
+# address only through its off-by-default `Backend` extension, and HAProxy is already the precedent
+# (charts/managed/haproxy). HAProxy's own WAF is an Enterprise product; Coraza SPOA is the OWASP
+# Coraza project's agent for HAProxy's SPOE, Apache-2.0, with the OWASP CRS compiled in.
+#
+# ⚠ IT DOES NOT WRAP AN OPERATOR, for charts/managed/haproxy's reason: the objects are one pod on a
+# tenant's subnet, and SOURCE names the two upstream images this chart runs unmodified.
+apiVersion: v2
+name: application-gateway
+description: An HTTP and HTTPS gateway inside a tenant's virtual network — HAProxy routing by host and path to pools of workload addresses, with the OWASP Core Rule Set on Coraza in detection or prevention mode.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# ⚠ The HAProxy release the proxy image is pinned to, by digest, in templates/_helpers.tpl.
+appVersion: "3.2.23"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - application-gateway
+  - waf
+  - haproxy
+  - coraza
+  - owasp-crs
+  - kube-ovn
+
+home: https://github.com/cybercloud
+sources:
+  - https://github.com/cybercloud
+  - https://github.com/haproxy/haproxy
+  - https://github.com/corazawaf/coraza-spoa
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+# ⚠ These three are read by `Build.Charts` and written into `values.schema.json` as `x-cybercloud-*`.
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Network/virtualNetworks/applicationGateways
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

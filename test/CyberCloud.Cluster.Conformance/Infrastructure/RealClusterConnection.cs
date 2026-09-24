@@ -82,7 +82,11 @@ public sealed class RealClusterConnection(IKubeApiClient api, Guid clusterId) : 
         CancellationToken cancellationToken = default
     ) {
         ArgumentNullException.ThrowIfNull(command);
-        return api.DeleteAsync(command.Target, policy, cancellationToken);
+
+        // ⚠ OwnedDelete, as ClusterConnectionGrain runs it, and not api.DeleteAsync directly: the
+        // refusal of an object labelled for another resource is part of what a delete is, and a
+        // suite that went round it would not see two types' names collide (#31's review).
+        return OwnedDelete.DeleteAsync(api, command, policy, cancellationToken);
     }
 
     /// <inheritdoc />

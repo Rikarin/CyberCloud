@@ -622,6 +622,71 @@ public sealed class VirtualNetworkPeeringCase : IProviderCaseSource {
     ];
 }
 
+/// <summary>
+///     <c>CyberCloud.Network/virtualNetworks/applicationGateways</c> — the family's eighth type, and the
+///     second whose objects are a workload.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>The load balancer's case, in the three places that matter, for its reasons.</b> Two
+///         namespaced objects, the network as the only ancestor, and a <c>ChangedBody</c> that adds a
+///         pool member — which changes the <c>ConfigMap</c>'s configuration <i>and</i> the pod
+///         template's hash, the pair whose disagreement is a gateway that applies cleanly and keeps
+///         routing to the old members.
+///     </para>
+///     <para>
+///         ⚠ <b>No certificate and no machine member in either body</b>: the harness's vault is a
+///         double and its view has no Compute provider behind it, so both reads would be tested against
+///         doubles of the things under test. <c>NetworkApplicationGatewayTests</c> covers both against a
+///         seeded resolver and a view that answers, and the cluster-backed class covers the certificate
+///         against the harness's real vault path on a real API server.
+///     </para>
+///     <para>
+///         ⚠ <b>The invalid body is an HTTP port of <c>0</c></b>, refused at
+///         <c>/properties/listeners/httpPort</c> by <c>Minimum</c> before the write path answers.
+///     </para>
+/// </remarks>
+public sealed class ApplicationGatewayCase : IProviderCaseSource {
+    /// <inheritdoc />
+    public static ProviderConformanceCase ProviderCase { get; } =
+        new() {
+            DisplayName = "CyberCloud.Network/virtualNetworks/applicationGateways",
+            CreateProvider = static () => new NetworkProvider(),
+            ReconcilerType = typeof(ApplicationGatewayReconciler),
+            CreateReconciler = static clock => new ApplicationGatewayReconciler(clock),
+            Type = ApplicationGateways.Type,
+            ApiVersion = ApplicationGateways.V2026,
+            Body = static cluster => ApplicationGateways.Body(cluster),
+            ChangedBody = static cluster => ApplicationGateways.Body(
+                cluster,
+                members: [ApplicationGateways.DefaultMember, "web=10.20.1.12:8080"]
+            ),
+            InvalidBody = static cluster => ApplicationGateways.Body(cluster, httpPort: 0),
+            InvalidBodyTarget = "/properties/listeners/httpPort",
+            ActionName = ApplicationGateways.RoutingAction,
+            Objects = static (id, ns) => ApplicationGateways.Objects(ns, id),
+            // A cluster data plane, which the harness breaks and reads itself — see ProviderConformanceCase.DataPlane.
+            DataPlane = null,
+            StoragePrefix = null,
+            // ⚠ Empty: the body names no certificate, so no Secret is rendered at all.
+            OperatorWritten = static (_, _) => [],
+            ObjectMatchesDesired = static match => {
+                using var desired = JsonDocument.Parse(match.DesiredJson);
+
+                return ApplicationGateways.Matches(
+                    match.ObjectJson,
+                    match.Namespace,
+                    match.Id,
+                    desired.RootElement,
+                    ApplicationGateways.NoResolution
+                );
+            }
+        };
+
+    /// <inheritdoc />
+    public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [VirtualNetworkCase.ProviderCase];
+}
+
 /// <summary>The shared suite, run against the virtual-network provider.</summary>
 /// <param name="cluster">The harness.</param>
 public sealed class VirtualNetworkConformance(ProviderTestCluster<VirtualNetworkCase> cluster)
@@ -689,6 +754,19 @@ public sealed class NatGatewayConformance(ProviderTestCluster<NatGatewayCase> cl
 public sealed class VirtualNetworkPeeringConformance(ProviderTestCluster<VirtualNetworkPeeringCase> cluster)
     : ProviderConformanceTests<VirtualNetworkPeeringCase>(cluster),
     IClassFixture<ProviderTestCluster<VirtualNetworkPeeringCase>>;
+
+/// <summary>
+///     The <b>same</b> suite again, run against the application gateway — the family's second
+///     workload type.
+/// </summary>
+/// <param name="cluster">The harness.</param>
+public sealed class ApplicationGatewayConformance(ProviderTestCluster<ApplicationGatewayCase> cluster)
+    : ProviderConformanceTests<ApplicationGatewayCase>(cluster),
+    IClassFixture<ProviderTestCluster<ApplicationGatewayCase>>;
+
+/// <summary>The container-backed half against the application gateway.</summary>
+public sealed class ApplicationGatewayClusterBackedConformance()
+    : ClusterBackedConformanceTests(ApplicationGatewayCase.ProviderCase);
 
 /// <summary>The container-backed half, skipped loudly, against the virtual-network type.</summary>
 public sealed class VirtualNetworkClusterBackedConformance()
@@ -786,6 +864,11 @@ public sealed class NetworkSuiteShapeTests {
             + "the shared suite, per object, so the count stays the network's."
         );
 
+        RunnableFactsOf(typeof(ApplicationGatewayConformance)).ShouldBe(
+            parent,
+            "the application gateway runs a different set of assertions than the virtual network does."
+        );
+
         parent.Length.ShouldBeGreaterThan(20);
     }
 
@@ -818,7 +901,9 @@ public sealed class NetworkSuiteShapeTests {
                      AncestorsOf<NatGatewayCase>(),
                      // ⚠ And the peering, whose parent is the LOCAL side of the exchange; the remote is
                      // a sibling, asserted separately below.
-                     AncestorsOf<VirtualNetworkPeeringCase>()
+                     AncestorsOf<VirtualNetworkPeeringCase>(),
+                     // ⚠ And the application gateway, for the load balancer's reason.
+                     AncestorsOf<ApplicationGatewayCase>()
                  ]) {
             ancestors.Length.ShouldBe(1);
 
@@ -845,7 +930,8 @@ public sealed class NetworkSuiteShapeTests {
                      SiblingsOf<NetworkSecurityGroupCase>(),
                      SiblingsOf<PublicIpAddressCase>(),
                      SiblingsOf<LoadBalancerCase>(),
-                     SiblingsOf<NatGatewayCase>()
+                     SiblingsOf<NatGatewayCase>(),
+                     SiblingsOf<ApplicationGatewayCase>()
                  ]) {
             siblings.ShouldBeEmpty("only a type whose body names another resource of this family declares a sibling");
         }
@@ -969,6 +1055,23 @@ public sealed class NetworkSuiteShapeTests {
             target.Namespace.ShouldBe("ns");
             target.Name.ShouldBe("net-web");
         }
+
+        // ⚠ And the application gateway is namespaced like the load balancer — the same two kinds —
+        // plus a certificate Secret the case does not own. ⚠ BUT NOT THE SAME NAME ARITHMETIC: both
+        // types write under one field manager into one namespace, so a gateway and a balancer of one
+        // name in one network were one ConfigMap and one Deployment, and deleting either deleted the
+        // other's pod — #31's review, on a real k3s. ApplicationGateways.ObjectNameOf says why a dot.
+        var gatewayObjects = ApplicationGatewayCase.ProviderCase.Objects(
+            child with { Type = ApplicationGateways.Type },
+            "ns"
+        );
+
+        gatewayObjects.Length.ShouldBe(2);
+        gatewayObjects.ShouldAllBe(static x => !x.IsClusterScoped && x.Namespace == "ns" && x.Name == "net.web");
+
+        gatewayObjects.Select(static x => (x.Kind.Kind, x.Name))
+            .Intersect(balancer.Select(static x => (x.Kind.Kind, x.Name)))
+            .ShouldBeEmpty("an application gateway and a load balancer of the same name in the same network render the same object");
 
         // ⚠ AND THE SIXTH IS CLUSTER-SCOPED AGAIN, WITH THE THIRD HYPHENATED PLURAL. The scope
         // alternates through the family — Vpc, Subnet, SecurityGroup and OvnEip cluster-scoped, a

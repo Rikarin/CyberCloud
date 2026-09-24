@@ -169,6 +169,9 @@ import type {
   NetworkPublicIpAddressesData,
   NetworkPublicIpAddressesResource,
   NetworkPublicIpAddressesShowAllocationResult,
+  NetworkVirtualNetworksApplicationGatewaysData,
+  NetworkVirtualNetworksApplicationGatewaysResource,
+  NetworkVirtualNetworksApplicationGatewaysShowRoutingResult,
   NetworkVirtualNetworksData,
   NetworkVirtualNetworksLoadBalancersData,
   NetworkVirtualNetworksLoadBalancersResource,
@@ -1651,6 +1654,36 @@ export class CyberCloudApi {
   /** showIsolation — permission 'read'. */
   showIsolationVirtualNetwork(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksShowIsolationResult>> {
     return this.transport.send<NetworkVirtualNetworksShowIsolationResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(resourceName)}/showIsolation` });
+  }
+
+  /** Reads one Application gateway. */
+  getApplicationGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksApplicationGatewaysResource>> {
+    return this.transport.send<NetworkVirtualNetworksApplicationGatewaysResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/applicationGateways/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Application gateway. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateApplicationGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string, data: NetworkVirtualNetworksApplicationGatewaysData): Promise<ApiResponse<NetworkVirtualNetworksApplicationGatewaysResource>> {
+    return this.transport.send<NetworkVirtualNetworksApplicationGatewaysResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/applicationGateways/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Application gateway. A merge patch: what is not set is not changed. */
+  updateApplicationGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string, data: Partial<NetworkVirtualNetworksApplicationGatewaysData>): Promise<ApiResponse<NetworkVirtualNetworksApplicationGatewaysResource>> {
+    return this.transport.send<NetworkVirtualNetworksApplicationGatewaysResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/applicationGateways/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Application gateway. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteApplicationGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/applicationGateways/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Application gateways in a resource group. ⚠ A short page never means "that is all there is". */
+  listApplicationGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, page: PageRequest = {}): Promise<ApiResponse<Page<NetworkVirtualNetworksApplicationGatewaysResource>>> {
+    return this.transport.send<Page<NetworkVirtualNetworksApplicationGatewaysResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/applicationGateways`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** showRouting — permission 'read'. */
+  showRoutingApplicationGateway(tenantId: string, subscriptionId: string, resourceGroupName: string, virtualNetworksName: string, resourceName: string): Promise<ApiResponse<NetworkVirtualNetworksApplicationGatewaysShowRoutingResult>> {
+    return this.transport.send<NetworkVirtualNetworksApplicationGatewaysShowRoutingResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Network/virtualNetworks/${CyberCloudApi.segment(virtualNetworksName)}/applicationGateways/${CyberCloudApi.segment(resourceName)}/showRouting` });
   }
 
   /** Reads one Load balancer. */

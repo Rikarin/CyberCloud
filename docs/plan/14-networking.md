@@ -12,8 +12,9 @@ packets on real hardware, and the honest framing is that **the software is the e
 | Platform service VIPs | **Cilium LB-IPAM + BGP Control Plane** | Replaces MetalLB where BGP is available. ADR-019 |
 | Tenant public addresses | **Kube-OVN EIP / FloatingIP / VpcNatGateway** | Never MetalLB — an address inside an OVN logical router is not something MetalLB can model |
 | ⚠ Fallback where the fabric is L2-only | **MetalLB, L2 mode** | Not Cilium L2 Announcements. ADR-019 explains why |
-| L7 | **Envoy Gateway** (Gateway API) | Where Kubernetes ingress is going; ingress-nginx is the legacy path. Cilium's own Gateway API implementation is the alternative and is evaluated in ADR-019 |
-| WAF | **Coraza** (OWASP CRS) as an Envoy filter | Apache-2.0, actively maintained |
+| L7 (platform ingress) | **Envoy Gateway** (Gateway API) | Where Kubernetes ingress is going; ingress-nginx is the legacy path. Cilium's own Gateway API implementation is the alternative and is evaluated in ADR-019. ⚠ **Not the tenant L7** — `applicationGateways` runs HAProxy, see § Application gateway |
+| L7 (tenant `applicationGateways`) | **HAProxy**, one pod on the tenant's subnet | ⚠ **Decided (#31)**: nothing to install, a pod the platform templates, addresses as backends, and `loadBalancers`' precedent — § Application gateway |
+| WAF | **Coraza** (OWASP CRS) ~~as an Envoy filter~~ as HAProxy's SPOE agent, `coraza-spoa` | Apache-2.0, actively maintained, and its CI runs the CRS regression suite against HAProxy 3.2 |
 
 > ⚠ **Corrected.** An earlier draft of this table had Kube-OVN as the primary CNI with Cilium chained
 > on top as a policy layer, and cited Cozystack for it. That is not what Cozystack runs — their
@@ -34,6 +35,7 @@ virtualNetworks/{name}
   ├─ securityGroups/{name}   → rules; Cilium policies + Kube-OVN ACLs
   ├─ routeTables/{name}      → static routes, next-hop
   ├─ natGateways/{name}      → one subnet's egress through a publicIpAddresses resource (M2, shipped)
+  ├─ applicationGateways/{name} → L7 routes + the OWASP CRS WAF on HAProxy (M2, shipped)
   └─ peerings/{name}         → VPC-to-VPC within a tenant, in one resource group (M2, shipped)
 ```
 
@@ -106,29 +108,63 @@ the mistake this note exists to prevent.
 
 ## Application gateway — `CyberCloud.Network/applicationGateways` · M2 · 2.0 EM
 
-L7 over Envoy Gateway: listeners, host/path routes, TLS (with cert-manager and our own ACME or an
-uploaded certificate from Vault), header rewrites, rate limits, and the Coraza WAF with a
-rule-set/paranoia-level selection.
+~~L7 over Envoy Gateway~~ **L7 on HAProxy, with the Coraza WAF as its SPOE agent (#31, shipped as
+`virtualNetworks/applicationGateways`)**. The plan's scope: listeners, host/path routes, TLS (with
+cert-manager and our own ACME or an uploaded certificate from Vault), header rewrites, rate limits, and
+the Coraza WAF with a rule-set/paranoia-level selection. ⚠ **2026-08-01 ships part of it** — listeners,
+host/path routes, TLS from a certificate the tenant holds in Vault, and the WAF; ACME, header rewrites
+and rate limits are owed (below, and `conformance.yaml § owed`). This paragraph claimed all of it until
+#31's review.
 
-> ⚠ **Owed (#31), and the shape it has to take was measured before anything was written** — at
-> `charts/managed/haproxy/conformance.yaml § owed`, `application-gateway-is-not-an-http-mode-of-this-proxy`.
-> The short form. **The controller is not installed:** `charts/bundle` carries Kube-OVN as the CNI and
-> no Envoy Gateway, no Cilium and no Gateway API definitions, so the first deliverable is a bundle
-> component and the comparison [ADR-019](02-technology-decisions.md) asks for, not a chart. **The
-> proxy sits inside the tenant's subnet or it is useless**, which for a controller-managed Envoy means
-> `provider.kubernetes.deploy.type: GatewayNamespace` plus the `logical_switch` and `ip_pool`
-> annotations through an `EnvoyProxy` pod template — the objects this type renders are then owned by
-> a controller, the CloudNativePG shape rather than the HAProxy one. **Backends are addresses**, for
-> #23's reason (no Service and no DNS inside a tenant VPC), and Gateway API's `backendRefs` reach a
-> bare address only through Envoy Gateway's `Backend` extension, which is off by default *"due to
-> security considerations"*. **Routes are one child resource each**, because an `HTTPRoute` is its
-> own object attaching to its Gateway by `parentRefs` — the one place in this family where the
-> substrate's object model dodges the array-of-objects refusal instead of hitting it. **The WAF is an
-> `EnvoyExtensionPolicy`** loading `coraza-proxy-wasm`, and its rule set and paranoia level are that
-> plugin's configuration. ⚠ And it is reachable from outside only through the inbound attachment
-> nothing renders yet — `charts/managed/kube-ovn-eip/conformance.yaml § owed`,
-> `only-a-nat-gateway-can-be-given-an-address` — so until that lands it is an L7 proxy private to the
-> VPC, exactly as `loadBalancers` is.
+> ⚠ **Decided (#31): HAProxy + Coraza SPOA, rendered directly, and not Envoy Gateway, Cilium's Gateway
+> API or Caddy.** The measurement that owed this type (`charts/managed/haproxy/conformance.yaml § owed`,
+> `application-gateway-is-not-an-http-mode-of-this-proxy`) assumed the Envoy Gateway named above and
+> found its first deliverable was a bundle component. Four readings turned the choice instead.
+>
+> 1. **Nothing to install.** `charts/bundle` carries no Gateway API definitions, no Envoy Gateway and no
+>    Cilium. Envoy Gateway is a controller, a CRD family and a certgen job in every cluster before it is
+>    one tenant's proxy; HAProxy is an image `loadBalancers` already runs.
+> 2. **The proxy has to be a pod the platform templates.** It sits on the tenant's subnet or it is
+>    useless, which is two Kube-OVN annotations on the pod (`logical_switch`, `ip_pool`). A controller-
+>    managed Envoy puts them there only through `GatewayNamespace` deploy mode and an `EnvoyProxy` pod
+>    template, and every object is then owned by a controller — the CloudNativePG shape, with the
+>    cluster-backed suite proving none of it. Rendered directly, the platform owns the pod, and a real
+>    k3s runs it (below).
+> 3. **Backends are addresses** — no Service and no DNS in a tenant VPC (#23) — which HAProxy takes
+>    natively and Gateway API reaches only through Envoy Gateway's `Backend` extension, off by default
+>    *"due to security considerations"*. Cilium's own Gateway API implementation is a *shared* Envoy per
+>    node, the placement ADR-019 already calls "a harder place to put" per-tenant isolation and a WAF.
+> 4. **The WAF.** HAProxy's own is HAProxy Enterprise's. `corazawaf/coraza-spoa` is the OWASP Coraza
+>    project's agent for HAProxy's SPOE — Apache-2.0, Coraza v3 with the OWASP CRS compiled in — and its
+>    CI runs the CRS regression suite (go-ftw) through HAProxy 2.8, 3.0 and 3.2 on every push
+>    (`.github/workflows/ftw.yaml` at `v0.7.3`). Envoy's equivalent, `coraza-proxy-wasm`, needs the
+>    module fetched into the proxy at runtime; Caddy's needs a custom `xcaddy` build the platform would
+>    have to own.
+>
+> **What shipped.** One pod on the tenant's subnet — HAProxy `3.2.23-alpine` and coraza-spoa `0.7.3`,
+> both **by digest** because they are a tested pair — the agent on the pod's loopback. Listeners are HTTP
+> and, with a vault handle under the tenant's own prefix, HTTPS. Routes are **a list on the gateway**,
+> `host/path=pool`, first match wins, a path matched on whole segments — not a child each, because on
+> HAProxy the routing table is lines in one file and a child would be `routeTables`' refusal again.
+> Pools are `pool=target:port`, where a target is an address or a `CyberCloud.Compute/virtualMachines`
+> id resolved through #90's view to the address KubeVirt reports; container groups are not a published
+> type and are refused by name. Health is an HTTP GET per member. The WAF policy is a mode (`off`,
+> `detection`, `prevention`), a CRS version (the one the pinned agent embeds, 4.25), a paranoia level,
+> rule exclusions and custom rules — every list in a closed grammar checked before rendering, so no
+> tenant text reaches HAProxy's configuration or SecLang as text. In prevention an unanswering agent is
+> a 503, never a pass. **Proven on a real k3s** by `ApplicationGatewayTrafficConformance`: routed by host
+> and by path to real backend pods, HTTPS from the harness vault, a SQL-injection probe 403 in
+> prevention and passed with `waf-rules:942100` on the gateway's log line in detection, custom denies
+> holding for every spelling of a host or path routing treats as the same, a 503 from the gateway's own
+> pod template with no agent in it, and a pool's member taken out when it stops answering its probe.
+> The objects are named `{network}.{name}` — not the load balancer's `{network}-{name}`, which one name
+> in one network made the same `Deployment` until #31's review (`ApplicationGatewayBesideALoadBalancerConformance`).
+>
+> ⚠ **Owed** — `charts/managed/application-gateway/conformance.yaml § owed`: it is private to the VPC
+> until the inbound attachment lands (`charts/managed/kube-ovn-eip/conformance.yaml § owed`,
+> `only-a-nat-gateway-can-be-given-an-address`), one replica, bodies inspected up to HAProxy's buffer,
+> no response inspection, no header rewrites, rate limits or ACME, and — because flannel ignores the
+> Kube-OVN annotations — the tenant-subnet half waits for #95's lane.
 
 ## VPN — `CyberCloud.Network/vpnGateways` · M1 · 1.5 EM
 
@@ -202,6 +238,15 @@ debugging trap.
 > bundle does not carry yet plus [16](16-observability.md)'s pipeline plus a query view —
 > [01](01-azure-parity-catalogue.md) files it under `CyberCloud.Monitor` at M3 — and not a chart under
 > `charts/managed`.
+>
+> ⚠ **Re-read for #31 on 2026-09-23, and still owed — the same file and row.** Kube-OVN v1.16.7 (the
+> bundle pins v1.16.2) adds an experimental `--enable-acl-sampling`: OVN samples on **NetworkPolicy**
+> ACLs, delivered per node through a kernel psample group to a debug command — nothing on this
+> platform, where `ENABLE_NP=false` removes those ACLs and a security group's are not sampled. Hubble
+> is still unmeasured against OVN-switched tenant pods, because no harness carries Cilium. What a
+> tenant **does** get now is the application gateway's per-request log line — client, pool member,
+> timings, status and the WAF's verdict — which is an L7 record of traffic *through a gateway* and no
+> more.
 
 ## Effort
 

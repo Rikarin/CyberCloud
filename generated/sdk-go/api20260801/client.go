@@ -2561,25 +2561,27 @@ func (c *ApplicationComponentClient) Transaction(ctx context.Context, tenantID, 
 
 // NetworkProvider holds the resource types of CyberCloud.Network.
 type NetworkProvider struct {
-	PublicIpAddresses             *PublicIPAddressClient
-	VirtualNetworks               *VirtualNetworkClient
-	VirtualNetworksLoadBalancers  *LoadBalancerClient
-	VirtualNetworksNatGateways    *NATGatewayClient
-	VirtualNetworksPeerings       *PeeringClient
-	VirtualNetworksSecurityGroups *SecurityGroupClient
-	VirtualNetworksSubnets        *SubnetClient
+	PublicIpAddresses                  *PublicIPAddressClient
+	VirtualNetworks                    *VirtualNetworkClient
+	VirtualNetworksApplicationGateways *ApplicationGatewayClient
+	VirtualNetworksLoadBalancers       *LoadBalancerClient
+	VirtualNetworksNatGateways         *NATGatewayClient
+	VirtualNetworksPeerings            *PeeringClient
+	VirtualNetworksSecurityGroups      *SecurityGroupClient
+	VirtualNetworksSubnets             *SubnetClient
 }
 
 // newNetworkProvider builds the group's clients over one transport.
 func newNetworkProvider(transport Transport) *NetworkProvider {
 	return &NetworkProvider{
-		PublicIpAddresses:             &PublicIPAddressClient{transport: transport},
-		VirtualNetworks:               &VirtualNetworkClient{transport: transport},
-		VirtualNetworksLoadBalancers:  &LoadBalancerClient{transport: transport},
-		VirtualNetworksNatGateways:    &NATGatewayClient{transport: transport},
-		VirtualNetworksPeerings:       &PeeringClient{transport: transport},
-		VirtualNetworksSecurityGroups: &SecurityGroupClient{transport: transport},
-		VirtualNetworksSubnets:        &SubnetClient{transport: transport},
+		PublicIpAddresses:                  &PublicIPAddressClient{transport: transport},
+		VirtualNetworks:                    &VirtualNetworkClient{transport: transport},
+		VirtualNetworksApplicationGateways: &ApplicationGatewayClient{transport: transport},
+		VirtualNetworksLoadBalancers:       &LoadBalancerClient{transport: transport},
+		VirtualNetworksNatGateways:         &NATGatewayClient{transport: transport},
+		VirtualNetworksPeerings:            &PeeringClient{transport: transport},
+		VirtualNetworksSecurityGroups:      &SecurityGroupClient{transport: transport},
+		VirtualNetworksSubnets:             &SubnetClient{transport: transport},
 	}
 }
 
@@ -2675,6 +2677,55 @@ func (c *VirtualNetworkClient) List(tenantID, subscriptionID, resourceGroupName 
 func (c *VirtualNetworkClient) ShowIsolation(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*VirtualNetworkShowIsolationResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(resourceName) + "/showIsolation"
 	var result VirtualNetworkShowIsolationResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ApplicationGatewayClient is application gateways — CyberCloud.Network/virtualNetworks/applicationGateways. An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode.
+type ApplicationGatewayClient struct {
+	transport Transport
+}
+
+// Get reads one Application gateway.
+func (c *ApplicationGatewayClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string) (*ApplicationGatewayResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/applicationGateways/" + segment(resourceName)
+	var result ApplicationGatewayResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Application gateway. ⚠ Long-running: Wait on the result.
+func (c *ApplicationGatewayClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string, data ApplicationGatewayData) (*Operation[ApplicationGatewayResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/applicationGateways/" + segment(resourceName)
+	return begin[ApplicationGatewayResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Application gateway. A merge patch: what is not set is not changed.
+func (c *ApplicationGatewayClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string, data ApplicationGatewayData) (*Operation[ApplicationGatewayResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/applicationGateways/" + segment(resourceName)
+	return begin[ApplicationGatewayResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Application gateway. ⚠ Permanent: this type declares no soft-delete window.
+func (c *ApplicationGatewayClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/applicationGateways/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Application gateways in a resource group. ⚠ A short page never means "that is all there is".
+func (c *ApplicationGatewayClient) List(tenantID, subscriptionID, resourceGroupName, virtualNetworksName string, options *ListOptions) *Pager[ApplicationGatewayResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/applicationGateways"
+	return newPager[ApplicationGatewayResource](c.transport, path, options)
+}
+
+// ShowRouting runs showRouting — permission 'read'.
+func (c *ApplicationGatewayClient) ShowRouting(ctx context.Context, tenantID, subscriptionID, resourceGroupName, virtualNetworksName, resourceName string) (*ApplicationGatewayShowRoutingResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Network/virtualNetworks/" + segment(virtualNetworksName) + "/applicationGateways/" + segment(resourceName) + "/showRouting"
+	var result ApplicationGatewayShowRoutingResult
 	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}

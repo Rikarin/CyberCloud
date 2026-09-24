@@ -86,8 +86,9 @@ limits:
 The proxy's configuration.
 
 ⚠ `mode tcp` AND NOT `mode http`, WHICH IS THE WHOLE OF WHAT THIS ROW CLAIMS. docs/plan/14 puts L7 —
-host and path routing, TLS termination, header rewrites, a WAF — on `applicationGateways` at M2, over
-Envoy. An HTTP-mode HAProxy here would be a second, quieter L7 product with none of those.
+host and path routing, TLS termination, header rewrites, a WAF — on `applicationGateways` (#31), a
+second type with its own chart (charts/managed/application-gateway) rather than an HTTP mode of this
+one. An HTTP-mode HAProxy here would be a second, quieter L7 product with none of those.
 
 ⚠ THE GLOBAL CONNECTION LIMIT IS TWICE THE FRONTEND'S, because HAProxy counts both sides of a proxied
 connection against `maxconn`: a global limit equal to the frontend's presents as a proxy that stalls at

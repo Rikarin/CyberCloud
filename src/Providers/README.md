@@ -1988,6 +1988,17 @@ the two measured and recorded rather than left as a sentence:
   collector plus docs/plan/16's pipeline plus a query view, which docs/plan/01 files under
   `CyberCloud.Monitor` at M3.
 
+**What landed on a later pass (2026-09-23): `virtualNetworks/applicationGateways` — and the first
+bullet above was the wrong shape to build it in.** The measurement was right about Envoy Gateway and
+it is why Envoy Gateway was not used: a bundle component, a controller owning a proxy pod the platform
+must annotate onto a tenant subnet, and an off-by-default extension for bare-address backends. The
+type ships on HAProxy — `loadBalancers`' image and its pod-on-the-subnet shape — with
+`corazawaf/coraza-spoa` as its WAF over HAProxy's SPOE, both images by digest; routes are a list on the
+gateway, because on HAProxy a route child would write into its parent's file; and the traffic is
+proven on the real k3s by `ApplicationGatewayTrafficConformance`. The reasoning is in docs/plan/14
+§ Application gateway and on `ApplicationGateways`; what is still owed is
+`charts/managed/application-gateway/conformance.yaml § owed`. Flow logs remain #31's one open noun.
+
 ### What the fourteenth provider measured
 
 `CyberCloud.Mail/domains`, [17 § `CyberCloud.Mail`](../../docs/plan/17-communication-and-email.md),
