@@ -92,7 +92,8 @@ public sealed class ReconcileDriver(
     NamespaceEnsurer namespaces,
     IClock clock,
     ResourceViews views,
-    IAgentTunnels? agents = null
+    IAgentTunnels? agents = null,
+    IObjectStoreGrants? grants = null
 ) {
     /// <summary>How long one pass may take. Clause 3 of docs/plan/08 § The reconcile loop.</summary>
     public static TimeSpan PassBudget { get; } = TimeSpan.FromSeconds(30);
@@ -123,6 +124,44 @@ public sealed class ReconcileDriver(
         }
 
         var reconcileInput = input.GetValueOrThrow();
+
+        // ⚠ A MANAGER-STARTED PASS RUNS ONLY OVER A RESOURCE THAT IS AT REST. A delete or a write that
+        // began after the pass was started owns the resource now: a refresh that reconciled a
+        // Deleting resource would re-apply what the teardown is removing, and one over an Updating
+        // resource would race the write's own pass with nothing to add. Converging without a pass
+        // is the honest ending — the next tick finds the resource at rest or gone.
+        if (spec.Kind == OperationKind.Refresh && reconcileInput.ProvisioningState != ProvisioningState.Succeeded) {
+            var skipped = Progress(
+                "skipped",
+                $"The resource is {reconcileInput.ProvisioningState}, so the periodic pass leaves it to the "
+                + "operation that owns it.",
+                100
+            );
+
+            return new(ReconcileOutcome.Converged, [skipped], false);
+        }
+
+        // ⚠ AND A WRITE'S PASS STOPS A MANAGER-STARTED ONE BEFORE IT APPLIES ANYTHING — #30's review.
+        // The check above runs once, when the refresh starts its pass; a write that begins while that
+        // pass is applying the body it already read would otherwise converge first and then be
+        // overwritten by the older body, and a delete's read-back could be followed by the refresh
+        // re-creating what it removed. So the refresh is cancelled — which tears nothing down — and
+        // driven to its end here. Neither operation grain is reentrant, and returning from its
+        // CancelAsync means its in-flight pass has finished.
+        if (spec.Kind != OperationKind.Refresh && reconcileInput.PassOperationId != Guid.Empty) {
+            var stopped = await StopPeriodicPassAsync(spec, reconcileInput.PassOperationId);
+
+            if (!stopped) {
+                var waiting = Progress(
+                    "waiting",
+                    $"The periodic pass {reconcileInput.PassOperationId:D} is still running over this resource, "
+                    + "so this operation waits for it to stop before applying anything.",
+                    0
+                );
+
+                return new(ReconcileOutcome.InProgress("the periodic pass has not stopped yet"), [waiting], false);
+            }
+        }
 
         var address = ResourceId.ParsePath(reconcileInput.Path);
         if (address.TryGetError(out var addressError)) {
@@ -312,6 +351,7 @@ public sealed class ReconcileDriver(
                 // — a test, a conformance harness — gets RefusingSecretWriter and has to say otherwise.
                 SecretWriter = secretWriter,
                 Objects = objects,
+                Grants = grants ?? new UnavailableObjectStoreGrants(),
                 // ⚠ COLLECTED HERE AND ACTED ON BELOW, WHICH IS WHAT KEEPS THE ATTACH BEHIND THE
                 // CONVERGENCE. The reconciler reports; this driver decides whether the report is due.
                 ClusterConnections = produced,
@@ -579,6 +619,7 @@ public sealed class ReconcileDriver(
         ) {
                 SecretWriter = secretWriter,
                 Objects = objects,
+                Grants = grants ?? new UnavailableObjectStoreGrants(),
                 Agents = agents ?? new UnavailableAgentTunnels(),
                 // The same seams a reconcile pass carries, bound the same way; RetainedVolumesAsync
                 // is a read of what this resource kept and may need to name another resource's disks.
@@ -696,6 +737,49 @@ public sealed class ReconcileDriver(
         grains
             .ForTenant(spec.TenantId.ToString("D", CultureInfo.InvariantCulture))
             .GetGrain<IResourceGrain>(GrainKeys.Resource(spec.ResourceId));
+
+    /// <summary>Cancels a manager-started pass and drives it to its end.</summary>
+    /// <param name="spec">The write whose pass is waiting.</param>
+    /// <param name="passId">The refresh operation the resource grain says is running.</param>
+    /// <returns><c>true</c> once the refresh is terminal (or gone) and the resource grain has been told.</returns>
+    /// <remarks>
+    ///     ⚠ <b>Called from the write's operation, never from the resource grain.</b> The refresh calls
+    ///     the resource grain mid-pass; the write's operation is a third grain that nothing in the
+    ///     refresh calls, so waiting on the refresh here cannot close a cycle. A refresh that answers
+    ///     nothing within Orleans' timeout is a pass that has not stopped, and the write waits a
+    ///     reminder period and asks again.
+    /// </remarks>
+    async Task<bool> StopPeriodicPassAsync(OperationSpec spec, Guid passId) {
+        var pass = grains
+            .ForTenant(spec.TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IOperationGrain>(GrainKeys.Operation(passId));
+
+        try {
+            var status = await pass.GetAsync();
+
+            if (status.IsSuccess && !status.GetValueOrThrow().IsTerminal) {
+                // A Conflict here is the refresh having ended between the two calls; DriveAsync answers
+                // a terminal operation with its status and does nothing else.
+                _ = await pass.CancelAsync(
+                    $"Operation {spec.OperationId:D} ({spec.Kind}) began on the resource, and a periodic "
+                    + "pass does not run beside a write."
+                );
+
+                status = await pass.DriveAsync();
+            }
+
+            if (status.IsSuccess && !status.GetValueOrThrow().IsTerminal) {
+                return false;
+            }
+
+            // ⚠ Told here as well as by the refresh's own ending, which is best effort; the call is
+            // idempotent and ignores any operation but the one the grain holds.
+            _ = await Resource(spec).EndPeriodicPassAsync(passId);
+            return true;
+        } catch (Exception failure) when (failure is TimeoutException or OrleansException) {
+            return false;
+        }
+    }
 
     static JsonElement ParseOrEmpty(string json) {
         try {

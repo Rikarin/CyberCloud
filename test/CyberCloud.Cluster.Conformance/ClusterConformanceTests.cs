@@ -1607,7 +1607,12 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
                     // ⚠ And the cross-resource seam, bound to this address the way the driver binds it —
                     // a type that reads another resource would otherwise fail every hand-driven pass
                     // against RefusingResourceView, for the harness's reason and not its own.
-                ) { SecretWriter = ClusterConformanceState<TSource>.Vault, View = view, Watch = watch },
+                ) {
+                    SecretWriter = ClusterConformanceState<TSource>.Vault,
+                    Grants = ClusterConformanceState<TSource>.Grants,
+                    View = view,
+                    Watch = watch
+                },
                 TestContext.Current.CancellationToken
             );
     }

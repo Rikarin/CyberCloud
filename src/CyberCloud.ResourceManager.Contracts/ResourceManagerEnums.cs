@@ -221,7 +221,28 @@ public enum OperationKind {
     ///         which docs/plan/08 § Soft delete calls the thing that "makes restore total".
     ///     </para>
     /// </remarks>
-    Restore = 6
+    Restore = 6,
+
+    /// <summary>
+    ///     A pass the manager started, over a resource nobody wrote to — docs/plan/08 § The
+    ///     manager-started pass.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The seventh kind docs/plan/08 § The cross-resource seam asked for: it converges
+    ///         without a body change and tears nothing down on cancel.</b> A type that declares
+    ///         <c>PassEvery</c> gets one of these from its resource grain's reminder; the pass is the
+    ///         ordinary <c>ReconcileAsync</c> over the stored body.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It never moves the resource's provisioning state.</b> The resource stays
+    ///         <c>Succeeded</c> while the pass runs, so a tenant's PUT is not refused with 409 by a
+    ///         pass the tenant did not start, and a pass that fails records its reason on the
+    ///         operation rather than turning a converged resource <c>Failed</c> over a transient
+    ///         fault. It reserves and commits no quota, because nothing about the body changed.
+    ///     </para>
+    /// </remarks>
+    Refresh = 7
 }
 
 /// <summary>

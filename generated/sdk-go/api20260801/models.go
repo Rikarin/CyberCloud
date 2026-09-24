@@ -1639,6 +1639,8 @@ type PostgreSQLServerProperties struct {
 	Pooling *PostgreSQLServerPropertiesPooling `json:"pooling,omitempty"`
 	// Number of instances, including the primary. One is a single point of failure and is offered for development only.
 	Replicas int64 `json:"replicas"`
+	// Where the server's data comes from when it is created from a recovery point rather than empty.
+	Restore *PostgreSQLServerPropertiesRestore `json:"restore,omitempty"`
 	// CPU and memory, either by preset or explicitly.
 	Sizing *PostgreSQLServerPropertiesSizing `json:"sizing,omitempty"`
 	// The data volume.
@@ -1651,7 +1653,7 @@ type PostgreSQLServerProperties struct {
 
 // PostgreSQLServerPropertiesBackup is Backup to the tenant's object store, using CloudNativePG's barman-cloud.
 type PostgreSQLServerPropertiesBackup struct {
-	// Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.
+	// Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.
 	DestinationPath *string `json:"destinationPath,omitempty"`
 	// Whether continuous backup and WAL archiving run.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -1681,6 +1683,12 @@ type PostgreSQLServerPropertiesPooling struct {
 	Instances *int64 `json:"instances,omitempty"`
 	// PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction.
 	Mode *PostgreSQLServerMode `json:"mode,omitempty"`
+}
+
+// PostgreSQLServerPropertiesRestore is Where the server's data comes from when it is created from a recovery point rather than empty.
+type PostgreSQLServerPropertiesRestore struct {
+	// The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database.
+	RecoveryPoint *string `json:"recoveryPoint,omitempty"`
 }
 
 // PostgreSQLServerPropertiesSizing is CPU and memory, either by preset or explicitly.
@@ -3306,6 +3314,20 @@ func (r *BackupVaultResource) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &r.Data)
 }
 
+// BackupVaultBackupNowContent is the parameters of backupNow.
+type BackupVaultBackupNowContent struct {
+	// The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items.
+	Item string `json:"item"`
+}
+
+// BackupVaultBackupNowResult is what backupNow returns.
+type BackupVaultBackupNowResult struct {
+	// The protected server the recovery point is being taken of.
+	Item string `json:"item"`
+	// The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`.
+	RecoveryPoint string `json:"recoveryPoint"`
+}
+
 // BackupVaultListRecoveryPointsResult is what listRecoveryPoints returns.
 type BackupVaultListRecoveryPointsResult struct {
 	// How many of them are restorable — CloudNativePG phase `completed`.
@@ -3320,20 +3342,24 @@ type BackupVaultListRecoveryPointsResult struct {
 type BackupVaultRecoverContent struct {
 	// The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`.
 	RecoveryPoint string `json:"recoveryPoint"`
-	// The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.
+	// The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites.
 	TargetName string `json:"targetName"`
 }
 
 // BackupVaultRecoverResult is what recover returns.
 type BackupVaultRecoverResult struct {
-	// What was created. Always `Cluster` — a CloudNativePG cluster object.
+	// What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers.
 	Kind string `json:"kind"`
-	// The restored cluster's name, as asked for.
+	// The restored server's name, as asked for.
 	Name string `json:"name"`
 	// The namespace it was created in — the vault's resource group's.
 	Namespace string `json:"namespace"`
+	// The create's operation, to poll for the restore's progress.
+	OperationID *string `json:"operationId,omitempty"`
 	// The recovery point it was bootstrapped from.
 	RecoveryPoint string `json:"recoveryPoint"`
+	// The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged.
+	ResourceID *string `json:"resourceId,omitempty"`
 	// The protected item the recovery point was taken of, as its resource id path.
 	Source string `json:"source"`
 }

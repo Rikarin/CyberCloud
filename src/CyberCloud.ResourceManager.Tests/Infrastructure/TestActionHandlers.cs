@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.ResourceManager.Tests.Infrastructure;
@@ -48,6 +49,42 @@ public sealed class RestartHandler : IResourceActionHandler {
 ///     exact string, and a value that came out of a vault double would be one more thing that could
 ///     be empty for a reason the assertion cannot see.
 /// </remarks>
+/// <summary>
+///     Creates a widget beside the one the action is on, through <see cref="ActionContext.Creator" /> —
+///     the shape of #30's <c>recover</c>, with nothing else in the way.
+/// </summary>
+public sealed class CloneHandler : IResourceActionHandler {
+    public ResourceTypeName Type => new("CyberCloud.Testing", "widgets");
+
+    public string Action => "clone";
+
+    public async Task<Result<string>> InvokeAsync(
+        ActionContext context,
+        CancellationToken cancellationToken = default
+    ) {
+        var name = context.Body.GetProperty("name").GetString() ?? string.Empty;
+        var gauge = context.Body.TryGetProperty("gauge", out var asGauge) && asGauge.ValueKind is JsonValueKind.True;
+        var origin = context.Body.TryGetProperty("origin", out var given) ? given.GetString() : null;
+
+        var created = await context.Creator.CreateAsync(
+            gauge ? TestingProvider.PeriodicTypeName : context.Id.Type,
+            name,
+            TestingProvider.V2026,
+            gauge ? TestingProvider.GaugeBody(origin, "cloned") : TestingProvider.Body(1, "cloned"),
+            cancellationToken
+        );
+
+        return created.TryGetError(out var error)
+            ? Result<string>.Failure(error)
+            : Result<string>.Success(
+                new JsonObject {
+                    ["resourceId"] = created.GetValueOrThrow().Id.Path,
+                    ["operationId"] = created.GetValueOrThrow().OperationId.ToString("D")
+                }.ToJsonString()
+            );
+    }
+}
+
 public sealed class ListKeysHandler : IResourceActionHandler {
     /// <summary>The secret this handler hands out. Searched for by the containment suite.</summary>
     public const string Secret = "the-secret-access-key-nothing-else-may-hold";

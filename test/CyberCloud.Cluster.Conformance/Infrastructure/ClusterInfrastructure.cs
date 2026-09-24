@@ -136,8 +136,28 @@ public static class ClusterInfrastructure {
         "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf";
 
     /// <summary>The drop-in's content. See <see cref="KubeletDropInPath" />.</summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             And the disk thresholds, because the node's disk is the Docker Desktop VM's and every
+    ///             image and volume on the machine is on it.
+    ///         </b> Measured on 2026-09-24 by #30's CloudNativePG lane: the VM's
+    ///         251 GB disk at 96% (11 GB free) put the k3s node at <c>DiskPressure</c> within seconds of
+    ///         starting — the kubelet's default <c>nodefs.available&lt;10%</c> and
+    ///         <c>imagefs.available&lt;15%</c> are 25 and 38 GB of headroom on that disk — so it evicted
+    ///         openebs's provisioner eleven times and tainted the node against every pod after. A test
+    ///         cluster that lives for twenty minutes needs a few gigabytes, not a tenth of the disk, so
+    ///         the thresholds are 1% here and the image collector's are raised so it does not delete
+    ///         the PostgreSQL image between the server that pulled it and the restore that needs it.
+    ///         ⚠ <c>evictionHard</c> replaces the kubelet's whole default map, so the memory and inode
+    ///         signals are restated at their defaults rather than dropped.
+    ///     </para>
+    /// </remarks>
     public const string KubeletDropIn =
-        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n";
+        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n"
+        + "evictionHard:\n  memory.available: \"100Mi\"\n  nodefs.available: \"1%\"\n  nodefs.inodesFree: \"5%\"\n"
+        + "  imagefs.available: \"1%\"\nimageGCHighThresholdPercent: 99\nimageGCLowThresholdPercent: 98\n";
 
     /// <summary>
     ///     The entrypoint every k3s-in-Docker here starts through: make <c>/var/run</c> a shared

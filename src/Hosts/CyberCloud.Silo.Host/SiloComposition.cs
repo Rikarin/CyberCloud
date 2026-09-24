@@ -109,6 +109,14 @@ public static class SiloComposition {
             builder.Services.AddS3ObjectStore(objectStorage);
         }
 
+        // ⚠ AND THE GRANTS, ON THE SAME CONDITION'S STRICTER HALF. A PostgreSQL server with backups on
+        // is given a bucket and a key to it through ReconcileContext.Grants; a silo without the IAM
+        // and data-plane endpoints keeps UnavailableObjectStoreGrants, whose refusal names both keys,
+        // so such a server fails at its first pass rather than archiving WAL to nowhere.
+        if (objectStorage.GrantsConfigured) {
+            builder.Services.AddSeaweedFsObjectStoreGrants(objectStorage);
+        }
+
         // ── The resource-changed stream and its projection — docs/plan/08 § The resource-graph projection ──
         //
         // ⚠ CONDITIONAL, LIKE THE TWO ABOVE, AND IN TWO STEPS. A silo with a NATS URL publishes the

@@ -1200,7 +1200,7 @@ export interface DBforPostgreSQLServersData {
   properties?: {
     /** Backup to the tenant's object store, using CloudNativePG's barman-cloud. */
     backup?: {
-      /** Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property. */
+      /** Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need. */
       destinationPath?: string;
       /** Whether continuous backup and WAL archiving run. */
       enabled?: boolean;
@@ -1234,6 +1234,11 @@ export interface DBforPostgreSQLServersData {
     };
     /** Number of instances, including the primary. One is a single point of failure and is offered for development only. */
     replicas: number;
+    /** Where the server's data comes from when it is created from a recovery point rather than empty. */
+    restore?: {
+      /** The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database. */
+      recoveryPoint?: string;
+    };
     /** CPU and memory, either by preset or explicitly. */
     sizing?: {
       /** Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset. */
@@ -2402,6 +2407,20 @@ export interface RecoveryServicesVaultsResource extends Resource, RecoveryServic
   readonly type: 'CyberCloud.RecoveryServices/vaults';
 }
 
+/** The parameters of backupNow. */
+export interface RecoveryServicesVaultsBackupNowContent {
+  /** The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items. */
+  item: string;
+}
+
+/** What backupNow returns. */
+export interface RecoveryServicesVaultsBackupNowResult {
+  /** The protected server the recovery point is being taken of. */
+  item: string;
+  /** The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`. */
+  recoveryPoint: string;
+}
+
 /** What listRecoveryPoints returns. */
 export interface RecoveryServicesVaultsListRecoveryPointsResult {
   /** How many of them are restorable — CloudNativePG phase `completed`. */
@@ -2416,20 +2435,24 @@ export interface RecoveryServicesVaultsListRecoveryPointsResult {
 export interface RecoveryServicesVaultsRecoverContent {
   /** The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`. */
   recoveryPoint: string;
-  /** The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites. */
+  /** The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites. */
   targetName: string;
 }
 
 /** What recover returns. */
 export interface RecoveryServicesVaultsRecoverResult {
-  /** What was created. Always `Cluster` — a CloudNativePG cluster object. */
+  /** What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers. */
   kind: string;
-  /** The restored cluster's name, as asked for. */
+  /** The restored server's name, as asked for. */
   name: string;
   /** The namespace it was created in — the vault's resource group's. */
   namespace: string;
+  /** The create's operation, to poll for the restore's progress. */
+  operationId?: string;
   /** The recovery point it was bootstrapped from. */
   recoveryPoint: string;
+  /** The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged. */
+  resourceId?: string;
   /** The protected item the recovery point was taken of, as its resource id path. */
   source: string;
 }

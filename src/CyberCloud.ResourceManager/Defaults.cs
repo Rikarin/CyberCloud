@@ -531,3 +531,47 @@ public sealed class UnavailableResourceGraphQuery : IResourceGraphQuery {
             )
         );
 }
+
+/// <summary>
+///     The <see cref="IObjectStoreGrants" /> a silo with no platform object store registers: it
+///     refuses.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>A refusal, for <see cref="UnavailableObjectStore" />'s reason</b>: a bucket that was
+///     reported made and a key that was reported issued, over a store nobody wired, would render a
+///     PostgreSQL server whose WAL archive fails on its first segment — minutes after the caller was
+///     told the server exists, in an operator log. Registered here as the <c>TryAdd</c> default for the
+///     layering reason <see cref="UnavailableObjectStore" /> gives.
+/// </remarks>
+public sealed class UnavailableObjectStoreGrants : IObjectStoreGrants {
+    const string Because =
+        "No platform object store is wired, so no bucket can be made and no key issued. docs/plan/15 "
+        + "§ Backup as a service keeps a PostgreSQL server's backups on the platform's SeaweedFS, and "
+        + "CyberCloud.ObjectStorage is the client — but this host registered none. Call "
+        + "AddSeaweedFsObjectStoreGrants() beside AddCyberCloudResourceManager(), with "
+        + "CyberCloud:ObjectStorage:IamEndpoint and :DataPlaneEndpoint configured, or turn "
+        + "backup.enabled off on the server.";
+
+    /// <inheritdoc />
+    public string DataPlaneEndpoint => string.Empty;
+
+    /// <inheritdoc />
+    public Task<Result> EnsureBucketAsync(string bucket, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result<ObjectStoreKey>> IssueKeyAsync(
+        string principal,
+        string bucket,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result<ObjectStoreKey>.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result> RevokeKeyAsync(
+        string principal,
+        string accessKeyId,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
+}

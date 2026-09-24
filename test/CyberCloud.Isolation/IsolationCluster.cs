@@ -846,6 +846,9 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     services.AddSingleton<ISecretResolver>(Vault);
                     services.AddSingleton<ISecretWriter>(Vault);
 
+                    // A PostgreSQL server with backups on is given a bucket and a key since #30.
+                    services.AddSingleton<IObjectStoreGrants>(new InMemoryObjectStoreGrants());
+
                     services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
             );

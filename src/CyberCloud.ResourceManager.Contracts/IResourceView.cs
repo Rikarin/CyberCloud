@@ -190,12 +190,13 @@ public sealed class RefusingResourceView : IResourceView {
 ///     </para>
 ///     <para>
 ///         ⚠ <b>What is owed, precisely.</b> Delivery is durable and the pass that runs next sees it.
-///         What does not exist yet is the pass itself: a converged resource has no operation and no
-///         reminder, so a notification waits for the next pass something else starts — a
-///         <c>PUT</c>, a restore, or the drift scan (docs/plan/08 § The reconcile loop). The hook for
-///         a manager-started pass is <see cref="IResourceGrain.NotifyChangedAsync" />, and the kind
-///         it would start is a seventh <see cref="OperationKind" /> that converges without a body
-///         change and tears nothing down on cancel. docs/plan/08 records it beside the seam.
+///         Since #30 the manager starts passes of its own — <see cref="OperationKind.Refresh" />, for a
+///         type that declares <c>PassEvery</c> — so a watcher of such a type hears its changes at its
+///         next periodic pass at the latest. What does not exist is a pass a DELIVERY starts:
+///         <see cref="IResourceGrain.NotifyChangedAsync" /> records the event and wakes nothing, so a
+///         watcher with no period still waits for a <c>PUT</c> or a restore. Starting a
+///         <see cref="OperationKind.Refresh" /> from that method is the hook; docs/plan/08 § The
+///         manager-started pass records it.
 ///     </para>
 /// </remarks>
 public interface IResourceWatch {

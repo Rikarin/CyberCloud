@@ -29,6 +29,8 @@ __all__ = [
     "ArtifactFeedData",
     "ArtifactFeedKind",
     "ArtifactFeedResource",
+    "BackupVaultBackupNowContent",
+    "BackupVaultBackupNowResult",
     "BackupVaultData",
     "BackupVaultListRecoveryPointsResult",
     "BackupVaultRecoverContent",

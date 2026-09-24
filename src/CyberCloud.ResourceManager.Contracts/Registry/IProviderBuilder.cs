@@ -389,4 +389,90 @@ public interface IResourceTypeBuilder : IProviderBuilder {
     ///     </para>
     /// </remarks>
     IResourceTypeBuilder RequiresCluster(string clusterIdPointer = ClusterPlacement.DefaultPointer);
+
+    /// <summary>
+    ///     Declares that a converged resource of this type needs a reconcile pass every
+    ///     <paramref name="period" /> even when nobody writes to it — docs/plan/08 § The manager-started
+    ///     pass.
+    /// </summary>
+    /// <param name="period">
+    ///     How often. At least <see cref="PeriodicPass.MinimumPeriod" />, which is Orleans' reminder
+    ///     floor.
+    /// </param>
+    /// <returns>The same builder.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>For a type whose desired state has a clock in it, and for nothing else.</b> A
+    ///         backup vault's retention is "delete what is older than N days", which becomes true of a
+    ///         recovery point without anybody changing the vault; before this existed, a converged
+    ///         vault pruned only when a PUT, a recover or the drift scan happened to run it. A type
+    ///         whose desired state is a pure function of its body gains nothing from a pass nobody
+    ///         asked for and pays a reminder row per resource for it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The pass is the ordinary <c>ReconcileAsync</c>, run by an operation of kind
+    ///         <see cref="OperationKind.Refresh" /></b>, so the four clauses of the reconciler
+    ///         contract are all it relies on — clause 1 above all, because the pass arrives on a
+    ///         resource that is already converged.
+    ///     </para>
+    /// </remarks>
+    IResourceTypeBuilder PassEvery(TimeSpan period);
+
+    /// <summary>
+    ///     Declares a property that only an action's <see cref="IResourceCreator" /> may set. A caller's
+    ///     own write may send back the value the resource already holds and nothing else.
+    /// </summary>
+    /// <param name="propertyPointer">
+    ///     The RFC 6901 pointer to the property. Every api-version must declare it, and it must be
+    ///     immutable.
+    /// </param>
+    /// <returns>The same builder.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>For a property whose value is a capability, not a setting.</b> A PostgreSQL
+    ///         server's <c>/properties/restore/recoveryPoint</c> names a CloudNativePG <c>Backup</c> in
+    ///         the group's namespace. The vault's <c>recover</c> checks that the point is its own and
+    ///         complete, and that the caller may <c>recover</c>. A plain <c>PUT</c> of a server that
+    ///         named the point itself would skip all three and get another server's data, with keys to
+    ///         it, from nothing but <c>write</c> on servers. #30's review found exactly that.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Enforced by the write path, not by <see cref="SchemaProperty.Immutable" /></b>,
+    ///         which is a declaration the manager does not enforce. The refusal is
+    ///         <see cref="ErrorCode.InvalidRequestBody" /> naming the pointer, before authorization, so
+    ///         it tells the caller nothing about any other resource.
+    ///     </para>
+    /// </remarks>
+    IResourceTypeBuilder SetOnlyByAnAction(string propertyPointer);
+}
+
+/// <summary>
+///     The numbers <see cref="IResourceTypeBuilder.PassEvery" /> is held to. docs/plan/08 § The
+///     manager-started pass.
+/// </summary>
+public static class PeriodicPass {
+    /// <summary>The shortest period a type may declare — Orleans' reminder floor.</summary>
+    public static TimeSpan MinimumPeriod { get; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>The reminder's name on the resource grain.</summary>
+    public const string ReminderName = "periodic-pass";
+
+    /// <summary>
+    ///     When a resource's first pass falls due: somewhere in the second half of the period,
+    ///     decided by the resource's own id.
+    /// </summary>
+    /// <param name="resourceId">The resource.</param>
+    /// <param name="period">The type's declared period.</param>
+    /// <returns>A due time between half the period and the whole of it.</returns>
+    /// <remarks>
+    ///     ⚠ <b>Jittered by the id rather than by <see cref="Random" />, so re-arming is stable.</b> A
+    ///     thousand vaults created by one script would otherwise all fall due in the same minute of
+    ///     every hour, and a random draw would move a resource's slot every time its reminder was
+    ///     re-registered. The id spreads them and keeps each one where it was.
+    /// </remarks>
+    public static TimeSpan FirstDue(Guid resourceId, TimeSpan period) {
+        var bytes = resourceId.ToByteArray();
+        var fraction = BitConverter.ToUInt32(bytes, 0) / (double)uint.MaxValue;
+        return TimeSpan.FromTicks((long)(period.Ticks * (0.5 + fraction / 2)));
+    }
 }

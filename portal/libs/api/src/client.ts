@@ -106,6 +106,8 @@ import type {
   NetworkVirtualNetworksSubnetsListAddressUsageResult,
   NetworkVirtualNetworksSubnetsResource,
   OperationStatus,
+  RecoveryServicesVaultsBackupNowContent,
+  RecoveryServicesVaultsBackupNowResult,
   RecoveryServicesVaultsData,
   RecoveryServicesVaultsListRecoveryPointsResult,
   RecoveryServicesVaultsRecoverContent,
@@ -1233,6 +1235,11 @@ export class CyberCloudApi {
   /** One page of the Backup vaults in a resource group. ⚠ A short page never means "that is all there is". */
   listBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<RecoveryServicesVaultsResource>>> {
     return this.transport.send<Page<RecoveryServicesVaultsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** backupNow — permission 'write'. */
+  backupNowBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: RecoveryServicesVaultsBackupNowContent): Promise<ApiResponse<RecoveryServicesVaultsBackupNowResult>> {
+    return this.transport.send<RecoveryServicesVaultsBackupNowResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}/backupNow`, body: content });
   }
 
   /** listRecoveryPoints — permission 'read'. */

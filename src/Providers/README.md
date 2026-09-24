@@ -2212,11 +2212,17 @@ for it (§ Hard rule above). What that measured:
   is *"should be at least 1 chars long"*, a filled-in one is *"missing credentials"* — so **no
   PostgreSQL server with backups on can be created on a real cluster today**, which is now
   `the-default-bucket-is-not-filled-in` on that chart. The fake and every harness stub admit it,
-  which is why no run before this one saw it.
+  which is why no run before this one saw it. *Closed 2026-09-24 (#30): the server's reconciler
+  gives it a bucket on the platform's object store and a vault-held key through `ReconcileContext.Grants`
+  — the first platform seam a provider reaches for a workload's storage rather than its own.*
 - **⚠ `restore` is a reserved action name.** `ProviderBuilder.Action` refuses it — soft delete's own
   dispatch — and the first conformance run found the refusal. The action is `recover`, and the
   restored cluster is a cluster object rather than a `DBforPostgreSQL/servers` resource, because the
   seam has no member that writes and that type has no bootstrap property: `a-restore-is-not-yet-a-resource`.
+  *Closed 2026-09-24 (#30): the server gained `/properties/restore/recoveryPoint`, and `recover` creates
+  one through `ActionContext.Creator` — the caller's own write, which is how an action may create a
+  resource of another family without the provider referencing it (docs/plan/08 § The cross-resource
+  seam).*
 - **⚠ The chart surface cannot carry a per-element format**, so `protectedItems` declares none and the
   reconciler checks the shape — the second sighting of `charts/managed/kafka`'s `cidr-shape-is-unenforced`.
 - **⚠ A second k3s lane installs the operator, in its own process.**

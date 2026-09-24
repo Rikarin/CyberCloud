@@ -3736,6 +3736,10 @@ public sealed partial class PostgreSQLServerData {
         [JsonPropertyName("replicas")]
         public required long Replicas { get; set; }
 
+        /// <summary>Where the server's data comes from when it is created from a recovery point rather than empty.</summary>
+        [JsonPropertyName("restore")]
+        public RestoreData? Restore { get; set; }
+
         /// <summary>CPU and memory, either by preset or explicitly.</summary>
         [JsonPropertyName("sizing")]
         public SizingData? Sizing { get; set; }
@@ -3757,7 +3761,7 @@ public sealed partial class PostgreSQLServerData {
         /// <summary>Backup to the tenant's object store, using CloudNativePG's barman-cloud.</summary>
         public sealed partial class BackupData {
 
-            /// <summary>Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.</summary>
+            /// <summary>Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.</summary>
             /// <remarks>Defaults to "" when left unset.</remarks>
             [JsonPropertyName("destinationPath")]
             public string? DestinationPath { get; set; }
@@ -3813,6 +3817,15 @@ public sealed partial class PostgreSQLServerData {
             /// <remarks>Defaults to "transaction" when left unset.</remarks>
             [JsonPropertyName("mode")]
             public PostgreSQLServerMode? Mode { get; set; }
+        }
+
+        /// <summary>Where the server's data comes from when it is created from a recovery point rather than empty.</summary>
+        public sealed partial class RestoreData {
+
+            /// <summary>The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database.</summary>
+            /// <remarks>⚠ Cannot change after create. Defaults to "" when left unset.</remarks>
+            [JsonPropertyName("recoveryPoint")]
+            public string? RecoveryPoint { get; set; }
         }
 
         /// <summary>CPU and memory, either by preset or explicitly.</summary>
@@ -7808,6 +7821,31 @@ public sealed partial class BackupVaultResource {
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
 
+    /// <summary>The parameters of backupNow.</summary>
+    public sealed partial class BackupNowContent {
+
+        /// <summary>The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items.</summary>
+        [JsonPropertyName("item")]
+        public required string Item { get; set; }
+    }
+
+    /// <summary>What backupNow returns.</summary>
+    public sealed partial class BackupNowResult {
+
+        /// <summary>The protected server the recovery point is being taken of.</summary>
+        [JsonPropertyName("item")]
+        public required string Item { get; set; }
+
+        /// <summary>The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`.</summary>
+        [JsonPropertyName("recoveryPoint")]
+        public required string RecoveryPoint { get; set; }
+    }
+
+    /// <summary>BackupNow. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<BackupNowResult>> BackupNowAsync(
+        BackupNowContent content,
+        CancellationToken cancellationToken = default);
+
     /// <summary>What listRecoveryPoints returns.</summary>
     public sealed partial class ListRecoveryPointsResult {
 
@@ -7835,7 +7873,7 @@ public sealed partial class BackupVaultResource {
         [JsonPropertyName("recoveryPoint")]
         public required string RecoveryPoint { get; set; }
 
-        /// <summary>The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.</summary>
+        /// <summary>The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites.</summary>
         [JsonPropertyName("targetName")]
         public required string TargetName { get; set; }
     }
@@ -7843,11 +7881,11 @@ public sealed partial class BackupVaultResource {
     /// <summary>What recover returns.</summary>
     public sealed partial class RecoverResult {
 
-        /// <summary>What was created. Always `Cluster` — a CloudNativePG cluster object.</summary>
+        /// <summary>What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers.</summary>
         [JsonPropertyName("kind")]
         public required string Kind { get; set; }
 
-        /// <summary>The restored cluster's name, as asked for.</summary>
+        /// <summary>The restored server's name, as asked for.</summary>
         [JsonPropertyName("name")]
         public required string Name { get; set; }
 
@@ -7855,9 +7893,17 @@ public sealed partial class BackupVaultResource {
         [JsonPropertyName("namespace")]
         public required string Namespace { get; set; }
 
+        /// <summary>The create's operation, to poll for the restore's progress.</summary>
+        [JsonPropertyName("operationId")]
+        public Guid? OperationId { get; set; }
+
         /// <summary>The recovery point it was bootstrapped from.</summary>
         [JsonPropertyName("recoveryPoint")]
         public required string RecoveryPoint { get; set; }
+
+        /// <summary>The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged.</summary>
+        [JsonPropertyName("resourceId")]
+        public string? ResourceId { get; set; }
 
         /// <summary>The protected item the recovery point was taken of, as its resource id path.</summary>
         [JsonPropertyName("source")]

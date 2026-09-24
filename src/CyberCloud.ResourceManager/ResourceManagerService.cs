@@ -85,9 +85,23 @@ public sealed class ResourceManagerService(
 )
     : IResourceManager {
     /// <inheritdoc />
-    public async Task<Result<WriteAccepted>> WriteAsync(
+    public Task<Result<WriteAccepted>> WriteAsync(
         WriteRequest request,
         CancellationToken cancellationToken = default
+    ) =>
+        WriteCoreAsync(request, false, cancellationToken);
+
+    /// <summary>The write path, told whether the write came through an action's creator.</summary>
+    /// <param name="request">The write.</param>
+    /// <param name="byAnAction">
+    ///     Whether <see cref="CreateForActionAsync" /> sent it. Only then may the body set a property
+    ///     the type declared <c>SetOnlyByAnAction</c>.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    async Task<Result<WriteAccepted>> WriteCoreAsync(
+        WriteRequest request,
+        bool byAnAction,
+        CancellationToken cancellationToken
     ) {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -146,8 +160,78 @@ public sealed class ResourceManagerService(
                 return Result<WriteAccepted>.Failure(schemaError);
             }
 
+            // ── 2b. A property only an action may set ───────────────────────────────────────────
+            //
+            // ⚠ FOUND BY #30'S REVIEW: a server's restore.recoveryPoint was a property any caller with
+            // `write` on servers could PUT, and it bootstrapped the new server from any Backup in the
+            // group's namespace — past the vault's `recover` permission, its ownership check and its
+            // phase check, with listKeys on the copy at the end. See IResourceTypeBuilder.SetOnlyByAnAction.
+            if (!byAnAction && target.Registration.ActionOnlyPointers.Length > 0) {
+                var refusal = await ActionOnlyRefusalAsync(request, target, body.RootElement);
+                if (refusal is { } setByAnAction) {
+                    return Result<WriteAccepted>.Failure(setByAnAction);
+                }
+            }
+
             return await ContinueWriteAsync(request, target, body.RootElement, trace, cancellationToken);
         }
+    }
+
+    /// <summary>
+    ///     Creates a resource beside an action's own, as the action's caller — the body of
+    ///     <see cref="CallerResourceCreator" />.
+    /// </summary>
+    /// <param name="owner">The resource the action is on. The new one goes in its subscription and group.</param>
+    /// <param name="caller">The action's caller, who becomes the create's caller.</param>
+    /// <param name="type">The type to create.</param>
+    /// <param name="name">The new resource's name.</param>
+    /// <param name="apiVersion">The api-version of <paramref name="body" />.</param>
+    /// <param name="body">The body.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <remarks>
+    ///     ⚠ <b>Nothing here is a second write path.</b> The request is a <c>PUT</c> handed to
+    ///     <see cref="WriteAsync" />, so authorization, locks, policy, quota, the index claim and the
+    ///     operation are all the ordinary ones, checked against <paramref name="caller" />. It adds one
+    ///     rule, the one a restore needs: an existing name is refused, never replaced. It lifts one:
+    ///     the body may set a property the type declared <c>SetOnlyByAnAction</c>, because the
+    ///     action's handler has already checked what that property grants.
+    /// </remarks>
+    internal async Task<Result<ResourceCreated>> CreateForActionAsync(
+        ResourceId owner,
+        CallerContext caller,
+        ResourceTypeName type,
+        string name,
+        string apiVersion,
+        string body,
+        CancellationToken cancellationToken
+    ) {
+        var address = new ResourceId(owner.TenantId, owner.SubscriptionId, owner.ResourceGroup, type, name, Guid.Empty);
+        var request = new WriteRequest {
+            Path = address.Path,
+            ApiVersion = apiVersion,
+            Verb = WriteVerb.Put,
+            Body = body,
+            Caller = caller
+        };
+
+        var resolved = await ResolveAsync(request, new WriteTraceBuilder());
+
+        if (resolved.IsSuccess && resolved.GetValueOrThrow().Exists) {
+            return Result<ResourceCreated>.Failure(
+                ErrorCode.ResourceAlreadyExists,
+                $"'{address.Path}' already exists. This action creates a new resource and never writes "
+                + "over one that is there — choose another name."
+            );
+        }
+
+        var accepted = await WriteCoreAsync(request, true, cancellationToken);
+
+        if (accepted.TryGetError(out var writeError)) {
+            return Result<ResourceCreated>.Failure(writeError);
+        }
+
+        var written = accepted.GetValueOrThrow();
+        return Result<ResourceCreated>.Success(new(address.WithId(written.Resource.Id), written.OperationId));
     }
 
     /// <inheritdoc />
@@ -1593,6 +1677,70 @@ public sealed class ResourceManagerService(
             : null;
     }
 
+    /// <summary>
+    ///     The refusal a caller's own write gets when it sets a property only an action may set, or
+    ///     <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Allowed: the property absent, its schema default, or the value the stored resource
+    ///         already holds, so a client that reads a restored server and sends the body back is not
+    ///         refused. Refused: anything else, on a create and on an update alike.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Before authorization, and that is safe.</b> The answer depends only on the body and
+    ///         on the resource being written, never on another resource, so a refusal here confirms
+    ///         nothing a <c>404</c> would hide. The stored value is read only when the body sets a
+    ///         guarded pointer and the resource exists.
+    ///     </para>
+    /// </remarks>
+    async Task<Error?> ActionOnlyRefusalAsync(WriteRequest request, WriteTarget target, JsonElement body) {
+        string? stored = null;
+
+        foreach (var pointer in target.Registration.ActionOnlyPointers) {
+            if (MeterDerivation.Resolve(body, pointer) is not { } incoming) {
+                continue;
+            }
+
+            var defaultJson = target.Schema.Properties.Where(x => string.Equals(x.JsonPointer, pointer, StringComparison.Ordinal))
+                .Select(static x => x.DefaultJson)
+                .FirstOrDefault();
+
+            if (defaultJson is { Length: > 0 }) {
+                using var fallback = JsonDocument.Parse(defaultJson);
+                if (JsonElement.DeepEquals(incoming, fallback.RootElement)) {
+                    continue;
+                }
+            }
+
+            if (target.Exists) {
+                stored ??= await Resource(target).GetAsync(target.ApiVersion.Value, []) is { IsSuccess: true } read
+                    ? read.GetValueOrThrow().Body
+                    : string.Empty;
+
+                if (stored.Length > 0) {
+                    using var storedBody = JsonDocument.Parse(stored);
+                    if (MeterDerivation.Resolve(storedBody.RootElement, pointer) is { } held
+                        && JsonElement.DeepEquals(incoming, held)) {
+                        continue;
+                    }
+                }
+            }
+
+            return new(
+                ErrorCode.InvalidRequestBody,
+                $"'{pointer}' is set only by the action that creates this resource, not by a write: "
+                + $"{request.Verb} '{request.Path}' may send back the value the resource already holds, and "
+                + "nothing else. For a PostgreSQL server's restore, that action is a backup vault's recover, "
+                + "which checks that the point is the vault's own and complete and that you may recover "
+                + "from the vault.",
+                pointer
+            );
+        }
+
+        return null;
+    }
+
     /// <summary>Whether this resource has purge protection turned on.</summary>
     /// <remarks>
     ///     ⚠
@@ -1850,6 +1998,10 @@ public sealed class ResourceManagerService(
             action,
             input.GetValueOrThrow(),
             body.RootElement,
+            // ⚠ BOUND TO THIS REQUEST'S CALLER HERE, AND THE HANDLER CANNOT REBIND IT. Whatever the
+            // handler creates is this caller's write, through every step of WriteAsync — see
+            // IResourceCreator for why an action may create and a reconciler may not.
+            new CallerResourceCreator(this, target.Id, request.Caller),
             cancellationToken
         );
 

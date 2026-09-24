@@ -33,10 +33,11 @@ public sealed class ProviderRegistryTests {
         registration.ReadPermission.ShouldBe("read");
         registration.WritePermission.ShouldBe("write");
         registration.DeletePermission.ShouldBe("delete");
-        // restart, listKeys, orphaned and resize. `resize` declares a request and a response schema,
-        // which is the expressiveness an action had none of; `orphaned` declares no handler, which is
-        // the shape every action in the catalogue had before one could be named at all.
-        registration.Actions.Length.ShouldBe(4);
+        // restart, listKeys, orphaned, resize and clone. `resize` declares a request and a response
+        // schema, which is the expressiveness an action had none of; `orphaned` declares no handler,
+        // which is the shape every action in the catalogue had before one could be named at all;
+        // `clone` creates through ActionContext.Creator (#30).
+        registration.Actions.Length.ShouldBe(5);
 
         // ⚠ THE HANDLER REACHES THE REGISTRY, WHICH IS WHAT ActionDispatcher RESOLVES FROM. A
         // declaration that carried a handler the registry dropped would be an action that refuses at

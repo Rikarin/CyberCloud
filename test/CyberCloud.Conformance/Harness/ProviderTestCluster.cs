@@ -97,6 +97,17 @@ public static class ConformanceState<TSource>
     /// </remarks>
     public static InMemoryObjectStore Objects { get; } = new();
 
+    /// <summary>
+    ///     The buckets and keys a server with backups on is given — what <c>ReconcileContext.Grants</c>
+    ///     is inside the silo.
+    /// </summary>
+    /// <remarks>
+    ///     Static for the reason <see cref="Vault" /> is. Since #30 a PostgreSQL server's default body
+    ///     archives to the platform's store, so the family converges only against something that
+    ///     issues a key; <c>UnavailableObjectStoreGrants</c> would fail every create for a wiring reason.
+    /// </remarks>
+    public static InMemoryObjectStoreGrants Grants { get; } = new();
+
     /// <summary>The clock the silo reads.</summary>
     public static ConformanceClock Clock { get; } = new();
 
@@ -1012,6 +1023,7 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                     // plane keeps bytes on the platform's storage cannot tear down against
                     // UnavailableObjectStore, and a refusal there would read as a provider bug.
                     services.AddSingleton<IObjectStore>(ConformanceState<TSource>.Objects);
+                    services.AddSingleton<IObjectStoreGrants>(ConformanceState<TSource>.Grants);
 
                     // The provider, exactly as AddCyberCloudProvider<T> registers one: the provider
                     // itself, and the reconciler as a SINGLETON BY CONCRETE TYPE — clause 2 makes one
