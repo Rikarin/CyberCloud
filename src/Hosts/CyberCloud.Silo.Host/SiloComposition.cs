@@ -1,10 +1,12 @@
 using CyberCloud.Authorization;
+using CyberCloud.Billing;
 using CyberCloud.Communication;
 using CyberCloud.Communication.Providers.Smtp;
 using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes;
 using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
+using CyberCloud.Metering;
 using CyberCloud.ObjectStorage;
 using CyberCloud.ResourceGraph;
 using CyberCloud.ResourceManager;
@@ -12,6 +14,7 @@ using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ServiceDefaults;
 using CyberCloud.ServiceDefaults.Storage;
 using CyberCloud.Tenancy;
+using CyberCloud.Vault;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -107,6 +110,42 @@ public static class SiloComposition {
 
         if (objectStorage.IsConfigured) {
             builder.Services.AddS3ObjectStore(objectStorage);
+        }
+
+        // ⚠ AND THE GRANTS, ON THE SAME CONDITION'S STRICTER HALF. A PostgreSQL server with backups on
+        // is given a bucket and a key to it through ReconcileContext.Grants; a silo without the IAM
+        // and data-plane endpoints keeps UnavailableObjectStoreGrants, whose refusal names both keys,
+        // so such a server fails at its first pass rather than archiving WAL to nowhere.
+        if (objectStorage.GrantsConfigured) {
+            builder.Services.AddSeaweedFsObjectStoreGrants(objectStorage);
+        }
+
+        // ── The platform vault — docs/plan/18, docs/plan/12 § The pattern, once, piece 5 ─────────
+        //
+        // ⚠ THE SILO TOO, AND NOT ONLY THE GATEWAY, BECAUSE A RECONCILE AND A VAULT'S DATA PLANE RUN
+        // HERE. The gateway's registration serves a synchronous listKeys inside
+        // ResourceManagerService. Everything else that touches OpenBao runs in this process:
+        // ReconcileDriver hands every reconciler ReconcileContext.SecretWriter and .Secrets, and
+        // KeyVaultGrain resolves its vault's root on every sealing call. Until this block existed no
+        // silo called it, so every mint — a vault's root, Valkey's, a registry's, a mail domain's —
+        // refused with UnavailableSecretWriter's sentence, and only fixtures that registered the
+        // OpenBao pair inside their own TestCluster ever saw a vault work (the #30 review).
+        //
+        // ⚠ CONDITIONAL, LIKE THE OBJECT STORE ABOVE AND THE GATEWAY'S VAULT. Unconfigured keeps the
+        // two refusing seams, whose messages name this section. Misconfigured is not unconfigured: a
+        // plaintext address without AllowInsecureTransport throws out of AddOpenBaoSecretResolver
+        // here, so the pod does not start. Replace inside it, so the order against
+        // AddCyberCloudResourceManager's TryAdd does not matter — VaultSeamWiringTests holds both.
+        //
+        // ⚠ CONFIGURING IT IS NOT YET SOMETHING ANY TOPOLOGY DOES. The AppHost declares no OpenBao and
+        // no chart deploys the platform's hosts, and KubernetesVaultTokenSource logs in with the
+        // pod's projected service-account token, which a silo process on a developer machine does
+        // not have. docs/plan/18 § What landed, and what is owed, `openbao-on-the-platform-topology`.
+        var vault = new VaultOptions();
+        builder.Configuration.GetSection(VaultOptions.SectionName).Bind(vault);
+
+        if (vault.IsConfigured) {
+            builder.Services.AddOpenBaoSecretResolver(vault);
         }
 
         // ── The resource-changed stream and its projection — docs/plan/08 § The resource-graph projection ──
@@ -254,6 +293,22 @@ public static class SiloComposition {
                     }
                 )
                 .AddCyberCloudResourceManager()
+                // ── Metering and billing — docs/plan/22, issue #38 ──────────────────────────────────
+                //
+                // ⚠ METERING WAS NEVER IN THIS SILO, AND BILLING IS WHAT FOUND IT. The usage ledger,
+                // rollup and sampler shipped in M1 with a TestCluster behind every test and no host
+                // line, so no production silo could activate a ledger grain — and billing rates the
+                // ledger, so its first cost query here would have been a grain type the manifest did
+                // not hold. Both are wired now. The sampler still reads the refusing
+                // IMeteredResourceSource until the resource-graph projection is its source
+                // (docs/plan/22 § What is owed), so nothing is sampled yet; what this line buys is
+                // that an emitted usage record lands and a cost query answers.
+                //
+                // ⚠ The issuer is bound from CyberCloud:Billing:Issuer and has no default: a silo
+                // without it prices costs and budgets and refuses an invoice, draft or final — BillingOptions.
+                // Nothing deployed sets it yet: docs/plan/22 § What is owed, issuer-configuration.
+                .AddCyberCloudMetering()
+                .AddCyberCloudBilling(BillingOptions.Bind(silo.Configuration))
                 // ── The first tenant's prerequisites — docs/plan/05 § The shard map, docs/plan/06 ─────
                 //
                 // ⚠ A STARTUP TASK AND NOT A GRAIN CALL SOMEBODY REMEMBERS TO MAKE. On a fresh run the

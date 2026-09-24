@@ -274,8 +274,21 @@ public static class CyberCloudResourceExtensions {
             .WithEnvironment(
                 "CyberCloud__Communication__Smtp__UnsubscribeMailbox",
                 CyberCloudResources.PlatformUnsubscribeMailbox
+            )
+            // #43: the page an invitation mail links to — the identity app's dev server. Beside the
+            // relay because the invitation route is taken only when there is one; without the page
+            // the silo keeps the refusing seam and says which setting is missing.
+            .WithEnvironment(
+                InvitationPageVariable,
+                $"http://localhost:{CyberCloudResources.IdentityAppPort.ToString(CultureInfo.InvariantCulture)}"
             );
     }
+
+    /// <summary>
+    ///     <c>CyberCloud:Identity:Invitations:PageBaseUri</c>, as an environment variable — where an
+    ///     invitation mail's link points. <c>SiloIdentityComposition.AddSiloIdentity</c> reads it.
+    /// </summary>
+    public const string InvitationPageVariable = "CyberCloud__Identity__Invitations__PageBaseUri";
 
     /// <summary>
     ///     Points a silo at the region's ClickHouse, so its <c>ResourceGraphProjector</c> has
@@ -303,5 +316,42 @@ public static class CyberCloudResourceExtensions {
             .WithEnvironment("CyberCloud__ResourceGraph__ClickHouseUser", CyberCloudResources.ClickHouseUser)
             .WithEnvironment("CyberCloud__ResourceGraph__ClickHousePassword", CyberCloudResources.ClickHousePassword)
             .WithEnvironment("CyberCloud__ResourceGraph__AllowInsecureTransport", "true");
+    }
+
+    /// <summary>
+    ///     Points the gateway's log search at the region's ClickHouse, the store a Monitor workspace's
+    ///     <c>ws_{guid}</c> database lives in, so <c>searchLogs</c> answers on a local run.
+    /// </summary>
+    /// <param name="builder">The gateway being configured.</param>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <returns>The same builder, for chaining.</returns>
+    /// <remarks>
+    ///     <para>
+    ///         Writes <c>CyberCloud__Monitor__Query__…</c>, the section <c>MonitorQueryOptions</c>
+    ///         binds (#41). The gateway is the host that needs it: a synchronous action runs inside
+    ///         <c>ResourceManagerService</c>, in the gateway's process. ⚠ <c>AllowInsecureTransport</c>
+    ///         for the same reason <see cref="WithResourceGraph{T}" /> sets it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The logs half only.</b> This run has no VictoriaMetrics, so <c>MetricsEndpoint</c>
+    ///         stays empty and <c>queryMetrics</c> refuses by naming the section rather than answering
+    ///         an empty chart. Nothing creates a workspace's <c>otel_logs</c> table yet either, so a
+    ///         search answers empty with <c>ClickHouseLogStore.NoTableNote</c>, which names that gap.
+    ///         Both are <c>charts/managed/monitor-workspace/conformance.yaml § owed</c>,
+    ///         <c>explorers-are-wired-on-a-laptop-only</c>.
+    ///     </para>
+    /// </remarks>
+    public static IResourceBuilder<T> WithMonitorLogSearch<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEnvironment {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder
+            .WithEnvironment(
+                "CyberCloud__Monitor__Query__LogsEndpoint",
+                $"http://localhost:{CyberCloudResources.ClickHouseHttpPort.ToString(CultureInfo.InvariantCulture)}"
+            )
+            .WithEnvironment("CyberCloud__Monitor__Query__LogsUser", CyberCloudResources.ClickHouseUser)
+            .WithEnvironment("CyberCloud__Monitor__Query__LogsPassword", CyberCloudResources.ClickHousePassword)
+            .WithEnvironment("CyberCloud__Monitor__Query__AllowInsecureTransport", "true");
     }
 }

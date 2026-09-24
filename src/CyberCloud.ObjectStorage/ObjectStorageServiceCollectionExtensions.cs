@@ -56,4 +56,45 @@ public static class ObjectStorageServiceCollectionExtensions {
 
         return services;
     }
+
+    /// <summary>
+    ///     Replaces <c>UnavailableObjectStoreGrants</c> with <see cref="SeaweedFsObjectStoreGrants" />.
+    /// </summary>
+    /// <param name="services">The container.</param>
+    /// <param name="options">
+    ///     The <c>CyberCloud:ObjectStorage</c> section, bound. Call only when
+    ///     <see cref="ObjectStorageOptions.GrantsConfigured" /> is true.
+    /// </param>
+    /// <returns>The same collection, for chaining.</returns>
+    /// <exception cref="ArgumentException">One of the three endpoints is not an acceptable URL.</exception>
+    /// <remarks>
+    ///     ⚠ <b><c>AddSingleton</c>, for <see cref="AddS3ObjectStore" />'s reason</b>: the manager's
+    ///     refusing default is a <c>TryAdd</c>, and this is the host's deliberate choice.
+    /// </remarks>
+    public static IServiceCollection AddSeaweedFsObjectStoreGrants(
+        this IServiceCollection services,
+        ObjectStorageOptions options
+    ) {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(options);
+
+        // Validated now, so a wrong section is a start-up failure rather than a server that never
+        // converges.
+        _ = SeaweedFsObjectStoreGrants.Validated(options.IamEndpoint, nameof(ObjectStorageOptions.IamEndpoint), options);
+        _ = SeaweedFsObjectStoreGrants.Validated(
+            options.DataPlaneEndpoint,
+            nameof(ObjectStorageOptions.DataPlaneEndpoint),
+            options
+        );
+
+        services.TryAddSingleton<IClock, SystemClock>();
+        services.AddSingleton<IObjectStoreGrants>(provider => new SeaweedFsObjectStoreGrants(
+                new HttpClient { Timeout = options.RequestTimeout },
+                options,
+                provider.GetRequiredService<IClock>()
+            )
+        );
+
+        return services;
+    }
 }

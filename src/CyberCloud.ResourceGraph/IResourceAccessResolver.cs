@@ -59,6 +59,19 @@ public interface IResourceAccessResolver {
 ///         index's subject-to-usersets read happens where the plan puts it — on the list query, once
 ///         per caller.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             A time-bounded assignment is left out of the column, and that's a deliberate miss
+///             (issue #49).
+///         </b> The column has no clock and is recomputed on a resource change and on
+///         nothing else, so an expiring grant written into it would keep the resource in its
+///         holder's graph query long after every check had started denying — a read the engine
+///         refuses, served by the projection. Leaving it out fails the other way: a just-in-time
+///         reader is told less by the graph query than a check would allow, and the resource list
+///         and a direct <c>GET</c> are unaffected. Carrying the expiry into the row, and filtering
+///         on it in the query, is recorded as owed in docs/plan/07 § Time-bounded relations.
+///     </para>
 /// </remarks>
 public sealed class ReBacResourceAccessResolver : IResourceAccessResolver {
     readonly IGrainFactory grains;
@@ -104,6 +117,7 @@ public sealed class ReBacResourceAccessResolver : IResourceAccessResolver {
         }
 
         var readers = listed.GetValueOrThrow()
+            .Where(static assignment => assignment.ExpiresOn is null)
             .Select(static assignment => assignment.Principal.ToString())
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)

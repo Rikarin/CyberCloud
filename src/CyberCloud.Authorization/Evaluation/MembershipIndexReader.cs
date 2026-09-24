@@ -47,6 +47,14 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         "walk it" here and nothing on the listing side, whose walk still hops the groups the
 ///         old way; the maintainer rebuilds it from the tuples the next time a write touches it.
 ///     </para>
+///     <para>
+///         ⚠ <b>A closure marked unclosed is the fourth answer's other cause.</b> The index closes
+///         over permanent edges only, and a userset with an expiring edge anywhere beneath it is
+///         marked (<see cref="MembershipIndexSnapshot.Unclosed" />): its "yes" is still a yes, and
+///         a subject missing from it is "walk it". Both "yes" answers are therefore memberships no
+///         expiry can end, which is why <c>CheckEvaluator</c> bounds an index answer by the tuple
+///         that led to the userset and by nothing inside it. docs/plan/07 § Time-bounded relations.
+///     </para>
 /// </remarks>
 public sealed class MembershipIndexReader : IMembershipIndex {
     readonly AuthorizationSchema schema;
@@ -131,7 +139,9 @@ public sealed class MembershipIndexReader : IMembershipIndex {
             return true;
         }
 
-        if (!IsComplete(members)) {
+        // ⚠ An expiring edge was left out of this closure, so its "no" isn't one — the walk,
+        // which sees the edge while it's live, decides. docs/plan/07 § Time-bounded relations.
+        if (usersetSnapshot.IsUnclosed(userset.Relation) || !IsComplete(members)) {
             return null;
         }
 

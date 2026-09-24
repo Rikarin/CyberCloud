@@ -1,3 +1,5 @@
+using CyberCloud.Providers.Monitor.Query;
+
 namespace CyberCloud.Providers.Monitor;
 
 /// <summary>
@@ -199,6 +201,17 @@ namespace CyberCloud.Providers.Monitor;
 ///         <see cref="MonitorAlertRules" />' carry the argument; the type's own declaration below
 ///         carries what it declares and does not.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             AND <c>workspaces/components</c> IS DECLARED (#32, the fourth noun), THE FIRST TYPE
+///             WHOSE ACTIONS READ A TELEMETRY STORE.
+///         </b> A component is an application inside the workspace: one <c>ConfigMap</c> holding the
+///         connection string, and five views — requests, dependencies, exceptions, the application
+///         map and a transaction — read on the request path from the workspace's ClickHouse database,
+///         whose name the handler derives from the workspace's GUID in the platform's index
+///         (<c>ActionContext.Parent</c>). <see cref="MonitorComponents" /> carries the argument.
+///     </para>
 /// </remarks>
 public sealed class MonitorProvider : IResourceProvider {
     /// <inheritdoc />
@@ -255,6 +268,40 @@ public sealed class MonitorProvider : IResourceProvider {
                 true,
                 response: MonitorWorkspaces.ListKeysResponse,
                 handler: typeof(MonitorWorkspaceListKeysHandler)
+            )
+            // ── The explorers' three reads — #41, docs/plan/16 § Querying a workspace ─────────────
+            //
+            // ⚠ ACTIONS AND NOT A ROUTE OF THEIR OWN, AND `read` AND NOT A PERMISSION OF THEIR OWN.
+            // MonitorQueries' remarks carry both arguments: the action path already resolves the
+            // address with the token's tenant, 404s what does not exist, checks through the one seam
+            // and hands the handler the GUID the accountID and the database are derived from; and a
+            // query reads the workspace, which is what Reader is for.
+            //
+            // ⚠ TWO OF THE THREE DECLARE NO RESPONSE. A series list and a row list are arrays of
+            // objects, which SchemaKind.Array refuses; the dispatcher leaves an undeclared response
+            // unchecked and the generated clients type it `unknown`. conformance.yaml § owed,
+            // query-responses-are-undeclared.
+            .Action(
+                MonitorQueries.QueryMetricsAction,
+                ActionKind.Post,
+                MonitorQueries.Permission,
+                request: MonitorQueries.QueryMetricsRequest,
+                handler: typeof(MonitorWorkspaceQueryMetricsHandler)
+            )
+            .Action(
+                MonitorQueries.ListMetricLabelsAction,
+                ActionKind.Post,
+                MonitorQueries.Permission,
+                request: MonitorQueries.ListMetricLabelsRequest,
+                response: MonitorQueries.ListMetricLabelsResponse,
+                handler: typeof(MonitorWorkspaceListMetricLabelsHandler)
+            )
+            .Action(
+                MonitorQueries.SearchLogsAction,
+                ActionKind.Post,
+                MonitorQueries.Permission,
+                request: MonitorQueries.SearchLogsRequest,
+                handler: typeof(MonitorWorkspaceSearchLogsHandler)
             )
             // ⚠ `workspace`, AND `monitor` IS THE ONE WORD THIS NAMESPACE COULD NOT HAVE.
             // CliEmitter derives the CLI GROUP key from the provider namespace's last segment,
@@ -381,6 +428,88 @@ public sealed class MonitorProvider : IResourceProvider {
                 + "to, carrying metrics, logs and traces into this workspace."
             )
             .Chart(MonitorCollectors.ChartName)
+            .SupportsTags()
+            .RequiresCluster()
+            // ── workspaces/components — #32, the fourth noun ────────────────────────────────────
+            //
+            // ⚠ RequiresCluster AND Chart FOR ONE ConfigMap, BECAUSE THE CONNECTION STRING IS A THING A
+            // POD MOUNTS. The views need no cluster at all — they read the workspace's ClickHouse
+            // database from the request path — but a connection string a workload has to be handed by
+            // hand is the step every tenant gets wrong, so it is published where envFrom can name it.
+            //
+            // ⚠ ONE METER, THE COUNT. A component runs nothing and stores nothing: its telemetry is
+            // the workspace's, reserved by the workspace's storage meter. What a view costs is a query
+            // on a shared store, bounded by the look-back cap and the store's per-query budget, which
+            // is the alert rule's argument about a query not being a thing a subscription HOLDS.
+            //
+            // ⚠ NO SupportsSoftDelete. The data a window would protect is the workspace's, and the
+            // workspace has the window; a deleted component is one PUT to bring back and its views
+            // return exactly what they did, because they never held anything.
+            .ResourceType(MonitorComponents.TypePath)
+            .ApiVersion(MonitorWorkspaces.V2026, MonitorComponents.Schema2026)
+            .Reconciler<MonitorComponentReconciler>()
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .Action(
+                MonitorComponents.ListConnectionStringAction,
+                ActionKind.Post,
+                MonitorComponents.Permission,
+                response: MonitorComponents.ListConnectionStringResponse,
+                handler: typeof(MonitorComponentConnectionStringHandler)
+            )
+            // ⚠ FIVE ACTIONS, ONE HANDLER, AND EACH IS SYNCHRONOUS. A view answers the caller or
+            // refuses; a long-running one would answer 202 and re-run the reconciler, which for a read
+            // is nothing (the listInstances argument). They run in the gateway's process, which is
+            // where the telemetry store is reached from — MonitorTelemetryServiceCollectionExtensions.
+            .Action(
+                MonitorComponents.RequestsAction,
+                ActionKind.Post,
+                MonitorComponents.Permission,
+                request: MonitorComponents.ViewRequest,
+                response: MonitorComponents.RequestsResponse,
+                handler: typeof(MonitorComponentViewHandler)
+            )
+            .Action(
+                MonitorComponents.DependenciesAction,
+                ActionKind.Post,
+                MonitorComponents.Permission,
+                request: MonitorComponents.ViewRequest,
+                response: MonitorComponents.DependenciesResponse,
+                handler: typeof(MonitorComponentViewHandler)
+            )
+            .Action(
+                MonitorComponents.ExceptionsAction,
+                ActionKind.Post,
+                MonitorComponents.Permission,
+                request: MonitorComponents.ViewRequest,
+                response: MonitorComponents.ExceptionsResponse,
+                handler: typeof(MonitorComponentViewHandler)
+            )
+            .Action(
+                MonitorComponents.ApplicationMapAction,
+                ActionKind.Post,
+                MonitorComponents.Permission,
+                request: MonitorComponents.ViewRequest,
+                response: MonitorComponents.ApplicationMapResponse,
+                handler: typeof(MonitorComponentViewHandler)
+            )
+            .Action(
+                MonitorComponents.TransactionAction,
+                ActionKind.Post,
+                MonitorComponents.Permission,
+                request: MonitorComponents.TransactionRequest,
+                response: MonitorComponents.TransactionResponse,
+                handler: typeof(MonitorComponentViewHandler)
+            )
+            .Display(
+                "Application component",
+                "Application components",
+                "component",
+                "An application inside the workspace: the connection string its SDKs send through a "
+                + "collector, and its requests, dependencies, exceptions, map and transactions read back "
+                + "from the workspace's traces and logs."
+            )
+            .Chart(MonitorComponents.ChartName)
             .SupportsTags()
             .RequiresCluster();
     }

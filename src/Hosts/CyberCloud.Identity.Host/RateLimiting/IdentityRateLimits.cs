@@ -37,7 +37,8 @@ public readonly record struct IdentityRateLimitBucket(string Name, int Limit, Ti
 ///         pins that the refusal reads the same for both.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Two buckets, not one per endpoint.</b> <c>/api/signup/begin</c> issues an OTP per
+///         ⚠ <b>Two buckets on the pages, not one per endpoint</b> — and a third on OpenIddict's
+///         device authorization endpoint, <see cref="DeviceAuthorization" />, since #43. <c>/api/signup/begin</c> issues an OTP per
 ///         call — a mail per call, once #93 lands an MTA — and the grain behind it caps issues per
 ///         sign-up, not per caller, so a caller minting sign-ups is uncapped without this.
 ///         <see cref="SignUpBegin" /> is that cap. The code-verify endpoints — <c>/api/signup/verify</c>,
@@ -76,8 +77,21 @@ public static class IdentityRateLimits {
     /// <summary>Per IP, the code-verify endpoints: 60 per minute. Each call is a guess.</summary>
     public static IdentityRateLimitBucket CodeVerify { get; } = new("code-verify", 60, TimeSpan.FromMinutes(1));
 
-    /// <summary>Both, for a test that asserts the set has not quietly changed.</summary>
-    public static ImmutableArray<IdentityRateLimitBucket> All { get; } = [SignUpBegin, CodeVerify];
+    /// <summary>
+    ///     Per IP, the device authorization endpoint (<c>POST /device</c>): 20 per 10 minutes. Each
+    ///     call draws a user code and writes a hot-tier grain that lives ten minutes — #43.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The same shape as <see cref="SignUpBegin" /> and for its reason: the call issues
+    ///     something that costs the platform, and nothing downstream caps it per caller. Twenty
+    ///     because a person whose first attempt timed out and a shell script that runs <c>cyc login</c>
+    ///     on a handful of machines behind one NAT both sit well below it.
+    /// </remarks>
+    public static IdentityRateLimitBucket DeviceAuthorization { get; } =
+        new("device-authorization", 20, TimeSpan.FromMinutes(10));
+
+    /// <summary>All three, for a test that asserts the set has not quietly changed.</summary>
+    public static ImmutableArray<IdentityRateLimitBucket> All { get; } = [SignUpBegin, CodeVerify, DeviceAuthorization];
 
     /// <summary>The sentence a refused caller reads — the same for every bucket and every address.</summary>
     public const string RefusedMessage = "Too many attempts from this address. Wait a moment and try again.";
@@ -123,6 +137,21 @@ public static class IdentityRateLimits {
                 statusCode: StatusCodes.Status429TooManyRequests
             );
         }
+    }
+
+    /// <summary>
+    ///     Writes the refusal a bucket's filter writes, for a caller that is not a mapped route —
+    ///     OpenIddict's device authorization endpoint, whose handler counts it.
+    /// </summary>
+    /// <param name="context">The request being refused.</param>
+    /// <param name="decision">The refusing decision, for its <c>Retry-After</c>.</param>
+    public static Task WriteRefusalAsync(HttpContext context, IdentityRateLimitDecision decision) {
+        ArgumentNullException.ThrowIfNull(context);
+
+        context.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.Response.Headers.RetryAfter = decision.RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+
+        return context.Response.WriteAsJsonAsync(new RateLimitedResponse(RefusedMessage, decision.RetryAfterSeconds));
     }
 }
 

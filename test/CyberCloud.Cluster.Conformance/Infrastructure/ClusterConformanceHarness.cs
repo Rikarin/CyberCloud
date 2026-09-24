@@ -60,6 +60,13 @@ public static class ClusterConformanceState<TSource>
     /// </remarks>
     public static InMemorySecretVault Vault { get; } = new();
 
+    /// <summary>
+    ///     The buckets and keys a server with backups on is given, unless the source's
+    ///     <c>ConfigureSilo</c> registers a real store after it — which the CloudNativePG lane does,
+    ///     because there the operator actually archives.
+    /// </summary>
+    public static InMemoryObjectStoreGrants Grants { get; } = new();
+
     /// <summary>The connection to the real API server. Set before the silos start.</summary>
     public static RealClusterConnection Connection { get; set; } = null!;
 
@@ -181,6 +188,10 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
         services.AddSingleton<IClock>(ClusterConformanceState<TSource>.Clock);
         services.AddSingleton<ISecretResolver>(ClusterConformanceState<TSource>.Vault);
         services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
+
+        // ⚠ And what a case's synchronous handlers hold — IProviderCaseSource.ConfigureHandlers, the
+        // Docker-free harness's line, kept in step for the reason above.
+        TSource.ConfigureHandlers(services);
 
         foreach (var handler in Registry.Types
                      .SelectMany(static x => x.Actions)
@@ -1356,6 +1367,7 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
 
                     services.AddSingleton<ISecretResolver>(ClusterConformanceState<TSource>.Vault);
                     services.AddSingleton<ISecretWriter>(ClusterConformanceState<TSource>.Vault);
+                    services.AddSingleton<IObjectStoreGrants>(ClusterConformanceState<TSource>.Grants);
 
                     foreach (var handler in ProviderRegistry.Build(Providers())
                                  .Types

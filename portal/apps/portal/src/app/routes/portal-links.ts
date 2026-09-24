@@ -87,6 +87,38 @@ export const links = {
     `${links.resourceGroup(subscriptionId, resourceGroup)}/terminal` +
     (console === undefined ? '' : `?console=${seg(console)}`),
 
+  /**
+   * The identity administration pages (#41) — tenant-wide, so no subscription in the path: the
+   * tenant is the token's, as everywhere here.
+   */
+  identityMembers: () => '/identity/members',
+  identityApplications: () => '/identity/applications',
+  identitySessions: () => '/identity/sessions',
+
+  /**
+   * Cost analysis on a subscription, or on one of its groups — docs/plan/20 § The pages that are not
+   * generated. The period and the grouping ride in the query (`?period=`, `?groupBy=`), so a link
+   * can name them; absent, the page shows this month by service.
+   */
+  cost: (subscriptionId: string, resourceGroup?: string) =>
+    `${resourceGroup === undefined ? links.subscription(subscriptionId) : links.resourceGroup(subscriptionId, resourceGroup)}/cost`,
+
+  /** The tenant's invoices, and one by its number. */
+  invoices: () => '/invoices',
+  invoice: (number: string) => `/invoices/${seg(number)}`,
+
+  /**
+   * A Monitor workspace's metrics explorer and log search (#41). Only that type has them, so they
+   * take the workspace's three segments rather than an address and a type.
+   */
+  workspaceMetrics: (subscriptionId: string, resourceGroup: string, workspace: string) =>
+    `${links.resourceGroup(subscriptionId, resourceGroup)}/providers/CyberCloud.Monitor/workspaces/${seg(workspace)}/metrics`,
+  workspaceLogs: (subscriptionId: string, resourceGroup: string, workspace: string) =>
+    `${links.resourceGroup(subscriptionId, resourceGroup)}/providers/CyberCloud.Monitor/workspaces/${seg(workspace)}/logs`,
+
+  /** The resource graph explorer — the tenant's, so no scope in the path. */
+  graph: () => '/graph',
+
   /** The operation view, and where to go once it succeeds. */
   operation: (operationId: string, then?: string) =>
     `/operations/${seg(operationId)}` + (then === undefined ? '' : `?then=${seg(then)}`)

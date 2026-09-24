@@ -1,4 +1,5 @@
 using CyberCloud.Providers.Analytics.Application;
+using CyberCloud.Providers.Billing.Application;
 using CyberCloud.Providers.Cache.Application;
 using CyberCloud.Providers.Communication.Application;
 using CyberCloud.Providers.Compute.Application;
@@ -7,11 +8,13 @@ using CyberCloud.Providers.ContainerService.Application;
 using CyberCloud.Providers.DBforMySQL.Application;
 using CyberCloud.Providers.DBforPostgreSQL.Application;
 using CyberCloud.Providers.DocumentDB.Application;
+using CyberCloud.Providers.KeyVault.Application;
 using CyberCloud.Providers.Mail.Application;
 using CyberCloud.Providers.Messaging.Application;
 using CyberCloud.Providers.Monitor.Application;
 using CyberCloud.Providers.Network.Application;
 using CyberCloud.Providers.RecoveryServices.Application;
+using CyberCloud.Providers.Resources.Application;
 using CyberCloud.Providers.Sample.Application;
 using CyberCloud.Providers.Search.Application;
 using CyberCloud.Providers.Storage.Application;
@@ -60,6 +63,7 @@ namespace CyberCloud.Gateway.Host;
 /// </remarks>
 [DependsOn(typeof(AbpAutofacModule))]
 [DependsOn(typeof(AnalyticsApplicationModule))]
+[DependsOn(typeof(BillingApplicationModule))]
 [DependsOn(typeof(ValkeyCacheApplicationModule))]
 [DependsOn(typeof(CommunicationApplicationModule))]
 [DependsOn(typeof(ComputeApplicationModule))]
@@ -76,5 +80,7 @@ namespace CyberCloud.Gateway.Host;
 [DependsOn(typeof(SearchApplicationModule))]
 [DependsOn(typeof(StorageApplicationModule))]
 [DependsOn(typeof(RecoveryServicesApplicationModule))]
+[DependsOn(typeof(ResourcesApplicationModule))]
+[DependsOn(typeof(KeyVaultApplicationModule))]
 [DependsOn(typeof(TerminalApplicationModule))]
 public sealed class GatewayHostModule : AbpModule;

@@ -29,8 +29,10 @@ namespace CyberCloud.Cli.Commands;
 ///     <para>
 ///         ⚠ <b>Nothing is written to <c>~/.cyc</c> by signing in.</b> The refresh token goes to the
 ///         OS keychain through <c>CyberCloudCredentialOptions.TokenCache</c>, whose default is
-///         <c>TokenCache.CreatePersistent</c>. <c>NoCredentialLeakTests.NoTokenCacheIsWrittenByTheCli</c>
-///         signs in against a scripted identity server and asserts the state directory is untouched.
+///         <c>TokenCache.CreatePersistent</c> — or, on a machine with no keychain, to the SDK's
+///         owner-only file in the per-user state directory (<c>FileTokenCache</c>, #43), and the
+///         command says which. <c>NoCredentialLeakTests.NoTokenCacheIsWrittenByTheCli</c> signs in
+///         against a scripted identity server and asserts the CLI's own state directory is untouched.
 ///     </para>
 /// </remarks>
 static class LoginCommand {
@@ -73,6 +75,7 @@ static class LoginCommand {
                 var invocation = CycRunner.Bind(host, globals, tree, parse);
                 var tenantId = parse.GetValue(tenant) ?? invocation.Settings.Get("tenant");
 
+                var credentialCache = parse.GetValue(servicePrincipal) ? null : invocation.Host.CreateCredentialOptions().TokenCache;
                 var credential = parse.GetValue(servicePrincipal)
                     ? ServicePrincipal(
                         invocation,
@@ -92,6 +95,14 @@ static class LoginCommand {
                     ).ConfigureAwait(false);
 
                     invocation.Console.Note("Signed in.");
+
+                    if (credentialCache is FileTokenCache file) {
+                        // ⚠ Said out loud: docs/plan/21 keeps a refresh token in the keychain, and a
+                        // person on a box without one should know it is in a file instead, and where.
+                        invocation.Console.Note(
+                            $"No keychain on this machine: the sign-in is kept in {file.Directory}, readable by you alone."
+                        );
+                    }
 
                     invocation.Render(
                         Payload.Object(
@@ -279,7 +290,7 @@ static class LoginCommand {
     }
 
     /// <summary>The identity host — <c>CYC_AUTHORITY_HOST</c>, the profile's <c>authority</c>, or the SDK's default.</summary>
-    static Uri Authority(CycInvocation invocation) =>
+    internal static Uri Authority(CycInvocation invocation) =>
         invocation.Settings.Get("authority") is { Length: > 0 } value
         && Uri.TryCreate(value, UriKind.Absolute, out var uri)
             ? uri

@@ -2,8 +2,8 @@
 
     <!--
       docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
-      the JSON Schemas". This one is the schema, the five-object projection, and the DNS records a
-      domain must publish before the platform will send for it.
+      the JSON Schemas". This one is the schema, the six-object projection, the mailbox slice, and
+      the DNS records a domain must publish before the platform will send for it.
 
       ⚠ NO GRAIN INTERFACES, for the reason every provider before this one gives: everything a
       reconcile needs is in the desired body ResourceGrain already stores. ⚠ THIS TYPE IS THE FIRST

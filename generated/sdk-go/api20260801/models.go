@@ -139,6 +139,122 @@ type ResourceGroupCreateContent struct {
 	Location string `json:"location"`
 }
 
+// PolicyAssignmentType is the values /type accepts. ⚠ Closed: the write path refuses anything else.
+type PolicyAssignmentType string
+
+const (
+	PolicyAssignmentTypeCyberCloudPolicyPolicyAssignments PolicyAssignmentType = "CyberCloud.Policy/policyAssignments"
+)
+
+// PolicyAssignment is a policy assignment, as the API renders it. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy.
+type PolicyAssignment struct {
+	// The assignment's own address.
+	ID string `json:"id"`
+	// The last segment of the address.
+	Name string `json:"name"`
+	// What the assignment applies, and where it doesn't.
+	Properties PolicyAssignmentProperties `json:"properties"`
+	// The Azure-shaped type string.
+	Type PolicyAssignmentType `json:"type"`
+}
+
+// PolicyAssignmentProperties is What the assignment applies, and where it doesn't.
+type PolicyAssignmentProperties struct {
+	// What a person reads.
+	DisplayName string `json:"displayName"`
+	// Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.
+	NotScopes []string `json:"notScopes"`
+	// The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.
+	PolicyDefinitionID string `json:"policyDefinitionId"`
+	// The scope the assignment sits on.
+	Scope string `json:"scope"`
+}
+
+// PolicyAssignmentContent is the body of a PUT that writes a policy assignment.
+type PolicyAssignmentContent struct {
+	// What the assignment applies, and where it doesn't.
+	Properties PolicyAssignmentContentProperties `json:"properties"`
+}
+
+// PolicyAssignmentContentProperties is What the assignment applies, and where it doesn't.
+type PolicyAssignmentContentProperties struct {
+	// What a person reads.
+	DisplayName *string `json:"displayName,omitempty"`
+	// Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.
+	NotScopes []string `json:"notScopes,omitempty"`
+	// The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.
+	PolicyDefinitionID string `json:"policyDefinitionId"`
+}
+
+// PolicyDefinitionType is the values /type accepts. ⚠ Closed: the write path refuses anything else.
+type PolicyDefinitionType string
+
+const (
+	PolicyDefinitionTypeCyberCloudPolicyPolicyDefinitions PolicyDefinitionType = "CyberCloud.Policy/policyDefinitions"
+)
+
+// PolicyDefinition is a policy definition, as the API renders it. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy.
+type PolicyDefinition struct {
+	// The definition's own address. An assignment names its definition by this.
+	ID string `json:"id"`
+	// The last segment of the address.
+	Name string `json:"name"`
+	// The definition's rule and its names.
+	Properties PolicyDefinitionProperties `json:"properties"`
+	// The Azure-shaped type string.
+	Type PolicyDefinitionType `json:"type"`
+}
+
+// PolicyDefinitionProperties is The definition's rule and its names.
+type PolicyDefinitionProperties struct {
+	// The longer explanation.
+	Description string `json:"description"`
+	// What a person reads.
+	DisplayName string `json:"displayName"`
+	// The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.
+	PolicyRule json.RawMessage `json:"policyRule"`
+}
+
+// PolicyDefinitionContent is the body of a PUT that writes a policy definition.
+type PolicyDefinitionContent struct {
+	// The definition's rule and its names.
+	Properties PolicyDefinitionContentProperties `json:"properties"`
+}
+
+// PolicyDefinitionContentProperties is The definition's rule and its names.
+type PolicyDefinitionContentProperties struct {
+	// The longer explanation.
+	Description *string `json:"description,omitempty"`
+	// What a person reads.
+	DisplayName *string `json:"displayName,omitempty"`
+	// The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.
+	PolicyRule json.RawMessage `json:"policyRule"`
+}
+
+// PolicyStateComplianceState is the values /complianceState accepts. ⚠ Closed: the write path refuses anything else.
+type PolicyStateComplianceState string
+
+const (
+	PolicyStateComplianceStateCompliant    PolicyStateComplianceState = "Compliant"
+	PolicyStateComplianceStateNonCompliant PolicyStateComplianceState = "NonCompliant"
+)
+
+// PolicyState is a policy state, as the API renders it. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy.
+type PolicyState struct {
+	// Whether the audit rule matched.
+	ComplianceState PolicyStateComplianceState `json:"complianceState"`
+	// The audit assignment.
+	PolicyAssignmentID string `json:"policyAssignmentId"`
+	// Its definition.
+	PolicyDefinitionID string `json:"policyDefinitionId"`
+	// The resource's canonical path.
+	ResourceID string `json:"resourceId"`
+	// The resource's type.
+	ResourceType string `json:"resourceType"`
+	// When the verdict last changed.
+	Timestamp string `json:"timestamp"`
+}
+
 // ProvisioningState is the values /provisioningState carries. ⚠ Read-only: the server sets it, and a write that carries it is refused.
 type ProvisioningState string
 
@@ -268,6 +384,121 @@ type ClickHouseClusterListKeysResult struct {
 	Password string `json:"password"`
 	// The user the credential below belongs to.
 	Username string `json:"username"`
+}
+
+// BudgetChannel is the values /properties/notification/channel accepts. ⚠ Closed: the write path refuses anything else.
+type BudgetChannel string
+
+const (
+	BudgetChannelSms      BudgetChannel = "sms"
+	BudgetChannelWhatsapp BudgetChannel = "whatsapp"
+	BudgetChannelEmail    BudgetChannel = "email"
+	BudgetChannelPush     BudgetChannel = "push"
+	BudgetChannelVoice    BudgetChannel = "voice"
+)
+
+// BudgetPeriod is the values /properties/period accepts. ⚠ Closed: the write path refuses anything else.
+type BudgetPeriod string
+
+const (
+	BudgetPeriodMonthly   BudgetPeriod = "monthly"
+	BudgetPeriodQuarterly BudgetPeriod = "quarterly"
+	BudgetPeriodAnnually  BudgetPeriod = "annually"
+)
+
+// BudgetScope is the values /properties/scope accepts. ⚠ Closed: the write path refuses anything else.
+type BudgetScope string
+
+const (
+	BudgetScopeResourceGroup BudgetScope = "resourceGroup"
+	BudgetScopeSubscription  BudgetScope = "subscription"
+)
+
+// BudgetData is Budget: the body a caller writes. A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service.
+type BudgetData struct {
+	// The region the budget is evaluated in.
+	Location string `json:"location"`
+	// The budget's own settings.
+	Properties *BudgetProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// BudgetProperties is The budget's own settings.
+type BudgetProperties struct {
+	// The amount for one period, in the billing account's currency.
+	Amount float64 `json:"amount"`
+	// Whether the budget is evaluated. Off keeps its history and stops the clock.
+	Enabled *bool `json:"enabled,omitempty"`
+	// Who is told, and how.
+	Notification *BudgetPropertiesNotification `json:"notification,omitempty"`
+	// How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year.
+	Period *BudgetPeriod `json:"period,omitempty"`
+	// What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. Its figures are the subscription's spend, so showStatus shows them only to a caller who may read the subscription.
+	Scope *BudgetScope `json:"scope,omitempty"`
+	// Percentages of the amount that alert, each at most once per period.
+	Thresholds *BudgetPropertiesThresholds `json:"thresholds,omitempty"`
+}
+
+// BudgetPropertiesNotification is Who is told, and how.
+type BudgetPropertiesNotification struct {
+	// Which of that service's channels carries it. The service must have the channel configured and enabled, or every alert is refused by name.
+	Channel BudgetChannel `json:"channel"`
+	// Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20.
+	Recipients []string `json:"recipients"`
+	// The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group.
+	Service string `json:"service"`
+}
+
+// BudgetPropertiesThresholds is Percentages of the amount that alert, each at most once per period.
+type BudgetPropertiesThresholds struct {
+	// Percentages of the amount the period's cost so far is compared with — 50, 80 and 100 is the usual set. At least one threshold across both lists and at most 10; a body outside that is refused when the budget is reconciled.
+	Actual []float64 `json:"actual,omitempty"`
+	// Percentages of the amount the forecast is compared with. The forecast is linear on the trailing seven days, and an alert on it says it is an estimate.
+	Forecast []float64 `json:"forecast,omitempty"`
+}
+
+// BudgetResource is one Budget, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type BudgetResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data BudgetData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *BudgetResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// BudgetShowStatusResult is what showStatus returns.
+type BudgetShowStatusResult struct {
+	// What the period has cost so far, rounded to the currency, as of the last evaluation.
+	Actual float64 `json:"actual"`
+	// Every alert the budget has fired, oldest first, one line each: '{firedAt} {actual|forecast} {percent}% at {figure}: {notification}'.
+	Alerts []string `json:"alerts"`
+	// The amount for one period, from the budget's body.
+	Amount float64 `json:"amount"`
+	// The currency the figures are in. Empty until evaluated.
+	Currency string `json:"currency"`
+	// Whether the budget has been evaluated in its current period. False until the first hourly evaluation, and for a disabled budget.
+	Evaluated bool `json:"evaluated"`
+	// The thresholds on the actual cost that have fired this period, as percentages.
+	FiredActual []float64 `json:"firedActual"`
+	// The thresholds on the forecast that have fired this period, as percentages.
+	FiredForecast []float64 `json:"firedForecast"`
+	// What the period will cost at the trailing seven days' rate, rounded. An estimate.
+	Forecast float64 `json:"forecast"`
+	// Why the last evaluation could not run, or empty. A subscription budget not yet granted reader on its subscription says so here.
+	LastError string `json:"lastError"`
+	// When the figures were computed. Absent until evaluated.
+	LastEvaluatedAt *string `json:"lastEvaluatedAt,omitempty"`
+	// The first instant of the next period. Absent until evaluated.
+	PeriodEnd *string `json:"periodEnd,omitempty"`
+	// The first instant of the period the figures are for. Absent until evaluated.
+	PeriodStart *string `json:"periodStart,omitempty"`
 }
 
 // ValkeyCacheMaxmemoryPolicy is the values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else.
@@ -1639,6 +1870,8 @@ type PostgreSQLServerProperties struct {
 	Pooling *PostgreSQLServerPropertiesPooling `json:"pooling,omitempty"`
 	// Number of instances, including the primary. One is a single point of failure and is offered for development only.
 	Replicas int64 `json:"replicas"`
+	// Where the server's data comes from when it is created from a recovery point rather than empty.
+	Restore *PostgreSQLServerPropertiesRestore `json:"restore,omitempty"`
 	// CPU and memory, either by preset or explicitly.
 	Sizing *PostgreSQLServerPropertiesSizing `json:"sizing,omitempty"`
 	// The data volume.
@@ -1651,7 +1884,7 @@ type PostgreSQLServerProperties struct {
 
 // PostgreSQLServerPropertiesBackup is Backup to the tenant's object store, using CloudNativePG's barman-cloud.
 type PostgreSQLServerPropertiesBackup struct {
-	// Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.
+	// Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.
 	DestinationPath *string `json:"destinationPath,omitempty"`
 	// Whether continuous backup and WAL archiving run.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -1681,6 +1914,12 @@ type PostgreSQLServerPropertiesPooling struct {
 	Instances *int64 `json:"instances,omitempty"`
 	// PgBouncer pooling mode. Transaction pooling is the useful one and breaks session-scoped features such as prepared statements and advisory locks. statement is published in this api-version and refused while pooling.enabled is true: CloudNativePG's Pooler admits only session and transaction.
 	Mode *PostgreSQLServerMode `json:"mode,omitempty"`
+}
+
+// PostgreSQLServerPropertiesRestore is Where the server's data comes from when it is created from a recovery point rather than empty.
+type PostgreSQLServerPropertiesRestore struct {
+	// The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database.
+	RecoveryPoint *string `json:"recoveryPoint,omitempty"`
 }
 
 // PostgreSQLServerPropertiesSizing is CPU and memory, either by preset or explicitly.
@@ -1921,6 +2160,794 @@ type DocumentDatabaseAccountListKeysResult struct {
 	Username string `json:"username"`
 }
 
+// KeyVaultData is Key vault: the body a caller writes. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.
+type KeyVaultData struct {
+	// The region the vault is billed in and served from.
+	Location string `json:"location"`
+	// The vault's own settings.
+	Properties *KeyVaultProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// KeyVaultProperties is The vault's own settings.
+type KeyVaultProperties struct {
+	// What the vault is for, shown in the portal beside its name.
+	Description *string `json:"description,omitempty"`
+	// Whether a deleted vault, secret or key may be purged before its seven-day recovery window ends. Once true it stays true: a write that sets it false is refused, and so is every purge until the window is out.
+	EnablePurgeProtection *bool `json:"enablePurgeProtection,omitempty"`
+}
+
+// KeyVaultResource is one Key vault, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type KeyVaultResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data KeyVaultData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *KeyVaultResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// KeyVaultCreateKeyContentCurve is the values /curve accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultCreateKeyContentCurve string
+
+const (
+	KeyVaultCreateKeyContentCurveP256 KeyVaultCreateKeyContentCurve = "P-256"
+	KeyVaultCreateKeyContentCurveP384 KeyVaultCreateKeyContentCurve = "P-384"
+	KeyVaultCreateKeyContentCurveP521 KeyVaultCreateKeyContentCurve = "P-521"
+)
+
+// KeyVaultCreateKeyContentKeyOps is the values /keyOps accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultCreateKeyContentKeyOps string
+
+const (
+	KeyVaultCreateKeyContentKeyOpsEncrypt   KeyVaultCreateKeyContentKeyOps = "encrypt"
+	KeyVaultCreateKeyContentKeyOpsDecrypt   KeyVaultCreateKeyContentKeyOps = "decrypt"
+	KeyVaultCreateKeyContentKeyOpsSign      KeyVaultCreateKeyContentKeyOps = "sign"
+	KeyVaultCreateKeyContentKeyOpsVerify    KeyVaultCreateKeyContentKeyOps = "verify"
+	KeyVaultCreateKeyContentKeyOpsWrapKey   KeyVaultCreateKeyContentKeyOps = "wrapKey"
+	KeyVaultCreateKeyContentKeyOpsUnwrapKey KeyVaultCreateKeyContentKeyOps = "unwrapKey"
+)
+
+// KeyVaultCreateKeyContentKty is the values /kty accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultCreateKeyContentKty string
+
+const (
+	KeyVaultCreateKeyContentKtyRSA KeyVaultCreateKeyContentKty = "RSA"
+	KeyVaultCreateKeyContentKtyEC  KeyVaultCreateKeyContentKty = "EC"
+)
+
+// KeyVaultCreateKeyContent is the parameters of createKey.
+type KeyVaultCreateKeyContent struct {
+	// An EC key's curve. P-256 when omitted; refused on an RSA key.
+	Curve *KeyVaultCreateKeyContentCurve `json:"curve,omitempty"`
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.
+	KeyOps []KeyVaultCreateKeyContentKeyOps `json:"keyOps,omitempty"`
+	// An RSA key's modulus in bits: 2048, 3072 or 4096. 2048 when omitted; refused on an EC key.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty KeyVaultCreateKeyContentKty `json:"kty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+}
+
+// KeyVaultCreateKeyResult is what createKey returns.
+type KeyVaultCreateKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultDecryptContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultDecryptContentAlg string
+
+const (
+	KeyVaultDecryptContentAlgRSAOAEP    KeyVaultDecryptContentAlg = "RSA-OAEP"
+	KeyVaultDecryptContentAlgRSAOAEP256 KeyVaultDecryptContentAlg = "RSA-OAEP-256"
+)
+
+// KeyVaultDecryptContent is the parameters of decrypt.
+type KeyVaultDecryptContent struct {
+	// RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+	Alg KeyVaultDecryptContentAlg `json:"alg"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The ciphertext or wrapped key, base64url without padding.
+	Value string `json:"value"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultDecryptResult is what decrypt returns. ⚠ Secret material — never log or persist this.
+type KeyVaultDecryptResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The plaintext, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultDeleteKeyContent is the parameters of deleteKey.
+type KeyVaultDeleteKeyContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+}
+
+// KeyVaultDeleteKeyResult is what deleteKey returns.
+type KeyVaultDeleteKeyResult struct {
+	// When the item was deleted.
+	DeletedOn string `json:"deletedOn"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// When the item is purged unless it is recovered first.
+	ScheduledPurgeDate string `json:"scheduledPurgeDate"`
+}
+
+// KeyVaultDeleteSecretContent is the parameters of deleteSecret.
+type KeyVaultDeleteSecretContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+}
+
+// KeyVaultDeleteSecretResult is what deleteSecret returns.
+type KeyVaultDeleteSecretResult struct {
+	// When the item was deleted.
+	DeletedOn string `json:"deletedOn"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// When the item is purged unless it is recovered first.
+	ScheduledPurgeDate string `json:"scheduledPurgeDate"`
+}
+
+// KeyVaultEncryptContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultEncryptContentAlg string
+
+const (
+	KeyVaultEncryptContentAlgRSAOAEP    KeyVaultEncryptContentAlg = "RSA-OAEP"
+	KeyVaultEncryptContentAlgRSAOAEP256 KeyVaultEncryptContentAlg = "RSA-OAEP-256"
+)
+
+// KeyVaultEncryptContent is the parameters of encrypt.
+type KeyVaultEncryptContent struct {
+	// RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+	Alg KeyVaultEncryptContentAlg `json:"alg"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The plaintext to encrypt or the key to wrap, base64url without padding.
+	Value string `json:"value"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultEncryptResult is what encrypt returns.
+type KeyVaultEncryptResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The result, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultGetKeyContent is the parameters of getKey.
+type KeyVaultGetKeyContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultGetKeyResult is what getKey returns.
+type KeyVaultGetKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultGetSecretContent is the parameters of getSecret.
+type KeyVaultGetSecretContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultGetSecretResult is what getSecret returns. ⚠ Secret material — never log or persist this.
+type KeyVaultGetSecretResult struct {
+	// What the value is. Absent when unset.
+	ContentType *string `json:"contentType,omitempty"`
+	// When the version was created.
+	Created string `json:"created"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The secret's value.
+	Value string `json:"value"`
+	// The version this response is about.
+	Version string `json:"version"`
+}
+
+// KeyVaultImportKeyContentKeyOps is the values /keyOps accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultImportKeyContentKeyOps string
+
+const (
+	KeyVaultImportKeyContentKeyOpsEncrypt   KeyVaultImportKeyContentKeyOps = "encrypt"
+	KeyVaultImportKeyContentKeyOpsDecrypt   KeyVaultImportKeyContentKeyOps = "decrypt"
+	KeyVaultImportKeyContentKeyOpsSign      KeyVaultImportKeyContentKeyOps = "sign"
+	KeyVaultImportKeyContentKeyOpsVerify    KeyVaultImportKeyContentKeyOps = "verify"
+	KeyVaultImportKeyContentKeyOpsWrapKey   KeyVaultImportKeyContentKeyOps = "wrapKey"
+	KeyVaultImportKeyContentKeyOpsUnwrapKey KeyVaultImportKeyContentKeyOps = "unwrapKey"
+)
+
+// KeyVaultImportKeyContent is the parameters of importKey.
+type KeyVaultImportKeyContent struct {
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.
+	KeyOps []KeyVaultImportKeyContentKeyOps `json:"keyOps,omitempty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// The private key as unencrypted PKCS#8 DER, in standard base64. RSA of 2048, 3072 or 4096 bits, or EC on P-256, P-384 or P-521. Sealed on arrival and never returned.
+	Pkcs8 string `json:"pkcs8"`
+}
+
+// KeyVaultImportKeyResult is what importKey returns.
+type KeyVaultImportKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultListDeletedKeysResult is what listDeletedKeys returns.
+type KeyVaultListDeletedKeysResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListDeletedSecretsResult is what listDeletedSecrets returns.
+type KeyVaultListDeletedSecretsResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListKeyVersionsContent is the parameters of listKeyVersions.
+type KeyVaultListKeyVersionsContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+}
+
+// KeyVaultListKeyVersionsResult is what listKeyVersions returns.
+type KeyVaultListKeyVersionsResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListKeysResult is what listKeys returns.
+type KeyVaultListKeysResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListSecretVersionsContent is the parameters of listSecretVersions.
+type KeyVaultListSecretVersionsContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+}
+
+// KeyVaultListSecretVersionsResult is what listSecretVersions returns.
+type KeyVaultListSecretVersionsResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListSecretsResult is what listSecrets returns.
+type KeyVaultListSecretsResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultPurgeDeletedKeyContent is the parameters of purgeDeletedKey.
+type KeyVaultPurgeDeletedKeyContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+}
+
+// KeyVaultPurgeDeletedKeyResult is what purgeDeletedKey returns.
+type KeyVaultPurgeDeletedKeyResult struct {
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// True: the item and every version of it are gone.
+	Purged bool `json:"purged"`
+}
+
+// KeyVaultPurgeDeletedSecretContent is the parameters of purgeDeletedSecret.
+type KeyVaultPurgeDeletedSecretContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+}
+
+// KeyVaultPurgeDeletedSecretResult is what purgeDeletedSecret returns.
+type KeyVaultPurgeDeletedSecretResult struct {
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// True: the item and every version of it are gone.
+	Purged bool `json:"purged"`
+}
+
+// KeyVaultRecoverDeletedKeyContent is the parameters of recoverDeletedKey.
+type KeyVaultRecoverDeletedKeyContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+}
+
+// KeyVaultRecoverDeletedKeyResult is what recoverDeletedKey returns.
+type KeyVaultRecoverDeletedKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultRecoverDeletedSecretContent is the parameters of recoverDeletedSecret.
+type KeyVaultRecoverDeletedSecretContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+}
+
+// KeyVaultRecoverDeletedSecretResult is what recoverDeletedSecret returns.
+type KeyVaultRecoverDeletedSecretResult struct {
+	// What the value is. Absent when unset.
+	ContentType *string `json:"contentType,omitempty"`
+	// When the version was created.
+	Created string `json:"created"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+}
+
+// KeyVaultSetSecretContent is the parameters of setSecret.
+type KeyVaultSetSecretContent struct {
+	// What the value is, for the consumer — for example text/plain. Not interpreted.
+	ContentType *string `json:"contentType,omitempty"`
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+	// The secret's value. Sealed under the vault's root before it is stored.
+	Value string `json:"value"`
+}
+
+// KeyVaultSetSecretResult is what setSecret returns.
+type KeyVaultSetSecretResult struct {
+	// What the value is. Absent when unset.
+	ContentType *string `json:"contentType,omitempty"`
+	// When the version was created.
+	Created string `json:"created"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+}
+
+// KeyVaultSignContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultSignContentAlg string
+
+const (
+	KeyVaultSignContentAlgRS256 KeyVaultSignContentAlg = "RS256"
+	KeyVaultSignContentAlgRS384 KeyVaultSignContentAlg = "RS384"
+	KeyVaultSignContentAlgRS512 KeyVaultSignContentAlg = "RS512"
+	KeyVaultSignContentAlgPS256 KeyVaultSignContentAlg = "PS256"
+	KeyVaultSignContentAlgPS384 KeyVaultSignContentAlg = "PS384"
+	KeyVaultSignContentAlgPS512 KeyVaultSignContentAlg = "PS512"
+	KeyVaultSignContentAlgES256 KeyVaultSignContentAlg = "ES256"
+	KeyVaultSignContentAlgES384 KeyVaultSignContentAlg = "ES384"
+	KeyVaultSignContentAlgES512 KeyVaultSignContentAlg = "ES512"
+)
+
+// KeyVaultSignContent is the parameters of sign.
+type KeyVaultSignContent struct {
+	// A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.
+	Alg KeyVaultSignContentAlg `json:"alg"`
+	// The digest to sign, base64url. Its length must be the algorithm's hash length.
+	Digest string `json:"digest"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultSignResult is what sign returns.
+type KeyVaultSignResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The result, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultUnwrapKeyContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultUnwrapKeyContentAlg string
+
+const (
+	KeyVaultUnwrapKeyContentAlgRSAOAEP    KeyVaultUnwrapKeyContentAlg = "RSA-OAEP"
+	KeyVaultUnwrapKeyContentAlgRSAOAEP256 KeyVaultUnwrapKeyContentAlg = "RSA-OAEP-256"
+)
+
+// KeyVaultUnwrapKeyContent is the parameters of unwrapKey.
+type KeyVaultUnwrapKeyContent struct {
+	// RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+	Alg KeyVaultUnwrapKeyContentAlg `json:"alg"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The ciphertext or wrapped key, base64url without padding.
+	Value string `json:"value"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultUnwrapKeyResult is what unwrapKey returns. ⚠ Secret material — never log or persist this.
+type KeyVaultUnwrapKeyResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The plaintext, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultUpdateKeyContentKeyOps is the values /keyOps accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultUpdateKeyContentKeyOps string
+
+const (
+	KeyVaultUpdateKeyContentKeyOpsEncrypt   KeyVaultUpdateKeyContentKeyOps = "encrypt"
+	KeyVaultUpdateKeyContentKeyOpsDecrypt   KeyVaultUpdateKeyContentKeyOps = "decrypt"
+	KeyVaultUpdateKeyContentKeyOpsSign      KeyVaultUpdateKeyContentKeyOps = "sign"
+	KeyVaultUpdateKeyContentKeyOpsVerify    KeyVaultUpdateKeyContentKeyOps = "verify"
+	KeyVaultUpdateKeyContentKeyOpsWrapKey   KeyVaultUpdateKeyContentKeyOps = "wrapKey"
+	KeyVaultUpdateKeyContentKeyOpsUnwrapKey KeyVaultUpdateKeyContentKeyOps = "unwrapKey"
+)
+
+// KeyVaultUpdateKeyContent is the parameters of updateKey.
+type KeyVaultUpdateKeyContent struct {
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.
+	KeyOps []KeyVaultUpdateKeyContentKeyOps `json:"keyOps,omitempty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultUpdateKeyResult is what updateKey returns.
+type KeyVaultUpdateKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultUpdateSecretContent is the parameters of updateSecret.
+type KeyVaultUpdateSecretContent struct {
+	// What the value is, for the consumer — for example text/plain. Not interpreted.
+	ContentType *string `json:"contentType,omitempty"`
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultUpdateSecretResult is what updateSecret returns.
+type KeyVaultUpdateSecretResult struct {
+	// What the value is. Absent when unset.
+	ContentType *string `json:"contentType,omitempty"`
+	// When the version was created.
+	Created string `json:"created"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+}
+
+// KeyVaultVerifyContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultVerifyContentAlg string
+
+const (
+	KeyVaultVerifyContentAlgRS256 KeyVaultVerifyContentAlg = "RS256"
+	KeyVaultVerifyContentAlgRS384 KeyVaultVerifyContentAlg = "RS384"
+	KeyVaultVerifyContentAlgRS512 KeyVaultVerifyContentAlg = "RS512"
+	KeyVaultVerifyContentAlgPS256 KeyVaultVerifyContentAlg = "PS256"
+	KeyVaultVerifyContentAlgPS384 KeyVaultVerifyContentAlg = "PS384"
+	KeyVaultVerifyContentAlgPS512 KeyVaultVerifyContentAlg = "PS512"
+	KeyVaultVerifyContentAlgES256 KeyVaultVerifyContentAlg = "ES256"
+	KeyVaultVerifyContentAlgES384 KeyVaultVerifyContentAlg = "ES384"
+	KeyVaultVerifyContentAlgES512 KeyVaultVerifyContentAlg = "ES512"
+)
+
+// KeyVaultVerifyContent is the parameters of verify.
+type KeyVaultVerifyContent struct {
+	// A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.
+	Alg KeyVaultVerifyContentAlg `json:"alg"`
+	// The digest to sign, base64url. Its length must be the algorithm's hash length.
+	Digest string `json:"digest"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The signature, base64url. An EC signature is r‖s, as JWS spells it.
+	Signature string `json:"signature"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultVerifyResult is what verify returns.
+type KeyVaultVerifyResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// Whether the signature is valid.
+	Value bool `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultWrapKeyContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultWrapKeyContentAlg string
+
+const (
+	KeyVaultWrapKeyContentAlgRSAOAEP    KeyVaultWrapKeyContentAlg = "RSA-OAEP"
+	KeyVaultWrapKeyContentAlgRSAOAEP256 KeyVaultWrapKeyContentAlg = "RSA-OAEP-256"
+)
+
+// KeyVaultWrapKeyContent is the parameters of wrapKey.
+type KeyVaultWrapKeyContent struct {
+	// RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+	Alg KeyVaultWrapKeyContentAlg `json:"alg"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The plaintext to encrypt or the key to wrap, base64url without padding.
+	Value string `json:"value"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultWrapKeyResult is what wrapKey returns.
+type KeyVaultWrapKeyResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The result, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
 // MailDomainPreset is the values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.
 type MailDomainPreset string
 
@@ -2010,6 +3037,528 @@ type MailDomainResource struct {
 
 // UnmarshalJSON reads the envelope and the body off one object.
 func (r *MailDomainResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// MailDomainDnsRecordsResultRecordsDkimType is the values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsDkimType string
+
+const (
+	MailDomainDnsRecordsResultRecordsDkimTypeMX    MailDomainDnsRecordsResultRecordsDkimType = "MX"
+	MailDomainDnsRecordsResultRecordsDkimTypeTXT   MailDomainDnsRecordsResultRecordsDkimType = "TXT"
+	MailDomainDnsRecordsResultRecordsDkimTypeCNAME MailDomainDnsRecordsResultRecordsDkimType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsDmarcType is the values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsDmarcType string
+
+const (
+	MailDomainDnsRecordsResultRecordsDmarcTypeMX    MailDomainDnsRecordsResultRecordsDmarcType = "MX"
+	MailDomainDnsRecordsResultRecordsDmarcTypeTXT   MailDomainDnsRecordsResultRecordsDmarcType = "TXT"
+	MailDomainDnsRecordsResultRecordsDmarcTypeCNAME MailDomainDnsRecordsResultRecordsDmarcType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsMtaStsType is the values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsMtaStsType string
+
+const (
+	MailDomainDnsRecordsResultRecordsMtaStsTypeMX    MailDomainDnsRecordsResultRecordsMtaStsType = "MX"
+	MailDomainDnsRecordsResultRecordsMtaStsTypeTXT   MailDomainDnsRecordsResultRecordsMtaStsType = "TXT"
+	MailDomainDnsRecordsResultRecordsMtaStsTypeCNAME MailDomainDnsRecordsResultRecordsMtaStsType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsMtaStsHostType is the values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsMtaStsHostType string
+
+const (
+	MailDomainDnsRecordsResultRecordsMtaStsHostTypeMX    MailDomainDnsRecordsResultRecordsMtaStsHostType = "MX"
+	MailDomainDnsRecordsResultRecordsMtaStsHostTypeTXT   MailDomainDnsRecordsResultRecordsMtaStsHostType = "TXT"
+	MailDomainDnsRecordsResultRecordsMtaStsHostTypeCNAME MailDomainDnsRecordsResultRecordsMtaStsHostType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsMxType is the values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsMxType string
+
+const (
+	MailDomainDnsRecordsResultRecordsMxTypeMX    MailDomainDnsRecordsResultRecordsMxType = "MX"
+	MailDomainDnsRecordsResultRecordsMxTypeTXT   MailDomainDnsRecordsResultRecordsMxType = "TXT"
+	MailDomainDnsRecordsResultRecordsMxTypeCNAME MailDomainDnsRecordsResultRecordsMxType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsSpfType is the values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsSpfType string
+
+const (
+	MailDomainDnsRecordsResultRecordsSpfTypeMX    MailDomainDnsRecordsResultRecordsSpfType = "MX"
+	MailDomainDnsRecordsResultRecordsSpfTypeTXT   MailDomainDnsRecordsResultRecordsSpfType = "TXT"
+	MailDomainDnsRecordsResultRecordsSpfTypeCNAME MailDomainDnsRecordsResultRecordsSpfType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsTlsRptType is the values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsTlsRptType string
+
+const (
+	MailDomainDnsRecordsResultRecordsTlsRptTypeMX    MailDomainDnsRecordsResultRecordsTlsRptType = "MX"
+	MailDomainDnsRecordsResultRecordsTlsRptTypeTXT   MailDomainDnsRecordsResultRecordsTlsRptType = "TXT"
+	MailDomainDnsRecordsResultRecordsTlsRptTypeCNAME MailDomainDnsRecordsResultRecordsTlsRptType = "CNAME"
+)
+
+// MailDomainDnsRecordsResult is what dnsRecords returns.
+type MailDomainDnsRecordsResult struct {
+	// The mail domain the records are for.
+	Domain string `json:"domain"`
+	// The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.
+	MtaStsPolicy string `json:"mtaStsPolicy"`
+	// One member per record the domain must publish.
+	Records MailDomainDnsRecordsResultRecords `json:"records"`
+	// Every record as a zone-file line, ready to paste into a zone.
+	ZoneFile string `json:"zoneFile"`
+}
+
+// MailDomainDnsRecordsResultRecords is One member per record the domain must publish.
+type MailDomainDnsRecordsResultRecords struct {
+	// The DKIM public key. Gates sending.
+	Dkim MailDomainDnsRecordsResultRecordsDkim `json:"dkim"`
+	// The DMARC policy. Gates sending.
+	Dmarc MailDomainDnsRecordsResultRecordsDmarc `json:"dmarc"`
+	// The MTA-STS policy announcement.
+	MtaSts MailDomainDnsRecordsResultRecordsMtaSts `json:"mtaSts"`
+	// The MTA-STS policy host.
+	MtaStsHost MailDomainDnsRecordsResultRecordsMtaStsHost `json:"mtaStsHost"`
+	// The MX record — where mail for the domain is delivered.
+	Mx MailDomainDnsRecordsResultRecordsMx `json:"mx"`
+	// The SPF record. Gates sending.
+	Spf MailDomainDnsRecordsResultRecordsSpf `json:"spf"`
+	// The TLS-RPT reporting address.
+	TlsRpt MailDomainDnsRecordsResultRecordsTlsRpt `json:"tlsRpt"`
+}
+
+// MailDomainDnsRecordsResultRecordsDkim is The DKIM public key. Gates sending.
+type MailDomainDnsRecordsResultRecordsDkim struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsDkimType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsDmarc is The DMARC policy. Gates sending.
+type MailDomainDnsRecordsResultRecordsDmarc struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsDmarcType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsMtaSts is The MTA-STS policy announcement.
+type MailDomainDnsRecordsResultRecordsMtaSts struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsMtaStsType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsMtaStsHost is The MTA-STS policy host.
+type MailDomainDnsRecordsResultRecordsMtaStsHost struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsMtaStsHostType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsMx is The MX record — where mail for the domain is delivered.
+type MailDomainDnsRecordsResultRecordsMx struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsMxType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsSpf is The SPF record. Gates sending.
+type MailDomainDnsRecordsResultRecordsSpf struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsSpfType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsTlsRpt is The TLS-RPT reporting address.
+type MailDomainDnsRecordsResultRecordsTlsRpt struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsTlsRptType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsDkimStatus is the values /records/dkim/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsDkimStatus string
+
+const (
+	MailDomainVerifyResultRecordsDkimStatusVerified     MailDomainVerifyResultRecordsDkimStatus = "verified"
+	MailDomainVerifyResultRecordsDkimStatusMissing      MailDomainVerifyResultRecordsDkimStatus = "missing"
+	MailDomainVerifyResultRecordsDkimStatusMismatch     MailDomainVerifyResultRecordsDkimStatus = "mismatch"
+	MailDomainVerifyResultRecordsDkimStatusUnresolvable MailDomainVerifyResultRecordsDkimStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsDkimType is the values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsDkimType string
+
+const (
+	MailDomainVerifyResultRecordsDkimTypeMX    MailDomainVerifyResultRecordsDkimType = "MX"
+	MailDomainVerifyResultRecordsDkimTypeTXT   MailDomainVerifyResultRecordsDkimType = "TXT"
+	MailDomainVerifyResultRecordsDkimTypeCNAME MailDomainVerifyResultRecordsDkimType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsDmarcStatus is the values /records/dmarc/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsDmarcStatus string
+
+const (
+	MailDomainVerifyResultRecordsDmarcStatusVerified     MailDomainVerifyResultRecordsDmarcStatus = "verified"
+	MailDomainVerifyResultRecordsDmarcStatusMissing      MailDomainVerifyResultRecordsDmarcStatus = "missing"
+	MailDomainVerifyResultRecordsDmarcStatusMismatch     MailDomainVerifyResultRecordsDmarcStatus = "mismatch"
+	MailDomainVerifyResultRecordsDmarcStatusUnresolvable MailDomainVerifyResultRecordsDmarcStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsDmarcType is the values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsDmarcType string
+
+const (
+	MailDomainVerifyResultRecordsDmarcTypeMX    MailDomainVerifyResultRecordsDmarcType = "MX"
+	MailDomainVerifyResultRecordsDmarcTypeTXT   MailDomainVerifyResultRecordsDmarcType = "TXT"
+	MailDomainVerifyResultRecordsDmarcTypeCNAME MailDomainVerifyResultRecordsDmarcType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsMtaStsStatus is the values /records/mtaSts/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMtaStsStatus string
+
+const (
+	MailDomainVerifyResultRecordsMtaStsStatusVerified     MailDomainVerifyResultRecordsMtaStsStatus = "verified"
+	MailDomainVerifyResultRecordsMtaStsStatusMissing      MailDomainVerifyResultRecordsMtaStsStatus = "missing"
+	MailDomainVerifyResultRecordsMtaStsStatusMismatch     MailDomainVerifyResultRecordsMtaStsStatus = "mismatch"
+	MailDomainVerifyResultRecordsMtaStsStatusUnresolvable MailDomainVerifyResultRecordsMtaStsStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsMtaStsType is the values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMtaStsType string
+
+const (
+	MailDomainVerifyResultRecordsMtaStsTypeMX    MailDomainVerifyResultRecordsMtaStsType = "MX"
+	MailDomainVerifyResultRecordsMtaStsTypeTXT   MailDomainVerifyResultRecordsMtaStsType = "TXT"
+	MailDomainVerifyResultRecordsMtaStsTypeCNAME MailDomainVerifyResultRecordsMtaStsType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsMtaStsHostStatus is the values /records/mtaStsHost/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMtaStsHostStatus string
+
+const (
+	MailDomainVerifyResultRecordsMtaStsHostStatusVerified     MailDomainVerifyResultRecordsMtaStsHostStatus = "verified"
+	MailDomainVerifyResultRecordsMtaStsHostStatusMissing      MailDomainVerifyResultRecordsMtaStsHostStatus = "missing"
+	MailDomainVerifyResultRecordsMtaStsHostStatusMismatch     MailDomainVerifyResultRecordsMtaStsHostStatus = "mismatch"
+	MailDomainVerifyResultRecordsMtaStsHostStatusUnresolvable MailDomainVerifyResultRecordsMtaStsHostStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsMtaStsHostType is the values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMtaStsHostType string
+
+const (
+	MailDomainVerifyResultRecordsMtaStsHostTypeMX    MailDomainVerifyResultRecordsMtaStsHostType = "MX"
+	MailDomainVerifyResultRecordsMtaStsHostTypeTXT   MailDomainVerifyResultRecordsMtaStsHostType = "TXT"
+	MailDomainVerifyResultRecordsMtaStsHostTypeCNAME MailDomainVerifyResultRecordsMtaStsHostType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsMxStatus is the values /records/mx/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMxStatus string
+
+const (
+	MailDomainVerifyResultRecordsMxStatusVerified     MailDomainVerifyResultRecordsMxStatus = "verified"
+	MailDomainVerifyResultRecordsMxStatusMissing      MailDomainVerifyResultRecordsMxStatus = "missing"
+	MailDomainVerifyResultRecordsMxStatusMismatch     MailDomainVerifyResultRecordsMxStatus = "mismatch"
+	MailDomainVerifyResultRecordsMxStatusUnresolvable MailDomainVerifyResultRecordsMxStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsMxType is the values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMxType string
+
+const (
+	MailDomainVerifyResultRecordsMxTypeMX    MailDomainVerifyResultRecordsMxType = "MX"
+	MailDomainVerifyResultRecordsMxTypeTXT   MailDomainVerifyResultRecordsMxType = "TXT"
+	MailDomainVerifyResultRecordsMxTypeCNAME MailDomainVerifyResultRecordsMxType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsSpfStatus is the values /records/spf/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsSpfStatus string
+
+const (
+	MailDomainVerifyResultRecordsSpfStatusVerified     MailDomainVerifyResultRecordsSpfStatus = "verified"
+	MailDomainVerifyResultRecordsSpfStatusMissing      MailDomainVerifyResultRecordsSpfStatus = "missing"
+	MailDomainVerifyResultRecordsSpfStatusMismatch     MailDomainVerifyResultRecordsSpfStatus = "mismatch"
+	MailDomainVerifyResultRecordsSpfStatusUnresolvable MailDomainVerifyResultRecordsSpfStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsSpfType is the values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsSpfType string
+
+const (
+	MailDomainVerifyResultRecordsSpfTypeMX    MailDomainVerifyResultRecordsSpfType = "MX"
+	MailDomainVerifyResultRecordsSpfTypeTXT   MailDomainVerifyResultRecordsSpfType = "TXT"
+	MailDomainVerifyResultRecordsSpfTypeCNAME MailDomainVerifyResultRecordsSpfType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsTlsRptStatus is the values /records/tlsRpt/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsTlsRptStatus string
+
+const (
+	MailDomainVerifyResultRecordsTlsRptStatusVerified     MailDomainVerifyResultRecordsTlsRptStatus = "verified"
+	MailDomainVerifyResultRecordsTlsRptStatusMissing      MailDomainVerifyResultRecordsTlsRptStatus = "missing"
+	MailDomainVerifyResultRecordsTlsRptStatusMismatch     MailDomainVerifyResultRecordsTlsRptStatus = "mismatch"
+	MailDomainVerifyResultRecordsTlsRptStatusUnresolvable MailDomainVerifyResultRecordsTlsRptStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsTlsRptType is the values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsTlsRptType string
+
+const (
+	MailDomainVerifyResultRecordsTlsRptTypeMX    MailDomainVerifyResultRecordsTlsRptType = "MX"
+	MailDomainVerifyResultRecordsTlsRptTypeTXT   MailDomainVerifyResultRecordsTlsRptType = "TXT"
+	MailDomainVerifyResultRecordsTlsRptTypeCNAME MailDomainVerifyResultRecordsTlsRptType = "CNAME"
+)
+
+// MailDomainVerifyResultSending is the values /sending accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultSending string
+
+const (
+	MailDomainVerifyResultSendingHeld      MailDomainVerifyResultSending = "held"
+	MailDomainVerifyResultSendingOpen      MailDomainVerifyResultSending = "open"
+	MailDomainVerifyResultSendingSuspended MailDomainVerifyResultSending = "suspended"
+)
+
+// MailDomainVerifyResult is what verify returns.
+type MailDomainVerifyResult struct {
+	// The mail domain the records are for.
+	Domain string `json:"domain"`
+	// The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.
+	MtaStsPolicy string `json:"mtaStsPolicy"`
+	// One member per record the domain must publish.
+	Records MailDomainVerifyResultRecords `json:"records"`
+	// held, open or suspended — why sendingEnabled is what it is.
+	Sending MailDomainVerifyResultSending `json:"sending"`
+	// Whether mail may leave the domain: SPF, DKIM and DMARC verify and the platform has not suspended it. Held mail is refused at RCPT TO, not queued.
+	SendingEnabled bool `json:"sendingEnabled"`
+	// Every record as a zone-file line, ready to paste into a zone.
+	ZoneFile string `json:"zoneFile"`
+}
+
+// MailDomainVerifyResultRecords is One member per record the domain must publish.
+type MailDomainVerifyResultRecords struct {
+	// The DKIM public key. Gates sending.
+	Dkim MailDomainVerifyResultRecordsDkim `json:"dkim"`
+	// The DMARC policy. Gates sending.
+	Dmarc MailDomainVerifyResultRecordsDmarc `json:"dmarc"`
+	// The MTA-STS policy announcement.
+	MtaSts MailDomainVerifyResultRecordsMtaSts `json:"mtaSts"`
+	// The MTA-STS policy host.
+	MtaStsHost MailDomainVerifyResultRecordsMtaStsHost `json:"mtaStsHost"`
+	// The MX record — where mail for the domain is delivered.
+	Mx MailDomainVerifyResultRecordsMx `json:"mx"`
+	// The SPF record. Gates sending.
+	Spf MailDomainVerifyResultRecordsSpf `json:"spf"`
+	// The TLS-RPT reporting address.
+	TlsRpt MailDomainVerifyResultRecordsTlsRpt `json:"tlsRpt"`
+}
+
+// MailDomainVerifyResultRecordsDkim is The DKIM public key. Gates sending.
+type MailDomainVerifyResultRecordsDkim struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsDkimStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsDkimType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsDmarc is The DMARC policy. Gates sending.
+type MailDomainVerifyResultRecordsDmarc struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsDmarcStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsDmarcType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsMtaSts is The MTA-STS policy announcement.
+type MailDomainVerifyResultRecordsMtaSts struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsMtaStsStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsMtaStsType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsMtaStsHost is The MTA-STS policy host.
+type MailDomainVerifyResultRecordsMtaStsHost struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsMtaStsHostStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsMtaStsHostType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsMx is The MX record — where mail for the domain is delivered.
+type MailDomainVerifyResultRecordsMx struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsMxStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsMxType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsSpf is The SPF record. Gates sending.
+type MailDomainVerifyResultRecordsSpf struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsSpfStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsSpfType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsTlsRpt is The TLS-RPT reporting address.
+type MailDomainVerifyResultRecordsTlsRpt struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsTlsRptStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsTlsRptType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailboxData is Mailbox: the body a caller writes. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.
+type MailboxData struct {
+	// The region the mailbox is billed in. The domain's.
+	Location string `json:"location"`
+	// The mailbox's own settings.
+	Properties *MailboxProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// MailboxProperties is The mailbox's own settings.
+type MailboxProperties struct {
+	// Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.
+	Aliases []string `json:"aliases,omitempty"`
+	// The cluster the domain's back end runs in. Must be the domain's.
+	ClusterID string `json:"clusterId"`
+	// Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.
+	ForwardTo []string `json:"forwardTo,omitempty"`
+	// With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.
+	KeepCopy *bool `json:"keepCopy,omitempty"`
+	// The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.
+	LocalPart string `json:"localPart"`
+	// A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it.
+	PasswordRef *string `json:"passwordRef,omitempty"`
+	// The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.
+	Quota *string `json:"quota,omitempty"`
+}
+
+// MailboxResource is one Mailbox, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type MailboxResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data MailboxData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *MailboxResource) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &r.Resource); err != nil {
 		return err
 	}
@@ -2553,6 +4102,76 @@ type MonitorWorkspaceListKeysResult struct {
 	SqlEndpoint string `json:"sqlEndpoint"`
 }
 
+// MonitorWorkspaceListMetricLabelsContent is the parameters of listMetricLabels.
+type MonitorWorkspaceListMetricLabelsContent struct {
+	// The window's end. Defaults to now.
+	End *string `json:"end,omitempty"`
+	// The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead.
+	Label *string `json:"label,omitempty"`
+	// A series selector the answer is narrowed to, for example http_requests_total.
+	Match *string `json:"match,omitempty"`
+	// The window's start. Defaults to a day before end.
+	Start *string `json:"start,omitempty"`
+}
+
+// MonitorWorkspaceListMetricLabelsResult is what listMetricLabels returns.
+type MonitorWorkspaceListMetricLabelsResult struct {
+	// Whether more than 10000 matched and the rest were left out.
+	Truncated bool `json:"truncated"`
+	// The label values, or the label names when no label was named, sorted.
+	Values []string `json:"values"`
+}
+
+// MonitorWorkspaceQueryMetricsContent is the parameters of queryMetrics.
+type MonitorWorkspaceQueryMetricsContent struct {
+	// Where a range query ends. Give it with start.
+	End *string `json:"end,omitempty"`
+	// A PromQL or MetricsQL expression, run under this workspace's metrics tenancy.
+	Query string `json:"query"`
+	// Where a range query starts. Give it with end, or neither for an instant query.
+	Start *string `json:"start,omitempty"`
+	// A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000.
+	StepSeconds *int64 `json:"stepSeconds,omitempty"`
+	// The instant an instant query is evaluated at. Defaults to now.
+	Time *string `json:"time,omitempty"`
+}
+
+// MonitorWorkspaceSearchLogsContentSeverities is the values /severities accepts. ⚠ Closed: the write path refuses anything else.
+type MonitorWorkspaceSearchLogsContentSeverities string
+
+const (
+	MonitorWorkspaceSearchLogsContentSeveritiesTrace MonitorWorkspaceSearchLogsContentSeverities = "trace"
+	MonitorWorkspaceSearchLogsContentSeveritiesDebug MonitorWorkspaceSearchLogsContentSeverities = "debug"
+	MonitorWorkspaceSearchLogsContentSeveritiesInfo  MonitorWorkspaceSearchLogsContentSeverities = "info"
+	MonitorWorkspaceSearchLogsContentSeveritiesWarn  MonitorWorkspaceSearchLogsContentSeverities = "warn"
+	MonitorWorkspaceSearchLogsContentSeveritiesError MonitorWorkspaceSearchLogsContentSeverities = "error"
+	MonitorWorkspaceSearchLogsContentSeveritiesFatal MonitorWorkspaceSearchLogsContentSeverities = "fatal"
+)
+
+// MonitorWorkspaceSearchLogsContent is the parameters of searchLogs.
+type MonitorWorkspaceSearchLogsContent struct {
+	// Up to 10 key=value filters, each matched against the record's own attributes and its resource's.
+	Attributes []string `json:"attributes,omitempty"`
+	// The histogram's bucket width. Defaults to the window cut into 60.
+	BucketSeconds *int64 `json:"bucketSeconds,omitempty"`
+	// Answer how many rows the search would read, and run nothing else.
+	Estimate *bool `json:"estimate,omitempty"`
+	// The window's start, inclusive.
+	From string `json:"from"`
+	// The service.name the record must come from.
+	Service *string `json:"service,omitempty"`
+	// The severity classes to keep. Leave it out for every record, including those with no severity.
+	Severities []MonitorWorkspaceSearchLogsContentSeverities `json:"severities,omitempty"`
+	// Text the log body must contain, compared without regard to case.
+	Text *string `json:"text,omitempty"`
+	// The window's end, exclusive. At most 90 days after from.
+	To string `json:"to"`
+	// How many records to return, newest first. Defaults to 100.
+	Top *int64 `json:"top,omitempty"`
+	// The trace the record must belong to, 32 hex digits.
+	TraceID *string `json:"traceId,omitempty"`
+}
+
 // AlertRuleChannel is the values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else.
 type AlertRuleChannel string
 
@@ -2749,6 +4368,247 @@ type OpenTelemetryCollectorListEndpointsResult struct {
 	Service string `json:"service"`
 	// The workspace everything sent here lands in.
 	Workspace string `json:"workspace"`
+}
+
+// ApplicationComponentProtocol is the values /properties/protocol accepts. ⚠ Closed: the write path refuses anything else.
+type ApplicationComponentProtocol string
+
+const (
+	ApplicationComponentProtocolGrpc         ApplicationComponentProtocol = "grpc"
+	ApplicationComponentProtocolHttpProtobuf ApplicationComponentProtocol = "http/protobuf"
+)
+
+// ApplicationComponentData is Application component: the body a caller writes. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.
+type ApplicationComponentData struct {
+	// The region the component is billed in — its workspace's.
+	Location string `json:"location"`
+	// The component's own settings.
+	Properties *ApplicationComponentProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// ApplicationComponentProperties is The component's own settings.
+type ApplicationComponentProperties struct {
+	// The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.
+	ClusterID string `json:"clusterId"`
+	// The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.
+	Collector string `json:"collector"`
+	// Which OTLP protocol the connection string names. The collector must have that receiver on.
+	Protocol *ApplicationComponentProtocol `json:"protocol,omitempty"`
+}
+
+// ApplicationComponentResource is one Application component, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type ApplicationComponentResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data ApplicationComponentData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *ApplicationComponentResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// ApplicationComponentApplicationMapContent is the parameters of applicationMap.
+type ApplicationComponentApplicationMapContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The most rows to return, busiest first.
+	Top *int64 `json:"top,omitempty"`
+}
+
+// ApplicationComponentApplicationMapResult is what applicationMap returns.
+type ApplicationComponentApplicationMapResult struct {
+	// Per edge: spans in the target whose parent span is in the source, in the window.
+	EdgeCalls []int64 `json:"edgeCalls"`
+	// Per edge: those whose status is Error.
+	EdgeFailures []int64 `json:"edgeFailures"`
+	// Per edge: the target span's 95th percentile duration, in milliseconds.
+	EdgeP95Ms []float64 `json:"edgeP95Ms"`
+	// Per edge: the calling service.
+	EdgeSources []string `json:"edgeSources"`
+	// Per edge: the called service.
+	EdgeTargets []string `json:"edgeTargets"`
+	// Per node: requests it failed.
+	NodeFailures []int64 `json:"nodeFailures"`
+	// Per node: requests it served in the window.
+	NodeRequests []int64 `json:"nodeRequests"`
+	// Per node: a service in the component.
+	Nodes []string `json:"nodes"`
+	// The window the view read, in minutes, ending when it was asked.
+	TimespanMinutes int64 `json:"timespanMinutes"`
+}
+
+// ApplicationComponentDependenciesContent is the parameters of dependencies.
+type ApplicationComponentDependenciesContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The most rows to return, busiest first.
+	Top *int64 `json:"top,omitempty"`
+}
+
+// ApplicationComponentDependenciesResult is what dependencies returns.
+type ApplicationComponentDependenciesResult struct {
+	// Per row: calls in the window.
+	Counts []int64 `json:"counts"`
+	// How many of them failed.
+	Failed int64 `json:"failed"`
+	// Per row: failures over calls, 0 to 1.
+	FailureRate []float64 `json:"failureRate"`
+	// Per row: failed calls.
+	Failures []int64 `json:"failures"`
+	// Per row: the client span's name.
+	Names []string `json:"names"`
+	// Per row: the median duration, in milliseconds.
+	P50Ms []float64 `json:"p50Ms"`
+	// Per row: the 95th percentile duration, in milliseconds.
+	P95Ms []float64 `json:"p95Ms"`
+	// Per row: the 99th percentile duration, in milliseconds.
+	P99Ms []float64 `json:"p99Ms"`
+	// Per row: the service that made the call.
+	Services []string `json:"services"`
+	// Per row: what was called — peer.service, else server.address, else the database or messaging system; empty when the span names none.
+	Targets []string `json:"targets"`
+	// The window the view read, in minutes, ending when it was asked.
+	TimespanMinutes int64 `json:"timespanMinutes"`
+	// Every outgoing call in the window, not only the rows below.
+	Total int64 `json:"total"`
+	// Per row: db, http, messaging, rpc or other, from the span's attributes.
+	Types []string `json:"types"`
+}
+
+// ApplicationComponentExceptionsContent is the parameters of exceptions.
+type ApplicationComponentExceptionsContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The most rows to return, busiest first.
+	Top *int64 `json:"top,omitempty"`
+}
+
+// ApplicationComponentExceptionsResult is what exceptions returns.
+type ApplicationComponentExceptionsResult struct {
+	// Per row: occurrences in the window.
+	Counts []int64 `json:"counts"`
+	// Per row: how many were an `exception` event on a span; the rest were log records carrying exception.type.
+	FromSpans []int64 `json:"fromSpans"`
+	// Per row: the latest occurrence.
+	LastSeen []string `json:"lastSeen"`
+	// Per row: the most recent exception.message of that type.
+	Messages []string `json:"messages"`
+	// Per row: the service that raised it.
+	Services []string `json:"services"`
+	// The window the view read, in minutes, ending when it was asked.
+	TimespanMinutes int64 `json:"timespanMinutes"`
+	// Every exception in the window, from spans and from logs, not only the rows below.
+	Total int64 `json:"total"`
+	// Per row: exception.type.
+	Types []string `json:"types"`
+}
+
+// ApplicationComponentListConnectionStringResultOtlpProtocol is the values /otlpProtocol accepts. ⚠ Closed: the write path refuses anything else.
+type ApplicationComponentListConnectionStringResultOtlpProtocol string
+
+const (
+	ApplicationComponentListConnectionStringResultOtlpProtocolGrpc         ApplicationComponentListConnectionStringResultOtlpProtocol = "grpc"
+	ApplicationComponentListConnectionStringResultOtlpProtocolHttpProtobuf ApplicationComponentListConnectionStringResultOtlpProtocol = "http/protobuf"
+)
+
+// ApplicationComponentListConnectionStringResult is what listConnectionString returns.
+type ApplicationComponentListConnectionStringResult struct {
+	// The ConfigMap in the component's namespace carrying the three variables, for a pod's envFrom.
+	ConfigMap string `json:"configMap"`
+	// The three variables as one Key=Value;… line, for a configuration that takes a single string.
+	ConnectionString string `json:"connectionString"`
+	// OTEL_EXPORTER_OTLP_ENDPOINT: the collector's in-cluster URL.
+	OtlpEndpoint string `json:"otlpEndpoint"`
+	// OTEL_EXPORTER_OTLP_PROTOCOL.
+	OtlpProtocol ApplicationComponentListConnectionStringResultOtlpProtocol `json:"otlpProtocol"`
+	// OTEL_RESOURCE_ATTRIBUTES: the service.namespace the views filter on.
+	ResourceAttributes string `json:"resourceAttributes"`
+}
+
+// ApplicationComponentRequestsContent is the parameters of requests.
+type ApplicationComponentRequestsContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The most rows to return, busiest first.
+	Top *int64 `json:"top,omitempty"`
+}
+
+// ApplicationComponentRequestsResult is what requests returns.
+type ApplicationComponentRequestsResult struct {
+	// Per row: requests in the window.
+	Counts []int64 `json:"counts"`
+	// How many of them failed — a span whose status is Error.
+	Failed int64 `json:"failed"`
+	// Per row: failures over requests, 0 to 1.
+	FailureRate []float64 `json:"failureRate"`
+	// Per row: failed requests.
+	Failures []int64 `json:"failures"`
+	// Per row: the operation — the server span's name.
+	Operations []string `json:"operations"`
+	// Per row: the median duration, in milliseconds.
+	P50Ms []float64 `json:"p50Ms"`
+	// Per row: the 95th percentile duration, in milliseconds.
+	P95Ms []float64 `json:"p95Ms"`
+	// Per row: the 99th percentile duration, in milliseconds.
+	P99Ms []float64 `json:"p99Ms"`
+	// Per row: requests per minute over the window.
+	RatePerMinute []float64 `json:"ratePerMinute"`
+	// Per row: the service that served the operation.
+	Services []string `json:"services"`
+	// The window the view read, in minutes, ending when it was asked.
+	TimespanMinutes int64 `json:"timespanMinutes"`
+	// Every request in the window, across every operation, not only the rows below.
+	Total int64 `json:"total"`
+}
+
+// ApplicationComponentTransactionContent is the parameters of transaction.
+type ApplicationComponentTransactionContent struct {
+	// How far back to read, in minutes, ending now.
+	TimespanMinutes *int64 `json:"timespanMinutes,omitempty"`
+	// The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it.
+	TraceID string `json:"traceId"`
+}
+
+// ApplicationComponentTransactionResult is what transaction returns.
+type ApplicationComponentTransactionResult struct {
+	// Per span: how long it took, in milliseconds.
+	DurationsMs []float64 `json:"durationsMs"`
+	// Per span: Server, Client, Internal, Producer or Consumer.
+	Kinds []string `json:"kinds"`
+	// Per log record: its body, cut at 2048 characters.
+	LogBodies []string `json:"logBodies"`
+	// How many log records of the trace are returned.
+	LogCount int64 `json:"logCount"`
+	// Per log record: its severity text.
+	LogSeverities []string `json:"logSeverities"`
+	// Per log record: the span it was written under.
+	LogSpanIds []string `json:"logSpanIds"`
+	// Per log record: when, oldest first.
+	LogTimes []string `json:"logTimes"`
+	// Per span: its name.
+	Names []string `json:"names"`
+	// Per span: its parent's id, empty for the root.
+	ParentSpanIds []string `json:"parentSpanIds"`
+	// Per span: the service that recorded it.
+	Services []string `json:"services"`
+	// How many spans are returned.
+	SpanCount int64 `json:"spanCount"`
+	// Per span: its id.
+	SpanIds []string `json:"spanIds"`
+	// Per span: when it started, oldest first.
+	Starts []string `json:"starts"`
+	// Per span: Unset, Ok or Error.
+	Statuses []string `json:"statuses"`
+	// The trace that was read.
+	TraceID string `json:"traceId"`
+	// Whether the trace has more spans or log records than a transaction returns.
+	Truncated bool `json:"truncated"`
 }
 
 // PublicIPAddressData is Public IP address: the body a caller writes. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic.
@@ -3456,6 +5316,20 @@ func (r *BackupVaultResource) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &r.Data)
 }
 
+// BackupVaultBackupNowContent is the parameters of backupNow.
+type BackupVaultBackupNowContent struct {
+	// The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items.
+	Item string `json:"item"`
+}
+
+// BackupVaultBackupNowResult is what backupNow returns.
+type BackupVaultBackupNowResult struct {
+	// The protected server the recovery point is being taken of.
+	Item string `json:"item"`
+	// The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`.
+	RecoveryPoint string `json:"recoveryPoint"`
+}
+
 // BackupVaultListRecoveryPointsResult is what listRecoveryPoints returns.
 type BackupVaultListRecoveryPointsResult struct {
 	// How many of them are restorable — CloudNativePG phase `completed`.
@@ -3470,22 +5344,100 @@ type BackupVaultListRecoveryPointsResult struct {
 type BackupVaultRecoverContent struct {
 	// The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`.
 	RecoveryPoint string `json:"recoveryPoint"`
-	// The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.
+	// The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites.
 	TargetName string `json:"targetName"`
 }
 
 // BackupVaultRecoverResult is what recover returns.
 type BackupVaultRecoverResult struct {
-	// What was created. Always `Cluster` — a CloudNativePG cluster object.
+	// What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers.
 	Kind string `json:"kind"`
-	// The restored cluster's name, as asked for.
+	// The restored server's name, as asked for.
 	Name string `json:"name"`
 	// The namespace it was created in — the vault's resource group's.
 	Namespace string `json:"namespace"`
+	// The create's operation, to poll for the restore's progress.
+	OperationID *string `json:"operationId,omitempty"`
 	// The recovery point it was bootstrapped from.
 	RecoveryPoint string `json:"recoveryPoint"`
+	// The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged.
+	ResourceID *string `json:"resourceId,omitempty"`
 	// The protected item the recovery point was taken of, as its resource id path.
 	Source string `json:"source"`
+}
+
+// DeploymentData is Deployment: the body a caller writes. A template of resources deployed in dependency order, each through the write path as its creator.
+type DeploymentData struct {
+	// The template, its parameters, and the record of the last run.
+	Properties *DeploymentProperties `json:"properties,omitempty"`
+}
+
+// DeploymentProperties is The template, its parameters, and the record of the last run.
+type DeploymentProperties struct {
+	// Why the last run failed, naming the resource that stopped it. Empty when it did not.
+	Error *string `json:"error,omitempty"`
+	// Every resource the last run created or updated, in the order it did.
+	OutputResources []string `json:"outputResources,omitempty"`
+	// The parameter values, as JSON text: { "name": { "value": … } }.
+	Parameters *string `json:"parameters,omitempty"`
+	// What a rollback would remove. Rollback is recorded and never performed.
+	Rollback *string `json:"rollback,omitempty"`
+	// One line per template resource, in dependency order: its state, its id and the operation that drove it.
+	Steps []string `json:"steps,omitempty"`
+	// The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.
+	Template string `json:"template"`
+}
+
+// MarshalJSON writes the struct with its read-only members cleared: Error, OutputResources, Rollback, Steps. The write path refuses a read-only member rather than ignoring it.
+func (v DeploymentProperties) MarshalJSON() ([]byte, error) {
+	type plain DeploymentProperties
+	stripped := plain(v)
+	stripped.Error = nil
+	stripped.OutputResources = nil
+	stripped.Rollback = nil
+	stripped.Steps = nil
+	return json.Marshal(stripped)
+}
+
+// DeploymentResource is one Deployment, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type DeploymentResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data DeploymentData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *DeploymentResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// DeploymentWhatIfContent is the parameters of whatIf.
+type DeploymentWhatIfContent struct {
+	// The template to evaluate and its parameters.
+	Properties DeploymentWhatIfContentProperties `json:"properties"`
+}
+
+// DeploymentWhatIfContentProperties is The template to evaluate and its parameters.
+type DeploymentWhatIfContentProperties struct {
+	// The parameter values, as JSON text.
+	Parameters *string `json:"parameters,omitempty"`
+	// The template, as JSON text — the same shape a PUT takes.
+	Template string `json:"template"`
+}
+
+// DeploymentWhatIfResult is what whatIf returns.
+type DeploymentWhatIfResult struct {
+	// The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.
+	Creates []string `json:"creates"`
+	// The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.
+	Modifies []string `json:"modifies"`
+	// The resources a deployment would leave as they are, in deployment order.
+	NoChanges []string `json:"noChanges"`
+	// Succeeded: the template evaluated and every resource was compared.
+	Status string `json:"status"`
 }
 
 // WidgetTier is the values /properties/tier accepts. ⚠ Closed: the write path refuses anything else.

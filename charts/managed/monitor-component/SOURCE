@@ -1,0 +1,33 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# Nothing was forked and nothing is deployed. The chart renders one ConfigMap whose keys are the
+# OpenTelemetry SDKs' own environment variables, and the only thing taken from upstream is their names.
+
+vendored: none
+upstream: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/
+
+# ── What was read, and where it landed ─────────────────────────────────────────────────────────────
+#
+#   * OTEL_EXPORTER_OTLP_ENDPOINT — a URL for both protocols: gRPC takes http://host:4317 and HTTP takes
+#     http://host:4318 and appends /v1/traces, /v1/logs and /v1/metrics itself. MonitorComponents.Endpoint.
+#   * OTEL_EXPORTER_OTLP_PROTOCOL — `grpc` or `http/protobuf`, spelled as the specification spells them,
+#     which is why `/properties/protocol`'s two values contain a slash.
+#   * OTEL_RESOURCE_ATTRIBUTES — `key=value` pairs separated by commas. The one pair written is
+#     `service.namespace={component}`, and a component name is a DNS label, so it needs no escaping.
+#
+# ── What the views read, and how the spellings were established ────────────────────────────────────
+#
+# The views read the workspace's `otel_traces` and `otel_logs` tables in the shape the pinned collector's
+# clickhouse exporter writes (otel/opentelemetry-collector-contrib:0.161.0, see
+# charts/managed/monitor-collector/SOURCE). Measured on 2026-09-23 against
+# clickhouse/clickhouse-server:25.3-alpine: with `create_schema: true` the exporter created
+# `otel_traces`, `otel_traces_trace_id_ts`, `otel_traces_trace_id_ts_mv` and `otel_logs`, and a server
+# span with an error status and an `exception` event, a client span with `db.system`, and a log record
+# with `exception.type` landed as
+#
+#   SpanName      SpanKind  StatusCode  Duration    Events.Name
+#   GET /cart     Server    Error       250000000   ['exception']
+#   SELECT carts  Client    Unset       10000000    []
+#
+# — `SpanKind` and `StatusCode` in their short spellings, `Duration` in nanoseconds. Those are the
+# spellings ComponentViews' statements use. MonitorTelemetrySchema carries the four statements verbatim.

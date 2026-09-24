@@ -26,11 +26,12 @@ upstream: none
 
 upstream-operator: none
 
-# ⚠ THE IMAGES ARE NOT UPSTREAM IMAGES AND THIS IS THE ROW MOST LIKELY TO BE READ AS DONE WHEN IT IS
-# NOT. `MailDomains.ImageRegistry` is `docker.io/cybercloud`, which is the platform's own namespace,
-# and NOTHING IN THIS REPOSITORY BUILDS THOSE THREE IMAGES. A mail back end needs Dovecot, Postfix
-# and Rspamd configured to read the ConfigMap and Secret this chart renders, and neither the official
-# images nor any third-party one does that out of the box. The image build is owed and is named in
-# the conformance.yaml § owed beside this file.
+# ⚠ TWO UPSTREAM IMAGES AND ONE OF OURS. Dovecot and Rspamd run their projects' own images
+# unmodified (MailDomains.DovecotImage, RspamdImage). Postfix publishes none, so
+# deploy/images/mail-postfix is Debian's package and nothing else, named
+# ghcr.io/rikarin/cybercloud/mail-postfix — the repository owner's namespace. ⚠ The first cut named
+# docker.io/cybercloud/*, which it called "the platform's own namespace"; that Docker Hub
+# organisation belongs to an unrelated party. The Postfix image is built by the cluster-backed suite
+# and pushed by nothing: conformance.yaml § owed, `the-postfix-image-is-not-published`.
 
-images-built: no
+images-built: postfix-by-the-test-only

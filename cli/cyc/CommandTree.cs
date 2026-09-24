@@ -54,7 +54,8 @@ static class CommandTree {
     ///     generator can refuse the provider name instead.
     /// </remarks>
     static readonly string[] ReservedGroups = [
-        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version", "graph"
+        "login", "logout", "account", "rest", "config", "completion", "complete", "extension", "version", "graph",
+        "deployment"
     ];
 
     /// <summary>
@@ -67,7 +68,7 @@ static class CommandTree {
     ///         <b>
     ///             The extension model's shadowing check reads this, and it has to include the
     ///             generated half.
-    ///         </b> <see cref="ReservedGroups" /> is ten fixed names; the groups a
+    ///         </b> <see cref="ReservedGroups" /> is eleven fixed names; the groups a
     ///         release actually carries are whatever the provider registry emitted, and an extension
     ///         called <c>postgres</c> is exactly as unreachable as one called <c>login</c>. Reading
     ///         both from one place is what keeps <c>cyc extension add</c>'s refusal in step with the

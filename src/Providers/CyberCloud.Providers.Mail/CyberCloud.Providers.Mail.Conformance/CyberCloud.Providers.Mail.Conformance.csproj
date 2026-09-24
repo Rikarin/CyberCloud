@@ -6,7 +6,7 @@
 
       ⚠ IT CONTAINS NO ASSERTIONS, AND THIS PROVIDER TESTS THAT CLAIM FROM A NEW DIRECTION. Earlier
       families demonstrated it for one object, for two, and for a pair of custom resources with a
-      required binding between them. This one is the first whose five objects include a SECRET whose
+      required binding between them. This one is the first whose objects include a SECRET whose
       contents the reconciler does not compute — it reads them back out of the vault — so the case's
       ObjectMatchesDesired has to be true of a document whose bytes the case cannot predict.
       test/CyberCloud.Conformance still needed no change: MailDomains.Matches answers `true` for a

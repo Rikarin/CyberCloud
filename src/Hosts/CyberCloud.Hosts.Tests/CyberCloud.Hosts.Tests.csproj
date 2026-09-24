@@ -29,6 +29,14 @@
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Shouldly"/>
         <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!--
+          #38: BillingAcrossTheHostsTests starts the two real hosts over real storage — a Redis hot tier
+          and two PostgreSQL durable shards — because the durable tier's JSON serializer is where a
+          billing type can fail and a TestCluster's memory storage cannot. The one test in this project
+          that needs a Docker daemon, and it fails without one, as the Gateway suite's ClickHouse test does.
+        -->
+        <PackageReference Include="Testcontainers.PostgreSql"/>
+        <PackageReference Include="Testcontainers.Redis"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">

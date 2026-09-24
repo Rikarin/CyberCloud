@@ -62,6 +62,128 @@ public readonly record struct ActionContext(
     ///     for the same reason; <c>ActionDispatcher</c> supplies the host's.
     /// </summary>
     public IAgentTunnels Agents { get; init; } = new UnavailableAgentTunnels();
+
+    /// <summary>
+    ///     Who invoked the action, as the manager checked the action's permission for. Empty when the
+    ///     dispatcher was built without one, as every test double's is.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>For a handler whose answer depends on more than the resource.</b> The manager has checked
+    ///     the declared permission on the resource and nothing else. <c>showStatus</c> on a budget that
+    ///     covers its subscription returns the subscription's spend, and a reader of the budget's group
+    ///     may not read that — so the handler asks again, about the subscription, for this caller. A
+    ///     handler that asks must refuse when this is empty rather than answer as nobody in particular.
+    /// </remarks>
+    public CallerContext Caller { get; init; } = new();
+
+    /// <summary>
+    ///     The resource's parent with its GUID resolved, or <see langword="null" /> for a top-level
+    ///     resource and for a child whose parent no longer resolves.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The action path learns the parent's GUID and the reconcile path still doesn't,
+    ///             and the difference is who resolves it.
+    ///         </b> A reconcile pass runs from a reminder with the address it was written at;
+    ///         an action runs on the request path, where <c>ResourceManagerService</c> already reads
+    ///         the tenant's index for the resource itself, so the parent is one more read through the
+    ///         same tenant-qualified factory. A handler that needs a fact the platform derives from the
+    ///         parent's GUID — <c>CyberCloud.Monitor/workspaces/components</c> reads the workspace's
+    ///         ClickHouse database, which is <c>ws_{guid:N}</c> — gets it from the index rather than
+    ///         from an object in the tenant's namespace, which a tenant who administers that cluster
+    ///         could rewrite to name another tenant's database.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The immediate parent only</b>, as the create path checks it. A dispatcher built by a
+    ///         test with no parent leaves this <see langword="null" />, and a handler that needs it
+    ///         refuses by name.
+    ///     </para>
+    /// </remarks>
+    public ResourceId? Parent { get; init; }
+
+    /// <summary>
+    ///     Creates another resource in this resource's group, as the <b>caller</b> of this action,
+    ///     through the whole write path. docs/plan/08 § What the resource manager deliberately does not
+    ///     do, "An action may create, as its caller".
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Defaults to <see cref="RefusingResourceCreator" />, which fails by name; the manager supplies
+    ///     one bound to the request's caller, and nothing a handler holds can rebind it.
+    /// </remarks>
+    public IResourceCreator Creator { get; init; } = new RefusingResourceCreator();
+}
+
+/// <summary>
+///     The one way an action handler brings a resource into existence: a <c>PUT</c> of a new name, made
+///     as the action's caller.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠
+///         <b>
+///             Why an action may do what a reconciler may not.
+///         </b> docs/plan/08 § The cross-resource seam refuses a reconciler any write because "a write
+///         needs a caller, and a reconciler has none". An action has one: the person who POSTed it,
+///         already authenticated, whose request is still open. So the create this seam performs is
+///         <i>that person's</i> write — authorised against them for the created type's write
+///         permission in this group, locked, quota-reserved, indexed, and recorded with them as its
+///         author — and a caller who may <c>recover</c> from a vault but may not create a PostgreSQL
+///         server is refused here exactly as their own <c>PUT</c> would be.
+///     </para>
+///     <para>
+///         ⚠ <b>Create only, and only in this resource's own subscription and group.</b> A name that
+///         already exists is refused with <see cref="ErrorCode.ResourceAlreadyExists" /> rather than
+///         replaced: a restore never overwrites, and a handler that could PUT over an existing resource
+///         would be one retry away from doing so. The check precedes the write and does not lock the
+///         name, so two concurrent creates of one name can both pass it and the second becomes an
+///         update; the created body is the same in that race, and it is recorded rather than closed.
+///     </para>
+/// </remarks>
+public interface IResourceCreator {
+    /// <summary>Creates one resource beside the action's own.</summary>
+    /// <param name="type">The type to create.</param>
+    /// <param name="name">Its name, in this resource's subscription and group.</param>
+    /// <param name="apiVersion">The api-version the body is written at.</param>
+    /// <param name="body">The body, as a caller would <c>PUT</c> it.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>The created resource and the operation creating it, or the write path's refusal.</returns>
+    Task<Result<ResourceCreated>> CreateAsync(
+        ResourceTypeName type,
+        string name,
+        string apiVersion,
+        string body,
+        CancellationToken cancellationToken = default
+    );
+}
+
+/// <summary>What <see cref="IResourceCreator.CreateAsync" /> started.</summary>
+/// <param name="Id">The new resource, with its GUID.</param>
+/// <param name="OperationId">The create's operation, which the caller polls.</param>
+public sealed record ResourceCreated(ResourceId Id, Guid OperationId);
+
+/// <summary>
+///     The <see cref="IResourceCreator" /> an <see cref="ActionContext" /> carries when nobody
+///     supplied one.
+/// </summary>
+public sealed class RefusingResourceCreator : IResourceCreator {
+    /// <inheritdoc />
+    public Task<Result<ResourceCreated>> CreateAsync(
+        ResourceTypeName type,
+        string name,
+        string apiVersion,
+        string body,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<ResourceCreated>.Failure(
+                ErrorCode.InternalError,
+                $"This action context carries no resource creator, so '{type}/{name}' cannot be created. "
+                + "ResourceManagerService.ActionAsync supplies one bound to the caller; a context built by "
+                + "hand has to set ActionContext.Creator."
+            )
+        );
 }
 
 /// <summary>

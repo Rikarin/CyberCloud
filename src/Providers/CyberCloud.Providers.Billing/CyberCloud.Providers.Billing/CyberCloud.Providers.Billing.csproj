@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the implementation assembly: "grains, reconcilers, the chart
+      bindings". One reconciler, no grain of its own and no chart: the budget grain is
+      CyberCloud.Billing's, reached through IBudgetControlPlane — the arrangement the Communication
+      family has with ICommunicationControlPlane, and for the same reason (see the .Contracts .csproj).
+
+      ⚠ ITS ENTIRE REFERENCE SET IS ITS OWN .Contracts. No Orleans package: a reconciler is a plain
+      singleton, and the grain factory it would need lives behind the control plane, qualified once.
+    -->
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Billing.Contracts/CyberCloud.Providers.Billing.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

@@ -13,6 +13,12 @@
     <ItemGroup>
         <PackageReference Include="xunit.v3"/>
         <PackageReference Include="Shouldly"/>
+        <!--
+          ⚠ The generic ContainerBuilder, for the images the domain's pod runs and a CoreDNS serving a
+          zone file: MailDataPlaneTests hands each rendering to the daemon that reads it, and
+          MailDnsResolverTests asks a real DNS server. Both need Docker; neither needs a cluster.
+        -->
+        <PackageReference Include="Testcontainers"/>
     </ItemGroup>
 
     <ItemGroup Label="Global usings">
@@ -30,12 +36,32 @@
         -->
         <EmbeddedResource Include="../../../../charts/managed/mail/templates/_helpers.tpl"
                           LogicalName="mail.helpers.tpl"/>
+        <!--
+          ⚠ And the four templates that carry the pod, since issue #34's second pass: the first cut's
+          chart repeated every defect its C# had, because nothing held the two copies together.
+          MailChartTests does now.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/mail/templates/statefulset.yaml"
+                          LogicalName="mail.statefulset.yaml"/>
+        <EmbeddedResource Include="../../../../charts/managed/mail/templates/service.yaml"
+                          LogicalName="mail.service.yaml"/>
+        <EmbeddedResource Include="../../../../charts/managed/mail/templates/configmap.yaml"
+                          LogicalName="mail.configmap.yaml"/>
+        <EmbeddedResource Include="../../../../charts/managed/mail/templates/secret-users.yaml"
+                          LogicalName="mail.secret-users.yaml"/>
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.csproj"/>
         <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
         <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!--
+          ⚠ The module, for MailApplicationModule.PlatformFrom: the abuse desk's suspension list is read
+          there, and the #34 review found nothing had ever fed it a configuration. docs/plan/03 § Assembly
+          graph rules, rule 4 is over shipping assemblies, which a test project is not — the Sample
+          provider's application tests reference theirs the same way.
+        -->
+        <ProjectReference Include="../CyberCloud.Providers.Mail.Application/CyberCloud.Providers.Mail.Application.csproj"/>
     </ItemGroup>
 
 </Project>

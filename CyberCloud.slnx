@@ -81,6 +81,10 @@
         <Project Path="src/CyberCloud.Metering.Contracts.Tests/CyberCloud.Metering.Contracts.Tests.csproj" />
         <Project Path="src/CyberCloud.Metering/CyberCloud.Metering.csproj" />
         <Project Path="src/CyberCloud.Metering.Tests/CyberCloud.Metering.Tests.csproj" />
+        <!-- docs/plan/22's M2 rows, issue #38: rating, invoicing, budgets, cost views, the PSP and tax seams. -->
+        <Project Path="src/CyberCloud.Billing.Contracts/CyberCloud.Billing.Contracts.csproj" />
+        <Project Path="src/CyberCloud.Billing/CyberCloud.Billing.csproj" />
+        <Project Path="src/CyberCloud.Billing.Tests/CyberCloud.Billing.Tests.csproj" />
         <Project Path="src/CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj" />
         <Project Path="src/CyberCloud.ResourceManager.Contracts.Tests/CyberCloud.ResourceManager.Contracts.Tests.csproj" />
         <Project Path="src/CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj" />
@@ -467,6 +471,19 @@
         <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Tests/CyberCloud.Providers.Terminal.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Conformance/CyberCloud.Providers.Terminal.Conformance.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Cluster.Conformance/CyberCloud.Providers.Terminal.Cluster.Conformance.csproj" />
+
+        <!--
+          CyberCloud.Resources/deployments — docs/plan/08 § Long-running operations, "Nested operations".
+
+          ⚠ THREE PROJECTS, AND THE THINNEST FAMILY IN THE TREE ON PURPOSE. A deployment's work is PUTs
+          made as its creator, which no provider may make, so the driver, the template evaluator and the
+          what-if are CyberCloud.ResourceManager's and the declaration is CyberCloud.ResourceManager.Contracts'.
+          This family exists because Build.Generate reads provider assemblies from src/Providers and
+          nowhere else. No .Contracts, no reconciler, no chart, no conformance suite — its .csproj says why.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.Application/CyberCloud.Providers.Resources.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.Tests/CyberCloud.Providers.Resources.Tests.csproj" />
           The twelfth provider family — CyberCloud.Monitor/workspaces, docs/plan/16
           § CyberCloud.Monitor/workspaces, M1 · 2.5 EM, and step 7 of docs/plan/24's M1 exit story
           ("see metrics and logs").
@@ -543,6 +560,18 @@
         <Project Path="src/Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Conformance/CyberCloud.Providers.Communication.Conformance.csproj" />
 
         <!--
+          The eighteenth provider family — CyberCloud.Billing/budgets, docs/plan/22 § Cost visibility,
+          issue #38. The second clusterless family, and the second whose type is a module's grain: the
+          budget is evaluated by CyberCloud.Billing, reached through IBudgetControlPlane, the way the
+          Communication family reaches its module.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Contracts/CyberCloud.Providers.Billing.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Application/CyberCloud.Providers.Billing.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Tests/CyberCloud.Providers.Billing.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Conformance/CyberCloud.Providers.Billing.Conformance.csproj" />
+
+        <!--
           The seventeenth provider family — CyberCloud.RecoveryServices/vaults, docs/plan/15 § Backup as
           a service: "Not a storage type; a policy resource that binds protected resources to schedules
           and retention." docs/plan/24 § Phase 3's Storage row, second noun (#30).
@@ -567,6 +596,23 @@
           break the other. ClusterSlot serialises processes; that is the boundary.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance.csproj" />
+
+        <!--
+          The nineteenth provider family — CyberCloud.KeyVault/vaults, docs/plan/18
+          § CyberCloud.KeyVault/vaults: secrets and RSA/EC keys behind a data plane of actions through
+          the gateway, sealed under a per-vault root the platform vault (CyberCloud.Vault) holds, and
+          authorized by four ReBAC data-plane roles no control-plane role implies. The prerequisite
+          #30's customer-managed keys named.
+
+          ⚠ CLUSTERLESS, AND NO .Cluster.Conformance PROJECT: a vault is a grain and a path in the
+          platform vault, so the k3s lane has nothing to apply — the same answer the Communication
+          family gives.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Contracts/CyberCloud.Providers.KeyVault.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Application/CyberCloud.Providers.KeyVault.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Tests/CyberCloud.Providers.KeyVault.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Conformance/CyberCloud.Providers.KeyVault.Conformance.csproj" />
 
         <!--
           The eighteenth provider family — CyberCloud.Compute/virtualMachines, disks and images, on

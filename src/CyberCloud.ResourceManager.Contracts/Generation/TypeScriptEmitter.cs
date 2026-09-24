@@ -86,6 +86,7 @@ public static class TypeScriptEmitter {
         var version = DocumentReader.VersionOf(document);
         var types = DocumentReader.TypesOf(document);
         var scopes = DocumentReader.ScopesOf(document);
+        var objects = DocumentReader.ScopeObjectsOf(document);
 
         return ImmutableSortedDictionary.CreateRange(
             StringComparer.Ordinal,
@@ -94,8 +95,8 @@ public static class TypeScriptEmitter {
                 ["tsconfig.json"] = ProjectFile(),
                 ["src/index.ts"] = Index(),
                 ["src/transport.ts"] = Transport(version),
-                ["src/models.ts"] = Models(document, types, scopes),
-                ["src/client.ts"] = Client(version, document, types, scopes)
+                ["src/models.ts"] = Models(document, types, scopes, objects),
+                ["src/client.ts"] = Client(version, document, types, scopes, objects)
             }
         );
     }
@@ -280,7 +281,8 @@ public static class TypeScriptEmitter {
     static string Models(
         JsonObject document,
         ImmutableArray<DocumentType> types,
-        ImmutableArray<DocumentScope> scopes
+        ImmutableArray<DocumentScope> scopes,
+        ImmutableArray<DocumentScopeObject> objects
     ) {
         var built = new StringBuilder(Head());
 
@@ -318,6 +320,7 @@ public static class TypeScriptEmitter {
         // three. A type per kind would be three identical interfaces whose only difference is the
         // value of one string literal.
         AppendScopeResource(built, document, scopes);
+        AppendScopeObjectModels(built, objects);
         AppendResourceEnvelope(built, document);
 
         foreach (var type in types) {
@@ -510,6 +513,51 @@ public static class TypeScriptEmitter {
 
             AppendMember(built, "  ", leaf);
         }
+
+        built.Append("}\n");
+    }
+
+    /// <summary>
+    ///     The objects addressed on a scope — issue #46's policy — one read interface and one write
+    ///     body per object, whatever the number of scopes it sits on.
+    /// </summary>
+    static void AppendScopeObjectModels(StringBuilder built, ImmutableArray<DocumentScopeObject> objects) {
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var scoped in objects) {
+            if (declared.Add(scoped.ModelName)) {
+                AppendScopeObjectModel(
+                    built,
+                    scoped.ModelName,
+                    scoped.Resource,
+                    scoped.DisplayName + ", as the API renders it. " + scoped.Summary
+                );
+            }
+
+            if (scoped.ContentName.Length > 0 && declared.Add(scoped.ContentName)) {
+                AppendScopeObjectModel(
+                    built,
+                    scoped.ContentName,
+                    scoped.Content,
+                    "The body of a PUT that writes a " + scoped.DisplayName.ToLowerInvariant() + "."
+                );
+            }
+        }
+    }
+
+    static void AppendScopeObjectModel(StringBuilder built, string name, JsonObject schema, string doc) {
+        var leaves = DocumentReader.LeavesOf(schema);
+
+        AppendUnions(built, name, leaves);
+
+        built.Append("\n/** ")
+            .Append(Comment(doc))
+            .Append(" */\n")
+            .Append("export interface ")
+            .Append(name)
+            .Append(" {\n");
+
+        AppendObject(built, "  ", EnumNaming.For(name, leaves), schema);
 
         built.Append("}\n");
     }
@@ -831,6 +879,8 @@ public static class TypeScriptEmitter {
             ? naming.NameOf(leaf)
             : DocumentReader.TypeOf(schema) switch {
                 "array" => Scalar(schema["items"] as JsonObject ?? [], naming, leaf) + "[]",
+                // ⚠ Any JSON value — a policy rule — before the object branch reads it as the tag bag.
+                "object" when DocumentReader.IsJsonValue(schema) => "unknown",
                 "object" => "Record<string, string>",
                 var scalar => Scalar(schema, naming, leaf, scalar)
             };
@@ -861,7 +911,8 @@ public static class TypeScriptEmitter {
         string version,
         JsonObject document,
         ImmutableArray<DocumentType> types,
-        ImmutableArray<DocumentScope> scopes
+        ImmutableArray<DocumentScope> scopes,
+        ImmutableArray<DocumentScopeObject> objects
     ) {
         var built = new StringBuilder(Head());
 
@@ -877,6 +928,14 @@ public static class TypeScriptEmitter {
 
         foreach (var scope in scopes.Where(static x => x.Creatable)) {
             imported.Add(ScopeInterface(scope));
+        }
+
+        foreach (var scoped in objects) {
+            imported.Add(scoped.ModelName);
+
+            if (scoped.ContentName.Length > 0) {
+                imported.Add(scoped.ContentName);
+            }
         }
 
         foreach (var type in types) {
@@ -928,6 +987,10 @@ public static class TypeScriptEmitter {
 
         foreach (var scope in scopes) {
             AppendScopeMethods(built, scope);
+        }
+
+        foreach (var scoped in objects) {
+            AppendScopeObjectMethods(built, scoped);
         }
 
         foreach (var type in types) {
@@ -1059,6 +1122,94 @@ public static class TypeScriptEmitter {
             .Append("    return this.transport.send<ScopeResource>({ method: 'PUT', path: ")
             .Append(PathExpression(scope.Path))
             .Append(", body: content });\n  }\n\n");
+    }
+
+    /// <summary>
+    ///     One object on one scope — issue #46's policy — as a method per verb:
+    ///     <c>getPolicyDefinitionAtSubscription</c> and its siblings.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ No operation URL to follow: a write converges before the call returns, 201 the first time
+    ///     and 200 after on a <c>PUT</c> and 204 on a <c>DELETE</c> — the scope methods' rule.
+    /// </remarks>
+    static void AppendScopeObjectMethods(StringBuilder built, DocumentScopeObject scoped) {
+        var on = Comment(scoped.DisplayName.ToLowerInvariant()) + " on a " + CliEmitter.Kebab(scoped.Scope).Replace('-', ' ');
+        var collectionPlaceholders = DocumentReader.PlaceholdersOf(scoped.CollectionPath);
+
+        built.Append("  /** One page of the ")
+            .Append(Comment(scoped.DisplayPlural.ToLowerInvariant()))
+            .Append(" on a ")
+            .Append(CliEmitter.Kebab(scoped.Scope).Replace('-', ' '))
+            .Append(". ⚠ A short page never means \"that is all there is\". */\n")
+            .Append("  list")
+            .Append(scoped.PluralStem)
+            .Append('(')
+            .Append(string.Join(", ", collectionPlaceholders.Select(static x => Camel(x) + ": string")))
+            .Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
+            .Append("page: PageRequest = {}): Promise<ApiResponse<Page<")
+            .Append(scoped.ModelName)
+            .Append(">>> {\n")
+            .Append("    return this.transport.send<Page<")
+            .Append(scoped.ModelName)
+            .Append(">>({ method: 'GET', path: ")
+            .Append(PathExpression(scoped.CollectionPath))
+            .Append(", query: CyberCloudApi.pageQuery(page) });\n  }\n\n");
+
+        if (scoped.Path.Length == 0) {
+            return;
+        }
+
+        var parameters = string.Join(", ", DocumentReader.PlaceholdersOf(scoped.Path).Select(static x => Camel(x) + ": string"));
+        var path = PathExpression(scoped.Path);
+
+        built.Append("  /** Reads one ")
+            .Append(on)
+            .Append(". */\n")
+            .Append("  get")
+            .Append(scoped.SingularStem)
+            .Append('(')
+            .Append(parameters)
+            .Append("): Promise<ApiResponse<")
+            .Append(scoped.ModelName)
+            .Append(">> {\n")
+            .Append("    return this.transport.send<")
+            .Append(scoped.ModelName)
+            .Append(">({ method: 'GET', path: ")
+            .Append(path)
+            .Append(" });\n  }\n\n");
+
+        if (!scoped.Writable) {
+            return;
+        }
+
+        built.Append("  /** Creates or replaces one ")
+            .Append(on)
+            .Append(", written whole. ⚠ 201 the first time and 200 after, and no operation to poll. */\n")
+            .Append("  createOrUpdate")
+            .Append(scoped.SingularStem)
+            .Append('(')
+            .Append(parameters)
+            .Append(", content: ")
+            .Append(scoped.ContentName)
+            .Append("): Promise<ApiResponse<")
+            .Append(scoped.ModelName)
+            .Append(">> {\n")
+            .Append("    return this.transport.send<")
+            .Append(scoped.ModelName)
+            .Append(">({ method: 'PUT', path: ")
+            .Append(path)
+            .Append(", body: content });\n  }\n\n")
+            .Append("  /** Deletes one ")
+            .Append(on)
+            .Append(". An object already gone is a success. */\n")
+            .Append("  delete")
+            .Append(scoped.SingularStem)
+            .Append('(')
+            .Append(parameters)
+            .Append("): Promise<ApiResponse<void>> {\n")
+            .Append("    return this.transport.send<void>({ method: 'DELETE', path: ")
+            .Append(path)
+            .Append(" });\n  }\n\n");
     }
 
     static void AppendTypeMethods(StringBuilder built, DocumentType type) {

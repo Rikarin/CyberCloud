@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      CyberCloud.Billing/budgets' tests: the declaration read the way a silo reads it at start, the body
+      turned into a spec and refused where the schema cannot refuse, and the reconciler driven against
+      the REAL budget grain in an in-process silo that hosts CyberCloud.Billing, the usage ledger, the
+      ReBAC engine and the sending module exactly as CyberCloud.Silo.Host composes them.
+
+      ⚠ In-memory grain storage and reminders — the deviation from ADR-018 CyberCloud.Billing.Tests
+      records, owed on the same terms.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.csproj"/>
+        <!-- The module the reconciler converges onto, hosted here the way the silo host hosts it. -->
+        <ProjectReference Include="../../../CyberCloud.Billing/CyberCloud.Billing.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Metering/CyberCloud.Metering.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

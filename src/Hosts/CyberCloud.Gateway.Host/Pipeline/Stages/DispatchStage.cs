@@ -1,3 +1,4 @@
+using CyberCloud.Billing.Contracts;
 using CyberCloud.Gateway.Host.Http;
 using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Operations;
@@ -39,11 +40,19 @@ sealed class DispatchStage(
     IScopeManager scopes,
     IRoleAssignmentManager roles,
     IResourceGraphQuery graph,
+    IDeploymentManager deployments,
+    IInvitationManager invitations,
+    IIdentityAdministration identityAdministration,
+    ICostQuery costs,
+    IInvoiceReader invoices,
+    IPolicyManager policies,
     IOperationReader operations,
     IHubTicketStore tickets,
     GatewayOptions options
 )
     : IGatewayStage {
+    readonly IdentityDispatch identity = new(invitations, identityAdministration);
+
     /// <inheritdoc />
     public GatewayStage Stage => GatewayStage.Dispatch;
 
@@ -64,6 +73,11 @@ sealed class DispatchStage(
             RouteKind.RoleAssignment => await RoleAssignmentAsync(context, path, cancellationToken),
             RouteKind.RoleAssignmentCollection => await RoleAssignmentCollectionAsync(context, path, cancellationToken),
             RouteKind.ResourceGraphQuery => await ResourceGraphQueryAsync(context, path, cancellationToken),
+            RouteKind.Identity => await identity.DispatchAsync(context, path, cancellationToken),
+            RouteKind.CostQuery => await CostQueryAsync(context, path, cancellationToken),
+            RouteKind.Invoice => await InvoiceAsync(context, path, cancellationToken),
+            RouteKind.Policy => await PolicyAsync(context, path, cancellationToken),
+            RouteKind.PolicyCollection => await PolicyCollectionAsync(context, path, cancellationToken),
             RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
@@ -450,6 +464,132 @@ sealed class DispatchStage(
     }
 
     /// <summary>
+    ///     A policy definition or assignment — docs/plan/08 § Policy, issue #46.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             <c>201</c> on a create, <c>200</c> on a replace or a repeat, <c>204</c> on a delete,
+    ///             and no <c>202</c> anywhere
+    ///         </b> — one catalog write converges before the call returns, the argument
+    ///         <see cref="RoleAssignmentAsync" /> makes for a grant.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>No authorization here, exactly as for a role assignment.</b> The <c>assignRole</c>
+    ///         check is <c>IPolicyManager</c>'s, behind the one seam; <c>GatewayIsolationTests</c> reads
+    ///         this project's source to keep it out of it. And nothing here <i>enforces</i> a policy —
+    ///         that is step 5 of every resource write, inside the resource manager.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>PATCH</c> and <c>POST</c> are <c>405</c>.</b> A definition is replaced whole — a
+    ///         merge patch into a condition tree has no sensible reading — and there is no action on
+    ///         either object.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> PolicyAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        var method = context.Http.Request.Method;
+
+        var request = new PolicyRequest {
+            // ⚠ The rebuilt path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
+            Path = context.Route.ResourcePath, Body = context.Body, Caller = context.Caller
+        };
+
+        if (HttpMethods.IsGet(method)) {
+            var read = await policies.ReadAsync(request, cancellationToken);
+
+            return read.TryGetError(out var readError)
+                ? ResultShaper.Shape(readError, path)
+                : new() { StatusCode = StatusCodes.Status200OK, Json = ResponseBodies.PolicyObject(read.GetValueOrThrow()) };
+        }
+
+        if (HttpMethods.IsDelete(method)) {
+            var deleted = await policies.DeleteAsync(request, cancellationToken);
+
+            return deleted.TryGetError(out var deleteError)
+                ? ResultShaper.Shape(deleteError, path)
+                : new GatewayOutcome { StatusCode = StatusCodes.Status204NoContent };
+        }
+
+        if (!HttpMethods.IsPut(method)) {
+            return new GatewayOutcome {
+                StatusCode = StatusCodes.Status405MethodNotAllowed,
+                Error = new(
+                    ErrorCode.InvalidRequestBody,
+                    $"{method} is not supported on a policy definition or assignment. It is read with GET, "
+                    + "written whole with PUT and deleted with DELETE — docs/plan/08 § Policy."
+                )
+            }.WithHeader(GatewayHeaders.Allow, "GET, PUT, DELETE");
+        }
+
+        var written = await policies.PutAsync(request, cancellationToken);
+
+        if (written.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var snapshot = written.GetValueOrThrow();
+
+        return new() {
+            StatusCode = snapshot.Created ? StatusCodes.Status201Created : StatusCodes.Status200OK,
+            Json = ResponseBodies.PolicyObject(snapshot)
+        };
+    }
+
+    /// <summary>
+    ///     A policy collection <c>GET</c> — the definitions or assignments on a scope, or the compliance
+    ///     states beneath it — paged like every collection of this API.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>$top</c> parsed leniently and used twice, <c>$skipToken</c> passed through verbatim —
+    ///     <see cref="CollectionAsync" />'s rules, so a client pages this one with no branch. No check and
+    ///     no filter here; the one check on the scope is the manager's.
+    /// </remarks>
+    async Task<GatewayOutcome> PolicyCollectionAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        var query = context.Http.Request.Query;
+        var top = int.TryParse(query["$top"], CultureInfo.InvariantCulture, out var asked) ? asked : 0;
+
+        var listed = await policies.ListAsync(
+            new() {
+                // ⚠ The rebuilt path, carrying the TOKEN's tenant. Never context.Http.Request.Path.
+                Path = context.Route.CollectionPath,
+                Caller = context.Caller,
+                Top = top,
+                Continuation = query["$skipToken"].ToString()
+            },
+            cancellationToken
+        );
+
+        if (listed.TryGetError(out var error)) {
+            return ResultShaper.Shape(error, path);
+        }
+
+        var page = listed.GetValueOrThrow();
+
+        return new() {
+            StatusCode = StatusCodes.Status200OK,
+            Json = ResponseBodies.PolicyPage(
+                page,
+                GatewayRouterPaths.NextLink(
+                    options.PublicBaseUri,
+                    context.Route.CollectionPath,
+                    context.ApiVersion.Value,
+                    top,
+                    page.Continuation
+                )
+            )
+        };
+    }
+
+    /// <summary>
     ///     The resource graph query <c>POST</c> —
     ///     <c>
     /// { "query": "resources | …", "$top": n,
@@ -541,6 +681,111 @@ sealed class DispatchStage(
     }
 
     /// <summary>
+    ///     The cost query <c>POST</c> — a period and a grouping to <see cref="ICostQuery" />, for the
+    ///     subscription or group the address names. docs/plan/22 § Cost visibility, issue #38.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>No check and no filter here</b>, for the reason the resource graph's query has
+    ///         none: the cost grain prices the scope and removes every row the caller may not read,
+    ///         behind the one seam. This stage copies the caller's subject across — the only two
+    ///         fields of it the grain needs — and renders what comes back; a caller who may read
+    ///         nothing gets the grain's <c>404</c>, which is the absent subscription's.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The tenant is the token's, twice.</b> The address was rebuilt with it at stage 6,
+    ///         and the grain call is qualified with it here; the request itself carries no tenant.
+    ///     </para>
+    /// </remarks>
+    async Task<GatewayOutcome> CostQueryAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        if (!HttpMethods.IsPost(context.Http.Request.Method)) {
+            return new GatewayOutcome {
+                StatusCode = StatusCodes.Status405MethodNotAllowed,
+                Error = new(
+                    ErrorCode.InvalidRequestBody,
+                    $"{context.Http.Request.Method} is not supported on the cost query. A query is a POST with "
+                    + """{ "from": "…", "to": "…", "groupBy": "…" } as the body — docs/plan/22 § Cost visibility."""
+                )
+            }.WithHeader(GatewayHeaders.Allow, "POST");
+        }
+
+        var parsed = CostQueryBody.Parse(context.Body);
+
+        if (parsed.TryGetError(out var bodyError)) {
+            return ResultShaper.Shape(bodyError, path);
+        }
+
+        var body = parsed.GetValueOrThrow();
+        var scope = context.Route.CostQuery.Scope;
+
+        var answered = await costs.QueryAsync(
+            context.Caller.TenantId,
+            new() {
+                Caller = new() { SubjectType = context.Caller.SubjectType, SubjectId = context.Caller.SubjectId },
+                SubscriptionId = scope.SubscriptionId,
+                ResourceGroup = scope.Kind == ScopeKind.ResourceGroup ? scope.ResourceGroup : string.Empty,
+                From = body.From,
+                To = body.To,
+                Grouping = body.Grouping,
+                Granularity = body.Granularity
+            },
+            cancellationToken
+        );
+
+        return answered.TryGetError(out var error)
+            ? ResultShaper.Shape(error, path)
+            : new() { StatusCode = StatusCodes.Status200OK, Json = CostQueryBody.Render(answered.GetValueOrThrow()) };
+    }
+
+    /// <summary>
+    ///     The invoices <c>GET</c> — the tenant's finalized invoices, or one by number, from
+    ///     <see cref="IInvoiceReader" />. docs/plan/22 § What is owed, <c>billing-http-surface</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>No check here</b>, for the cost query's reason: the grain behind the reader asks the
+    ///     ReBAC engine whether the caller may read the tenant, and a no is the grain's <c>404</c>.
+    ///     A read, so anything but <c>GET</c> is a <c>405</c> — an invoice is issued by the month close
+    ///     and corrected by a credit note, never written through this address.
+    /// </remarks>
+    async Task<GatewayOutcome> InvoiceAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        if (!HttpMethods.IsGet(context.Http.Request.Method)) {
+            return new GatewayOutcome {
+                StatusCode = StatusCodes.Status405MethodNotAllowed,
+                Error = new(
+                    ErrorCode.InvalidRequestBody,
+                    $"{context.Http.Request.Method} is not supported on invoices. An invoice is read with a GET; it is "
+                    + "issued when its month closes and corrected by a credit note — docs/plan/22 § Invoicing and payment."
+                )
+            }.WithHeader(GatewayHeaders.Allow, "GET");
+        }
+
+        var address = context.Route.Invoice;
+        var caller = new CostCaller { SubjectType = context.Caller.SubjectType, SubjectId = context.Caller.SubjectId };
+
+        if (address.IsCollection) {
+            var listed = await invoices.ListAsync(context.Caller.TenantId, caller, cancellationToken);
+
+            return listed.TryGetError(out var listError)
+                ? ResultShaper.Shape(listError, path)
+                : new() { StatusCode = StatusCodes.Status200OK, Json = InvoiceBody.RenderList(listed.GetValueOrThrow()) };
+        }
+
+        var read = await invoices.GetAsync(context.Caller.TenantId, caller, address.Number, cancellationToken);
+
+        return read.TryGetError(out var error)
+            ? ResultShaper.Shape(error, path)
+            : new() { StatusCode = StatusCodes.Status200OK, Json = InvoiceBody.Render(read.GetValueOrThrow()) };
+    }
+
+    /// <summary>
     ///     The collection <c>GET</c>. Straight to <c>IResourceManager.ListAsync</c>, which owns the
     ///     per-member filter.
     /// </summary>
@@ -618,11 +863,35 @@ sealed class DispatchStage(
         };
     }
 
+    /// <summary>
+    ///     A <c>POST</c> action — to <c>IResourceManager.ActionAsync</c>, or, for an action the
+    ///     registry says an entry point serves, to that entry point.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>One such action today — a deployment's <c>whatIf</c> — and it is routed by name rather
+    ///     than by reading the registry here.</b> It runs as the caller against every resource its
+    ///     template names, which a handler cannot, and it answers for a deployment that may not exist,
+    ///     which <c>ActionAsync</c> refuses by design (<c>ActionRegistration.EntryPoint</c> carries the
+    ///     argument). Routing is not a decision: <c>IDeploymentManager.WhatIfAsync</c> runs the
+    ///     ownership checks and the permission check itself, behind the same seam, and this stage
+    ///     renders whatever it answers.
+    /// </remarks>
     async Task<GatewayOutcome> ActionAsync(
         GatewayRequestContext context,
         string path,
         CancellationToken cancellationToken
     ) {
+        if (Deployments.Is(context.Route.Resource.Type)
+            && string.Equals(context.Route.Action, Deployments.WhatIfAction, StringComparison.OrdinalIgnoreCase)) {
+            var answered = await deployments.WhatIfAsync(Build(context, WriteVerb.Post), cancellationToken);
+
+            return answered.TryGetError(out var whatIfError)
+                ? ResultShaper.Shape(whatIfError, path)
+                : new GatewayOutcome {
+                    StatusCode = StatusCodes.Status200OK, Json = answered.GetValueOrThrow().ToJson()
+                };
+        }
+
         var accepted = await manager.ActionAsync(Build(context, WriteVerb.Post), cancellationToken);
 
         if (accepted.TryGetError(out var error)) {

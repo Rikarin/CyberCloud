@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      What only this provider's declaration can be wrong about. A deployment's behaviour — the template,
+      the parent operation, the children written as the caller, the what-if — is the resource manager's
+      and is tested there, against real grains (CyberCloud.ResourceManager.Tests) and against the real
+      authorization engine (test/CyberCloud.Isolation).
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+        <Using Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.csproj"/>
+        <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

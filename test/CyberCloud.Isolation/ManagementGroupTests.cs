@@ -381,7 +381,97 @@ public sealed class ManagementGroupTests(IsolationCluster cluster) {
             )).IsSuccess.ShouldBeTrue();
     }
 
+    /// <summary>
+    ///     ⚠ <b>A deleted group's policy does not survive under its name either.</b> The tenant's policy
+    ///     catalog keys an assignment by its scope's path, and a management group's path is its name —
+    ///     so before the review of issue #46 the old owner's deny was in force on the group re-created
+    ///     under that name, readable there, and undeletable while the scope was gone (the policy
+    ///     manager answers 404 for a scope that doesn't exist). The reviewer's probe, made permanent.
+    /// </summary>
+    [Fact]
+    public async Task ADeletedGroupRecreatedUnderTheSameNameCarriesNoneOfItsOldPolicy() {
+        await SeedTenantAsync();
+        var owner = IsolationCluster.Caller(Tree, TenantOwner);
+        var group = ScopeId.ManagementGroupOf(Tree, "residue");
+        var definition = PolicyAddress.Definition(group, "residue-deny");
+        var assignment = PolicyAddress.Assignment(group, "residue-asg");
+
+        (await Put(group.Path, "{}", owner)).IsSuccess.ShouldBeTrue();
+        (await PutPolicyAsync(definition, DenyAll, owner)).IsSuccess.ShouldBeTrue();
+        (await PutPolicyAsync(assignment, AssignmentBody(definition), owner)).IsSuccess.ShouldBeTrue();
+
+        var deleted = await cluster.Scopes.DeleteAsync(new() { Path = group.Path, Caller = owner }, TestContext.Current.CancellationToken);
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        (await CatalogAssignmentsAsync(group)).ShouldBeEmpty("a deleted group's assignment is still in the tenant's catalog");
+
+        // ── Re-created under the same name: nothing of the old owner's is there ───────────────────
+        (await Put(group.Path, """{"displayName":"Residue, again"}""", owner)).IsSuccess.ShouldBeTrue();
+
+        var read = await cluster.Policies.ReadAsync(
+            new() { Path = assignment.Path, Caller = owner },
+            TestContext.Current.CancellationToken
+        );
+        read.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "the old group's assignment governs the group that took its name");
+
+        (await cluster.Policies.ReadAsync(new() { Path = definition.Path, Caller = owner }, TestContext.Current.CancellationToken))
+            .Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "the old group's definition is still there");
+
+        // The name is free for the new owner's own policy, created rather than replaced.
+        var fresh = await PutPolicyAsync(definition, DenyAll, owner);
+        fresh.IsSuccess.ShouldBeTrue(fresh.Error?.Message);
+        (await cluster.Policies.DeleteAsync(new() { Path = definition.Path, Body = "{}", Caller = owner }, TestContext.Current.CancellationToken))
+            .IsSuccess.ShouldBeTrue("a definition nothing assigns is deletable — no orphaned assignment holds it");
+    }
+
+    /// <summary>
+    ///     The same residue one level down: a resource group's path is its subscription and its name,
+    ///     so an assignment left by a deleted group governed the group re-created under that name.
+    /// </summary>
+    [Fact]
+    public async Task ADeletedResourceGroupRecreatedUnderTheSameNameCarriesNoneOfItsOldPolicy() {
+        await SeedTenantAsync();
+        var owner = IsolationCluster.Caller(Tree, TenantOwner);
+        var subscription = Guid.Parse("99999999-0000-4000-8000-0000000000d6");
+        var subscriptionScope = ScopeId.Subscription(Tree, subscription);
+        var group = ScopeId.Group(Tree, subscription, "residue-rg");
+        var definition = PolicyAddress.Definition(subscriptionScope, "rg-residue-deny");
+        var assignment = PolicyAddress.Assignment(group, "rg-residue-asg");
+
+        (await Put(subscriptionScope.Path, """{"displayName":"Residue"}""", owner)).IsSuccess.ShouldBeTrue();
+        (await Put(group.Path, """{"location":"eu-west-1"}""", owner)).IsSuccess.ShouldBeTrue();
+        (await PutPolicyAsync(definition, DenyAll, owner)).IsSuccess.ShouldBeTrue();
+        (await PutPolicyAsync(assignment, AssignmentBody(definition), owner)).IsSuccess.ShouldBeTrue();
+
+        var deleted = await cluster.Scopes.DeleteAsync(new() { Path = group.Path, Caller = owner }, TestContext.Current.CancellationToken);
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+
+        (await Put(group.Path, """{"location":"eu-west-1"}""", owner)).IsSuccess.ShouldBeTrue();
+
+        (await cluster.Policies.ReadAsync(new() { Path = assignment.Path, Caller = owner }, TestContext.Current.CancellationToken))
+            .Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "the old group's assignment governs the group that took its name");
+
+        // ⚠ The subscription's definition was the subscription's, and it stays — only what the deleted
+        // scope held goes. With its one assignment gone it's deletable.
+        (await cluster.Policies.DeleteAsync(new() { Path = definition.Path, Body = "{}", Caller = owner }, TestContext.Current.CancellationToken))
+            .IsSuccess.ShouldBeTrue("the orphaned assignment still holds the subscription's definition");
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    const string DenyAll = """{ "properties": { "policyRule": { "if": { "field": "type", "like": "*" }, "then": { "effect": "deny" } } } }""";
+
+    static string AssignmentBody(PolicyAddress definition) =>
+        $$"""{ "properties": { "policyDefinitionId": "{{definition.Path}}" } }""";
+
+    Task<Result<PolicyObjectSnapshot>> PutPolicyAsync(PolicyAddress address, string body, CallerContext caller) =>
+        cluster.Policies.PutAsync(new() { Path = address.Path, Body = body, Caller = caller }, TestContext.Current.CancellationToken);
+
+    /// <summary>What the catalog holds at a scope, asked of the grain directly, since the manager answers 404 for a scope that is gone.</summary>
+    async Task<IReadOnlyList<PolicyAssignmentRecord>> CatalogAssignmentsAsync(ScopeId scope) =>
+        (await cluster.For(Tree)
+            .GetGrain<IPolicyCatalogGrain>(GrainKeys.PolicyCatalog(Tree))
+            .ListAssignmentsAsync(scope.Path)).GetValueOrThrow();
 
     static CallerContext Gwen(string user) => IsolationCluster.Caller(Tree, user);
 

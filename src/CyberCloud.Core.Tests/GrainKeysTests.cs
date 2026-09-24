@@ -172,7 +172,7 @@ public class GrainKeysTests {
             }
         }
 
-        count.ShouldBe(3_000 * 8);
+        count.ShouldBe(3_000 * 9);
     }
 
     [Fact]
@@ -180,7 +180,8 @@ public class GrainKeysTests {
         foreach (var id in Corpus.ResourceIds(500, 11)) {
             var expected = new[] {
                 GrainKeyKind.Subscription, GrainKeyKind.ResourceGroup, GrainKeyKind.Resource, GrainKeyKind.PathIndex,
-                GrainKeyKind.User, GrainKeyKind.EmailIndex, GrainKeyKind.Operation, GrainKeyKind.ClusterConnection
+                GrainKeyKind.User, GrainKeyKind.EmailIndex, GrainKeyKind.Operation, GrainKeyKind.ClusterConnection,
+                GrainKeyKind.PolicyCatalog
             };
 
             var actual = Corpus.EveryGrainKeyShapeFor(id)
@@ -248,8 +249,8 @@ public class GrainKeysTests {
             }
         }
 
-        // Sanity: the corpus really did exercise all eight shapes.
-        seen.Values.Select(static x => x.Kind).Distinct().Count().ShouldBe(8);
+        // Sanity: the corpus really did exercise all nine shapes — #46 added the policy catalog.
+        seen.Values.Select(static x => x.Kind).Distinct().Count().ShouldBe(9);
     }
 
     [Fact]
@@ -651,6 +652,100 @@ public class GrainKeysTests {
         }
     }
 
+    // ── #43: the device authorization and the invitation ───────────────────────────────────────
+
+    [Fact]
+    public void ADeviceAuthorizationIsKeyedByItsUserCodesDigestAndNeverSpellsTheCode() {
+        var key = GrainKeys.DeviceAuthorization("BCDFGHJK");
+
+        key.ShouldStartWith("device/");
+        key.Length.ShouldBe("device/".Length + GrainKeys.DigestLength);
+        // ⚠ The code is a credential for its ten minutes; a key that spelled it would print it in
+        // every log line that prints a grain id — GrainKeys.DeviceAuthorization's remarks.
+        key.ShouldNotContain("BCDFGHJK");
+        key.ShouldNotBe(GrainKeys.DeviceAuthorization("BCDFGHJL"));
+
+        var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.DeviceAuthorization);
+        parsed.ToString().ShouldBe(key);
+
+        // Normalized input only: a separator, lower case or a control character is the caller's
+        // bug, and a digest of the un-normalized form would be a second grain for one code.
+        Should.Throw<ArgumentException>(static () => GrainKeys.DeviceAuthorization("BCDF-GHJK"));
+        Should.Throw<ArgumentException>(static () => GrainKeys.DeviceAuthorization("bcdfghjk"));
+        Should.Throw<ArgumentException>(static () => GrainKeys.DeviceAuthorization(""));
+        GrainKeys.Parse("device/" + Resource.ToString("N")).IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("device/" + parsed.Digest.ToUpperInvariant()).IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void TheInvitationShapeIsInviteSlashIdAndRoundTrips() {
+        GrainKeys.Invitation(Resource).ShouldBe("invite/0a1b2c3d4e5f40718293a4b5c6d7e8f9");
+
+        var parsed = GrainKeys.Parse(GrainKeys.Invitation(Resource)).GetValueOrThrow();
+
+        parsed.Kind.ShouldBe(GrainKeyKind.Invitation);
+        parsed.Id.ShouldBe(Resource);
+        GrainKeys.Parse("invite/" + Resource.ToString("D")).IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void TheDirectoryIndexIsOneKeyPerCollectionFromAClosedSet() {
+        GrainKeys.DirectoryIndex(GrainKeys.DirectoryUsers).ShouldBe("idx/dir/users");
+        GrainKeys.DirectoryIndex(GrainKeys.DirectoryInvitations).ShouldBe("idx/dir/invitations");
+        GrainKeys.DirectoryIndex(GrainKeys.DirectoryApplications).ShouldBe("idx/dir/applications");
+
+        foreach (var collection in GrainKeys.DirectoryCollections) {
+            var key = GrainKeys.DirectoryIndex(collection);
+            var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+            parsed.Kind.ShouldBe(GrainKeyKind.DirectoryIndex);
+            parsed.Name.ShouldBe(collection);
+            parsed.Digest.ShouldBeEmpty("the one idx/ shape whose payload is a name, not a digest");
+            parsed.ToString().ShouldBe(key);
+            GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+        }
+
+        // Closed: a fourth collection, a near-miss spelling and a digest in the name's place are
+        // refused rather than read as a list nobody writes to.
+        Should.Throw<ArgumentException>(static () => GrainKeys.DirectoryIndex("groups"));
+        GrainKeys.Parse("idx/dir/groups").IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("idx/dir/Users").IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("idx/dir/0123456789abcdef").IsFailure.ShouldBeTrue();
+        GrainKeys.Parse("idx/dir/users/extra").IsFailure.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void TheDirectoryIndexCollidesWithNoOtherShape() {
+        var directory = GrainKeys.DirectoryCollections.Select(GrainKeys.DirectoryIndex).ToArray();
+
+        foreach (var id in Corpus.ResourceIds(300, 4100)) {
+            foreach (var other in Corpus.EveryGrainKeyShapeFor(id)) {
+                directory.ShouldNotContain(other);
+            }
+
+            directory.ShouldNotContain(GrainKeys.Invitation(id.Id));
+            directory.ShouldNotContain(GrainKeys.ClientIndex(id.TenantId, id.Name));
+        }
+    }
+
+    [Fact]
+    public void TheTwoIssue43ShapesCollideWithNoneOfTheOthers() {
+        foreach (var id in Corpus.ResourceIds(300, 4300)) {
+            var device = GrainKeys.DeviceAuthorization(id.Id.ToString("N")[..8].ToUpperInvariant());
+            var invite = GrainKeys.Invitation(id.Id);
+
+            GrainKeys.IsTenantQualificationSafe(device).ShouldBeTrue();
+            GrainKeys.IsTenantQualificationSafe(invite).ShouldBeTrue();
+
+            foreach (var other in Corpus.EveryGrainKeyShapeFor(id)) {
+                other.ShouldNotBe(device);
+                other.ShouldNotBe(invite);
+            }
+        }
+    }
+
     // ── The watch index: hash(subscriptionId + canonical type), per subscription ──────────────
 
     [Fact]
@@ -982,11 +1077,13 @@ public class GrainKeysTests {
     }
 
     [Fact]
-    public void ThePlatformSingletonsAreAClosedSetOfTwo() {
+    public void ThePlatformSingletonsAreAClosedSetOfThree() {
         GrainKeys.ShardMap().ShouldBe("platform/shard-map");
         GrainKeys.TenantDirectory().ShouldBe("platform/tenant-directory");
+        // #38: the gap-free invoice sequence, one counter per issuer, and so one activation.
+        GrainKeys.PlatformSingleton(GrainKeys.InvoiceNumberingSingleton).ShouldBe("platform/invoice-numbering");
 
-        GrainKeys.PlatformSingletons.ShouldBe(["shard-map", "tenant-directory"]);
+        GrainKeys.PlatformSingletons.ShouldBe(["shard-map", "tenant-directory", "invoice-numbering"]);
 
         foreach (var name in GrainKeys.PlatformSingletons) {
             var key = GrainKeys.PlatformSingleton(name);
@@ -1417,14 +1514,86 @@ public class GrainKeysTests {
             "a management group name containing '/' must not be constructible into a key"
         );
 
+    // ── metrics-account/{accountId}: the second per-entity null-tenant shape ──────────────────
+
+    [Fact]
+    public void AMetricsAccountKeyIsTheAccountInDecimalAndRoundTrips() {
+        GrainKeys.MetricsAccount(1).ShouldBe("metrics-account/1");
+        GrainKeys.MetricsAccount(uint.MaxValue).ShouldBe("metrics-account/4294967295");
+
+        foreach (var account in new uint[] { 1, 7, 1_000_000, 2_166_136_261, uint.MaxValue }) {
+            var key = GrainKeys.MetricsAccount(account);
+            var parsed = GrainKeys.Parse(key).GetValueOrThrow();
+
+            parsed.Kind.ShouldBe(GrainKeyKind.MetricsAccount);
+            parsed.Name.ShouldBe(account.ToString(CultureInfo.InvariantCulture));
+            parsed.Id.ShouldBe(Guid.Empty);
+            parsed.ToString().ShouldBe(key);
+
+            // Null tenant, like the cluster key: no '|', so the null-tenant encoding leaves it as itself.
+            OrleansMultitenantKeyModel.Qualify(null, key).ShouldBe(key);
+            OrleansMultitenantKeyModel.ExtractTenant(key).ShouldBeNull();
+            GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+        }
+    }
+
+    [Fact]
+    public void TheZeroAccountHasNoKey() =>
+        Should.Throw<ArgumentOutOfRangeException>(
+            static () => GrainKeys.MetricsAccount(0),
+            "zero is the account every misconfigured client writes to, and the fold never produces it"
+        );
+
+    [Theory]
+    [InlineData("metrics-account/0", "zero")]
+    [InlineData("metrics-account/007", "a leading zero is a second spelling of 7")]
+    [InlineData("metrics-account/+7", "a sign")]
+    [InlineData("metrics-account/-7", "a negative")]
+    [InlineData("metrics-account/ 7", "white space")]
+    [InlineData("metrics-account/4294967296", "one past uint.MaxValue")]
+    [InlineData("metrics-account/0a1b2c3d4e5f40718293a4b5c6d7e8f9", "a GUID where the number belongs")]
+    [InlineData("metrics-account/7/extra", "a third segment")]
+    [InlineData("Metrics-Account/7", "the prefix is matched case-sensitively")]
+    public void AForgedMetricsAccountKeyIsRejected(string forged, string why) {
+        GrainKeys.TryParse(forged, out _).ShouldBeFalse($"'{forged}' — {why}");
+        GrainKeys.Parse(forged).Error!.Code.ShouldBe(ErrorCode.InvalidGrainKey);
+    }
+
     /// <summary>
     ///     ⚠ The count prose on <see cref="GrainKeys" /> is re-derived off the enum, and this is the
     ///     derivation: every member but <see cref="GrainKeyKind.None" /> is a key. The number here
-    ///     has to move with the enum AND with the prose — it was twenty-six on #39's branch, and
+    ///     has to move with the enum AND with the prose — it was twenty-six on #39's branch,
     ///     twenty-nine on the day it merged beside #90's <see cref="GrainKeyKind.WatchIndex" /> and
-    ///     #94's two, which is the drift the prose paragraph describes happening to itself.
+    ///     #94's two, which is the drift the prose paragraph describes happening to itself; thirty-one
+    ///     since #43's <see cref="GrainKeyKind.DeviceAuthorization" /> and
+    ///     <see cref="GrainKeyKind.Invitation" />; thirty-two since #41's
+    ///     <see cref="GrainKeyKind.DirectoryIndex" />; thirty-three since #41's review's
+    ///     <see cref="GrainKeyKind.MetricsAccount" />; thirty-four since #46's
+    ///     <see cref="GrainKeyKind.PolicyCatalog" />.
     /// </summary>
     [Fact]
-    public void TheClosedSetHasTwentyNineShapes() =>
-        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(29);
+    public void TheClosedSetHasThirtyFourShapes() =>
+        Enum.GetValues<GrainKeyKind>().Count(static x => x != GrainKeyKind.None).ShouldBe(34);
+
+    /// <summary>
+    ///     ⚠ The policy catalog (#46) repeats its tenant inside its own qualification, as
+    ///     <see cref="GrainKeys.TupleStore" /> does, and round-trips through the parser like every
+    ///     other shape — a key that could be built and not decoded would be one a dead-letter handler
+    ///     could not route back to its grain.
+    /// </summary>
+    [Fact]
+    public void ThePolicyCatalogShapeIsKeyedByTenantAndRoundTrips() {
+        var key = GrainKeys.PolicyCatalog(Tenant);
+
+        key.ShouldBe("policy/" + Tenant.ToString("N", CultureInfo.InvariantCulture));
+        GrainKeys.IsTenantQualificationSafe(key).ShouldBeTrue();
+
+        var decoded = GrainKeys.Parse(key).GetValueOrThrow();
+        decoded.Kind.ShouldBe(GrainKeyKind.PolicyCatalog);
+        decoded.Id.ShouldBe(Tenant);
+        decoded.ToString().ShouldBe(key);
+
+        GrainKeys.Parse("policy/" + Tenant.ToString("D", CultureInfo.InvariantCulture))
+            .IsFailure.ShouldBeTrue("only the 32-digit 'N' form is a key — one grain, one spelling");
+    }
 }

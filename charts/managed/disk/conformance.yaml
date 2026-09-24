@@ -125,3 +125,17 @@ owed:
     says: >
       Seventh sighting of charts/managed/nats' item of the same name. Capacity used inside a disk is
       a fact the guest knows and the platform does not.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.Compute/disks. OWED. THE ENGINE STEP, AND IT IS THE STORAGE LAYER'S: a disk is a
+      block volume CDI populates, so encryption belongs below the claim — LINSTOR's LUKS layer on the
+      replicated path (#19, not installed) or an encrypting CSI driver — with a per-disk passphrase
+      the platform wraps with the customer's key. Nothing in the bundle encrypts a block volume today.
+      Azure's disk encryption sets are the shape to copy, as a type of their own a disk names. What
+      every family still needs is docs/plan/18 § What customer-managed keys still need: (1) a key-use
+      seam — the grant is expressible today, `keyVaultCryptoUser` with principalType `resource` on a
+      CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and wrapKey/unwrapKey
+      are actions, so no reconciler can call them; (2) an `encryption.keyUri` property on a NEW
+      api-version of this type; (3) revocation — a disabled key taking the data offline, which needs a
+      re-unwrap on a schedule nothing runs. The key's home is no longer the blocker:
+      CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.

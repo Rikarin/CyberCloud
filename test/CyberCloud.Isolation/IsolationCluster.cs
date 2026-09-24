@@ -6,6 +6,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Principals;
 using CyberCloud.Identity;
 using CyberCloud.Identity.Contracts;
+using CyberCloud.Providers.Resources;
 using CyberCloud.Providers.Sample;
 using CyberCloud.Providers.Sample.Contracts;
 using CyberCloud.Providers.Storage;
@@ -312,6 +313,47 @@ public sealed class IsolationCluster : IAsyncLifetime {
     public IRoleAssignmentManager Roles { get; private set; } = null!;
 
     /// <summary>
+    ///     The one clock the silo's grains and <see cref="Roles" /> both read, so a test that moves it
+    ///     moves "now" for the tuple store, the object grains, the check cache and the manager's
+    ///     <c>expiresOn</c> check at once. Issue #49.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Shared across the collection, like every other piece of this fixture. A test that
+    ///     advances it leaves it advanced; nothing else in the suite reads a duration off it that a
+    ///     few minutes could cross.
+    /// </remarks>
+    public ConformanceClock Clock { get; } = new();
+
+    /// <summary>
+    ///     The invitation path (#43), held the way the gateway holds it: the real
+    ///     <c>InvitationService</c> and its <c>assignRole</c> check over the real engine, and the
+    ///     gateway's own <c>GrainInvitationIssuer</c> over the real invitation grain.
+    /// </summary>
+    public IInvitationManager Invitations { get; private set; } = null!;
+
+    /// <summary>
+    ///     The identity administration API (#41), held the way the gateway holds it: the real
+    ///     <c>IdentityAdministrationService</c> and its checks over the real engine, and the gateway's
+    ///     own <c>GrainIdentityDirectory</c> over the real identity grains.
+    /// </summary>
+    public IIdentityAdministration Identity { get; private set; } = null!;
+
+    /// <summary>
+    ///     Every invitation the silo mailed, as the delivery seam received it — so a test can follow
+    ///     the link. ⚠ Static for <see cref="Vault" />'s reason: the silo resolves its own container.
+    ///     The mail itself is <c>Identity.Host.Tests</c>' <c>InvitationsOverHttpTests</c>, against
+    ///     Mailpit; this suite is about the membership and the grant.
+    /// </summary>
+    public static CapturingInvitationDelivery InvitationMail { get; } = new();
+
+    /// <summary>
+    ///     The policy path (#46), held the way a gateway holds it, over the real scope seam — the
+    ///     <c>assignRole</c> check a definition or an assignment write needs is answered by
+    ///     <c>CyberCloudSchema</c>, not by a double.
+    /// </summary>
+    public IPolicyManager Policies { get; private set; } = null!;
+
+    /// <summary>
     ///     The cross-resource seam of docs/plan/08 § What the resource manager deliberately does not
     ///     do, over the real authorizer. <c>Views.For(owner)</c> is what a reconcile pass for
     ///     <c>owner</c> receives; <c>CrossResourceViewTests</c> and <c>ResourceWatchTests</c> attack
@@ -478,6 +520,27 @@ public sealed class IsolationCluster : IAsyncLifetime {
         written.IsSuccess.ShouldBeTrue(written.Error?.Message);
     }
 
+    /// <summary>Deletes one tuple from a tenant's store — a revocation, as the engine sees one.</summary>
+    /// <param name="tenant">Whose store.</param>
+    /// <param name="target">The object.</param>
+    /// <param name="relation">The relation.</param>
+    /// <param name="subject">The subject.</param>
+    public async Task DeleteTupleAsync(
+        Guid tenant,
+        Authorization.Contracts.ObjectRef target,
+        string relation,
+        SubjectRef subject
+    ) {
+        var tuple = RelationTuple.Create(target, relation, subject);
+        tuple.IsSuccess.ShouldBeTrue(tuple.Error?.Message);
+
+        var deleted = await For(tenant)
+            .GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant))
+            .DeleteAsync(tuple.GetValueOrThrow());
+
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+    }
+
     // ── Principals — the directory objects a role assignment is checked against (issue #86) ────
 
     /// <summary>
@@ -615,7 +678,12 @@ public sealed class IsolationCluster : IAsyncLifetime {
         // resource type this platform serves" from whichever half was forgotten, which is a clear
         // enough message that a third copy to diff them would cost more than it catches.
         Registry = ProviderRegistry.Build(
-            [new SampleProvider(), new Conformance.Reference.ReferenceProvider(), new StorageProvider()]
+            [
+                new SampleProvider(),
+                new Conformance.Reference.ReferenceProvider(),
+                new StorageProvider(),
+                new ResourcesProvider()
+            ]
         );
 
         Manager = new ResourceManagerService(
@@ -635,7 +703,10 @@ public sealed class IsolationCluster : IAsyncLifetime {
                 NullLogger<ReBacResourceRelationWriter>.Instance
             ),
             new ResourceScopeLockResolver(cluster.GrainFactory),
-            new NotSupportedPolicyEvaluator(),
+            // ⚠ THE REAL POLICY ENGINE (#46), SO EVERY ATTACK IN THIS SUITE CROSSES STEP 5 AS IT IS
+            // SHIPPED. Each tenant's catalog is reached ForTenant from the resource's own address, and
+            // PolicyIsolationTests assigns a deny in one tenant and writes the same path in the other.
+            new CatalogPolicyEvaluator(cluster.GrainFactory, NullLogger<CatalogPolicyEvaluator>.Instance),
             new LoggingResourceChangedSink(NullLogger<LoggingResourceChangedSink>.Instance),
             cluster.GrainFactory,
             // ⚠ THE ACTION PATH, AND IT IS ON THE SEAM SIDE THIS SUITE EXISTS TO ATTACK. A
@@ -704,7 +775,32 @@ public sealed class IsolationCluster : IAsyncLifetime {
             // RoleAssignmentTests makes about it.
             new GrainPrincipalDirectory(cluster.GrainFactory),
             cluster.GrainFactory,
+            // The silo's own clock, so an expiresOn the manager accepts is one the store accepts.
+            Clock,
             NullLogger<RoleAssignmentService>.Instance
+        );
+
+        Invitations = new InvitationService(
+            new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
+            new GrainInvitationIssuer(cluster.GrainFactory),
+            cluster.GrainFactory,
+            NullLogger<InvitationService>.Instance
+        );
+
+        Identity = new IdentityAdministrationService(
+            new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
+            new GrainIdentityDirectory(cluster.GrainFactory),
+            cluster.GrainFactory,
+            NullLogger<IdentityAdministrationService>.Instance
+        );
+
+        // ⚠ The policy path (#46), over the same real scope seam: who may write a definition or an
+        // assignment is `assignRole` on the scope through CyberCloudSchema, and PolicyIsolationTests
+        // drives it with a contributor, a reader and another tenant's owner.
+        Policies = new PolicyManagerService(
+            new ReBacScopeAuthorizer(cluster.GrainFactory, NullLogger<ReBacScopeAuthorizer>.Instance),
+            cluster.GrainFactory,
+            NullLogger<PolicyManagerService>.Instance
         );
 
         // ⚠ The subscriptions and their groups are real records now, because step 1 of the write path
@@ -809,7 +905,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
             silo.UseInMemoryReminderService();
 
             silo.ConfigureServices(static services => {
-                    services.AddSingleton<IClock>(new ConformanceClock());
+                    services.AddSingleton<IClock>(Instance.Clock);
                     services.AddSingleton<IClusterConnectionFactory>(new FakeClusterConnectionFactory(Instance.World));
 
                     services.AddSingleton<IResourceProvider, SampleProvider>();
@@ -828,6 +924,7 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     // the child onto the parent — and each type still needs its own reconciler
                     // singleton, because ProviderRegistry stores them by CONCRETE TYPE.
                     services.AddSingleton<IResourceProvider, StorageProvider>();
+                    services.AddSingleton<IResourceProvider, ResourcesProvider>();
                     services.AddSingleton<StorageAccountReconciler>();
                     services.AddSingleton<StorageBucketReconciler>();
                     // ⚠ The third type, and the failure that reported its absence is worth keeping:
@@ -845,6 +942,12 @@ public sealed class IsolationCluster : IAsyncLifetime {
                     // is a suite that passes for the wrong reason.
                     services.AddSingleton<ISecretResolver>(Vault);
                     services.AddSingleton<ISecretWriter>(Vault);
+
+                    // A PostgreSQL server with backups on is given a bucket and a key since #30.
+                    services.AddSingleton<IObjectStoreGrants>(new InMemoryObjectStoreGrants());
+                    // #43: FIRST, so AddCyberCloudIdentity's TryAdd keeps it — the invitation's mail,
+                    // captured for the link.
+                    services.AddSingleton<IInvitationDeliverySeam>(InvitationMail);
 
                     services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
@@ -868,4 +971,17 @@ public sealed class IsolationCluster : IAsyncLifetime {
 public sealed class IsolationSuite : ICollectionFixture<IsolationCluster> {
     /// <summary>The collection name.</summary>
     public const string Name = "isolation";
+}
+
+/// <summary>An <see cref="IInvitationDeliverySeam" /> that keeps every invitation it is handed (#43).</summary>
+public sealed class CapturingInvitationDelivery : IInvitationDeliverySeam {
+    /// <summary>Every delivery, oldest first.</summary>
+    public System.Collections.Concurrent.ConcurrentQueue<InvitationDelivery> Deliveries { get; } = new();
+
+    /// <inheritdoc />
+    public Task<Result> DeliverAsync(InvitationDelivery delivery, CancellationToken cancellationToken = default) {
+        Deliveries.Enqueue(delivery);
+
+        return Task.FromResult(Result.Success);
+    }
 }

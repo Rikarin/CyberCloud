@@ -63,6 +63,44 @@ public sealed record SecretRef {
     /// </remarks>
     public bool IsEmpty => Path.Length == 0 || Field.Length == 0;
 
+    /// <summary>
+    ///     Whether <see cref="Path" /> addresses exactly what it spells: no empty segment, and no
+    ///     <c>.</c> or <c>..</c> segment.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A PREFIX CHECK ON A PATH THAT IS NOT CANONICAL CHECKS NOTHING.</b> The resolver escapes
+    ///     each segment and <c>..</c> survives escaping unchanged, so an HTTP client collapses
+    ///     <c>tenants/{a}/../{b}/db</c> to <c>tenants/{b}/db</c> before OpenBao sees it — found by the
+    ///     #34 review, which printed <c>StartsWith</c> answering <c>True</c> for tenant A's prefix and
+    ///     the request URI naming tenant B's secret. The platform resolves with one broad token, so the
+    ///     path is the only thing standing between two tenants' vaults, and a path that is not
+    ///     canonical is refused rather than normalized: a normalizing check would have to agree
+    ///     byte for byte with every HTTP stack's normalization, forever.
+    /// </remarks>
+    public bool IsCanonical =>
+        Path.Split('/').All(static x => x.Length > 0 && x != "." && x != "..");
+
+    /// <summary>
+    ///     Whether a tenant-spelled vault path is inside <paramref name="prefix" />: canonical, under it,
+    ///     and naming something below it rather than the prefix itself.
+    /// </summary>
+    /// <param name="path">The path as a resource body spelled it.</param>
+    /// <param name="prefix">The tenant's own prefix, ending in <c>/</c> — for example <c>tenants/{tenantId}/</c>.</param>
+    /// <returns><see langword="true" /> when resolving <paramref name="path" /> can only reach under <paramref name="prefix" />.</returns>
+    /// <remarks>
+    ///     ⚠ One rule for every type that lets a tenant name a vault path, so the traversal check
+    ///     <see cref="IsCanonical" /> describes cannot be present in one parser and missing from the
+    ///     next — the first two copies of the prefix check in this tree both lacked it.
+    /// </remarks>
+    public static bool IsConfinedTo(string path, string prefix) {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentException.ThrowIfNullOrEmpty(prefix);
+
+        return path.Length > prefix.Length
+            && path.StartsWith(prefix, StringComparison.Ordinal)
+            && new SecretRef { Path = path }.IsCanonical;
+    }
+
     /// <inheritdoc />
     public override string ToString() => Version.Length == 0 ? $"{Path}#{Field}" : $"{Path}#{Field}@{Version}";
 }

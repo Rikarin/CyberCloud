@@ -1,0 +1,103 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Monitor/workspaces/components. This file is
+# data: `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml.
+
+resourceType: CyberCloud.Monitor/workspaces/components
+apiVersion: "2026-08-01"
+chart: monitor-component
+
+# Objects the reconciler must have applied once the resource reports Succeeded.
+#
+# ⚠ ONE, AND IT IS THE CONNECTION STRING. The views are actions over the workspace's ClickHouse
+# database and apply nothing to any cluster.
+renders:
+  - group: ""
+    version: v1
+    kind: ConfigMap
+    count: 1
+
+# ADR-013 — every rendered object carries all seven labels.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.monitor_workspaces_components
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: each-view-counts-what-the-exporter-wrote
+    says: >
+      Spans and log records the test emits as OTLP go through the pinned collector's clickhouse
+      exporter into a real ClickHouse, into tables MonitorTelemetrySchema created, and each of the five
+      views answers the numbers the test put there: request counts, failures, rate, failure rate and
+      exact p50/p95/p99 per operation; dependencies by type and target; exceptions from span events and
+      from logs, split; the service-to-service edges from parent and child spans; one trace's spans and
+      logs in order. ✅ ASSERTED: ComponentViewsAgainstClickHouseTests, through the real
+      ResourceManagerService, the real action dispatcher and the real handler.
+  - id: the-platforms-tables-are-the-exporters
+    says: >
+      The four statements the platform owns create exactly the columns — name, type, default, codec —
+      the exporter creates for itself. ✅ ASSERTED:
+      ComponentViewsAgainstClickHouseTests.ThePlatformsTablesAreTheExportersShape.
+  - id: another-tenant-reads-nothing
+    says: >
+      A caller from another tenant POSTing a view at this component's address is answered 404 over
+      HTTP, through the gateway's stages, and no statement reaches the store; that tenant's own
+      component of the same name reads its own workspace's database and none of this one's rows.
+      ✅ ASSERTED: MonitorComponentViewsOverHttpTests.
+  - id: a-view-reads-its-own-namespace
+    says: >
+      Two components under one workspace each see only the telemetry whose service.namespace is their
+      own name. ✅ ASSERTED: ComponentViewsAgainstClickHouseTests.AComponentSeesOnlyItsOwnNamespace.
+
+# ── Owed ────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: nothing-creates-the-tables
+    says: >
+      The views read `otel_traces` and `otel_logs` in the workspace's database, and nothing in
+      production creates them — the same gap charts/managed/monitor-collector records as
+      collector-clickhouse-tables-are-the-exporters-shape. What this row adds is the statements
+      themselves (MonitorTelemetrySchema), proved equal to the exporter's own; until something runs
+      them, a view on a real workspace answers 409 naming that owed id rather than a zero it cannot
+      vouch for.
+    closes: The ingest host's schema step, or the workspace's reconciler reaching the store, running MonitorTelemetrySchema.Statements for the workspace's database.
+  - id: one-read-credential-for-every-workspace
+    says: >
+      The gateway reaches ClickHouse as one platform user (CyberCloud:Monitor:Telemetry) and the
+      tenancy is the database the view path derives from the workspace's GUID in the platform's index.
+      A defect in that derivation is the whole boundary; per-workspace read users would make the store
+      refuse a wrong database on its own.
+    closes: A read user per workspace, minted with its ingest key and granted SELECT on its own database only.
+  - id: the-namespace-is-the-clients-assertion
+    says: >
+      A component's views filter on service.namespace, which the SDK sets. Two components in one
+      workspace can each send as the other; that separates applications, not tenants, and the database
+      remains the tenant boundary.
+    closes: The ingest host stamping a component id it resolved from the ingest key, the way it will stamp the tenant.
+  - id: portal-views-are-not-built
+    says: >
+      The five views are published in the OpenAPI document, the SDKs and `cyc monitor component …`;
+      the portal generates the resource's form, and the form's action descriptions reach
+      generated/forms, but no portal page invokes an action — so neither the connection string nor
+      a requests table, a failure chart or an application map is on a page. Owed to issue #41 (the
+      portal's views).
+    closes: Portal pages over the five columnar responses, which chart a column as a series with no reshaping.
+  - id: no-availability-tests-no-live-metrics-no-sampling-view
+    says: >
+      Application Insights also has availability tests, live metrics and a sampling indicator. None is
+      here: an availability test is a scheduled probe (a reminder and a sender), live metrics is a
+      stream rather than a query, and over-quota sampling is the ingest host's, which does not exist.
+    closes: Each its own design in docs/plan/16 first.
+
+# Meters the type must emit — docs/plan/12 § The pattern, once, piece 3.
+meters:
+  - resources

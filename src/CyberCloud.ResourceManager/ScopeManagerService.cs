@@ -253,8 +253,12 @@ public sealed class ScopeManagerService(
     ///     left the tuples and said so in <c>ResourceGroupReclaimer</c>'s remarks, when the writer had
     ///     no way to remove them; the review of issue #39 found the same residue on a management
     ///     group, where a grant reaches every subscription under it, and the sweep now runs for both.
+    ///     ⚠ The review of issue #46 found the same residue in the policy catalog, which keys the
+    ///     group's assignments by its path — <see cref="ForgetPolicyAsync" />.
     /// </remarks>
     async Task<Result> SweepResourceGroupTuplesAsync(ScopeId scope, CancellationToken cancellationToken) {
+        await ForgetPolicyAsync(scope);
+
         var cleared = await relations.ClearAsync(scope, cancellationToken);
         if (cleared.TryGetError(out var clearError)) {
             logger.LogError(
@@ -1106,6 +1110,8 @@ public sealed class ScopeManagerService(
             }
         }
 
+        await ForgetPolicyAsync(scope);
+
         // ⚠ EVERY tuple on the object and not only the parent edge — IScopeRelationWriter.ClearAsync
         // says why: the object id is the bare name, so a grant left on `managementGroup:{name}`
         // would be a grant on the next group created under that name, reaching every subscription
@@ -1119,6 +1125,43 @@ public sealed class ScopeManagerService(
                 + "succeeds: the tuples are its grants.",
                 scope.ManagementGroup,
                 clearError.Message
+            );
+        }
+    }
+
+    /// <summary>
+    ///     Forgets the policy a deleted management group or resource group held: its definitions, its
+    ///     assignments and the verdicts beneath it. Logged and never returned, as the tuple sweep is.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The same residue as the tuples, in a different store.</b> The tenant's policy catalog
+    ///     keys an assignment by its scope's path, and a group's path is its name — so a deny, modify
+    ///     or audit written by a deleted group's owner governed every subscription placed under the
+    ///     group re-created under that name, and couldn't be deleted over the API while the scope was
+    ///     gone, because the policy manager answers 404 for a scope that doesn't exist. The review of
+    ///     issue #46 found it. <see cref="IPolicyCatalogGrain.ForgetScopeAsync" /> says what goes.
+    ///     ⚠ Before the tuples, so an owner's grant is still on the object while its policy is being
+    ///     removed, and both run again on a re-driven <c>DELETE</c>.
+    /// </remarks>
+    async Task ForgetPolicyAsync(ScopeId scope) {
+        Result forgotten;
+
+        try {
+            forgotten = await grains
+                .ForTenant(scope.TenantId.ToString("D", CultureInfo.InvariantCulture))
+                .GetGrain<IPolicyCatalogGrain>(GrainKeys.PolicyCatalog(scope.TenantId))
+                .ForgetScopeAsync(scope.Path);
+        } catch (Exception exception) when (exception is not OperationCanceledException) {
+            forgotten = Result.Failure(ErrorCode.InternalError, exception.Message);
+        }
+
+        if (forgotten.TryGetError(out var forgetError)) {
+            logger.LogError(
+                "'{Scope}' is deleted but the policy catalog still holds its definitions, assignments or "
+                + "verdicts: {Message}. The next DELETE forgets them. Do not re-create a scope under this "
+                + "name until one succeeds: its assignments would govern the new one.",
+                scope.Path,
+                forgetError.Message
             );
         }
     }

@@ -251,6 +251,10 @@ public static class FormsEmitter {
             field["format"] = format;
         }
 
+        if (NumericItems(schema) is { } items) {
+            field["items"] = items;
+        }
+
         if (DocumentReader.Flag(schema["readOnly"])) {
             field["readOnly"] = true;
         }
@@ -280,6 +284,38 @@ public static class FormsEmitter {
         }
 
         return field;
+    }
+
+    /// <summary>
+    ///     An array of numbers' element type and bounds, as <c>{ "type", "minimum", "maximum" }</c>, or
+    ///     <see langword="null" /> for any other field.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Without it a chip list of numbers is sent as strings</b> — found by #41, whose budget
+    ///     thresholds are the first numeric array in the document. A chip input holds text, the form had
+    ///     no way to know <c>[50, 80]</c> should go back as numbers, and it sent <c>["50", "80"]</c>, which
+    ///     the write path refuses as the wrong type. Every other array in the document is of strings,
+    ///     which is why only this case carries the member and nothing else changed.
+    /// </remarks>
+    static JsonObject? NumericItems(JsonObject schema) {
+        if (DocumentReader.TypeOf(schema) != "array" || schema["items"] is not JsonObject items) {
+            return null;
+        }
+
+        var itemType = DocumentReader.TypeOf(items);
+        if (itemType is not ("number" or "integer")) {
+            return null;
+        }
+
+        var described = new JsonObject { ["type"] = itemType };
+
+        foreach (var bound in new[] { "minimum", "maximum" }) {
+            if (items[bound] is { } value) {
+                described[bound] = value.DeepClone();
+            }
+        }
+
+        return described;
     }
 
     static JsonObject Action(DocumentAction action) {

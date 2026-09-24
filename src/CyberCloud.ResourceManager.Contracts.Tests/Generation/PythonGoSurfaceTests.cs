@@ -353,7 +353,12 @@ public sealed class PythonGoSurfaceTests {
     /// </remarks>
     [Fact]
     public void AReadOnlyLeafIsReadAndNeverWritten() {
-        var properties = Block(PythonModels, "    class Properties:");
+        // ⚠ Searched from the type's own class: the policy models the document now carries nest a
+        // `Properties` class of their own, earlier in the file — issue #46's review.
+        var properties = Block(
+            PythonModels[PythonModels.IndexOf("class PostgreSQLServerData:", StringComparison.Ordinal)..],
+            "    class Properties:"
+        );
 
         properties.ShouldContain("""provisioning_state=wire.get("provisioningState")""");
         properties.ShouldNotContain("""wire["provisioningState"]""");

@@ -45,6 +45,23 @@
         <NoWarn>$(NoWarn);IDE0005</NoWarn>
     </PropertyGroup>
 
+    <ItemGroup Label="Cluster harness teardown"
+               Condition="'$(IsTestProject)' == 'true' AND $(MSBuildProjectName.EndsWith('.Cluster.Conformance'))">
+        <!--
+          ⚠ The process-wide k3s, PostgreSQL and Redis of test/CyberCloud.Cluster.Conformance stop in
+          an assembly fixture, because stopping them at process exit races xunit.v3's watchdog, which
+          turns a suite with 0 failures into exit code 1 (ClusterInfrastructureTeardown's remarks).
+          Generated here rather than declared per suite so that a provider joins the cluster lane
+          with its class declarations and nothing else, and by the suffix rule Directory.Build.props
+          § Project role detection already uses. Every .Cluster.Conformance project references the
+          harness, so the type resolves in each of them.
+        -->
+        <AssemblyAttribute Include="Xunit.AssemblyFixtureAttribute">
+            <_Parameter1>typeof(global::CyberCloud.Cluster.Conformance.Infrastructure.ClusterInfrastructureTeardown)</_Parameter1>
+            <_Parameter1_IsLiteral>true</_Parameter1_IsLiteral>
+        </AssemblyAttribute>
+    </ItemGroup>
+
     <PropertyGroup Label="Contracts project conventions" Condition="'$(IsContractsProject)' == 'true'">
         <!--
           docs/plan/03 § The .Contracts split: these assemblies are the wire surface referenced by the

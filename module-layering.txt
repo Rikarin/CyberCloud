@@ -55,6 +55,35 @@ CyberCloud.Tenancy -> CyberCloud.ServiceDefaults
 CyberCloud.Metering -> CyberCloud.Core
 CyberCloud.Metering -> CyberCloud.Tenancy
 
+# ── Billing — docs/plan/22, issue #38 ──────────────────────────────────────────────────────────
+# Rating, invoices, budgets and the cost query. Five lines, and the direction of each is the review:
+#
+#   * Metering, because the usage ledger is what is rated. ⚠ NEVER THE REVERSE. The Metering
+#     paragraph above says nothing reaches metering; billing reads it, and a rating bug must not be
+#     able to stop a usage record being written — docs/plan/22 § Effort's "usage that was never
+#     recorded cannot be recovered" is the reason M1 shipped one without the other.
+#   * Communication, for a budget alert through IMessageSender — docs/plan/22 § Cost visibility's
+#     "delivered via [17]". The sending module's own .Contracts .csproj names "the billing dunning
+#     path" among its customers; this is that edge, arriving for budgets first. The floor paragraph
+#     above is why the reverse is refused: a failed cost query must not take an OTP down.
+#   * Authorization, for the cost query's per-row ReBAC filter and a subscription budget's grant —
+#     enforcement behind the one seam (docs/plan/10 § Request pipeline), so the gateway checks
+#     nothing. The fourth module to hold this edge, for a read, as CyberCloud.ResourceGraph does.
+#   * Tenancy, for ISubscriptionGrain: a subscription is attached to a billing account only if the
+#     tenant holds it.
+#   * Core.
+#
+# ⚠ NO CyberCloud.ResourceManager, for Metering's reason. The CyberCloud.Billing/budgets TYPE is the
+# CyberCloud.Providers.Billing family's, below, which converges onto this module's budget grain through
+# IBudgetControlPlane. The reverse edge would be the provider-family-to-module line the Communication
+# family already takes — and a module that reached the resource manager could no longer be reached
+# FROM a provider without a cycle.
+CyberCloud.Billing -> CyberCloud.Authorization
+CyberCloud.Billing -> CyberCloud.Communication
+CyberCloud.Billing -> CyberCloud.Core
+CyberCloud.Billing -> CyberCloud.Metering
+CyberCloud.Billing -> CyberCloud.Tenancy
+
 # ⚠ CyberCloud.Communication reaches CyberCloud.Core and NOTHING ELSE, and that is the single most
 # load-bearing absence in this file. docs/plan/17 makes the platform the sending module's first
 # customer — identity, monitor and billing all call INTO it. An edge the other way would let an OTP
@@ -362,6 +391,18 @@ CyberCloud.Providers.Cache -> CyberCloud.Core
 # manager deliberately does not do's "a provider with no cluster at all" — so it names no kind and no
 # connection. The absence is checked the same way the presence would be: a line here with no edge
 # behind it is a coupling nobody reviewed.
+# ⚠ THE EIGHTEENTH FAMILY TAKES THE FIFTEENTH'S SHAPE: CyberCloud.Providers.Billing is the tenant-facing
+# face of CyberCloud.Billing — docs/plan/22 § Cost visibility's budgets, issue #38 — and its one type IS
+# that module's budget grain, converged through IBudgetControlPlane in the .Contracts assembly. The grain
+# stays in the module because the module is reached from elsewhere too: the gateway asks it for costs,
+# and the budget's figure has to be the cost view's figure, from the one rating path. No
+# CyberCloud.Kubernetes (clusterless) and no CyberCloud.Communication — the Monitor family's fifth line
+# is not this family's, because the sending service is named by path and CyberCloud.Billing, which
+# holds that edge, derives its grain id where it sends.
+CyberCloud.Providers.Billing -> CyberCloud.Billing
+CyberCloud.Providers.Billing -> CyberCloud.Core
+CyberCloud.Providers.Billing -> CyberCloud.ResourceManager
+CyberCloud.Providers.Billing -> CyberCloud.Tenancy
 CyberCloud.Providers.Compute -> CyberCloud.Core
 CyberCloud.Providers.Compute -> CyberCloud.Kubernetes
 CyberCloud.Providers.Compute -> CyberCloud.ResourceManager
@@ -440,6 +481,21 @@ CyberCloud.Providers.RecoveryServices -> CyberCloud.Core
 CyberCloud.Providers.RecoveryServices -> CyberCloud.Kubernetes
 CyberCloud.Providers.RecoveryServices -> CyberCloud.ResourceManager
 CyberCloud.Providers.RecoveryServices -> CyberCloud.Tenancy
+# ⚠ TWO AND NOT FOUR, AND THE MISSING PAIR IS THE FAMILY'S WHOLE DESIGN. CyberCloud.Resources/deployments
+# renders nothing, so there is no Kubernetes edge; it declares no meter, so there is no Tenancy edge. Its
+# declaration lives in CyberCloud.ResourceManager.Contracts, where the manager that drives a deployment can
+# reach it, and its .Application names Core for OwningHost and the manager for its registration call.
+CyberCloud.Providers.Resources -> CyberCloud.Core
+CyberCloud.Providers.Resources -> CyberCloud.ResourceManager
+
+# ⚠ THREE LINES, LIKE THE OTHER CLUSTERLESS FAMILY (Communication has its fourth for the module it IS).
+# CyberCloud.KeyVault/vaults applies nothing to a cluster, so it names nothing of CyberCloud.Kubernetes; and
+# it reaches the platform vault through ISecretWriter and ISecretResolver on ReconcileContext — seams in
+# CyberCloud.ResourceManager.Contracts — so there is no line to CyberCloud.Vault, which would be a second
+# OpenBao client inside a provider (docs/plan/18 § CyberCloud.KeyVault/vaults).
+CyberCloud.Providers.KeyVault -> CyberCloud.Core
+CyberCloud.Providers.KeyVault -> CyberCloud.ResourceManager
+CyberCloud.Providers.KeyVault -> CyberCloud.Tenancy
 CyberCloud.Providers.Sample -> CyberCloud.Core
 CyberCloud.Providers.Sample -> CyberCloud.Kubernetes
 CyberCloud.Providers.Sample -> CyberCloud.ResourceManager

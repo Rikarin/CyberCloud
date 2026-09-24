@@ -29,7 +29,7 @@ namespace CyberCloud.Bundle.Cluster.Conformance;
 ///         <b>
 ///             The same three containers <c>ClusterInfrastructure</c> starts for every provider
 ///             suite, started through the same method, and NOT the process-wide trio it keeps.
-///         </b> That trio lives until the process exits, which is right for a suite whose every class
+///         </b> That trio lives until the test run ends, which is right for a suite whose every class
 ///         shares one cluster and wrong here twice over: the story's first assertion is that the
 ///         cluster holds none of the three components it is about to install, so it must be one
 ///         nothing else in this assembly has touched; and this assembly's other fixtures each dispose

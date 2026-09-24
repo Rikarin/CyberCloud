@@ -48,7 +48,7 @@ Versions verified against `api.nuget.org` on 2026-08-08. These go verbatim into
 | `Volo.Abp.AspNetCore.SignalR` | 10.6.0 | gateway |
 | `Volo.Abp.Ddd.Domain` / `.Application` | 10.6.0 | providers |
 | `Volo.Abp.Authorization` | 10.6.0 | ⚠ **the attribute plumbing only** — the policy source is ours, ADR-007 |
-| `Volo.Abp.EntityFrameworkCore.PostgreSql` | 10.6.0 | durable tier, billing ledger, identity |
+| `Volo.Abp.EntityFrameworkCore.PostgreSql` | 10.6.0 | durable tier, identity. ⚠ The billing ledger it was also listed for was never built (#38): billing reads the usage ledger, which is grain state |
 | `Volo.Abp.AspNetCore.Serilog` | 10.6.0 | all hosts |
 | `Volo.Abp.TestBase` | 10.6.0 | tests |
 
@@ -91,8 +91,10 @@ framework we live inside.**
 | `Microsoft.CodeAnalysis.Analyzers` | 5.6.0 — the RS1xxx analyzer-authoring rules |
 | `Microsoft.CodeAnalysis.CSharp.Analyzer.Testing` | 1.1.4 — the analyzer test harness |
 | `Microsoft.CodeAnalysis.CSharp.Workspaces` | 5.6.0 — **transitive pin only**, see below |
+| `SSH.NET` | 2026.0.0 — **transitive pin only**, lifting Testcontainers 4.13.0's 2025.1.0 past two High advisories (GHSA-q939-rpr3-3284, GHSA-mggc-4xg6-vcxf). Nothing here opens an SSH connection; delete the pin when Testcontainers asks for 2026.0.0 itself |
+| `BouncyCastle.Cryptography` | 2.7.0 — **test projects only** (`CyberCloud.Providers.KeyVault.Tests`, `CyberCloud.Gateway.Host.Tests`), MIT: the independent implementation a key vault's signatures and ciphertexts are checked against. The vault itself uses `System.Security.Cryptography` and nothing else ([18 § What landed, and what is owed](18-security-vault-and-malware-scan.md)). 2.7.0 because the SSH.NET pin already resolves it in every Testcontainers suite |
 
-⚠ **These four rows were missing, and their absence was a real gap rather than an oversight in
+⚠ **The four `Microsoft.CodeAnalysis.*` rows were missing, and their absence was a real gap rather than an oversight in
 transcription.** Four documents assert "analyzer-enforced" — [00 § Coding standards](00-vision-and-principles.md),
 [00 § Non-negotiables](00-vision-and-principles.md), ADR-002 below, and
 [04 § Failure and upgrade](04-orleans-topology.md) — and this register listed no
@@ -117,6 +119,11 @@ produces four `NU1701` warnings — which `MSBuildTreatWarningsAsErrors` makes f
 
 ⚠ **Not `…Analyzer.Testing.XUnit`.** That variant binds to xUnit v2 and ADR-018 makes this
 repository `xunit.v3`. The base package ships `DefaultVerifier`, which needs no test framework.
+
+⚠ **The `SSH.NET` and `BouncyCastle.Cryptography` rows were added by the #30 review**, which found
+BouncyCastle pinned in `Directory.Packages.props` with no row here, and SSH.NET missing before it.
+Neither ships in a host, so neither needs an ADR. They're recorded because the sentence at the top
+of this section says anything not here does.
 
 ### Rejected / reference-only
 
@@ -273,7 +280,7 @@ breach. Two tenancy systems in one codebase is worse than either, so ABP's is of
 | Tier | Store | For | Loss tolerance |
 |---|---|---|---|
 | **Hot** | Redis Cluster, AOF `everysec`, 1 replica per shard | Sessions, live status, observed cluster state, caches, rate counters, ReBAC check cache, terminal sessions, metric aggregates | Rebuildable. Losing it costs a warm-up |
-| **Durable** | PostgreSQL, sharded by tenant, synchronous replica | Tenants, subscriptions, resource desired state, users and credentials, ReBAC tuples, operations, billing ledger, audit cursors, cluster connections | **Zero.** An acknowledged write survives the loss of any single node |
+| **Durable** | PostgreSQL, sharded by tenant, synchronous replica | Tenants, subscriptions, resource desired state, users and credentials, ReBAC tuples, operations, usage ledgers and invoices, audit cursors, cluster connections | **Zero.** An acknowledged write survives the loss of any single node |
 
 **Why not Redis for everything, as the brief suggested.** Redis with `appendfsync everysec` can lose
 up to one second of acknowledged writes when a primary dies uncleanly, and `WAIT` does not make it
@@ -351,7 +358,8 @@ assumption. If it slips past M1, the fallback is `Microsoft.Orleans.Streaming.Me
 streams plus direct `NATS.Client.JetStream` for the event log — which is where the value is anyway.
 
 **Ordering guarantee, stated once.** Per-subject ordering only. Anything needing global order (the
-billing ledger) uses the durable tier and a per-tenant sequence, not the stream.
+usage ledger, per subscription, and invoice numbers, per issuer — #38 built no separate billing
+ledger) uses the durable tier and a sequence one grain holds, not the stream.
 
 ### ADR-006 — ABP is a module system, not a framework we live inside
 

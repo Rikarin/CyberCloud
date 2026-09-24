@@ -1,0 +1,41 @@
+{
+  "notes": [
+    "EU VAT standard rates by member state — read by CyberCloud.Billing.Tax.EuVatTaxService.",
+    "A row is in force from its date until the next row for the same country. A rate change is a NEW row; a past row is never edited.",
+    "Standard rates only: the platform's supply is an electronically supplied service, which no member state reduces. Recorded as known on 2026-09-23; keeping the table current is owed to a rate feed — docs/plan/22 § What is owed, vat-rates-are-a-committed-table.",
+    "vatPrefix is the prefix a VAT number carries, which is the ISO code for every state but Greece (EL)."
+  ],
+  "rates": [
+    { "country": "AT", "vatPrefix": "AT", "from": "2024-01-01", "percent": 20 },
+    { "country": "BE", "vatPrefix": "BE", "from": "2024-01-01", "percent": 21 },
+    { "country": "BG", "vatPrefix": "BG", "from": "2024-01-01", "percent": 20 },
+    { "country": "CY", "vatPrefix": "CY", "from": "2024-01-01", "percent": 19 },
+    { "country": "CZ", "vatPrefix": "CZ", "from": "2024-01-01", "percent": 21 },
+    { "country": "DE", "vatPrefix": "DE", "from": "2024-01-01", "percent": 19 },
+    { "country": "DK", "vatPrefix": "DK", "from": "2024-01-01", "percent": 25 },
+    { "country": "EE", "vatPrefix": "EE", "from": "2024-01-01", "percent": 22 },
+    { "country": "EE", "vatPrefix": "EE", "from": "2025-07-01", "percent": 24 },
+    { "country": "ES", "vatPrefix": "ES", "from": "2024-01-01", "percent": 21 },
+    { "country": "FI", "vatPrefix": "FI", "from": "2024-01-01", "percent": 24 },
+    { "country": "FI", "vatPrefix": "FI", "from": "2024-09-01", "percent": 25.5 },
+    { "country": "FR", "vatPrefix": "FR", "from": "2024-01-01", "percent": 20 },
+    { "country": "GR", "vatPrefix": "EL", "from": "2024-01-01", "percent": 24 },
+    { "country": "HR", "vatPrefix": "HR", "from": "2024-01-01", "percent": 25 },
+    { "country": "HU", "vatPrefix": "HU", "from": "2024-01-01", "percent": 27 },
+    { "country": "IE", "vatPrefix": "IE", "from": "2024-01-01", "percent": 23 },
+    { "country": "IT", "vatPrefix": "IT", "from": "2024-01-01", "percent": 22 },
+    { "country": "LT", "vatPrefix": "LT", "from": "2024-01-01", "percent": 21 },
+    { "country": "LU", "vatPrefix": "LU", "from": "2024-01-01", "percent": 17 },
+    { "country": "LV", "vatPrefix": "LV", "from": "2024-01-01", "percent": 21 },
+    { "country": "MT", "vatPrefix": "MT", "from": "2024-01-01", "percent": 18 },
+    { "country": "NL", "vatPrefix": "NL", "from": "2024-01-01", "percent": 21 },
+    { "country": "PL", "vatPrefix": "PL", "from": "2024-01-01", "percent": 23 },
+    { "country": "PT", "vatPrefix": "PT", "from": "2024-01-01", "percent": 23 },
+    { "country": "RO", "vatPrefix": "RO", "from": "2024-01-01", "percent": 19 },
+    { "country": "RO", "vatPrefix": "RO", "from": "2025-08-01", "percent": 21 },
+    { "country": "SE", "vatPrefix": "SE", "from": "2024-01-01", "percent": 25 },
+    { "country": "SI", "vatPrefix": "SI", "from": "2024-01-01", "percent": 22 },
+    { "country": "SK", "vatPrefix": "SK", "from": "2024-01-01", "percent": 20 },
+    { "country": "SK", "vatPrefix": "SK", "from": "2025-01-01", "percent": 23 }
+  ]
+}

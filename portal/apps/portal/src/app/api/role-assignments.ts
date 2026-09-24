@@ -6,10 +6,19 @@ import { ResourceAddress } from './resource-verbs';
 
 /**
  * The roles a `PUT` may grant — `RoleAssignmentService.GrantableRoles`, spelled as the tuple store
- * spells the relation. docs/plan/07 § Azure RBAC, expressed in it: the three roles are the
- * schema's three, and a deny assignment is a different resource type.
+ * spells the relation. docs/plan/07 § Azure RBAC, expressed in it: the first three are the
+ * control-plane roles; the four `keyVault*` roles are the key-vault data plane's (docs/plan/18),
+ * which no control-plane role implies. A deny assignment is a different resource type.
  */
-export const roles = ['owner', 'contributor', 'reader'] as const;
+export const roles = [
+  'owner',
+  'contributor',
+  'reader',
+  'keyVaultSecretsOfficer',
+  'keyVaultSecretsUser',
+  'keyVaultCryptoOfficer',
+  'keyVaultCryptoUser'
+] as const;
 export type Role = (typeof roles)[number];
 
 /**
@@ -137,7 +146,7 @@ export function assignmentPath(scope: AccessScope, name: RoleAssignmentName): st
 }
 
 /**
- * An assignment as `ResponseBodies.RoleAssignment` renders one: Azure's envelope, with the three
+ * An assignment as `ResponseBodies.RoleAssignment` renders one: Azure's envelope, with the four
  * body properties under `properties` so that a `GET` can be sent back as a `PUT` unchanged.
  * `roleDefinitionId` is a role *name*; there are no role definitions to address.
  */
@@ -150,6 +159,12 @@ export interface RoleAssignment {
     readonly principalId: string;
     readonly principalType: string;
     readonly roleDefinitionId: string;
+    /**
+     * When a just-in-time grant ends, in UTC, or `null` for a permanent one (issue #49). Optional
+     * only because a gateway older than #49 doesn't write it; every row it writes now carries it.
+     * After the instant the platform answers `404`, so a served row is never already over.
+     */
+    readonly expiresOn?: string | null;
   };
 }
 
@@ -183,15 +198,26 @@ export class RoleAssignmentsApi {
    * which the platform checks against it — `RoleAssignmentService.BodyAgrees` refuses a body that
    * disagrees rather than trusting either one, so sending them is a self-check and not a
    * redundancy.
+   *
+   * ⚠ **`expiresOn` makes it a just-in-time grant, and leaving it out makes it permanent.** A
+   * `PUT` states the whole assignment, so repeating a grant with no end removes the end it had
+   * (docs/plan/07 § Time-bounded relations). It's sent as `toISOString()`, which always carries the
+   * `Z` the platform requires: an instant with no offset is a `400`, because it would name a
+   * different instant on each gateway replica.
    */
-  assign(scope: AccessScope, name: RoleAssignmentName): Promise<ApiResponse<RoleAssignment>> {
+  assign(
+    scope: AccessScope,
+    name: RoleAssignmentName,
+    expiresOn: Date | null = null
+  ): Promise<ApiResponse<RoleAssignment>> {
     return this.transport.send<RoleAssignment>({
       method: 'PUT',
       path: assignmentPath(scope, name),
       body: {
         principalId: name.principalId,
         principalType: name.principalType,
-        roleDefinitionId: name.role
+        roleDefinitionId: name.role,
+        ...(expiresOn === null ? {} : { expiresOn: expiresOn.toISOString() })
       }
     });
   }

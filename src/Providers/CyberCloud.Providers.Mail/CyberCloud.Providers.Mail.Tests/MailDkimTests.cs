@@ -37,7 +37,7 @@ public sealed class MailDkimTests {
         var connection = new RecordingConnection();
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
 
-        var reconciler = new MailDomainReconciler(new FixedClock());
+        var reconciler = MailHarness.Reconciler();
         var context = MailHarness.Context(connection, body.RootElement, vault);
 
         await reconciler.ReconcileAsync(context, TestContext.Current.CancellationToken);
@@ -87,7 +87,7 @@ public sealed class MailDkimTests {
         var connection = new RecordingConnection();
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
 
-        await new MailDomainReconciler(new FixedClock()).ReconcileAsync(
+        await MailHarness.Reconciler().ReconcileAsync(
             MailHarness.Context(connection, body.RootElement, vault, address),
             TestContext.Current.CancellationToken
         );
@@ -111,10 +111,12 @@ public sealed class MailDkimTests {
         using var key = RSA.Create(MailDomains.DkimKeyBits);
         var pem = key.ExportPkcs8PrivateKeyPem();
 
-        MailDomains.TryRequiredRecords("example.com", pem, "mx.cybercloud.io", out var records)
+        MailDnsRecords.TryRequired("example.com", pem, MailHarness.Platform, out var records)
             .ShouldBeTrue();
 
-        var dkim = records.Single(static x => x.Name.StartsWith(MailDomains.DkimSelector, StringComparison.Ordinal));
+        var dkim = records.Single(static x => x.Role == MailDnsRecords.Dkim);
+
+        dkim.Name.ShouldBe(MailDomains.DkimSelector + "._domainkey.example.com");
 
         dkim.Value.ShouldContain(
             "p=" + Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()),
@@ -124,25 +126,27 @@ public sealed class MailDkimTests {
     }
 
     [Fact]
-    public void TheFourRecordsAreTheFourDeliverabilityRequires() {
-        // docs/plan/17 § Deliverability names SPF, DKIM, DMARC and reverse DNS, and § Resource model
-        // adds the MX. ⚠ PTR is NOT here and cannot be: it is a record on the OUTBOUND IP's reverse
-        // zone, which belongs to whoever owns the address block, not to the tenant's domain. A
-        // tenant cannot publish it and this platform must — charts/managed/mail/conformance.yaml
-        // § owed, outbound-pools-and-warm-up.
+    public void TheSevenRecordsAreWhatDeliverabilityRequiresAndThreeOfThemGate() {
+        // docs/plan/17 § Deliverability names SPF, DKIM, DMARC and reverse DNS, § Resource model adds
+        // the MX, and issue #34 adds MTA-STS and TLS-RPT. ⚠ PTR is NOT here and cannot be: it is a
+        // record on the OUTBOUND IP's reverse zone, which belongs to whoever owns the address block,
+        // not to the tenant's domain — charts/managed/mail/conformance.yaml § owed,
+        // outbound-pools-and-warm-up.
         using var key = RSA.Create(MailDomains.DkimKeyBits);
 
-        MailDomains.TryRequiredRecords(
-            "example.com",
-            key.ExportPkcs8PrivateKeyPem(),
-            "mx.cybercloud.io",
-            out var records
-        )
+        MailDnsRecords.TryRequired("example.com", key.ExportPkcs8PrivateKeyPem(), MailHarness.Platform, out var records)
             .ShouldBeTrue();
 
-        records.Length.ShouldBe(4);
+        records.Select(static x => x.Role).ShouldBe(MailDnsRecords.Roles);
         records.Count(static x => x.Kind == "MX").ShouldBe(1);
-        records.Count(static x => x.Kind == "TXT").ShouldBe(3);
+        records.Count(static x => x.Kind == "TXT").ShouldBe(5);
+        records.Count(static x => x.Kind == "CNAME").ShouldBe(1);
+
+        // ⚠ Only the three a receiver judges mail FROM the domain by hold sending. The MX is how mail
+        // reaches the domain, and MTA-STS and TLS-RPT harden that direction — none of them is a
+        // reason a receiver would refuse the domain's outbound mail.
+        records.Where(static x => x.GatesSending).Select(static x => x.Role)
+            .ShouldBe([MailDnsRecords.Spf, MailDnsRecords.Dkim, MailDnsRecords.Dmarc]);
 
         // ⚠ `-all` and not `~all`. A soft fail asks the receiver to accept a forgery and mark it,
         // which hands an attacker delivery as this domain — and makes the "will not send until the
@@ -162,7 +166,7 @@ public sealed class MailDkimTests {
         MailDomains.TryDkimPublicKey("-----BEGIN PRIVATE KEY-----\nnonsense\n-----END PRIVATE KEY-----", out _)
             .ShouldBeFalse();
 
-        MailDomains.TryRequiredRecords("example.com", string.Empty, "mx.cybercloud.io", out var records)
+        MailDnsRecords.TryRequired("example.com", string.Empty, MailHarness.Platform, out var records)
             .ShouldBeFalse();
 
         records.ShouldBeEmpty();
@@ -175,7 +179,7 @@ public sealed class MailDkimTests {
         // tenant B tenant A's signing identity, which is the worst instance of the clause-2 failure
         // class in the catalogue — B could sign as A.
         var vault = new InMemorySecretVault();
-        var reconciler = new MailDomainReconciler(new FixedClock());
+        var reconciler = MailHarness.Reconciler();
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
 
         var a = new RecordingConnection();
@@ -222,7 +226,7 @@ public sealed class MailDkimTests {
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
         var context = MailHarness.Context(connection, body.RootElement, vault);
 
-        await new MailDomainReconciler(new FixedClock())
+        await MailHarness.Reconciler()
             .ReconcileAsync(context, TestContext.Current.CancellationToken);
 
         foreach (var field in MailDomains.CredentialFields) {
@@ -251,7 +255,10 @@ public sealed class MailDkimTests {
 
     /// <summary>The body of the one <c>Secret</c> the pass applied.</summary>
     static string SecretBody(RecordingConnection connection) {
-        var applied = connection.Applied.LastOrDefault(static x => x.Target.Kind.Kind == "Secret");
+        // ⚠ By name: a domain applies TWO Secrets now, and the mailbox one carries no credential.
+        var applied = connection.Applied.LastOrDefault(
+            static x => x.Target.Kind.Kind == "Secret" && x.Target.Name.EndsWith("-mail-credentials", StringComparison.Ordinal)
+        );
 
         applied.ShouldNotBeNull("no Secret was applied at all");
 

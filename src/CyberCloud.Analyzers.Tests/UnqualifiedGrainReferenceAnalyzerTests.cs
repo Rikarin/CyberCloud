@@ -145,6 +145,9 @@ public sealed class UnqualifiedGrainReferenceAnalyzerTests {
 
                   public ITenantGrain Cluster(IGrainFactory grains, System.Guid clusterId) =>
                       grains.GetGrain<ITenantGrain>(GrainKeys.ClusterConnection(clusterId));
+
+                  public ITenantGrain Account(IGrainFactory grains, uint accountId) =>
+                      grains.GetGrain<ITenantGrain>(GrainKeys.MetricsAccount(accountId));
               }
               """
         );
