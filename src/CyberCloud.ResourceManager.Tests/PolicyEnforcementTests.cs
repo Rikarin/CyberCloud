@@ -75,7 +75,11 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
             new RecordingChangeSink(),
             cluster.Grains,
             new ActionDispatcher(actions, new NoClusterConnectionFactory(), new UnavailableSecretResolver()),
-            NullLogger<ResourceManagerService>.Instance
+            NullLogger<ResourceManagerService>.Instance,
+            // ⚠ A child write asks whether its recorded caller may still act before step 1 (#39's
+            // second review), and an absent answer refuses — so without this the child case below
+            // was refused as nobody before it could reach step 5, and read as InternalError.
+            standing: new SwitchablePrincipalStanding()
         );
 
     /// <inheritdoc />

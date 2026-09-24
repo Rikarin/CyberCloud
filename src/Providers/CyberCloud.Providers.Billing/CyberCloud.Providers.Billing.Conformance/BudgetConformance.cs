@@ -1,4 +1,5 @@
 using CyberCloud.Authorization;
+using CyberCloud.Authorization.Contracts;
 using CyberCloud.Billing;
 using CyberCloud.Billing.Contracts;
 using CyberCloud.Communication;
@@ -8,6 +9,8 @@ using CyberCloud.Core.Resources;
 using CyberCloud.Metering;
 using CyberCloud.Providers.Billing.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Orleans.Multitenant;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -101,6 +104,29 @@ public sealed class BudgetModule : IConvergedModule {
         silo.AddCyberCloudAuthorization();
         silo.AddCyberCloudCommunication();
         silo.AddCyberCloudBilling();
+
+        // ⚠ THE HARNESS'S CALLER READS THE HARNESS'S GROUP IN THE REAL ReBAC ENGINE, AND NOBODY ELSE DOES.
+        // The manager here asks PermissiveAuthorizer, which writes no tuple, but showStatus asks the ReBAC
+        // engine whether its caller may read the group the budget covers. So the action case passes
+        // only when ResourceManagerService, ActionDispatcher and ActionContext.Caller hand the harness's
+        // caller all the way to the handler: drop it anywhere and the handler asks about nobody and
+        // answers 403.
+        silo.AddStartupTask(static async (services, _) => {
+            var group = ObjectRef.Of(
+                ObjectTypes.ResourceGroup,
+                ConformanceIds.Subscription.ToString("N", CultureInfo.InvariantCulture) + "-" + ConformanceIds.ResourceGroup
+            );
+            var reader = RelationTuple.Create(group, Relations.Reader, SubjectRef.Of(ObjectTypes.User, ProviderTestCluster<BudgetCase>.Caller().SubjectId)).GetValueOrThrow();
+
+            var written = await services.GetRequiredService<IGrainFactory>()
+                .ForTenant(ConformanceIds.Tenant.ToString("D", CultureInfo.InvariantCulture))
+                .GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(ConformanceIds.Tenant))
+                .WriteAsync(reader);
+
+            if (written.TryGetError(out var error)) {
+                throw new InvalidOperationException($"The harness couldn't grant its caller reader on its group: {error.Message}");
+            }
+        });
     }
 
     /// <inheritdoc />

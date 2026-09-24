@@ -23,10 +23,17 @@ public sealed class RestartHandler : IResourceActionHandler {
     /// <summary>The parent the last invocation carried — <see langword="null" /> for a top-level widget.</summary>
     public static ResourceId? LastParent { get; private set; }
 
+    /// <summary>
+    ///     The caller the last invocation carried — what <c>BudgetStatusHandler</c> re-checks against,
+    ///     so what <c>ActionCallerTests</c> asserts arrived.
+    /// </summary>
+    public static CallerContext? LastCaller { get; private set; }
+
     /// <summary>Puts the counter back.</summary>
     public static void Reset() {
         Invocations = 0;
         LastParent = null;
+        LastCaller = null;
     }
 
     /// <inheritdoc />
@@ -42,6 +49,7 @@ public sealed class RestartHandler : IResourceActionHandler {
     ) {
         Invocations++;
         LastParent = context.Parent;
+        LastCaller = context.Caller;
 
         return Task.FromResult(Result<string>.Success("""{"restarted":true}"""));
     }

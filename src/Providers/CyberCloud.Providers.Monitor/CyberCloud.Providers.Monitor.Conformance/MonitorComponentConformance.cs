@@ -1,6 +1,7 @@
 using CyberCloud.Conformance;
 using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.Providers.Monitor.Contracts;
+using CyberCloud.Providers.Monitor.Query;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -56,9 +57,16 @@ public sealed class MonitorComponentCase : IProviderCaseSource {
     public static ImmutableArray<ProviderConformanceCase> Ancestors { get; } = [MonitorCase.ProviderCase];
 
     /// <inheritdoc />
-    /// <remarks>The line <c>MonitorCollectorCase</c> carries, for the sibling's handler.</remarks>
+    /// <remarks>
+    ///     The line <c>MonitorCollectorCase</c> carries, for the sibling's handler. ⚠ <b>Both halves of
+    ///     it.</b> #32 wrote this case before #41's explorers gave the workspace reconciler the
+    ///     accounts ledger and the workspace its three query handlers, so it carried the alerting half
+    ///     alone, and the merge kept it that way: the silo's container then failed validation at
+    ///     fixture start on <c>IMonitorAccounts</c> and both query stores, which took this suite, the
+    ///     Labels gate and <c>MonitorComponentViewsOverHttpTests</c> down with it.
+    /// </remarks>
     public static void ConfigureSilo(ISiloBuilder silo) =>
-        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting());
+        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting().AddCyberCloudMonitorQuery(new()));
 
     static string WithProtocol(string body, string protocol) {
         var node = JsonNode.Parse(body)!.AsObject();

@@ -63,9 +63,9 @@ export function thresholdsOf(row: BudgetRow): ThresholdState[] {
  *
  * ⚠ **One status call per budget, and a refusal is the row's, not the page's.** A budget whose first
  * reconcile hasn't written it answers `409` until it has; one row saying so is better than a page
- * that shows none. A `scope: subscription` budget answers `403` to a caller who can't read the
- * subscription, because its figures are the subscription's spend. The figures are the last hourly
- * evaluation's, and the row says when that was.
+ * that shows none. A budget answers `403` to a caller who can't read what it covers, the group or
+ * with `scope: subscription` the subscription, because its figures are that scope's spend. The
+ * figures are the last hourly evaluation's, and the row says when that was.
  */
 @Component({
   selector: 'cc-budget-list',
