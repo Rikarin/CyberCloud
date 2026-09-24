@@ -48,6 +48,14 @@ public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
     /// <summary>The index as the evaluators read it. Fresh per request in production; here it is one per reader.</summary>
     public MembershipIndexReader Index { get; }
 
+    /// <summary>
+    ///     The instant reads are made at, as <see cref="InMemoryRelationReader.Now" />: an entry whose
+    ///     tuple has expired by then is left out, the way <c>ISubjectRelationsGrain.ListAsync</c>
+    ///     leaves it out. The index is built as the store would have built it — every tuple live
+    ///     when it was written — so an expiring edge is marked unclosed rather than closed over.
+    /// </summary>
+    public DateTimeOffset Now { get; set; } = DateTimeOffset.MinValue;
+
     /// <summary>Builds a reader over a tuple set, closed under <paramref name="schema" />.</summary>
     /// <param name="schema">The schema — it decides which relations the index follows.</param>
     /// <param name="tuples">The tuples.</param>
@@ -64,12 +72,15 @@ public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
             }
 
             SubjectIndexEntry entry = new() {
-                Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation
+                Object = tuple.Object,
+                Relation = tuple.Relation,
+                SubjectRelation = tuple.Subject.Relation,
+                ExpiresOn = tuple.ExpiresOn
             };
 
-            if (!entries.Contains(entry)) {
-                entries.Add(entry);
-            }
+            // Matched as the grain matches: a later write of the same tuple replaces its expiry.
+            entries.RemoveAll(x => x.IsSameEntryAs(entry));
+            entries.Add(entry);
         }
 
         var maintainer = new MembershipIndexMaintainer(schema, new InMemoryRelationReader(all), this, Store);
@@ -110,9 +121,11 @@ public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
         ArgumentNullException.ThrowIfNull(tuple);
 
         if (bySubject.TryGetValue(tuple.Subject.Object, out var entries)) {
-            entries.Remove(
-                new() { Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation }
-            );
+            SubjectIndexEntry entry = new() {
+                Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation
+            };
+
+            entries.RemoveAll(x => x.IsSameEntryAs(entry));
         }
     }
 
@@ -124,7 +137,7 @@ public sealed class InMemoryReverseRelationReader : IReverseRelationReader {
         Reads++;
 
         IReadOnlyList<SubjectIndexEntry> entries = bySubject.TryGetValue(subjectObject, out var found)
-            ? [.. found]
+            ? [.. found.Where(x => TupleExpiry.IsLive(x.ExpiresOn, Now))]
             : [];
 
         return ValueTask.FromResult(Result<IReadOnlyList<SubjectIndexEntry>>.Success(entries));

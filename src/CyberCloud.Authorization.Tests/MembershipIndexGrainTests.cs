@@ -309,7 +309,7 @@ public sealed class MembershipIndexGrainTests(AuthorizationCluster cluster) {
         var tuple = RelationTuple.Parse(text).GetValueOrThrow();
 
         (await cluster.Objects(tenant, tuple.Object)
-                .WriteAsync(tuple.Relation, tuple.Subject)).IsSuccess.ShouldBeTrue();
+                .WriteAsync(tuple.Relation, tuple.Subject, tuple.ExpiresOn)).IsSuccess.ShouldBeTrue();
         (await cluster.SubjectIndex(tenant, tuple.Subject)
                 .AddAsync(
                     new() { Object = tuple.Object, Relation = tuple.Relation, SubjectRelation = tuple.Subject.Relation }

@@ -184,7 +184,8 @@ public sealed class JwksBearerTokenValidator(IClock clock, ILogger<JwksBearerTok
                 subjectId,
                 principal.GetClaim(AccessTokenClaims.Scope) ?? string.Empty,
                 principal.GetClaim(AccessTokenClaims.ImpersonatedBy) ?? string.Empty,
-                expiry
+                expiry,
+                principal.GetClaim(AccessTokenClaims.SessionId) ?? string.Empty
             )
         );
     }

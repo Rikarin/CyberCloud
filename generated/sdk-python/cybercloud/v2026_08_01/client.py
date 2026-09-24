@@ -13,8 +13,23 @@ from .models import (
     AlertRuleData,
     AlertRuleListInstancesResult,
     AlertRuleResource,
+    ApplicationComponentApplicationMapContent,
+    ApplicationComponentApplicationMapResult,
+    ApplicationComponentData,
+    ApplicationComponentDependenciesContent,
+    ApplicationComponentDependenciesResult,
+    ApplicationComponentExceptionsContent,
+    ApplicationComponentExceptionsResult,
+    ApplicationComponentListConnectionStringResult,
+    ApplicationComponentRequestsContent,
+    ApplicationComponentRequestsResult,
+    ApplicationComponentResource,
+    ApplicationComponentTransactionContent,
+    ApplicationComponentTransactionResult,
     ArtifactFeedData,
     ArtifactFeedResource,
+    BackupVaultBackupNowContent,
+    BackupVaultBackupNowResult,
     BackupVaultData,
     BackupVaultListRecoveryPointsResult,
     BackupVaultRecoverContent,
@@ -51,6 +66,10 @@ from .models import (
     ContainerRegistryData,
     ContainerRegistryListCredentialsResult,
     ContainerRegistryResource,
+    DeploymentData,
+    DeploymentResource,
+    DeploymentWhatIfContent,
+    DeploymentWhatIfResult,
     DocumentDatabaseAccountData,
     DocumentDatabaseAccountListKeysResult,
     DocumentDatabaseAccountResource,
@@ -62,11 +81,63 @@ from .models import (
     KafkaClusterData,
     KafkaClusterListKeysResult,
     KafkaClusterResource,
+    KeyVaultCreateKeyContent,
+    KeyVaultCreateKeyResult,
+    KeyVaultData,
+    KeyVaultDecryptContent,
+    KeyVaultDecryptResult,
+    KeyVaultDeleteKeyContent,
+    KeyVaultDeleteKeyResult,
+    KeyVaultDeleteSecretContent,
+    KeyVaultDeleteSecretResult,
+    KeyVaultEncryptContent,
+    KeyVaultEncryptResult,
+    KeyVaultGetKeyContent,
+    KeyVaultGetKeyResult,
+    KeyVaultGetSecretContent,
+    KeyVaultGetSecretResult,
+    KeyVaultImportKeyContent,
+    KeyVaultImportKeyResult,
+    KeyVaultListDeletedKeysResult,
+    KeyVaultListDeletedSecretsResult,
+    KeyVaultListKeyVersionsContent,
+    KeyVaultListKeyVersionsResult,
+    KeyVaultListKeysResult,
+    KeyVaultListSecretVersionsContent,
+    KeyVaultListSecretVersionsResult,
+    KeyVaultListSecretsResult,
+    KeyVaultPurgeDeletedKeyContent,
+    KeyVaultPurgeDeletedKeyResult,
+    KeyVaultPurgeDeletedSecretContent,
+    KeyVaultPurgeDeletedSecretResult,
+    KeyVaultRecoverDeletedKeyContent,
+    KeyVaultRecoverDeletedKeyResult,
+    KeyVaultRecoverDeletedSecretContent,
+    KeyVaultRecoverDeletedSecretResult,
+    KeyVaultResource,
+    KeyVaultSetSecretContent,
+    KeyVaultSetSecretResult,
+    KeyVaultSignContent,
+    KeyVaultSignResult,
+    KeyVaultUnwrapKeyContent,
+    KeyVaultUnwrapKeyResult,
+    KeyVaultUpdateKeyContent,
+    KeyVaultUpdateKeyResult,
+    KeyVaultUpdateSecretContent,
+    KeyVaultUpdateSecretResult,
+    KeyVaultVerifyContent,
+    KeyVaultVerifyResult,
+    KeyVaultWrapKeyContent,
+    KeyVaultWrapKeyResult,
     LoadBalancerData,
     LoadBalancerResource,
     LoadBalancerShowBackendsResult,
     MailDomainData,
+    MailDomainDnsRecordsResult,
     MailDomainResource,
+    MailDomainVerifyResult,
+    MailboxData,
+    MailboxResource,
     ManagedDiskData,
     ManagedDiskResource,
     ManagedGrafanaData,
@@ -85,7 +156,11 @@ from .models import (
     MessageTemplateResource,
     MonitorWorkspaceData,
     MonitorWorkspaceListKeysResult,
+    MonitorWorkspaceListMetricLabelsContent,
+    MonitorWorkspaceListMetricLabelsResult,
+    MonitorWorkspaceQueryMetricsContent,
     MonitorWorkspaceResource,
+    MonitorWorkspaceSearchLogsContent,
     NATGatewayData,
     NATGatewayResource,
     NATGatewayShowEgressResult,
@@ -104,6 +179,11 @@ from .models import (
     PeeringData,
     PeeringResource,
     PeeringShowRoutesResult,
+    PolicyAssignment,
+    PolicyAssignmentContent,
+    PolicyDefinition,
+    PolicyDefinitionContent,
+    PolicyState,
     PostgreSQLServerData,
     PostgreSQLServerListKeysResult,
     PostgreSQLServerResource,
@@ -254,6 +334,151 @@ class ResourceGroupsClient:
         response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}", body=content.to_wire()))
         raise_for_status(response)
         return ScopeResource.from_wire(wire_of(response))
+
+
+class PolicyClient:
+    """The objects under CyberCloud.Policy, on every scope that takes them — docs/plan/08 § Policy."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def list_policy_assignments_at_management_group(self, tenant_id: str, management_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyAssignment]:
+        """Lists the policy assignments on a management group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyAssignments", top, PolicyAssignment.from_wire)
+
+    def get_policy_assignment_at_management_group(self, tenant_id: str, management_group_name: str, policy_assignment_name: str) -> PolicyAssignment:
+        """Reads one policy assignment on a management group."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def create_or_update_policy_assignment_at_management_group(self, tenant_id: str, management_group_name: str, policy_assignment_name: str, content: PolicyAssignmentContent) -> PolicyAssignment:
+        """Creates or replaces one policy assignment on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def delete_policy_assignment_at_management_group(self, tenant_id: str, management_group_name: str, policy_assignment_name: str) -> None:
+        """Deletes one policy assignment on a management group. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+
+    def list_policy_definitions_at_management_group(self, tenant_id: str, management_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyDefinition]:
+        """Lists the policy definitions on a management group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyDefinitions", top, PolicyDefinition.from_wire)
+
+    def get_policy_definition_at_management_group(self, tenant_id: str, management_group_name: str, policy_definition_name: str) -> PolicyDefinition:
+        """Reads one policy definition on a management group."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def create_or_update_policy_definition_at_management_group(self, tenant_id: str, management_group_name: str, policy_definition_name: str, content: PolicyDefinitionContent) -> PolicyDefinition:
+        """Creates or replaces one policy definition on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def delete_policy_definition_at_management_group(self, tenant_id: str, management_group_name: str, policy_definition_name: str) -> None:
+        """Deletes one policy definition on a management group. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+
+    def list_policy_states_at_management_group(self, tenant_id: str, management_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyState]:
+        """Lists the policy states on a management group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/managementGroups/{_segment(management_group_name)}/providers/CyberCloud.Policy/policyStates", top, PolicyState.from_wire)
+
+    def list_policy_definitions_at_tenant(self, tenant_id: str, *, top: Optional[int] = None) -> Pager[PolicyDefinition]:
+        """Lists the policy definitions on a tenant, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/providers/CyberCloud.Policy/policyDefinitions", top, PolicyDefinition.from_wire)
+
+    def get_policy_definition_at_tenant(self, tenant_id: str, policy_definition_name: str) -> PolicyDefinition:
+        """Reads one policy definition on a tenant."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def create_or_update_policy_definition_at_tenant(self, tenant_id: str, policy_definition_name: str, content: PolicyDefinitionContent) -> PolicyDefinition:
+        """Creates or replaces one policy definition on a tenant, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def delete_policy_definition_at_tenant(self, tenant_id: str, policy_definition_name: str) -> None:
+        """Deletes one policy definition on a tenant. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+
+    def list_policy_assignments_at_subscription(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[PolicyAssignment]:
+        """Lists the policy assignments on a subscription, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyAssignments", top, PolicyAssignment.from_wire)
+
+    def get_policy_assignment_at_subscription(self, tenant_id: str, subscription_id: str, policy_assignment_name: str) -> PolicyAssignment:
+        """Reads one policy assignment on a subscription."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def create_or_update_policy_assignment_at_subscription(self, tenant_id: str, subscription_id: str, policy_assignment_name: str, content: PolicyAssignmentContent) -> PolicyAssignment:
+        """Creates or replaces one policy assignment on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def delete_policy_assignment_at_subscription(self, tenant_id: str, subscription_id: str, policy_assignment_name: str) -> None:
+        """Deletes one policy assignment on a subscription. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+
+    def list_policy_definitions_at_subscription(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[PolicyDefinition]:
+        """Lists the policy definitions on a subscription, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyDefinitions", top, PolicyDefinition.from_wire)
+
+    def get_policy_definition_at_subscription(self, tenant_id: str, subscription_id: str, policy_definition_name: str) -> PolicyDefinition:
+        """Reads one policy definition on a subscription."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def create_or_update_policy_definition_at_subscription(self, tenant_id: str, subscription_id: str, policy_definition_name: str, content: PolicyDefinitionContent) -> PolicyDefinition:
+        """Creates or replaces one policy definition on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyDefinition.from_wire(wire_of(response))
+
+    def delete_policy_definition_at_subscription(self, tenant_id: str, subscription_id: str, policy_definition_name: str) -> None:
+        """Deletes one policy definition on a subscription. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyDefinitions/{_segment(policy_definition_name)}"))
+        raise_for_status(response)
+
+    def list_policy_states_at_subscription(self, tenant_id: str, subscription_id: str, *, top: Optional[int] = None) -> Pager[PolicyState]:
+        """Lists the policy states on a subscription, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/providers/CyberCloud.Policy/policyStates", top, PolicyState.from_wire)
+
+    def list_policy_assignments_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyAssignment]:
+        """Lists the policy assignments on a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyAssignments", top, PolicyAssignment.from_wire)
+
+    def get_policy_assignment_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, policy_assignment_name: str) -> PolicyAssignment:
+        """Reads one policy assignment on a resource group."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def create_or_update_policy_assignment_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, policy_assignment_name: str, content: PolicyAssignmentContent) -> PolicyAssignment:
+        """Creates or replaces one policy assignment on a resource group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll."""
+        response = self._transport.send(Request("PUT", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}", body=content.to_wire()))
+        raise_for_status(response)
+        return PolicyAssignment.from_wire(wire_of(response))
+
+    def delete_policy_assignment_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, policy_assignment_name: str) -> None:
+        """Deletes one policy assignment on a resource group. An object already gone is a success."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyAssignments/{_segment(policy_assignment_name)}"))
+        raise_for_status(response)
+
+    def list_policy_states_at_resource_group(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[PolicyState]:
+        """Lists the policy states on a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Policy/policyStates", top, PolicyState.from_wire)
 
 
 class ClickHouseClusterClient:
@@ -1194,6 +1419,212 @@ class DocumentDBProvider:
         self.accounts = DocumentDatabaseAccountClient(transport)
 
 
+class KeyVaultClient:
+    """Key vaults — CyberCloud.KeyVault/vaults. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultResource:
+        """Reads one Key vault."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return KeyVaultResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: KeyVaultData) -> Operation[KeyVaultResource]:
+        """Creates or replaces one Key vault. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, KeyVaultResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: KeyVaultData) -> Operation[KeyVaultResource]:
+        """Amends one Key vault. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, KeyVaultResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Key vault. ⚠ Recoverable for 7 day(s)."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[KeyVaultResource]:
+        """Lists the Key vaults in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults", top, KeyVaultResource.from_wire)
+
+    def create_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultCreateKeyContent) -> KeyVaultCreateKeyResult:
+        """createKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/createKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultCreateKeyResult.from_wire(wire_of(response))
+
+    def decrypt(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultDecryptContent) -> KeyVaultDecryptResult:
+        """decrypt — permission 'useKeys'. ⚠ The response carries secret material."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/decrypt", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultDecryptResult.from_wire(wire_of(response))
+
+    def delete_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultDeleteKeyContent) -> KeyVaultDeleteKeyResult:
+        """deleteKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/deleteKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultDeleteKeyResult.from_wire(wire_of(response))
+
+    def delete_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultDeleteSecretContent) -> KeyVaultDeleteSecretResult:
+        """deleteSecret — permission 'writeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/deleteSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultDeleteSecretResult.from_wire(wire_of(response))
+
+    def encrypt(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultEncryptContent) -> KeyVaultEncryptResult:
+        """encrypt — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/encrypt", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultEncryptResult.from_wire(wire_of(response))
+
+    def get_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultGetKeyContent) -> KeyVaultGetKeyResult:
+        """getKey — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/getKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultGetKeyResult.from_wire(wire_of(response))
+
+    def get_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultGetSecretContent) -> KeyVaultGetSecretResult:
+        """getSecret — permission 'readSecrets'. ⚠ The response carries secret material."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/getSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultGetSecretResult.from_wire(wire_of(response))
+
+    def import_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultImportKeyContent) -> KeyVaultImportKeyResult:
+        """importKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/importKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultImportKeyResult.from_wire(wire_of(response))
+
+    def list_deleted_keys(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultListDeletedKeysResult:
+        """listDeletedKeys — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listDeletedKeys"))
+        raise_for_status(response)
+        return KeyVaultListDeletedKeysResult.from_wire(wire_of(response))
+
+    def list_deleted_secrets(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultListDeletedSecretsResult:
+        """listDeletedSecrets — permission 'readSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listDeletedSecrets"))
+        raise_for_status(response)
+        return KeyVaultListDeletedSecretsResult.from_wire(wire_of(response))
+
+    def list_key_versions(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultListKeyVersionsContent) -> KeyVaultListKeyVersionsResult:
+        """listKeyVersions — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listKeyVersions", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultListKeyVersionsResult.from_wire(wire_of(response))
+
+    def list_keys(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultListKeysResult:
+        """listKeys — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listKeys"))
+        raise_for_status(response)
+        return KeyVaultListKeysResult.from_wire(wire_of(response))
+
+    def list_secret_versions(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultListSecretVersionsContent) -> KeyVaultListSecretVersionsResult:
+        """listSecretVersions — permission 'readSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listSecretVersions", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultListSecretVersionsResult.from_wire(wire_of(response))
+
+    def list_secrets(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> KeyVaultListSecretsResult:
+        """listSecrets — permission 'readSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/listSecrets"))
+        raise_for_status(response)
+        return KeyVaultListSecretsResult.from_wire(wire_of(response))
+
+    def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """purge — permission 'purge'. ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/purge"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def purge_deleted_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultPurgeDeletedKeyContent) -> KeyVaultPurgeDeletedKeyResult:
+        """purgeDeletedKey — permission 'purgeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/purgeDeletedKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultPurgeDeletedKeyResult.from_wire(wire_of(response))
+
+    def purge_deleted_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultPurgeDeletedSecretContent) -> KeyVaultPurgeDeletedSecretResult:
+        """purgeDeletedSecret — permission 'purgeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/purgeDeletedSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultPurgeDeletedSecretResult.from_wire(wire_of(response))
+
+    def recover_deleted_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultRecoverDeletedKeyContent) -> KeyVaultRecoverDeletedKeyResult:
+        """recoverDeletedKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/recoverDeletedKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultRecoverDeletedKeyResult.from_wire(wire_of(response))
+
+    def recover_deleted_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultRecoverDeletedSecretContent) -> KeyVaultRecoverDeletedSecretResult:
+        """recoverDeletedSecret — permission 'writeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/recoverDeletedSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultRecoverDeletedSecretResult.from_wire(wire_of(response))
+
+    def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[KeyVaultResource]:
+        """restore — permission 'write'. ⚠ Long-running: wait() resolves to the resource afterwards."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/restore"))
+        raise_for_status(response)
+        return Operation(self._transport, response, KeyVaultResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}")
+
+    def set_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultSetSecretContent) -> KeyVaultSetSecretResult:
+        """setSecret — permission 'writeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/setSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultSetSecretResult.from_wire(wire_of(response))
+
+    def sign(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultSignContent) -> KeyVaultSignResult:
+        """sign — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/sign", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultSignResult.from_wire(wire_of(response))
+
+    def unwrap_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultUnwrapKeyContent) -> KeyVaultUnwrapKeyResult:
+        """unwrapKey — permission 'useKeys'. ⚠ The response carries secret material."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/unwrapKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultUnwrapKeyResult.from_wire(wire_of(response))
+
+    def update_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultUpdateKeyContent) -> KeyVaultUpdateKeyResult:
+        """updateKey — permission 'writeKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/updateKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultUpdateKeyResult.from_wire(wire_of(response))
+
+    def update_secret(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultUpdateSecretContent) -> KeyVaultUpdateSecretResult:
+        """updateSecret — permission 'writeSecrets'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/updateSecret", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultUpdateSecretResult.from_wire(wire_of(response))
+
+    def verify(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultVerifyContent) -> KeyVaultVerifyResult:
+        """verify — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/verify", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultVerifyResult.from_wire(wire_of(response))
+
+    def wrap_key(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: KeyVaultWrapKeyContent) -> KeyVaultWrapKeyResult:
+        """wrapKey — permission 'useKeys'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.KeyVault/vaults/{_segment(resource_name)}/wrapKey", body=content.to_wire()))
+        raise_for_status(response)
+        return KeyVaultWrapKeyResult.from_wire(wire_of(response))
+
+
+class KeyVaultProvider:
+    """The resource types of CyberCloud.KeyVault."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.vaults = KeyVaultClient(transport)
+
+
 class MailDomainClient:
     """Mail domains — CyberCloud.Mail/domains. A managed mail domain on Dovecot, Postfix and Rspamd, with a per-tenant mail store, DKIM signing, and the SPF, DKIM, DMARC and MX records the domain must publish before the platform will send for it."""
 
@@ -1230,12 +1661,62 @@ class MailDomainClient:
         """Lists the Mail domains in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
         return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains", top, MailDomainResource.from_wire)
 
+    def dns_records(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> MailDomainDnsRecordsResult:
+        """dnsRecords — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(resource_name)}/dnsRecords"))
+        raise_for_status(response)
+        return MailDomainDnsRecordsResult.from_wire(wire_of(response))
+
+    def verify(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> MailDomainVerifyResult:
+        """verify — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(resource_name)}/verify"))
+        raise_for_status(response)
+        return MailDomainVerifyResult.from_wire(wire_of(response))
+
+
+class MailboxClient:
+    """Mailboxes — CyberCloud.Mail/domains/mailboxes. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, resource_name: str) -> MailboxResource:
+        """Reads one Mailbox."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return MailboxResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, resource_name: str, data: MailboxData) -> Operation[MailboxResource]:
+        """Creates or replaces one Mailbox. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, MailboxResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, resource_name: str, data: MailboxData) -> Operation[MailboxResource]:
+        """Amends one Mailbox. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, MailboxResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Mailbox. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, *, top: Optional[int] = None) -> Pager[MailboxResource]:
+        """Lists the Mailboxes in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes", top, MailboxResource.from_wire)
+
 
 class MailProvider:
     """The resource types of CyberCloud.Mail."""
 
     def __init__(self, transport: Transport) -> None:
         self.domains = MailDomainClient(transport)
+        self.domains_mailboxes = MailboxClient(transport)
 
 
 class KafkaClusterClient:
@@ -1418,17 +1899,35 @@ class MonitorWorkspaceClient:
         raise_for_status(response)
         return MonitorWorkspaceListKeysResult.from_wire(wire_of(response))
 
+    def list_metric_labels(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: MonitorWorkspaceListMetricLabelsContent) -> MonitorWorkspaceListMetricLabelsResult:
+        """listMetricLabels — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/listMetricLabels", body=content.to_wire()))
+        raise_for_status(response)
+        return MonitorWorkspaceListMetricLabelsResult.from_wire(wire_of(response))
+
     def begin_purge(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
         """purge — permission 'purge'. ⚠ Long-running, and it removes the resource: wait() resolves to None, because there is nothing left to read."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/purge"))
         raise_for_status(response)
         return Operation(self._transport, response, _nothing, None)
 
+    def query_metrics(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: MonitorWorkspaceQueryMetricsContent) -> None:
+        """queryMetrics — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/queryMetrics", body=content.to_wire()))
+        raise_for_status(response)
+        return None
+
     def begin_restore(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[MonitorWorkspaceResource]:
         """restore — permission 'write'. ⚠ Long-running: wait() resolves to the resource afterwards."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/restore"))
         raise_for_status(response)
         return Operation(self._transport, response, MonitorWorkspaceResource.from_wire, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}")
+
+    def search_logs(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: MonitorWorkspaceSearchLogsContent) -> None:
+        """searchLogs — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(resource_name)}/searchLogs", body=content.to_wire()))
+        raise_for_status(response)
+        return None
 
 
 class AlertRuleClient:
@@ -1517,6 +2016,79 @@ class OpenTelemetryCollectorClient:
         return OpenTelemetryCollectorListEndpointsResult.from_wire(wire_of(response))
 
 
+class ApplicationComponentClient:
+    """Application components — CyberCloud.Monitor/workspaces/components. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> ApplicationComponentResource:
+        """Reads one Application component."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return ApplicationComponentResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, data: ApplicationComponentData) -> Operation[ApplicationComponentResource]:
+        """Creates or replaces one Application component. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ApplicationComponentResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, data: ApplicationComponentData) -> Operation[ApplicationComponentResource]:
+        """Amends one Application component. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, ApplicationComponentResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Application component. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, *, top: Optional[int] = None) -> Pager[ApplicationComponentResource]:
+        """Lists the Application components in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components", top, ApplicationComponentResource.from_wire)
+
+    def application_map(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentApplicationMapContent) -> ApplicationComponentApplicationMapResult:
+        """applicationMap — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/applicationMap", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentApplicationMapResult.from_wire(wire_of(response))
+
+    def dependencies(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentDependenciesContent) -> ApplicationComponentDependenciesResult:
+        """dependencies — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/dependencies", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentDependenciesResult.from_wire(wire_of(response))
+
+    def exceptions(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentExceptionsContent) -> ApplicationComponentExceptionsResult:
+        """exceptions — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/exceptions", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentExceptionsResult.from_wire(wire_of(response))
+
+    def list_connection_string(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str) -> ApplicationComponentListConnectionStringResult:
+        """listConnectionString — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/listConnectionString"))
+        raise_for_status(response)
+        return ApplicationComponentListConnectionStringResult.from_wire(wire_of(response))
+
+    def requests(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentRequestsContent) -> ApplicationComponentRequestsResult:
+        """requests — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/requests", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentRequestsResult.from_wire(wire_of(response))
+
+    def transaction(self, tenant_id: str, subscription_id: str, resource_group_name: str, workspaces_name: str, resource_name: str, content: ApplicationComponentTransactionContent) -> ApplicationComponentTransactionResult:
+        """transaction — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Monitor/workspaces/{_segment(workspaces_name)}/components/{_segment(resource_name)}/transaction", body=content.to_wire()))
+        raise_for_status(response)
+        return ApplicationComponentTransactionResult.from_wire(wire_of(response))
+
+
 class MonitorProvider:
     """The resource types of CyberCloud.Monitor."""
 
@@ -1524,6 +2096,7 @@ class MonitorProvider:
         self.workspaces = MonitorWorkspaceClient(transport)
         self.workspaces_alert_rules = AlertRuleClient(transport)
         self.workspaces_collectors = OpenTelemetryCollectorClient(transport)
+        self.workspaces_components = ApplicationComponentClient(transport)
 
 
 class PublicIPAddressClient:
@@ -1876,6 +2449,12 @@ class BackupVaultClient:
         """Lists the Backup vaults in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
         return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults", top, BackupVaultResource.from_wire)
 
+    def backup_now(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: BackupVaultBackupNowContent) -> BackupVaultBackupNowResult:
+        """backupNow — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults/{_segment(resource_name)}/backupNow", body=content.to_wire()))
+        raise_for_status(response)
+        return BackupVaultBackupNowResult.from_wire(wire_of(response))
+
     def list_recovery_points(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> BackupVaultListRecoveryPointsResult:
         """listRecoveryPoints — permission 'read'."""
         response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.RecoveryServices/vaults/{_segment(resource_name)}/listRecoveryPoints"))
@@ -1894,6 +2473,56 @@ class RecoveryServicesProvider:
 
     def __init__(self, transport: Transport) -> None:
         self.vaults = BackupVaultClient(transport)
+
+
+class DeploymentClient:
+    """Deployments — CyberCloud.Resources/deployments. A template of resources deployed in dependency order, each through the write path as its creator."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> DeploymentResource:
+        """Reads one Deployment."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return DeploymentResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: DeploymentData) -> Operation[DeploymentResource]:
+        """Creates or replaces one Deployment. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, DeploymentResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, data: DeploymentData) -> Operation[DeploymentResource]:
+        """Amends one Deployment. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, DeploymentResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Deployment. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[DeploymentResource]:
+        """Lists the Deployments in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments", top, DeploymentResource.from_wire)
+
+    def what_if(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str, content: DeploymentWhatIfContent) -> DeploymentWhatIfResult:
+        """whatIf — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Resources/deployments/{_segment(resource_name)}/whatIf", body=content.to_wire()))
+        raise_for_status(response)
+        return DeploymentWhatIfResult.from_wire(wire_of(response))
+
+
+class ResourcesProvider:
+    """The resource types of CyberCloud.Resources."""
+
+    def __init__(self, transport: Transport) -> None:
+        self.deployments = DeploymentClient(transport)
 
 
 class WidgetClient:
@@ -2217,6 +2846,7 @@ class CyberCloudClient:
         self.managementGroups = ManagementGroupsClient(transport)
         self.subscriptions = SubscriptionsClient(transport)
         self.resource_groups = ResourceGroupsClient(transport)
+        self.policy = PolicyClient(transport)
         self.analytics = AnalyticsProvider(transport)
         self.billing = BillingProvider(transport)
         self.cache = CacheProvider(transport)
@@ -2228,11 +2858,13 @@ class CyberCloudClient:
         self.dbforpostgresql = DBforPostgreSQLProvider(transport)
         self.dashboard = DashboardProvider(transport)
         self.documentdb = DocumentDBProvider(transport)
+        self.keyvault = KeyVaultProvider(transport)
         self.mail = MailProvider(transport)
         self.messaging = MessagingProvider(transport)
         self.monitor = MonitorProvider(transport)
         self.network = NetworkProvider(transport)
         self.recoveryservices = RecoveryServicesProvider(transport)
+        self.resources = ResourcesProvider(transport)
         self.sample = SampleProvider(transport)
         self.search = SearchProvider(transport)
         self.storage = StorageProvider(transport)

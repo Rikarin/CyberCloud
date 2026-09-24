@@ -167,13 +167,25 @@ public sealed class MembershipIndexGrain(
         var changed = false;
 
         if (change.Reset) {
-            changed = state.State.Members.Count > 0 || state.State.Usersets.Count > 0;
+            changed = state.State.Members.Count > 0 || state.State.Usersets.Count > 0 || state.State.Unclosed.Count > 0;
             state.State.Members.Clear();
             state.State.Usersets.Clear();
+            state.State.Unclosed.Clear();
         }
 
         foreach (var (relation, members) in change.ReplaceMembers) {
             changed |= Replace(state.State.Members, relation, members);
+
+            // A replaced closure's mark is replaced with it — see MembershipIndexChange.Unclosed.
+            changed |= change.Unclosed.Contains(relation, StringComparer.Ordinal)
+                ? Mark(relation)
+                : state.State.Unclosed.Remove(relation);
+        }
+
+        foreach (var relation in change.Unclosed) {
+            if (!change.ReplaceMembers.ContainsKey(relation)) {
+                changed |= Mark(relation);
+            }
         }
 
         foreach (var (relation, members) in change.AddMembers) {
@@ -196,12 +208,22 @@ public sealed class MembershipIndexGrain(
         return changed;
     }
 
+    bool Mark(string relation) {
+        if (state.State.Unclosed.Contains(relation, StringComparer.Ordinal)) {
+            return false;
+        }
+
+        state.State.Unclosed.Add(relation);
+        return true;
+    }
+
     MembershipIndexSnapshot Snapshot() =>
         new() {
             Object = self,
             SchemaVersion = state.State.SchemaVersion,
             Members = Freeze(state.State.Members),
-            Usersets = Freeze(state.State.Usersets)
+            Usersets = Freeze(state.State.Usersets),
+            Unclosed = [.. state.State.Unclosed.Order(StringComparer.Ordinal)]
         };
 
     static Dictionary<string, IReadOnlyList<SubjectRef>> Freeze(Dictionary<string, List<SubjectRef>> lists) {
@@ -276,6 +298,13 @@ public sealed class MembershipIndexGrain(
 
         foreach (var (key, values) in change.AddMembers.Concat(change.ReplaceMembers)) {
             var validated = ValidateRelation(key, values, "userset relation");
+            if (validated.IsFailure) {
+                return validated;
+            }
+        }
+
+        foreach (var relation in change.Unclosed) {
+            var validated = RelationNaming.ValidateName(relation, "userset relation");
             if (validated.IsFailure) {
                 return validated;
             }

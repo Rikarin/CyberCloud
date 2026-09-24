@@ -47,6 +47,30 @@ sealed class WriteTraceBuilder {
         reached.Add(step);
     }
 
+    ImmutableArray<PolicyTraceEntry> policy = [];
+
+    /// <summary>
+    ///     Records what step 5 decided — every assignment that applied and every rewrite a modify made.
+    /// </summary>
+    /// <param name="entries">The engine's entries, in evaluation order.</param>
+    /// <exception cref="InvalidOperationException">The write path has not entered <see cref="WriteStep.Policy" />.</exception>
+    /// <remarks>
+    ///     ⚠ Refuses outside step 5 for the reason <see cref="Enter" /> refuses to go backwards: an entry
+    ///     recorded anywhere else would put a policy decision in a trace whose step list says it was not
+    ///     made there.
+    /// </remarks>
+    public void RecordPolicy(ImmutableArray<PolicyTraceEntry> entries) {
+        if (reached.Count == 0 || reached[^1] != WriteStep.Policy) {
+            throw new InvalidOperationException(
+                "Policy entries are recorded inside step 5 and the trace so far is: "
+                + string.Join(" → ", reached)
+                + "."
+            );
+        }
+
+        policy = entries.IsDefault ? [] : entries;
+    }
+
     /// <summary>The trace as it stands.</summary>
-    public WriteTrace Build() => new() { Reached = reached.ToImmutable() };
+    public WriteTrace Build() => new() { Reached = reached.ToImmutable(), Policy = policy };
 }

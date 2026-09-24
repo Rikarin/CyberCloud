@@ -145,4 +145,53 @@ static partial class GrantLog {
         Message = "Session {SessionId} in tenant {TenantId} signed out."
     )]
     public static partial void SignedOut(ILogger logger, Guid tenantId, Guid sessionId);
+
+    /// <summary>A device authorization could not be recorded — every drawn user code collided, or the grain refused.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="clientId">The client that asked.</param>
+    /// <param name="reason">The grain's refusal.</param>
+    [LoggerMessage(
+        EventId = 1140,
+        Level = LogLevel.Warning,
+        Message = "Device authorization for {ClientId} not begun: {Reason}"
+    )]
+    public static partial void DeviceAuthorizationNotBegun(ILogger logger, string clientId, string reason);
+
+    /// <summary>A person answered a device authorization on the verification page.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant the person is signed into.</param>
+    /// <param name="userId">Who answered.</param>
+    /// <param name="approved">Whether they allowed it.</param>
+    [LoggerMessage(
+        EventId = 1141,
+        Level = LogLevel.Information,
+        Message = "User {UserId} in tenant {TenantId} answered a device authorization: approved {Approved}."
+    )]
+    public static partial void DeviceAuthorizationDecided(ILogger logger, Guid tenantId, Guid userId, bool approved);
+
+    /// <summary>
+    ///     A device code was redeemed a second time; the token session the first redemption opened
+    ///     was revoked — <c>AuthorizationCodeReplayed</c>'s rule, applied to RFC 8628.
+    /// </summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant.</param>
+    /// <param name="userId">Whose approval.</param>
+    /// <param name="revokedSessionId">The token session the first redemption opened, now revoked.</param>
+    [LoggerMessage(
+        EventId = 1142,
+        Level = LogLevel.Warning,
+        Message = "A device code for user {UserId} in tenant {TenantId} was redeemed again; token session {RevokedSessionId} revoked."
+    )]
+    public static partial void DeviceCodeReplayed(ILogger logger, Guid tenantId, Guid userId, Guid revokedSessionId);
+
+    /// <summary>A client revoked its own refresh token at <c>/revoke</c>, which ends the token session.</summary>
+    /// <param name="logger">The sink.</param>
+    /// <param name="tenantId">The tenant.</param>
+    /// <param name="sessionId">The token session revoked.</param>
+    [LoggerMessage(
+        EventId = 1143,
+        Level = LogLevel.Information,
+        Message = "Token session {SessionId} in tenant {TenantId} revoked by its client."
+    )]
+    public static partial void RevokedByClient(ILogger logger, Guid tenantId, Guid sessionId);
 }

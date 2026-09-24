@@ -1,4 +1,5 @@
 using CyberCloud.ResourceManager.Conformance;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Immutable;
 
 namespace CyberCloud.Conformance;
@@ -645,6 +646,39 @@ public interface IProviderCaseSource {
     static virtual void ConfigureSilo(ISiloBuilder silo) { }
 
     /// <summary>
+    ///     What the harness's action-handler container must hold beyond its own doubles for this
+    ///     case's handlers to be constructible — the handler-side twin of <see cref="ConfigureSilo" />.
+    ///     Nothing, for every case before <c>CyberCloud.Mail/domains</c> and
+    ///     <c>CyberCloud.Monitor/workspaces/components</c>, which found the gap on two branches at once
+    ///     and added this member twice (one survives the 2026-09-24 merge).
+    /// </summary>
+    /// <param name="services">The container <c>ActionDispatcher</c> resolves handlers from.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             WHY <see cref="ConfigureSilo" /> COULD NOT CARRY IT, AND WHY
+    ///             <see cref="ConvergedModule" /> COULD NOT EITHER.
+    ///         </b> A synchronous action is dispatched from a container each harness builds for the
+    ///         purpose — the clock, the vault and the cluster factory, then the handlers — not from the
+    ///         silo's. <see cref="ConfigureSilo" /> reaches the silo, where the reconcilers live; a
+    ///         module's <c>ConfigureHandlers</c> reaches this container but a module is refused to a
+    ///         cluster-backed case by name. So the first cluster-backed family whose handler took a
+    ///         seam of its own — mail's <c>dnsRecords</c>, which needs the platform's mail hosts —
+    ///         failed its POST assertion with <i>"Unable to resolve service for type
+    ///         'MailPlatformOptions'"</i>: the harness quietly agreeing with every provider so far,
+    ///         the third time this suite has found that shape.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both harnesses call it</b> — <c>ProviderTestCluster</c> and
+    ///         <c>ClusterConformanceHarness</c> — for the reason their handler containers were fixed
+    ///         together once already: a fix in one leaves the other failing later, on a Docker-backed
+    ///         run, for a reason the Docker-free run had solved.
+    ///     </para>
+    /// </remarks>
+    static virtual void ConfigureHandlers(IServiceCollection services) { }
+
+    /// <summary>
     ///     Resources of <b>other</b> providers that must exist before this case's own resource can
     ///     converge — what a backup vault protects. Nothing, for every case before
     ///     <c>CyberCloud.RecoveryServices/vaults</c>.
@@ -714,19 +748,13 @@ public sealed record CompanionCase {
     ///     family's own <see cref="ProviderConformanceCase.Body" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Exists because the other family's default body can be one a real operator refuses.</b>
-    ///     <c>PostgresServers.Body</c> renders a backup section with a <c>destinationPath</c> and no
-    ///     credentials, which the committed definition admits — the fake and the k3s harness both
-    ///     validate against it — and CloudNativePG's admission webhook refuses for
-    ///     <i>
-    ///         "missing
-    ///         credentials"
-    ///     </i>: found the first time a companion met the operator the bundle installs
-    ///     (<c>charts/managed/postgres/conformance.yaml § owed</c>,
-    ///     <c>the-default-bucket-is-not-filled-in</c>). A lane that runs against the real operator
-    ///     gives its companion a body the operator admits — backups off — and asserts what the case
-    ///     under test then says about it; the override is a function of the same cluster id, so the two
-    ///     bodies differ in what the lane says and nothing else.
+    ///     ⚠ <b>Exists because a lane against a real operator needs a companion sized for it.</b> It was
+    ///     added when <c>PostgresServers.Body</c> rendered a backup section CloudNativePG's webhook
+    ///     refused for <i>"missing credentials"</i> (<c>charts/managed/postgres/conformance.yaml § owed</c>,
+    ///     <c>the-default-bucket-is-not-filled-in</c>, closed by #30); the vault's CloudNativePG lane
+    ///     now uses it for one instance, no pooler and a one-gibibyte volume — a server a k3s in Docker
+    ///     brings up in minutes. The override is a function of the same cluster id, so the two bodies
+    ///     differ in what the lane says and nothing else.
     /// </remarks>
     public Func<Guid, string>? Body { get; init; }
 

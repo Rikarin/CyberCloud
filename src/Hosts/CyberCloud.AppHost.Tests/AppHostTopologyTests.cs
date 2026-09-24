@@ -346,6 +346,13 @@ public sealed class AppHostTopologyTests {
             // ⚠ No explicit route: the silo is in Development, so the unset section is what makes
             // DevelopmentOtpDelivery log the code AND mail it through the platform's own service.
             environment.ShouldNotContainKey("CyberCloud__Identity__OtpDelivery__ServiceId");
+
+            // #43: an invitation's link opens the identity app — the same origin the identity host
+            // sends a person to sign in on — and without it the silo refuses to invite.
+            environment[CyberCloudResourceExtensions.InvitationPageVariable].ShouldBe(
+                $"http://localhost:{CyberCloudResources.IdentityAppPort}",
+                $"{name} mails invitation links that open the identity app"
+            );
             environment["DOTNET_ENVIRONMENT"].ShouldBe("Development");
         }
 
@@ -416,6 +423,22 @@ public sealed class AppHostTopologyTests {
                 && x.TargetPort == CyberCloudResources.ClickHouseHttpPort
                 && !x.IsProxied
             );
+    }
+
+    [Fact]
+    public async Task TheGatewaysLogSearchReadsTheRegionsClickHouseAndItsMetricsHalfIsLeftToRefuse() {
+        // #41: searchLogs runs inside ResourceManagerService, in the gateway's process, and a gateway
+        // with no CyberCloud:Monitor:Query section refuses every search by naming it — which is what
+        // every composed environment did before the review of #41 found it.
+        var gateway = await Model().EnvironmentOf(CyberCloudResources.Gateway);
+
+        gateway["CyberCloud__Monitor__Query__LogsEndpoint"].ShouldBe($"http://localhost:{CyberCloudResources.ClickHouseHttpPort}");
+        gateway["CyberCloud__Monitor__Query__LogsUser"].ShouldBe(CyberCloudResources.ClickHouseUser);
+        gateway["CyberCloud__Monitor__Query__AllowInsecureTransport"].ShouldBe("true");
+
+        // ⚠ No VictoriaMetrics on this run, so no metrics endpoint: the explorer refuses by name
+        // rather than drawing an empty chart. conformance.yaml § owed, explorers-are-wired-on-a-laptop-only.
+        gateway.ShouldNotContainKey("CyberCloud__Monitor__Query__MetricsEndpoint");
     }
 
     [Fact]

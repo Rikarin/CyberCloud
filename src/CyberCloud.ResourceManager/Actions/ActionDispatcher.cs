@@ -72,7 +72,15 @@ public sealed class ActionDispatcher(
     /// <param name="action">The action, which names the handler and the response shape.</param>
     /// <param name="input">The resource as stored — its desired body, api-version and cluster.</param>
     /// <param name="body">The validated <c>POST</c> body.</param>
+    /// <param name="creator">
+    ///     The caller-bound creator a handler may use, or <see langword="null" /> for the refusing
+    ///     default — see <see cref="IResourceCreator" />.
+    /// </param>
     /// <param name="caller">Who invoked it, handed to the handler as <see cref="ActionContext.Caller" />.</param>
+    /// <param name="parent">
+    ///     The resource's parent with its GUID resolved, or <see langword="null" /> — see
+    ///     <see cref="ActionContext.Parent" />.
+    /// </param>
     /// <param name="cancellationToken">Cancels the invocation.</param>
     /// <returns>The response JSON, or a failure.</returns>
     public async Task<Result<string>> InvokeAsync(
@@ -81,11 +89,26 @@ public sealed class ActionDispatcher(
         ActionRegistration action,
         ReconcileInput input,
         JsonElement body,
+        IResourceCreator? creator = null,
         CallerContext? caller = null,
+        ResourceId? parent = null,
         CancellationToken cancellationToken = default
     ) {
         ArgumentNullException.ThrowIfNull(registration);
         ArgumentNullException.ThrowIfNull(input);
+
+        if (action.EntryPoint.Length > 0) {
+            // ⚠ Not a gap, and said so rather than reported as one. The gateway routes this action
+            // to its entry point, which runs it as the caller; reaching the dispatcher means
+            // something called IResourceManager.ActionAsync directly, and a handler-less 500 naming
+            // "no handler" would send that caller looking for code that is deliberately not there.
+            return Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"'{id.Type}/{action.Name}' is served by {action.EntryPoint}, which runs it as the "
+                + "caller, and not by an action handler. Call the entry point; the gateway routes "
+                + "the action there."
+            );
+        }
 
         if (action.HandlerType is null) {
             // ⚠ InternalError, a 500, and not a 404 or a 400. The caller did nothing wrong: they
@@ -156,7 +179,9 @@ public sealed class ActionDispatcher(
                 // without one — which every test double does, and which is the right answer for a
                 // dispatcher that serves no connected cluster.
                 Agents = agents ?? new UnavailableAgentTunnels(),
-                Caller = caller ?? new()
+                Creator = creator ?? new RefusingResourceCreator(),
+                Caller = caller ?? new(),
+                Parent = parent
             };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

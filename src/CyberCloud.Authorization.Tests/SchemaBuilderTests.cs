@@ -60,7 +60,13 @@ public sealed class SchemaBuilderTests {
         CyberCloudSchema.Instance.TypeNames.ShouldContain(ObjectTypes.ResourceGroup);
         CyberCloudSchema.Instance.Type(ObjectTypes.Subscription)!
             .Roles
-                .ShouldBe([Relations.Contributor, Relations.Owner, Relations.Reader]);
+                .ShouldBe(
+                    [
+                        Relations.Contributor, Relations.KeyVaultCryptoOfficer, Relations.KeyVaultCryptoUser,
+                        Relations.KeyVaultSecretsOfficer, Relations.KeyVaultSecretsUser, Relations.Owner,
+                        Relations.Reader
+                    ]
+                );
     }
 
     // ── ⚠ The negation rules. Each of these MUST fail to build. ────────────────────────────────

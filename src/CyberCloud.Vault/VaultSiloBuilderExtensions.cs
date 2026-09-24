@@ -27,12 +27,16 @@ namespace CyberCloud.Vault;
 ///         operator could not be produced.
 ///     </para>
 ///     <para>
-///         ⚠ <b>What is honestly true of this one, today: no host calls it.</b>
-///         <c>CyberCloud.Silo.Host</c> composes the resource manager and therefore holds
-///         <c>UnavailableSecretResolver</c> — which is reachable, is driven by <c>ReconcileDriver</c>
-///         through every provider, and is the refusal an operator reads. What is not yet true is that
-///         any deployment resolves a real secret. Wiring the host is a separate change and this
-///         paragraph is here so the next reader does not have to establish it by grepping.
+///         ⚠ <b>What is honestly true of this one, today: both hosts call it, and no topology
+///         configures it.</b> <c>GatewayComposition</c> and <c>SiloComposition</c> call it when
+///         <c>CyberCloud:Vault</c> is configured. The silo's call arrived with the #30 review, and
+///         until then every mint and every key vault's data plane refused on a real silo.
+///         <c>HostCompositionTests.BothHostsThatReachOpenBaoWireItOnlyWhenTheVaultIsConfigured</c>
+///         asserts both. But the AppHost declares no OpenBao and no chart deploys the hosts, so every
+///         silo that runs today still holds <c>UnavailableSecretResolver</c>, and that refusal is what
+///         an operator reads. <c>KeyVaultOverTheRealHostsTests</c> asserts that refusal across the
+///         real process boundary. docs/plan/18 § What landed, and what is owed, records it as
+///         <c>openbao-on-the-platform-topology</c>.
 ///     </para>
 ///     <para>
 ///         ⚠

@@ -101,6 +101,28 @@ public static class Relations {
 
     /// <summary>A platform operator — the relation docs/plan/06 § Platform administration names.</summary>
     public const string Operator = "operator";
+
+    // ── The key-vault data-plane roles — docs/plan/18 § CyberCloud.KeyVault/vaults ─────────────
+    //
+    // ⚠ FOUR ROLES THAT NO CONTROL-PLANE ROLE IMPLIES, AND THAT IS THE WHOLE POINT OF THEM. Azure's
+    // Owner, Contributor and Reader hold no data action on a key vault; "Key Vault Secrets User" and
+    // "Key Vault Crypto User" are granted separately, so the person who can create or delete a vault
+    // is not, by that fact, a person who can read its secrets. Here the same line is drawn in the
+    // schema: none of the four is rewritten from owner, contributor or reader, and none of the
+    // three is rewritten from them. Each Officer implies its User, as Azure's Officer holds the
+    // User's actions.
+
+    /// <summary>Manages a vault's secrets and reads their values — Azure's Key Vault Secrets Officer.</summary>
+    public const string KeyVaultSecretsOfficer = "keyVaultSecretsOfficer";
+
+    /// <summary>Reads a vault's secret values — Azure's Key Vault Secrets User.</summary>
+    public const string KeyVaultSecretsUser = "keyVaultSecretsUser";
+
+    /// <summary>Manages a vault's keys and uses them — Azure's Key Vault Crypto Officer.</summary>
+    public const string KeyVaultCryptoOfficer = "keyVaultCryptoOfficer";
+
+    /// <summary>Uses a vault's keys: encrypt, decrypt, wrap, unwrap, sign, verify — Azure's Key Vault Crypto User.</summary>
+    public const string KeyVaultCryptoUser = "keyVaultCryptoUser";
 }
 
 /// <summary>The permission names the built-in schema defines.</summary>
@@ -149,6 +171,33 @@ public static class Permissions {
 
     /// <summary>Administer the platform.</summary>
     public const string Administer = "administer";
+
+    // ── The key-vault data plane — docs/plan/18 § CyberCloud.KeyVault/vaults ───────────────────
+    //
+    // ⚠ SPELLED A SECOND TIME IN CyberCloud.Providers.KeyVault.Contracts' KeyVaults, which cannot
+    // reference this assembly (docs/plan/07 § The enforcement seam). A permission the schema does not
+    // define evaluates false and becomes the canonical 404 for everybody — the way `purge` went
+    // unnoticed — so KeyVaultDeclarationTests.TheSixPermissionsAreTheSchemasAndNoControlPlaneRoleHoldsThem
+    // pins the two spellings together, and KeyVaultOverTheGatewayTests drives each one through this
+    // schema.
+
+    /// <summary>Read a vault's secrets — values, versions, names. Held by <see cref="Relations.KeyVaultSecretsUser" />.</summary>
+    public const string ReadSecrets = "readSecrets";
+
+    /// <summary>Set, update, delete and recover a vault's secrets. Held by <see cref="Relations.KeyVaultSecretsOfficer" />.</summary>
+    public const string WriteSecrets = "writeSecrets";
+
+    /// <summary>Purge a deleted secret. <see cref="Relations.KeyVaultSecretsOfficer" />, minus a deny row.</summary>
+    public const string PurgeSecrets = "purgeSecrets";
+
+    /// <summary>Use a vault's keys and read their public halves. Held by <see cref="Relations.KeyVaultCryptoUser" />.</summary>
+    public const string UseKeys = "useKeys";
+
+    /// <summary>Create, import, update, delete and recover a vault's keys. Held by <see cref="Relations.KeyVaultCryptoOfficer" />.</summary>
+    public const string WriteKeys = "writeKeys";
+
+    /// <summary>Purge a deleted key. <see cref="Relations.KeyVaultCryptoOfficer" />, minus a deny row.</summary>
+    public const string PurgeKeys = "purgeKeys";
 }
 
 /// <summary>

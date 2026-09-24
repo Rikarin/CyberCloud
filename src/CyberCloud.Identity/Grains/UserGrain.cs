@@ -82,6 +82,18 @@ public sealed class UserGrain(
                 );
         }
 
+        // ⚠ Listed before it exists — IDirectoryIndexGrain's remarks. A crash after this line leaves
+        // an id whose grain answers "not found", which a listing skips; the other order would leave
+        // a person no administrator can find. Issue #41.
+        var listed = await grains
+            .ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<IDirectoryIndexGrain>(GrainKeys.DirectoryIndex(GrainKeys.DirectoryUsers))
+            .AddAsync(userId);
+
+        if (listed.TryGetError(out var unlisted)) {
+            return Result<UserProfile>.Failure(unlisted);
+        }
+
         state.State.Email = address;
         state.State.DisplayName = displayName ?? string.Empty;
         state.State.Status = status;
@@ -126,6 +138,44 @@ public sealed class UserGrain(
         }
 
         await state.WriteStateAsync();
+        return Result<UserProfile>.Success(Profile());
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<UserProfile>> AcceptInvitationAsync(string displayName, string password) {
+        if (!Exists()) {
+            return NotFound<UserProfile>();
+        }
+
+        // ⚠ First, before the input is even read: a member, a suspended account or a deprovisioned
+        // one is not waiting for an invitation, and whatever the link carries must change nothing.
+        if (state.State.Status != UserStatus.Invited) {
+            return Result<UserProfile>.Failure(
+                ErrorCode.PreconditionFailed,
+                $"User {userId:D} is {state.State.Status}, not Invited; an invitation cannot change it."
+            );
+        }
+
+        var name = (displayName ?? string.Empty).Trim();
+
+        if (name.Length is 0 or > 200) {
+            return Result<UserProfile>.Failure(
+                ErrorCode.InvalidRequestBody,
+                "A display name is between one and two hundred characters."
+            );
+        }
+
+        if (string.IsNullOrEmpty(password)) {
+            return Result<UserProfile>.Failure(ErrorCode.InvalidRequestBody, "A password is required.");
+        }
+
+        // No session to revoke, unlike SetPasswordAsync: an invited user cannot authenticate
+        // (CanAuthenticate), so none was ever opened.
+        state.State.DisplayName = name;
+        state.State.PasswordHash = hasher.Hash(password);
+        state.State.Status = UserStatus.Active;
+        await state.WriteStateAsync();
+
         return Result<UserProfile>.Success(Profile());
     }
 

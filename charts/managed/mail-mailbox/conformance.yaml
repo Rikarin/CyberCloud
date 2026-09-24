@@ -1,0 +1,138 @@
+# Conformance manifest — docs/plan/12 § The pattern, once, piece 8.
+#
+# What the conformance suite asserts about CyberCloud.Mail/domains/mailboxes. This file is data:
+# `Build.Charts` checks that it is present, non-empty, and names the same resource type as
+# Chart.yaml.
+
+resourceType: CyberCloud.Mail/domains/mailboxes
+apiVersion: "2026-08-01"
+chart: mail-mailbox
+
+# ⚠ NONE. A mailbox owns no object: it is a FRAGMENT of its domain's mailbox Secret, written through
+# the co-owned apply (docs/plan/09 § A second writer on an object) — the second type in the tree
+# that owns nothing, after virtualNetworks/peerings. ProviderConformanceCase.Objects names the
+# domain's Secret so the shared suite reads it, and tells it from an owned object by the resource-id
+# label the domain's copy carries.
+renders: []
+
+coWrites:
+  - group: ""
+    version: v1
+    kind: Secret
+    count: 1
+    fragment: data.{local}.passwd + data.{local}.virtual + data.{address}.claim per address
+    manager: cybercloud/cybercloud.mail_domains/{ownerId} — shared by every mailbox of one domain
+
+# ADR-013 — the labels on the Secret are the DOMAIN's, and a co-writer writes none.
+labels:
+  required:
+    - cybercloud.io/tenant-id
+    - cybercloud.io/subscription-id
+    - cybercloud.io/resource-group
+    - cybercloud.io/resource-id
+    - cybercloud.io/resource-type
+    - cybercloud.io/api-version
+    - cybercloud.io/managed-by
+  values:
+    cybercloud.io/resource-type: cybercloud.mail_domains
+    cybercloud.io/managed-by: cybercloud
+
+# Behaviour a tenant is entitled to. Each is a statement the suite can fail on, not a feature list.
+assertions:
+  - id: the-password-never-enters-a-body
+    says: >
+      passwordRef is a vault handle under the tenant's own prefix; the value is resolved in one pass,
+      hashed with SHA512-CRYPT at 100,000 rounds under a salt derived from the mailbox's GUID, and only
+      the hash is written. A handle naming another tenant's path is refused with AuthorizationFailed
+      before the vault is asked — MailMailboxTests.AForeignHandleIsRefusedBeforeTheVaultIsAskedAndNothingIsWritten.
+      ⚠ So is one that STARTS with the tenant's prefix and climbs out of it: an empty, `.` or `..`
+      segment is refused (SecretRef.IsConfinedTo), because the resolver's HTTP client collapses
+      `tenants/{mine}/../{theirs}/db` into tenant B's path before OpenBao sees it — the #34 review's
+      probe, and a password oracle for another tenant's secret under the first cut's StartsWith check.
+      The resolver refuses such a path too, as the last place that can.
+  - id: the-hash-is-in-no-grain
+    says: >
+      A mailbox's observed state names the Secret and the keys of its own fragment and carries no
+      value. The first cut stored the whole Secret as the observation, so every mailbox's grain — and
+      the durable tier's backups — held every other mailbox's hash.
+      MailMailboxTests.TheObservationNamesTheKeysAndCarriesNoHash.
+  - id: a-mailbox-without-a-password-cannot-be-signed-in-to
+    says: >
+      An empty passwordRef renders `{CRYPT}!` and `nologin=y`, never an empty password field, which
+      Dovecot reads as "any password". MailDataPlaneTests signs in to one with `!`, an empty string
+      and a real password against both Dovecot majors and is refused all three times, and
+      MailDeliveryOnK3sTests does the same on the running pod.
+  - id: the-login-is-the-whole-address
+    says: >
+      A mailbox's password signs in as `{local}@{domain}` and as nothing else — not the local part
+      under another domain. The passwd line's first field is the whole address.
+  - id: two-mailboxes-cannot-claim-one-address
+    says: >
+      A mailbox claims its own address and each alias as `{local}.claim` holding its GUID. A second
+      mailbox naming an address another holds writes one key with a second value, which the
+      co-writer's merge refuses atomically; the reconciler reports Conflict naming both resources.
+  - id: a-mailbox-is-signed-in-to-and-delivered-to-on-a-running-back-end
+    says: >
+      On a real k3s, through the real write path, three mailboxes written into one Secret by three
+      second writers are each found by Dovecot: bob signs in over IMAP, alice submits with AUTH and bob
+      fetches the message, mail from outside to alice's alias — unauthenticated, on the inbound port —
+      lands in alice, and alice may send as her alias and as nobody else. MailDeliveryOnK3sTests.
+  - id: forwarding-and-aliases-cannot-inject-a-map-line
+    says: >
+      Every alias must be a local part and every forward an address with no whitespace, comma or
+      colon, checked per element before anything is resolved — an address with a newline would be a
+      line of the domain's Postfix alias map. MailMailboxTests walks each refusal.
+  - id: a-delete-withdraws-and-the-domain-stands
+    says: >
+      Deleting a mailbox removes its keys and its three bookkeeping annotations from the domain's
+      Secret and nothing else; the domain's other mailboxes and the Secret itself remain.
+
+meters:
+  - resources
+
+# ── owed ──────────────────────────────────────────────────────────────────────────────────────────
+owed:
+  - id: sieve-rules-are-not-a-property
+    says: >
+      docs/plan/17 lists "Sieve rules" on a mailbox. They are editable over ManageSieve (the domain's
+      Service carries 4190 when `sieve` is on) and are not part of the resource body: a Sieve script is
+      a program, and a body property holding one would need a validator the schema cannot express.
+  - id: app-passwords
+    says: >
+      One password per mailbox. An app password — a second, revocable credential per client — is a
+      second passwd line the same login can match, which Dovecot supports as a second passdb; it needs
+      a child type or a list of vault handles, and neither is built.
+  - id: four-hundred-mailboxes-per-domain
+    says: >
+      Every co-writer's fragment is also stored as an annotation on the domain's Secret (the co-owned
+      apply's bookkeeping), and Kubernetes caps an object's annotations at 256 KiB in total. A
+      mailbox's fragment is about 600 bytes, so a domain holds roughly four hundred mailboxes before
+      the API server refuses the next write. A larger domain needs a passdb that is not a file per
+      mailbox — Dovecot's SQL or dict drivers — which is a different design.
+  - id: a-deleted-mailbox-keeps-its-mail
+    says: >
+      Withdrawing a mailbox removes its login and its addresses, not its messages: they stay in the
+      domain's mail store, which MailDomains.RetainedClaims keeps unconditionally. A mailbox recreated
+      with the same local part finds them — including when it is a different person. A purge of one
+      mailbox's directory is a data-plane operation (doveadm) this type does not perform.
+  - id: a-password-change-needs-a-reapply
+    says: >
+      The body holds a handle, and changing the vault value behind the same handle changes nothing the
+      platform watches. The new password takes effect on the mailbox's next reconcile — a PUT — and
+      then within the kubelet's sync period. Pinning a handle's `@version` makes the change a body
+      change, which is the way to make it explicit.
+  - id: hashes-ride-in-the-fragment-annotation
+    says: >
+      The co-owned apply keeps each co-writer's fragment as an annotation on the owner's object, so
+      every mailbox's SHA512-CRYPT hash is on the domain's Secret twice — in data and in
+      cybercloud.io/fragment.{mailboxId}. Reading either takes `get secrets`, so no new principal can,
+      but `kubectl describe secret` prints annotations where it prints only a byte count for data,
+      and a pasted describe carries every hash. ⚠ WHAT WOULD CLOSE IT: the co-writer storing, for a
+      Secret target, a digest of the fragment rather than the fragment — which means it could no
+      longer re-apply the other writers' slices from the annotation and would have to read them from
+      data, a change to KubeCoWriter for every co-writer rather than to this type.
+  - id: the-shared-cluster-suite-presumes-ownership
+    says: >
+      As charts/managed/kube-ovn-vpc-peering/conformance.yaml records: ClusterConformanceTests<TSource>
+      reads a co-writer's object as its own, so the mailbox runs the shared silo-kill class and
+      MailDeliveryOnK3sTests rather than the lifecycle class.

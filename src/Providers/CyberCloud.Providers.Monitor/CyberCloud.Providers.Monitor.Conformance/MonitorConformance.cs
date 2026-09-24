@@ -5,6 +5,7 @@ using CyberCloud.Conformance;
 using CyberCloud.Core.Resources;
 using CyberCloud.Providers.Monitor.Alerting;
 using CyberCloud.Providers.Monitor.Contracts;
+using CyberCloud.Providers.Monitor.Query;
 // ⚠ For OperationState and Shouldly, which only the soft-delete experiment below needs. Every other
 // provider's conformance project is two class declarations and a case, and needs neither.
 using CyberCloud.ResourceManager.Contracts;
@@ -78,7 +79,7 @@ public sealed class MonitorCase : IProviderCaseSource {
             DisplayName = "CyberCloud.Monitor/workspaces",
             CreateProvider = static () => new MonitorProvider(),
             ReconcilerType = typeof(MonitorWorkspaceReconciler),
-            CreateReconciler = static clock => new MonitorWorkspaceReconciler(clock),
+            CreateReconciler = static clock => new MonitorWorkspaceReconciler(clock, new InMemoryMonitorAccounts()),
             Type = MonitorWorkspaces.Type,
             ApiVersion = MonitorWorkspaces.V2026,
             Body = static cluster => MonitorWorkspaces.Body(cluster),
@@ -145,7 +146,7 @@ public sealed class MonitorCase : IProviderCaseSource {
     ///     <c>MonitorApplicationModule</c> makes in both hosts.
     /// </remarks>
     public static void ConfigureSilo(ISiloBuilder silo) =>
-        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting());
+        silo.ConfigureServices(static services => services.AddCyberCloudMonitorAlerting().AddCyberCloudMonitorQuery(new()));
 
     /// <summary>A valid body whose over-quota sample rate is zero.</summary>
     /// <param name="body">A valid body.</param>

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the first of the five projects: "grain interfaces, resource models,
+      the JSON Schemas". Here that is the vault's schema, the request and response shapes of its
+      data-plane actions, the ReBAC permission names those actions check, and IKeyVaultGrain — the
+      grain a vault's secrets and keys live in.
+
+      ⚠ A GRAIN INTERFACE, AND THE REASON IS THE SAME AS CyberCloud.ContainerRegistry/feeds'. The
+      resource manager holds a vault's declared intent — its purge protection and its description —
+      and nothing else. What a tenant puts INTO a vault through the data plane (secret versions, key
+      versions, what is soft-deleted and until when) is data-plane content that arrives through
+      actions, and there is no cluster to hold it. durable-grains.txt's Providers section carries the
+      argument beside the grain's line.
+
+      ⚠ EVERY WIRE TYPE HERE CARRIES AN [Alias], AND THE REASON IS A PROCESS BOUNDARY. An action
+      handler runs inside ResourceManagerService, which the GATEWAY hosts as an Orleans client, and
+      IKeyVaultGrain lives on a silo — so every call the data plane makes crosses a process. An
+      in-process TestCluster shares one type manifest and hides a missing alias (the #39 defect);
+      KeyVaultDeclarationTests.EveryWireTypeCarriesAnAlias is what asserts them instead.
+    -->
+
+    <ItemGroup>
+        <!--
+          The source generator over IKeyVaultGrain and its wire types, in THIS assembly.
+          CyberCloud.ContainerRegistry.Contracts is the precedent and says why the transitive
+          reference is not enough.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Sdk"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../../CyberCloud.ResourceManager.Contracts/CyberCloud.ResourceManager.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

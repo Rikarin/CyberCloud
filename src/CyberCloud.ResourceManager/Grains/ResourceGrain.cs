@@ -3,6 +3,8 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CyberCloud.ResourceManager.Contracts.Registry;
+using Orleans.Multitenant;
 
 namespace CyberCloud.ResourceManager.Grains;
 
@@ -10,21 +12,31 @@ namespace CyberCloud.ResourceManager.Grains;
 ///     <see cref="IResourceGrain" /> — Entity, Durable, key <c>res/{resourceId:N}</c>.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>This grain never provisions inline.</b> docs/plan/08 § The reconcile loop:
-///     <i>
-///         "The
-///         resource grain never provisions inline. It records intent and returns; a reminder drives
-///         convergence."
-///     </i> Nothing here calls a reconciler, reaches a cluster, or awaits anything but
-///     its own storage — which is what keeps a <c>PUT</c> a sub-millisecond write rather than a
-///     four-minute request.
+///     <para>
+///         ⚠ <b>This grain never provisions inline.</b> docs/plan/08 § The reconcile loop:
+///         <i>
+///             "The
+///             resource grain never provisions inline. It records intent and returns; a reminder drives
+///             convergence."
+///         </i> Nothing here calls a reconciler, reaches a cluster, or awaits anything but
+///         its own storage — which is what keeps a <c>PUT</c> a sub-millisecond write rather than a
+///         four-minute request.
+///     </para>
+///     <para>
+///         ⚠ <b>And it holds the one reminder a converged resource has.</b> docs/plan/08 § The
+///         manager-started pass: a type that declares <c>PassEvery</c> gets a <c>periodic-pass</c>
+///         reminder here, armed when a write converges and removed when a delete begins. The tick
+///         does not reconcile — that would be provisioning inline — it starts an
+///         <see cref="OperationKind.Refresh" /> operation and returns, exactly as a write does.
+///     </para>
 /// </remarks>
 public sealed class ResourceGrain(
     [PersistentState("resource", StorageTiers.Durable)]
     IPersistentState<ResourceState> state,
-    IClock clock
+    IClock clock,
+    IProviderRegistry registry
 )
-    : Grain, IResourceGrain {
+    : Grain, IResourceGrain, IRemindable {
     /// <summary>
     ///     The tag cap of docs/plan/06 § Tags, locks — 50 pairs.
     /// </summary>
@@ -230,6 +242,11 @@ public sealed class ResourceGrain(
         state.State.Etag = NextEtag();
 
         await state.WriteStateAsync();
+
+        // ⚠ Cancelled at the delete's START, not its end: a pass that fired during the teardown
+        // would find the resource Deleting and skip, but a reminder row left for a resource that is
+        // on its way out is a wakeup per period for as long as the recovery window lasts.
+        await DisarmPeriodicPassAsync(PassPeriod());
         return Result<ResourceSnapshot>.Success(Snapshot(state.State.ApiVersion, []));
     }
 
@@ -250,8 +267,10 @@ public sealed class ResourceGrain(
             );
         }
 
+        var period = PassPeriod();
         await state.ClearStateAsync();
         state.State = new();
+        await DisarmPeriodicPassAsync(period);
         return Result.Success;
     }
 
@@ -357,7 +376,110 @@ public sealed class ResourceGrain(
         }
 
         await state.WriteStateAsync();
+
+        // ⚠ Armed on every converged write, and a restore is one: the delete that parked the resource
+        // removed the reminder, and the restore's CompleteAsync is what puts it back.
+        if (terminal is ProvisioningState.Succeeded) {
+            await ArmPeriodicPassCoreAsync();
+        }
+
         return Result<ResourceSnapshot>.Success(Snapshot(state.State.ApiVersion, []));
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<Guid>> RunPeriodicPassAsync() {
+        if (!state.State.Exists) {
+            await DisarmPeriodicPassAsync(PeriodicPass.MinimumPeriod);
+            return NotFound<Guid>();
+        }
+
+        if (PassPeriod() == TimeSpan.Zero) {
+            // A type that stopped declaring a period since the reminder was armed.
+            await DisarmPeriodicPassAsync(PeriodicPass.MinimumPeriod);
+            return Result<Guid>.Success(Guid.Empty);
+        }
+
+        // ⚠ ONLY A RESOURCE AT REST. Creating, Updating and Deleting belong to the operation that
+        // put them there, and a Failed or Canceled resource is waiting for its owner rather than for
+        // a pass — re-running a failed create every hour would be a retry nobody asked for.
+        if (state.State.ProvisioningState != ProvisioningState.Succeeded || state.State.OperationId != Guid.Empty) {
+            return Result<Guid>.Success(Guid.Empty);
+        }
+
+        // ⚠ One pass at a time. A pass that is still backing off — a vault whose cluster is
+        // unreachable — is the pass; starting a second beside it would be two drivers of one
+        // resource, which is the race the single-writer guard exists to prevent.
+        //
+        // ⚠ DECIDED FROM THIS GRAIN'S OWN STATE, AND IT USED TO ASK THE OPERATION — #30's review. The
+        // running pass calls this grain mid-drive, so a tick that awaited that operation's GetAsync
+        // while it drove was a cycle of two non-reentrant grains, broken only by Orleans' 30-second
+        // response timeout. The pass says when it ends (EndPeriodicPassAsync); one that never said so
+        // has been failed by ReconcileSchedule.Timeout's ceiling by the time this lets another start.
+        if (state.State.PassOperationId != Guid.Empty
+            && clock.UtcNow - state.State.PassStartedAt < ReconcileSchedule.Timeout + PeriodicPass.MinimumPeriod) {
+            return Result<Guid>.Success(Guid.Empty);
+        }
+
+        var tenant = GrainFactory.ForTenant(ResourceManagerGrainKeys.TenantOf(this).ToString("D", CultureInfo.InvariantCulture));
+
+        var address = ResourceId.ParsePath(state.State.Path).GetValueOrThrow();
+        var operationId = Guid.NewGuid();
+
+        var started = await tenant.GetGrain<IOperationGrain>(GrainKeys.Operation(operationId))
+            .StartAsync(
+                new() {
+                    OperationId = operationId,
+                    Kind = OperationKind.Refresh,
+                    ResourcePath = state.State.Path,
+                    ResourceId = resourceId,
+                    TenantId = address.TenantId,
+                    SubscriptionId = address.SubscriptionId,
+                    ApiVersion = state.State.ApiVersion,
+                    Desired = state.State.Superset
+                }
+            );
+
+        if (started.TryGetError(out var startError)) {
+            return Result<Guid>.Failure(startError);
+        }
+
+        state.State.PassOperationId = operationId;
+        state.State.PassStartedAt = clock.UtcNow;
+        await state.WriteStateAsync();
+        return Result<Guid>.Success(operationId);
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> EndPeriodicPassAsync(Guid operationId) {
+        if (operationId == Guid.Empty || state.State.PassOperationId != operationId) {
+            return Result.Success;
+        }
+
+        state.State.PassOperationId = Guid.Empty;
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result<bool>> ArmPeriodicPassAsync() {
+        if (!state.State.Exists) {
+            return NotFound<bool>();
+        }
+
+        // ⚠ Only a converged resource. Anything else has an operation that arms the reminder when it
+        // converges, or is waiting for its owner — a Failed create gets no hourly retry from here.
+        if (state.State.ProvisioningState != ProvisioningState.Succeeded || PassPeriod() == TimeSpan.Zero) {
+            return Result<bool>.Success(false);
+        }
+
+        return Result<bool>.Success(await ArmPeriodicPassCoreAsync());
+    }
+
+    /// <inheritdoc />
+    public async Task ReceiveReminder(string reminderName, TickStatus status) {
+        if (string.Equals(reminderName, PeriodicPass.ReminderName, StringComparison.Ordinal)) {
+            _ = await RunPeriodicPassAsync();
+        }
     }
 
     /// <inheritdoc />
@@ -369,6 +491,52 @@ public sealed class ResourceGrain(
         }
 
         state.State.Observed = observed;
+        await state.WriteStateAsync();
+        return Result.Success;
+    }
+
+    /// <inheritdoc />
+    public async Task<Result> RecordReadOnlyAsync(ImmutableDictionary<string, string> values) {
+        ArgumentNullException.ThrowIfNull(values);
+
+        if (!state.State.Exists) {
+            return NotFound();
+        }
+
+        var superset = Parse(state.State.Superset).GetValueOrThrow();
+
+        foreach (var (pointer, json) in values.OrderBy(static x => x.Key, StringComparer.Ordinal)) {
+            JsonNode? value;
+
+            try {
+                value = JsonNode.Parse(json);
+            } catch (JsonException exception) {
+                return Result.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"The value recorded at '{pointer}' is not JSON: {exception.Message}",
+                    pointer
+                );
+            }
+
+            if (value is null) {
+                JsonPointer.Remove(superset, pointer);
+            } else {
+                JsonPointer.Write(superset, pointer, value);
+            }
+        }
+
+        var next = JsonCanonical.Of(superset).ToJsonString();
+
+        if (string.Equals(next, state.State.Superset, StringComparison.Ordinal)) {
+            return Result.Success;
+        }
+
+        // ⚠ The body changed, so the etag and the version move — a client holding the etag from the
+        // PUT that started the run is holding a representation that no longer exists. ModifiedBy
+        // stays: the platform recording a run is not somebody modifying the resource.
+        state.State.Superset = next;
+        state.State.Version++;
+        state.State.Etag = NextEtag();
         await state.WriteStateAsync();
         return Result.Success;
     }
@@ -407,7 +575,8 @@ public sealed class ResourceGrain(
                     ChangeSequence = state.State.PendingChanges.Count == 0
                         ? 0
                         : state.State.PendingChanges[^1].Sequence,
-                    ChangesDropped = state.State.ChangesDropped
+                    ChangesDropped = state.State.ChangesDropped,
+                    PassOperationId = state.State.PassOperationId
                 }
             )
         );
@@ -468,6 +637,49 @@ public sealed class ResourceGrain(
     }
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>The period this resource's type declared, or zero.</summary>
+    TimeSpan PassPeriod() {
+        var address = ResourceId.ParsePath(state.State.Path);
+        return address.IsSuccess && registry.TryGetType(address.GetValueOrThrow().Type, out var registration)
+            ? registration.PassPeriod
+            : TimeSpan.Zero;
+    }
+
+    /// <summary>Registers the <c>periodic-pass</c> reminder, once, for a type that declares a period.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Only when <c>GetReminder</c> answers nothing</b> — the lesson docs/plan/08 § Two-phase
+    ///     create records from #83. Re-registering on every converged write would push the first due
+    ///     time out again each time, and a resource written more often than its period would never
+    ///     get a pass at all.
+    /// </remarks>
+    /// <returns><c>true</c> if this call registered the reminder.</returns>
+    async Task<bool> ArmPeriodicPassCoreAsync() {
+        var period = PassPeriod();
+
+        if (period == TimeSpan.Zero || await this.GetReminder(PeriodicPass.ReminderName) is not null) {
+            return false;
+        }
+
+        await this.RegisterOrUpdateReminder(PeriodicPass.ReminderName, PeriodicPass.FirstDue(resourceId, period), period);
+        return true;
+    }
+
+    /// <summary>Removes the <c>periodic-pass</c> reminder if there is one.</summary>
+    /// <param name="period">
+    ///     The type's period, read before a clear took the path away. ⚠ Zero skips the reminder
+    ///     table entirely, which is what keeps every type without a period — all but one — from
+    ///     paying a reminder read on every delete.
+    /// </param>
+    async Task DisarmPeriodicPassAsync(TimeSpan period) {
+        if (period == TimeSpan.Zero) {
+            return;
+        }
+
+        if (await this.GetReminder(PeriodicPass.ReminderName) is { } reminder) {
+            await this.UnregisterReminder(reminder);
+        }
+    }
 
     /// <summary>The resource as the API renders it, projected to one api-version.</summary>
     /// <remarks>

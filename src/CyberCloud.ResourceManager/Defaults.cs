@@ -6,29 +6,45 @@ using System.Globalization;
 namespace CyberCloud.ResourceManager;
 
 /// <summary>
-///     The policy evaluator a platform with no policy engine registers. Step 5, M3.
+///     The policy evaluator a harness with no policy engine passes. Step 5, answered by nobody.
 /// </summary>
 /// <remarks>
-///     ⚠
-///     <b>
-///         Returns <see cref="PolicyEffect.NotSupported" /> rather than
-///         <see cref="PolicyEffect.Allow" />, and the difference is what an audit log has to be able to
-///         state.
-///     </b> An <see cref="PolicyEffect.Allow" /> is indistinguishable from a policy engine that
-///     evaluated and permitted; <see cref="PolicyEffect.NotSupported" /> says no engine ran. The write
-///     path treats both as "carry on", so the step stays in its place in the order from the first day
-///     — and the ordering is the thing that must not move later.
+///     <para>
+///         ⚠
+///         <b>
+///             Returns <see cref="PolicyEffect.NotSupported" /> rather than
+///             <see cref="PolicyEffect.Allow" />, and the difference is what an audit log has to be able
+///             to state.
+///         </b> An <see cref="PolicyEffect.Allow" /> is indistinguishable from a policy engine that
+///         evaluated and permitted; <see cref="PolicyEffect.NotSupported" /> says no engine ran. The
+///         write path treats both as "carry on".
+///     </para>
+///     <para>
+///         ⚠ <b>No longer the default a host gets.</b> <c>AddCyberCloudResourceManager</c> registers
+///         <see cref="CatalogPolicyEvaluator" /> since issue #46; this remains for the hand-built
+///         harnesses — the conformance suites, the isolation suite — whose subject is not policy and
+///         which build <see cref="ResourceManagerService" /> without a catalog grain to ask.
+///     </para>
 /// </remarks>
 public sealed class NotSupportedPolicyEvaluator : IPolicyEvaluator {
     /// <inheritdoc />
     public Task<PolicyDecision> EvaluateAsync(
-        ResourceId id,
-        string apiVersion,
-        string body,
-        CallerContext caller,
+        PolicyEvaluationRequest request,
         CancellationToken cancellationToken = default
     ) =>
         Task.FromResult(PolicyDecision.NotSupported);
+
+    /// <inheritdoc />
+    public Task<Result> RecordComplianceAsync(
+        ResourceId id,
+        PolicyDecision decision,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result.Success);
+
+    /// <inheritdoc />
+    public Task<Result> ForgetAsync(ResourceId id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Success);
 }
 
 /// <summary>
@@ -530,4 +546,130 @@ public sealed class UnavailableResourceGraphQuery : IResourceGraphQuery {
                 + """have no resources" is the wrong sentence for "nothing is wired"."""
             )
         );
+}
+
+/// <summary>
+///     The <see cref="IObjectStoreGrants" /> a silo with no platform object store registers: it
+///     refuses.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>A refusal, for <see cref="UnavailableObjectStore" />'s reason</b>: a bucket that was
+///     reported made and a key that was reported issued, over a store nobody wired, would render a
+///     PostgreSQL server whose WAL archive fails on its first segment — minutes after the caller was
+///     told the server exists, in an operator log. Registered here as the <c>TryAdd</c> default for the
+///     layering reason <see cref="UnavailableObjectStore" /> gives.
+/// </remarks>
+public sealed class UnavailableObjectStoreGrants : IObjectStoreGrants {
+    const string Because =
+        "No platform object store is wired, so no bucket can be made and no key issued. docs/plan/15 "
+        + "§ Backup as a service keeps a PostgreSQL server's backups on the platform's SeaweedFS, and "
+        + "CyberCloud.ObjectStorage is the client — but this host registered none. Call "
+        + "AddSeaweedFsObjectStoreGrants() beside AddCyberCloudResourceManager(), with "
+        + "CyberCloud:ObjectStorage:IamEndpoint and :DataPlaneEndpoint configured, or turn "
+        + "backup.enabled off on the server.";
+
+    /// <inheritdoc />
+    public string DataPlaneEndpoint => string.Empty;
+
+    /// <inheritdoc />
+    public Task<Result> EnsureBucketAsync(string bucket, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result<ObjectStoreKey>> IssueKeyAsync(
+        string principal,
+        string bucket,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result<ObjectStoreKey>.Failure(ErrorCode.InternalError, Because));
+
+    /// <inheritdoc />
+    public Task<Result> RevokeKeyAsync(
+        string principal,
+        string accessKeyId,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Because));
+}
+
+/// <summary>
+///     The <see cref="IInvitationIssuer" /> a host with no identity reach registers: it refuses, and
+///     names the seam — <see cref="UnavailablePrincipalDirectory" />'s arrangement, for its reason.
+/// </summary>
+public sealed class UnavailableInvitationIssuer : IInvitationIssuer {
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> IssueAsync(InvitationIssue issue, CancellationToken cancellationToken = default) =>
+        Task.FromResult(
+            Result<InvitationSnapshot>.Failure(
+                ErrorCode.InternalError,
+                "No invitation issuer is wired, so the invitation was checked and not created. The host "
+                + "that serves invitations replaces this IInvitationIssuer registration with its own — the "
+                + "gateway's is GrainInvitationIssuer, over IInvitationGrain."
+            )
+        );
+}
+
+/// <summary>
+///     The <see cref="IIdentityDirectory" /> a host with no identity reach registers: every call
+///     is refused with a sentence naming the seam — <see cref="UnavailableInvitationIssuer" />'s
+///     arrangement, for its reason. Issue #41.
+/// </summary>
+public sealed class UnavailableIdentityDirectory : IIdentityDirectory {
+    /// <summary>The sentence every call answers.</summary>
+    public const string Message =
+        "No identity directory is wired, so the request was checked and not served. The host that "
+        + "serves the identity administration API replaces this IIdentityDirectory registration with "
+        + "its own — the gateway's is GrainIdentityDirectory, over the identity grains.";
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<MemberSnapshot>>> ListMembersAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Refuse<IReadOnlyList<MemberSnapshot>>();
+
+    /// <inheritdoc />
+    public Task<Result<MemberSnapshot>> DeprovisionMemberAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken = default) =>
+        Refuse<MemberSnapshot>();
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<InvitationSnapshot>>> ListInvitationsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Refuse<IReadOnlyList<InvitationSnapshot>>();
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> ResendInvitationAsync(Guid tenantId, Guid invitationId, CancellationToken cancellationToken = default) =>
+        Refuse<InvitationSnapshot>();
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> RevokeInvitationAsync(Guid tenantId, Guid invitationId, CancellationToken cancellationToken = default) =>
+        Refuse<InvitationSnapshot>();
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<ApplicationSnapshot>>> ListApplicationsAsync(Guid tenantId, CancellationToken cancellationToken = default) =>
+        Refuse<IReadOnlyList<ApplicationSnapshot>>();
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationSnapshot>> GetApplicationAsync(Guid tenantId, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Refuse<ApplicationSnapshot>();
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationRegistered>> CreateApplicationAsync(Guid tenantId, ApplicationDraft draft, CancellationToken cancellationToken = default) =>
+        Refuse<ApplicationRegistered>();
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationRegistered>> RotateApplicationSecretAsync(Guid tenantId, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Refuse<ApplicationRegistered>();
+
+    /// <inheritdoc />
+    public Task<Result> DeleteApplicationAsync(Guid tenantId, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Message));
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<SessionSnapshot>>> ListSessionsAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken = default) =>
+        Refuse<IReadOnlyList<SessionSnapshot>>();
+
+    /// <inheritdoc />
+    public Task<Result> RevokeSessionAsync(Guid tenantId, Guid userId, Guid sessionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result.Failure(ErrorCode.InternalError, Message));
+
+    static Task<Result<T>> Refuse<T>()
+        where T : notnull =>
+        Task.FromResult(Result<T>.Failure(ErrorCode.InternalError, Message));
 }

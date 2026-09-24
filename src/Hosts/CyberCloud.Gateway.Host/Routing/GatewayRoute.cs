@@ -138,6 +138,22 @@ enum RouteKind {
     ResourceGraphQuery,
 
     /// <summary>
+    ///     An address under <c>/tenants/{t}/providers/CyberCloud.Identity/</c> — the invitations of
+    ///     issue #43 and the members, applications and own sessions of issue #41.
+    ///     docs/plan/11 § The object model.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The resource graph's arrangement under a namespace of its own
+    ///     (<c>IdentityAddress.ProviderNamespace</c>): one grammar, asked before the scope and
+    ///     resource grammars and the <c>POST</c> branch, a <c>400</c> listing the addresses for
+    ///     anything else under it. Dispatched by <c>IdentityDispatch</c>: a <c>POST</c> on the
+    ///     invitations collection to <c>IInvitationManager</c>, everything else to
+    ///     <c>IIdentityAdministration</c>, and both own their checks. <c>IdentityRoutingTests</c>
+    ///     pins the shapes and the verbs.
+    /// </remarks>
+    Identity,
+
+    /// <summary>
     ///     The cost query — <c>POST {scope}/providers/CyberCloud.CostManagement/query</c> on a
     ///     subscription or a resource group. docs/plan/22 § Cost visibility, issue #38.
     /// </summary>
@@ -170,6 +186,38 @@ enum RouteKind {
     ///     tenant.
     /// </remarks>
     Invoice,
+
+    /// <summary>
+    ///     A policy definition or assignment —
+    ///     <c>{scope}/providers/CyberCloud.Policy/{policyDefinitions|policyAssignments}/{name}</c>.
+    ///     <c>GET</c>, <c>PUT</c> and <c>DELETE</c>. docs/plan/08 § Policy, issue #46.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Under the fourth reserved namespace, and asked before the scope and resource grammars
+    ///     for the role assignment's reason.</b> On a resource group an assignment's address is a
+    ///     well-formed ten-segment resource path; tried after <see cref="Resource" /> it would reach
+    ///     the resource manager as a type no provider serves. Under the namespace only
+    ///     <c>PolicyAddress.ParsePath</c>'s answer counts. <c>PolicyRoutingTests</c> pins the shapes,
+    ///     the precedence and the <c>400</c>s.
+    ///     <para>
+    ///         ⚠ <b>Separate from <see cref="Resource" /> because the dispatch target differs</b>: a
+    ///         policy object goes to <c>IPolicyManager</c>, which owns the <c>assignRole</c> check and
+    ///         the catalog write. What <i>enforces</i> a policy is step 5 of a resource write, and
+    ///         that is <see cref="Resource" />'s route, not this one.
+    ///     </para>
+    /// </remarks>
+    Policy,
+
+    /// <summary>
+    ///     A collection of policy objects on a scope — definitions, assignments, or the compliance
+    ///     states of the resources beneath it (<c>policyStates</c>). <c>GET</c> only.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Separate from <see cref="Policy" /> for the reason <see cref="Collection" /> is
+    ///     separate from <see cref="Resource" /></b>: which one a path is, is decided by the path —
+    ///     a type with no name after it — and never by the method.
+    /// </remarks>
+    PolicyCollection,
 
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
@@ -290,6 +338,10 @@ enum RouteKind {
 ///     The query address, for <see cref="RouteKind.ResourceGraphQuery" />. ⚠ Its tenant is the
 ///     <i>token's</i> too — the address carries nothing but a tenant, and that one is rebuilt.
 /// </param>
+/// <param name="Identity">
+///     The identity address, for <see cref="RouteKind.Identity" />. ⚠ The token's tenant, rebuilt,
+///     as for <paramref name="ResourceGraph" />.
+/// </param>
 /// <param name="CostQuery">
 ///     The cost query's address, for <see cref="RouteKind.CostQuery" />. ⚠ Its tenant is the
 ///     <i>token's</i> too — <c>CostQueryAddress.WithTenant</c> rebuilds it.
@@ -297,6 +349,11 @@ enum RouteKind {
 /// <param name="Invoice">
 ///     The invoices' address, for <see cref="RouteKind.Invoice" />. ⚠ Its tenant is the
 ///     <i>token's</i> too — <c>InvoiceAddress.WithTenant</c> rebuilds it.
+/// </param>
+/// <param name="Policy">
+///     The policy address, for <see cref="RouteKind.Policy" /> and
+///     <see cref="RouteKind.PolicyCollection" />. ⚠ Its tenant is the <i>token's</i> too —
+///     <c>PolicyAddress.WithTenant</c> rebuilds its scope.
 /// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
@@ -310,8 +367,10 @@ readonly record struct GatewayRoute(
     RoleAssignmentCollectionId RoleAssignments = default,
     ScopeCollectionId Scopes = default,
     ResourceGraphAddress ResourceGraph = default,
+    IdentityAddress Identity = default,
     CostQueryAddress CostQuery = default,
-    InvoiceAddress Invoice = default
+    InvoiceAddress Invoice = default,
+    PolicyAddress Policy = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -328,6 +387,7 @@ readonly record struct GatewayRoute(
             RouteKind.Resource or RouteKind.Action => Resource.Path,
             RouteKind.Scope => Scope.Path,
             RouteKind.RoleAssignment => RoleAssignment.Path,
+            RouteKind.Policy => Policy.Path,
             _ => ""
         };
 
@@ -344,6 +404,8 @@ readonly record struct GatewayRoute(
             RouteKind.ScopeCollection => Scopes.Path,
             // The query answers a collection envelope and pages with a nextLink built from this.
             RouteKind.ResourceGraphQuery => ResourceGraph.Path,
+            RouteKind.Identity => Identity.Path,
+            RouteKind.PolicyCollection => Policy.Path,
             _ => ""
         };
 }
@@ -526,6 +588,32 @@ static class GatewayRouter {
             );
         }
 
+        // ── The identity addresses, under the third reserved namespace (#43, #41). ─────────────
+        //
+        // ⚠ THE RESOURCE GRAPH'S ARRANGEMENT, BELOW: one grammar, a 400 listing the addresses for any
+        // other path under the namespace, and before the POST branch so ResolveAction never reads
+        // `…/resend` or `…/rotateSecret` as an action on a resource. A verb an address doesn't take
+        // is a 405 that names the ones it does, answered by dispatch where the Allow header is
+        // written. ⚠ The tenant is the token's, rebuilt, as for every tenant-scoped address here.
+        if (IdentityAddress.IsUnderNamespace(path)) {
+            var identity = IdentityAddress.ParsePath(path);
+
+            if (identity.TryGetError(out var identityError)) {
+                return Result<GatewayRoute>.Failure(identityError);
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    RouteKind.Identity,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    Identity: identity.GetValueOrThrow() with { TenantId = tenantId }
+                )
+            );
+        }
+
         // ── The resource graph's query, under the second reserved namespace (#54). ──────────────
         //
         // ⚠ THE SAME ARRANGEMENT AS THE ROLE ASSIGNMENT'S, ONE GRAMMAR INSTEAD OF TWO. Under
@@ -558,6 +646,50 @@ static class GatewayRouter {
                     "",
                     // NAMED, for the reason the other optional address kinds are; the token's tenant.
                     ResourceGraph: new(tenantId)
+                )
+            );
+        }
+
+        // ── Policy, under its own reserved namespace (#46). ─────────────────────────────────
+        //
+        // ⚠ THE ROLE ASSIGNMENT'S ARRANGEMENT, FOR THE ROLE ASSIGNMENT'S REASON. An assignment on a
+        // resource group is a well-formed ten-segment resource path, so this is asked before the scope
+        // and resource grammars, and under /providers/CyberCloud.Policy/ only PolicyAddress.ParsePath
+        // counts: a malformed policy path is a 400 that names the grammar, never a fall-through to the
+        // canonical 404 of a type no provider serves. The order against the two namespaces above is
+        // free — a path names one namespace or it names none.
+        //
+        // ⚠ AN ITEM OR A COLLECTION, DECIDED BY THE PATH. A collection is read with GET only, and a
+        // write to one is a 400 that names the item address, as for role assignments — a PUT that lost
+        // its name segment most needs to be told where the name goes.
+        if (PolicyAddress.IsUnderNamespace(path)) {
+            var policy = PolicyAddress.ParsePath(path);
+
+            if (policy.TryGetError(out var policyError)) {
+                return Result<GatewayRoute>.Failure(policyError);
+            }
+
+            var address = policy.GetValueOrThrow().WithTenant(tenantId);
+
+            if (address.IsCollection && !HttpMethods.IsGet(method)) {
+                return Result<GatewayRoute>.Failure(
+                    ErrorCode.InvalidResourceId,
+                    $"'{path}' is a policy collection, which is read with GET only. A definition or an "
+                    + "assignment is written with PUT and deleted with DELETE at "
+                    + "'{scope}/providers/CyberCloud.Policy/{policyDefinitions|policyAssignments}/{name}', and "
+                    + "the compliance states are only ever read — docs/plan/08 § Policy."
+                );
+            }
+
+            return Result<GatewayRoute>.Success(
+                new(
+                    address.IsCollection ? RouteKind.PolicyCollection : RouteKind.Policy,
+                    default,
+                    "",
+                    Guid.Empty,
+                    "",
+                    // NAMED, for the reason every other optional address kind is; the token's tenant.
+                    Policy: address
                 )
             );
         }

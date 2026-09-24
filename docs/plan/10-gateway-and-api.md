@@ -124,6 +124,17 @@ segment most needs. The listing is one `read` check on the scope and no per-row 
 collection and is still right. And a grant now checks the principal against the directory — the same
 section — so a `PUT` naming a user this tenant does not have is a `400`, not a tuple.
 
+**A grant can end on its own (issue #49):** a `PUT` body may carry `expiresOn` beside the other three, an
+ISO 8601 instant with an offset and later than now, and every rendered assignment carries
+`properties.expiresOn` — the instant in UTC, or `null` for a permanent grant — so a `GET` sent back as
+a `PUT` sets the same end. A `PUT` without it makes the assignment permanent: the body states the
+whole assignment. From the instant it passes, the assignment is a `404` on `GET`, missing from the
+collection, and denied by every check, before any sweep has run; [07](07-rebac-authorization.md)
+§ Time-bounded relations is where the rest lives. That holds for an end a later `PUT` brought closer,
+too, for an answer a check cached while the grant ran longer. ⚠ Such an end has to be at least a
+minute away, or the `PUT` is a `400`: a grant that must end sooner is revoked, and a revoke is
+07 § Consistency's `MinimizeLatency` question, not this one.
+
 ⚠ **The role assignment API is not in the generated document, and that is #63's question asked a
 third time.** The reserved namespace is exactly what keeps it out of the registry the emitters read,
 and the scope extension #63 added carries a scope, not an address *on* one. So `cyc` and the SDK are
@@ -182,9 +193,63 @@ write is a `405` with `Allow: GET`. `InvoiceRoutingTests` pins the gateway's hal
 question asked a fourth time.** The reserved namespace keeps it out of the registry the emitters
 read, exactly as `CyberCloud.Authorization`'s does, so `openapi/`, the three SDKs and the portal's
 generated client are silent about it and `cyc graph query` — hand-written beside `cyc rest`,
-[21 § Grammar](21-cli-and-sdks.md) — is the CLI's whole knowledge of it. The fix is the same third
+[21 § Grammar](21-cli-and-sdks.md) — is the CLI's whole knowledge of it. The portal's resource graph
+explorer (#41, [20](20-portal.md)) reaches it the way the access page reaches role assignments:
+`ResourceGraphApi` (`portal/apps/portal/src/app/api/resource-graph.ts`), hand-written beside
+`RoleAssignmentsApi` over the generated client's transport, and following a `nextLink` by its
+`$skipToken` rather than by its URL. The fix is the same third
 non-registry source the role assignment API waits on, one path rather than a sub-path of every
 scope, and it is owed with that one because it touches the same five surfaces.
+
+**A deployment's `whatIf` is a fifth component behind the same door, and unlike the last two it is in
+the generated document (#39).** `CyberCloud.Resources/deployments` is a registered type, so its `PUT`,
+`GET`, `DELETE` and collection are the ordinary resource routes to `IResourceManager` and its
+`whatIf` is declared like any action — but the declaration names an entry point instead of a handler
+(`ActionRegistration.EntryPoint`), and stage 8 sends `POST …/deployments/{name}/whatIf` to
+`IDeploymentManager` rather than to `IResourceManager.ActionAsync`. Two properties force it: a what-if
+answers for a deployment that need not exist, and `ActionAsync` refuses an action on an absent
+resource because `POST` never creates; and it reads every resource the template names *as the
+caller*, which an action handler — handed an `ActionContext` with no caller, by design — cannot. It
+answers `200` with `{ "status", "changes": [ … ] }` and no `Azure-AsyncOperation`. Routing is still
+not a decision: the entry point runs step 1's ownership checks and the action's permission check
+itself, behind the same seam. ⚠ The gateway never names `IResourceManager.WriteChildAsync`, the
+door a deployment's children go through as their recorded caller —
+`GatewayIsolationTests.NoGatewaySourceFileWritesAsARecordedCaller` reads this project's source for it.
+
+**The identity administration API is a sixth component behind the same door, under the third
+reserved namespace (#43, widened by #41):** `/tenants/{t}/providers/CyberCloud.Identity/` followed by
+`invitations`, `invitations/{id}`, `invitations/{id}/resend`, `members`, `members/{id}`,
+`applications`, `applications/{id}`, `applications/{id}/rotateSecret`, `sessions` or
+`sessions/{id}`, every id the `N` form and nothing else. Routed as `RouteKind.Identity` before the
+scope grammars and the `POST` branch — `…/resend` and `…/rotateSecret` would otherwise read as
+actions on a resource — and, under the namespace, that grammar alone: anything else is a `400` that
+lists the ten addresses. A `POST` on `invitations` reaches `IInvitationManager` as it did under #43;
+every other address reaches `IIdentityAdministration`, both owning their checks
+([11 § Sign-up and tenant creation](11-identity.md)). A verb an address doesn't take is a `405`
+with `Allow`, which makes this the fourth family to answer one. The two answers that return a
+client secret — the registration and the rotation — carry `Cache-Control: no-store`, a `secret: true`
+action's rule. ⚠ **Not in the generated document, #63's question asked a fifth time**, for the
+reason the resource graph's isn't: `portal/apps/portal/src/app/api/identity-admin.ts` is the portal's
+second hand-written client, beside `RoleAssignmentsApi` and on the same transport, and the fix is the
+same non-registry source.
+
+**Policy is a seventh component behind the same door, under its own reserved namespace (#46):**
+`{scope}/providers/CyberCloud.Policy/policyDefinitions/{name}` on a tenant, a management group or a
+subscription, `…/policyAssignments/{name}` on a management group, a subscription or a resource group,
+and `…/policyStates` on the latter three reach `IPolicyManager` ([08 § Policy](08-resource-manager.md)).
+Routed as `RouteKind.Policy` for an object and `RouteKind.PolicyCollection` for a collection, and asked
+before the scope and resource grammars for the role assignment's reason: an assignment on a resource
+group is a well-formed ten-segment resource path. Under the namespace only `PolicyAddress`'s grammar
+answers, so a definition on a resource group, a named state or an unknown type is a `400`, never a
+fall-through to a `404`. `PUT` answers `201` or `200`, `DELETE` `204`, `PATCH` and `POST` `405` with
+`Allow: GET, PUT, DELETE`; a collection is `GET` only and a write to one is a `400` naming the item
+address. The gateway enforces nothing here either — the deny a policy produces is decided at step 5 of a
+resource write inside the resource manager and arrives at the gateway as a `403 PolicyViolation` to render.
+⚠ **In the generated document, unlike the identity and resource-graph namespaces** — #63's question asked a fifth time, and
+the first of the three to be answered: the review of #46 added the third non-registry source they wait on,
+objects addressed on a scope (`x-cybercloud-scope-object`), and put policy's fifteen paths through it to
+`cyc policy`, the three SDKs and the portal's client ([08 § Policy](08-resource-manager.md)). Role
+assignments are the same shape — an object on a scope, and on a resource — and are the next to move.
 
 ## Request pipeline
 
@@ -352,7 +417,7 @@ named `resources/negotiate` and answered 404 to every client that negotiated.
 | Caller | Credential | Notes |
 |---|---|---|
 | Portal | Authorization Code + PKCE → access token in memory, refresh in an `HttpOnly` cookie scoped to the identity host | Access token never in `localStorage`. The cookie is `__Host-cyc-refresh`, `SameSite=Lax`, and the identity host both writes it and reads it back only when the request's `Origin` is one of the portal's registered redirect-URI origins — `Lax` lets a same-site subdomain's `POST` carry it, and a top-level cross-site form `POST` would have its `Set-Cookie` honoured whatever `SameSite` says; the `Origin` check is what refuses both ([11 § Protocol](11-identity.md#protocol)) |
-| CLI | Device code, or client credentials for CI | Token cached in the OS keychain |
+| CLI | Device code, or client credentials for CI | Token cached in the OS keychain, or in an owner-only file where the machine has none (#43, [21 § Decisions](21-cli-and-sdks.md)) |
 | SDK | `TokenCredential` — the Azure SDK shape, so the mental model transfers | |
 | Service principal | Client credentials, or a certificate | |
 | Workload in a tenant cluster | Its projected SA token, exchanged for a platform token against the cluster's trusted OIDC issuer | This is managed identity ([11](11-identity.md)) and it is the reason a tenant's app needs no stored secret |

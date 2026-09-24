@@ -127,41 +127,78 @@ public sealed class RecoveryVaultActionHandlerTests {
             """{"apiVersion":"postgresql.cnpg.io/v1","kind":"Cluster","metadata":{"name":"main"},"spec":{"instances":2,"imageName":"ghcr.io/cloudnative-pg/postgresql:17.2","storage":{"size":"50Gi","storageClass":"openebs-hostpath"},"backup":{"barmanObjectStore":{"destinationPath":"s3://b/p"}}}}"""
         );
 
+        var creator = new RecordingCreator();
         var request = new JsonObject { ["recoveryPoint"] = point, ["targetName"] = "main-restored" }.ToJsonString();
         var answer = await new RecoveryVaultRecoverHandler().InvokeAsync(
-            Context(vault, connection, ns, RecoveryVaults.RecoverAction, request),
+            Context(vault, connection, ns, RecoveryVaults.RecoverAction, request) with { Creator = creator },
             TestContext.Current.CancellationToken
         );
 
         answer.IsSuccess.ShouldBeTrue(answer.Error?.Message);
 
         var response = JsonNode.Parse(answer.GetValueOrThrow())!.AsObject();
-        response["kind"]!.GetValue<string>().ShouldBe("Cluster");
+        response["kind"]!.GetValue<string>().ShouldBe("CyberCloud.DBforPostgreSQL/servers");
         response["name"]!.GetValue<string>().ShouldBe("main-restored");
         response["namespace"]!.GetValue<string>().ShouldBe(ns);
         response["recoveryPoint"]!.GetValue<string>().ShouldBe(point);
         response["source"]!.GetValue<string>().ShouldBe(Ids.Server("main").Path);
+        response["resourceId"]!.GetValue<string>().ShouldEndWith("/providers/CyberCloud.DBforPostgreSQL/servers/main-restored");
 
         using var parsed = JsonDocument.Parse(answer.GetValueOrThrow());
         RecoveryVaults.RecoverResponse.Validate(parsed.RootElement).IsSuccess.ShouldBeTrue();
 
-        var restored = connection.Applied.Single(static x => x.Target.Kind.Kind == "Cluster");
-        var spec = JsonNode.Parse(restored.Body)!["spec"]!.AsObject();
+        // ⚠ #30: the restore is a server the caller creates, and NOTHING is applied to the cluster by the
+        // vault — the server's own reconciler renders the Cluster, its bucket and its key.
+        connection.Applied.ShouldNotContain(static x => x.Target.Kind.Kind == "Cluster");
 
-        spec["bootstrap"]!["recovery"]!["backup"]!["name"]!.GetValue<string>().ShouldBe(point);
-        spec["instances"]!.GetValue<int>().ShouldBe(1);
-        spec["storage"]!["size"]!.GetValue<string>()
+        var (type, name, apiVersion, body) = creator.Created.ShouldHaveSingleItem();
+        type.ShouldBe(RecoveryVaults.PostgresServerType);
+        name.ShouldBe("main-restored");
+        apiVersion.ShouldBe(RecoveryVaults.PostgresServerApiVersion);
+
+        var properties = JsonNode.Parse(body)!["properties"]!.AsObject();
+        properties["restore"]!["recoveryPoint"]!.GetValue<string>().ShouldBe(point);
+        properties["clusterId"]!.GetValue<string>().ShouldBe(Ids.Cluster.ToString("D"));
+        properties["version"]!.GetValue<string>().ShouldBe("17", "the major off the source's image, 17.2");
+        properties["replicas"]!.GetValue<int>().ShouldBe(2);
+        properties["storage"]!["size"]!.GetValue<string>()
             .ShouldBe("50Gi", "a recovery needs a volume at least as large as the one it came from");
-        spec["storage"]!["storageClass"]!.GetValue<string>().ShouldBe("openebs-hostpath");
-        spec["imageName"]!.GetValue<string>().ShouldBe("ghcr.io/cloudnative-pg/postgresql:17.2");
-        spec.ContainsKey("backup")
-            .ShouldBeFalse(
-                "a restored cluster that archived into the source's store under the source's name would overwrite its WAL"
-            );
+        properties["storage"]!["class"]!.GetValue<string>().ShouldBe("openebs-hostpath");
+        properties["pooling"]!["enabled"]!.GetValue<bool>().ShouldBeFalse("the source ran no pooler");
+        properties.ContainsKey("backup")
+            .ShouldBeFalse("the copy takes the server defaults — backups on, to a bucket of its own GUID");
+    }
 
-        restored.Labels[RecoveryVaults.RestoreRoleLabel].ShouldBe("restore");
-        restored.Labels[RecoveryVaults.ProtectedItemLabel].ShouldBe("main");
-        restored.Labels[KubeLabels.ResourceId].ShouldBe(KubeLabels.GuidValue(vault.Id));
+    [Fact]
+    public async Task ACreateTheWritePathRefusesIsTheRestoresRefusal() {
+        // The caller may use the vault and may not create a server: the create's refusal is the answer,
+        // unchanged — it is the manager's, with the manager's code.
+        var (vault, connection, ns) = await ProtectedAsync("main");
+        var schedule = RecoveryVaults.ScheduledBackupNameOf("nightly", "main");
+        var point = schedule + "-ok";
+
+        connection.Plant(
+            RecoveryVaults.BackupRef(ns, point),
+            RecoveryVaults.OperatorBackupJson(ns, schedule, "main", point, "completed", Now, Now)
+        );
+
+        var creator = new RecordingCreator {
+            Refuse = new(ErrorCode.AuthorizationFailed, "you may not write CyberCloud.DBforPostgreSQL/servers here")
+        };
+
+        var answer = await new RecoveryVaultRecoverHandler().InvokeAsync(
+            Context(
+                vault,
+                connection,
+                ns,
+                RecoveryVaults.RecoverAction,
+                new JsonObject { ["recoveryPoint"] = point, ["targetName"] = "copy" }.ToJsonString()
+            ) with { Creator = creator },
+            TestContext.Current.CancellationToken
+        );
+
+        answer.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+        answer.Error.Message.ShouldContain("may not write");
     }
 
     [Fact]
@@ -180,21 +217,101 @@ public sealed class RecoveryVaultActionHandlerTests {
                 point,
                 "completed",
                 Now.AddDays(-1),
-                Now.AddDays(-1)
+                Now.AddDays(-1),
+                majorVersion: 16
             )
         );
 
+        var creator = new RecordingCreator();
         var request = new JsonObject { ["recoveryPoint"] = point, ["targetName"] = "main-again" }.ToJsonString();
         var answer = await new RecoveryVaultRecoverHandler().InvokeAsync(
-            Context(vault, connection, ns, RecoveryVaults.RecoverAction, request),
+            Context(vault, connection, ns, RecoveryVaults.RecoverAction, request) with { Creator = creator },
             TestContext.Current.CancellationToken
         );
 
         answer.IsSuccess.ShouldBeTrue(answer.Error?.Message);
-        var spec = JsonNode.Parse(connection.Applied.Single(static x => x.Target.Kind.Kind == "Cluster").Body)!["spec"]!
-            .AsObject();
-        spec["storage"]!["size"]!.GetValue<string>().ShouldBe("20Gi");
-        spec.ContainsKey("imageName").ShouldBeFalse();
+        var properties = JsonNode.Parse(creator.Created.ShouldHaveSingleItem().Body)!["properties"]!.AsObject();
+        properties["storage"]!["size"]!.GetValue<string>().ShouldBe("20Gi");
+        properties["replicas"]!.GetValue<int>().ShouldBe(1);
+        properties["restore"]!["recoveryPoint"]!.GetValue<string>().ShouldBe(point);
+
+        // ⚠ #30's review: this used to be a guess of 17, and a 16 point restored into 17 never starts.
+        properties["version"]!.GetValue<string>().ShouldBe("16", "the major came from a guess and not from the point");
+    }
+
+    [Fact]
+    public async Task RecoverRefusesAPointThatRecordsNoMajorWhenTheSourceIsGone() {
+        var (vault, connection, ns) = await ProtectedAsync("main");
+        var schedule = RecoveryVaults.ScheduledBackupNameOf("nightly", "main");
+        var point = schedule + "-unversioned";
+
+        connection.Plant(
+            RecoveryVaults.BackupRef(ns, point),
+            RecoveryVaults.OperatorBackupJson(ns, schedule, "main", point, "completed", Now, Now, majorVersion: 0)
+        );
+
+        var creator = new RecordingCreator();
+        var answer = await new RecoveryVaultRecoverHandler().InvokeAsync(
+            Context(
+                vault,
+                connection,
+                ns,
+                RecoveryVaults.RecoverAction,
+                new JsonObject { ["recoveryPoint"] = point, ["targetName"] = "main-guess" }.ToJsonString()
+            ) with { Creator = creator },
+            TestContext.Current.CancellationToken
+        );
+
+        answer.Error!.Code.ShouldBe(ErrorCode.PreconditionFailed);
+        answer.Error.Target.ShouldBe("/recoveryPoint");
+        creator.Created.ShouldBeEmpty("a server was created at a guessed major");
+    }
+
+    [Fact]
+    public async Task BackupNowAppliesAPointTheScheduleOwnsAndTheListingFinds() {
+        var (vault, connection, ns) = await ProtectedAsync("main");
+        var schedule = RecoveryVaults.ScheduledBackupNameOf("nightly", "main");
+        var clock = new FixedClock();
+
+        var answer = await new RecoveryVaultBackupNowHandler(clock).InvokeAsync(
+            Context(vault, connection, ns, RecoveryVaults.BackupNowAction, """{"item":"main"}"""),
+            TestContext.Current.CancellationToken
+        );
+
+        answer.IsSuccess.ShouldBeTrue(answer.Error?.Message);
+        using var parsed = JsonDocument.Parse(answer.GetValueOrThrow());
+        RecoveryVaults.BackupNowResponse.Validate(parsed.RootElement).IsSuccess.ShouldBeTrue();
+
+        var name = parsed.RootElement.GetProperty("recoveryPoint").GetString()!;
+        name.ShouldBe(RecoveryVaults.OnDemandBackupNameOf(schedule, clock.UtcNow));
+
+        var applied = connection.Applied.Single(static x => x.Target.Kind.Kind == "Backup");
+        applied.Labels[RecoveryVaults.ParentScheduledBackupLabel].ShouldBe(schedule, "the label every reader of a vault's points selects on");
+        applied.Labels[RecoveryVaults.ProtectedItemLabel].ShouldBe("main");
+        applied.Labels[KubeLabels.ResourceId].ShouldBe(KubeLabels.GuidValue(vault.Id));
+
+        var document = JsonNode.Parse(connection.Objects[RecordingConnection.Key(RecoveryVaults.BackupRef(ns, name))])!;
+        document["spec"]!["cluster"]!["name"]!.GetValue<string>().ShouldBe("main");
+        document["spec"]!["method"]!.GetValue<string>().ShouldBe(RecoveryVaults.BackupMethod);
+
+        // ⚠ Owned by the schedule, so the vault's teardown takes it with the schedule's own points.
+        var owner = document["metadata"]!["ownerReferences"]!.AsArray().Single()!.AsObject();
+        owner["kind"]!.GetValue<string>().ShouldBe("ScheduledBackup");
+        owner["name"]!.GetValue<string>().ShouldBe(schedule);
+    }
+
+    [Fact]
+    public async Task BackupNowRefusesAnItemTheVaultHasNotScheduled() {
+        var (vault, connection, ns) = await ProtectedAsync("main");
+
+        var answer = await new RecoveryVaultBackupNowHandler(new FixedClock()).InvokeAsync(
+            Context(vault, connection, ns, RecoveryVaults.BackupNowAction, """{"item":"reports"}"""),
+            TestContext.Current.CancellationToken
+        );
+
+        answer.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        answer.Error.Target.ShouldBe("/item");
+        connection.Applied.ShouldNotContain(static x => x.Target.Kind.Kind == "Backup");
     }
 
     [Fact]

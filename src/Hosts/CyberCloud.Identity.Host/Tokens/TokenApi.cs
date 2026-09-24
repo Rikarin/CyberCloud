@@ -19,12 +19,14 @@ namespace CyberCloud.Identity.Host.Tokens;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         <b>Three grants, three shapes, one factory.</b> Client credentials authenticates a
+///         <b>Four grants, four shapes, one factory.</b> Client credentials authenticates a
 ///         service principal against the vault seam and mints with no session. The authorization
 ///         code — minted by <c>AuthorizeApi</c> from the cookie session — is exchanged here for a
 ///         <i>token session</i>: one <see cref="ISessionGrain" /> per (user, client), opened at the
-///         exchange and bound to the interactive session by <c>cyc:isid</c>. The refresh grant
-///         rotates that session's chain. Every access token comes out of
+///         exchange and bound to the interactive session by <c>cyc:isid</c>. The device code —
+///         approved on the verification page from another machine — is redeemed for a token session
+///         bound to itself, <see cref="MintForDeviceCodeAsync" /> says why. The refresh grant
+///         rotates either session's chain. Every access token comes out of
 ///         <see cref="AccessTokenPrincipalFactory.Build" />, so the closed claim set is the same
 ///         whichever grant produced it.
 ///     </para>
@@ -70,12 +72,14 @@ namespace CyberCloud.Identity.Host.Tokens;
 /// <param name="secrets">The vault seam a service principal's credential is checked through.</param>
 /// <param name="tenants">Which tenant a request that names none belongs to.</param>
 /// <param name="clock">For <c>auth_time</c> on a grant with no session behind it.</param>
+/// <param name="devices">The device flow's grains, for the device-code grant.</param>
 /// <param name="logger">Where the refusal reasons go.</param>
 public sealed class TokenApi(
     IGrainFactory grains,
     IClientSecretSeam secrets,
     TenantHint tenants,
     IClock clock,
+    DeviceFlow devices,
     ILogger<TokenApi> logger
 ) {
     /// <summary>
@@ -471,6 +475,16 @@ public sealed class TokenApi(
 
         await tenant.GetGrain<IUserGrain>(GrainKeys.User(facts.UserId)).TrackSessionAsync(tokenSessionId);
 
+        if (!await StillMayActAsync(tenant, facts.UserId, tokenSessionId)) {
+            return Refused(
+                facts.TenantId,
+                OpenIddictConstants.GrantTypes.AuthorizationCode,
+                tokenSessionId,
+                "user-cannot-authenticate",
+                SessionRevokedDescription
+            );
+        }
+
         GrantLog.TokenSessionOpened(logger, facts.TenantId, facts.UserId, tokenSessionId, facts.InteractiveSessionId);
 
         var session = new SessionDescriptor {
@@ -588,7 +602,211 @@ public sealed class TokenApi(
         );
     }
 
+    // ── The device code ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Redeems an approved device code for a token session and the access-token principal —
+    ///     RFC 8628 § 3.5's success response.
+    /// </summary>
+    /// <param name="deviceCode">The <c>device_code</c> parameter, verbatim.</param>
+    /// <param name="client">The registration the request resolved to.</param>
+    /// <param name="context">What the host knows about the request — the device label and the address.</param>
+    /// <param name="cancellationToken">The request's token.</param>
+    /// <returns>
+    ///     The principal to sign in with, or <see cref="ErrorCode.AuthorizationFailed" /> carrying one
+    ///     of the sentences above — the endpoint answers <c>invalid_grant</c>.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><see cref="MintForCodeAsync" />'s three calls in its order, for its reason.</b> The
+    ///         token session's id is minted first, the device authorization records it in the turn
+    ///         that spends the device code, and only then is the session opened — so a second
+    ///         redemption, which can only be a device code that leaked, revokes the session the first
+    ///         one opened (<see cref="RevocationReason.DeviceCodeReuseDetected" />) whether or not it
+    ///         has finished opening.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The device's token session is bound to itself, not to the browser session the
+    ///             person approved from — and that is the one place this grant differs from the
+    ///             code exchange on purpose.
+    ///         </b> A code's token session carries the interactive session as <c>cyc:isid</c> so a
+    ///         <c>/logout</c> in the browser ends every chain the sign-in produced. The device flow
+    ///         exists because the device and the browser are two machines: the person approves on a
+    ///         phone and walks away, and a sign-out on the phone ending the build agent's CLI session
+    ///         would be a surprise nobody could explain from the agent. So <c>cyc:isid</c> names the
+    ///         token session itself, <see cref="MintForRefreshAsync" />'s liveness check reads the
+    ///         chain's own grain, and the chain ends at <c>cyc logout</c> (<c>/revoke</c>), at its
+    ///         absolute lifetime, or at "sign out everywhere" — the session is tracked on the user
+    ///         like every other, which is what reaches it from the portal.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Bound to itself once it exists, but not before.</b> Until the device collects
+    ///         them, an approval stands in for the tokens, and a sign-in that ended must take it
+    ///         down, as it does an unexchanged authorization code (<see cref="MintForCodeAsync" />).
+    ///         So the redemption refuses when the approving session is no longer live, and after
+    ///         the track it refuses and revokes when the user is no longer
+    ///         <see cref="UserStatus.Active" /> (<see cref="StillMayActAsync" /> says why there). The
+    ///         first cut read neither. A code approved and then suspended, or signed out everywhere,
+    ///         still got tokens for the rest of its ten minutes, and the chain it opened was one no
+    ///         revocation had reached. The review of #43 proved it with a probe, and
+    ///         <c>DeviceFlowOverHttpTests.AnApprovalDiesWithTheSignInThatGaveItAndWithTheAccount</c>
+    ///         pins it now.
+    ///     </para>
+    /// </remarks>
+    public async Task<Result<ClaimsPrincipal>> MintForDeviceCodeAsync(
+        string? deviceCode,
+        ApplicationRegistration client,
+        SignInContext context,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(context);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var tokenSessionId = Guid.NewGuid();
+        var redeemed = await devices.RedeemAsync(deviceCode, tokenSessionId);
+
+        if (redeemed.TryGetError(out var notRedeemed)) {
+            return Refused(
+                Guid.Empty,
+                OpenIddictConstants.GrantTypes.DeviceCode,
+                Guid.Empty,
+                notRedeemed.Message,
+                DeviceCodeRejectedDescription
+            );
+        }
+
+        var redemption = redeemed.GetValueOrThrow();
+        var approval = redemption.Approval;
+        var tenant = grains.ForTenant(TenantHint.Qualifier(approval.TenantId));
+
+        if (!redemption.FirstUse) {
+            await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(redemption.TokenSessionId))
+                .RevokeAsync(RevocationReason.DeviceCodeReuseDetected);
+
+            GrantLog.DeviceCodeReplayed(logger, approval.TenantId, approval.UserId, redemption.TokenSessionId);
+
+            return Refused(
+                approval.TenantId,
+                OpenIddictConstants.GrantTypes.DeviceCode,
+                redemption.TokenSessionId,
+                "device-code-replayed",
+                DeviceCodeRejectedDescription
+            );
+        }
+
+        // ⚠ The approval is only as good as the sign-in that gave it, until the device collects it.
+        // A suspension and "sign out everywhere" both revoke that sign-in, and a code approved
+        // before either must not open a chain after — see the remarks.
+        var approving = await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(approval.InteractiveSessionId))
+            .GetAsync();
+
+        if (approving.TryGetError(out _) || !approving.GetValueOrThrow().IsLive) {
+            return Refused(
+                approval.TenantId,
+                OpenIddictConstants.GrantTypes.DeviceCode,
+                approval.InteractiveSessionId,
+                "interactive-session-not-live",
+                DeviceCodeRejectedDescription
+            );
+        }
+
+        var opened = await tenant
+            .GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId))
+            .OpenAsync(
+                approval.UserId,
+                client.ClientId,
+                context.DeviceLabel,
+                CredentialDigest.AddressDigest(context.ClientAddress),
+                approval.Methods
+            );
+
+        if (opened.TryGetError(out var failed)) {
+            return Refused(
+                approval.TenantId,
+                OpenIddictConstants.GrantTypes.DeviceCode,
+                tokenSessionId,
+                failed.Message,
+                DeviceCodeRejectedDescription
+            );
+        }
+
+        await tenant.GetGrain<IUserGrain>(GrainKeys.User(approval.UserId)).TrackSessionAsync(tokenSessionId);
+
+        if (!await StillMayActAsync(tenant, approval.UserId, tokenSessionId)) {
+            return Refused(
+                approval.TenantId,
+                OpenIddictConstants.GrantTypes.DeviceCode,
+                tokenSessionId,
+                "user-cannot-authenticate",
+                DeviceCodeRejectedDescription
+            );
+        }
+
+        GrantLog.TokenSessionOpened(logger, approval.TenantId, approval.UserId, tokenSessionId, tokenSessionId);
+
+        var session = new SessionDescriptor {
+            SessionId = tokenSessionId,
+            UserId = approval.UserId,
+            TenantId = approval.TenantId,
+            ClientId = client.ClientId,
+            AuthenticatedAt = approval.AuthenticatedAt,
+            Methods = approval.Methods
+        };
+
+        // ⚠ The interactive session in the facts is the token session itself — see the remarks.
+        var facts = new Facts(
+            approval.TenantId,
+            approval.UserId,
+            tokenSessionId,
+            tokenSessionId,
+            approval.AuthenticatedAt,
+            redemption.Scopes,
+            null,
+            approval.Email,
+            approval.DisplayName
+        );
+
+        return Result<ClaimsPrincipal>.Success(
+            Assemble(session, facts, opened.GetValueOrThrow().Handle, OpenIddictConstants.GrantTypes.DeviceCode)
+        );
+    }
+
+    /// <summary>
+    ///     What a device-code redemption answers when it cannot mint — not approved, spent, or not
+    ///     a code this server issued. One sentence, for <see cref="RefreshRejectedDescription" />'s reason.
+    /// </summary>
+    public const string DeviceCodeRejectedDescription = "That device code is no longer valid. Run the sign-in again.";
+
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Whether the user may still hold the token session just opened and tracked for them. When
+    ///     they may not, the session is revoked here.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>After <see cref="IUserGrain.TrackSessionAsync" />, not before, and that order closes
+    ///     the race.</b> <c>UserGrain.SetStatusAsync</c> revokes every session it tracks before the
+    ///     suspension returns, but a session tracked after that call is not in its list. The user
+    ///     grain runs one call at a time, so a suspension is either earlier than the track, and the
+    ///     status read here is no longer <see cref="UserStatus.Active" />, or later, and it revokes
+    ///     this session with the rest. A check before the open would leave the window between the
+    ///     check and the track open.
+    /// </remarks>
+    async Task<bool> StillMayActAsync(TenantGrainFactory tenant, Guid userId, Guid tokenSessionId) {
+        var user = await tenant.GetGrain<IUserGrain>(GrainKeys.User(userId)).GetAsync();
+
+        if (user.IsSuccess && user.GetValueOrThrow().Status == UserStatus.Active) {
+            return true;
+        }
+
+        await tenant.GetGrain<ISessionGrain>(GrainKeys.Session(tokenSessionId)).RevokeAsync(RevocationReason.AdminAction);
+
+        return false;
+    }
 
     /// <summary>What a code or a refresh token says, read back off its principal.</summary>
     sealed record Facts(

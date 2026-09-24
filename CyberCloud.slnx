@@ -471,6 +471,19 @@
         <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Tests/CyberCloud.Providers.Terminal.Tests.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Conformance/CyberCloud.Providers.Terminal.Conformance.csproj" />
         <Project Path="src/Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Cluster.Conformance/CyberCloud.Providers.Terminal.Cluster.Conformance.csproj" />
+
+        <!--
+          CyberCloud.Resources/deployments — docs/plan/08 § Long-running operations, "Nested operations".
+
+          ⚠ THREE PROJECTS, AND THE THINNEST FAMILY IN THE TREE ON PURPOSE. A deployment's work is PUTs
+          made as its creator, which no provider may make, so the driver, the template evaluator and the
+          what-if are CyberCloud.ResourceManager's and the declaration is CyberCloud.ResourceManager.Contracts'.
+          This family exists because Build.Generate reads provider assemblies from src/Providers and
+          nowhere else. No .Contracts, no reconciler, no chart, no conformance suite — its .csproj says why.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.Application/CyberCloud.Providers.Resources.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.Tests/CyberCloud.Providers.Resources.Tests.csproj" />
           The twelfth provider family — CyberCloud.Monitor/workspaces, docs/plan/16
           § CyberCloud.Monitor/workspaces, M1 · 2.5 EM, and step 7 of docs/plan/24's M1 exit story
           ("see metrics and logs").
@@ -583,6 +596,23 @@
           break the other. ClusterSlot serialises processes; that is the boundary.
         -->
         <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance.csproj" />
+
+        <!--
+          The nineteenth provider family — CyberCloud.KeyVault/vaults, docs/plan/18
+          § CyberCloud.KeyVault/vaults: secrets and RSA/EC keys behind a data plane of actions through
+          the gateway, sealed under a per-vault root the platform vault (CyberCloud.Vault) holds, and
+          authorized by four ReBAC data-plane roles no control-plane role implies. The prerequisite
+          #30's customer-managed keys named.
+
+          ⚠ CLUSTERLESS, AND NO .Cluster.Conformance PROJECT: a vault is a grain and a path in the
+          platform vault, so the k3s lane has nothing to apply — the same answer the Communication
+          family gives.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Contracts/CyberCloud.Providers.KeyVault.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Application/CyberCloud.Providers.KeyVault.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Tests/CyberCloud.Providers.KeyVault.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Conformance/CyberCloud.Providers.KeyVault.Conformance.csproj" />
 
         <!--
           The eighteenth provider family — CyberCloud.Compute/virtualMachines, disks and images, on

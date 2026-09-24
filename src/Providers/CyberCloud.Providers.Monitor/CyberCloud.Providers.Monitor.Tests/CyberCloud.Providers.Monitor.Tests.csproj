@@ -57,6 +57,13 @@
                           LogicalName="monitor-collector.values.yaml"/>
         <EmbeddedResource Include="../../../../charts/managed/grafana/templates/_helpers.tpl"
                           LogicalName="grafana.helpers.tpl"/>
+        <!--
+          ⚠ AND THE COMPONENT'S HELPERS, for the collector's Service name the chart spells a second time
+          — a chart cannot include another chart's helper. ComponentDeclarationTests compares it; a
+          drift is a connection string pointing at a Service that does not exist.
+        -->
+        <EmbeddedResource Include="../../../../charts/managed/monitor-component/templates/_helpers.tpl"
+                          LogicalName="monitor-component.helpers.tpl"/>
         <EmbeddedResource Include="../../../../charts/managed/grafana/values.yaml"
                           LogicalName="grafana.values.yaml"/>
         <!--

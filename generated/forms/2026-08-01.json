@@ -3527,6 +3527,8 @@
         "/properties/pooling/instances",
         "/properties/pooling/mode",
         "/properties/replicas",
+        "/properties/restore",
+        "/properties/restore/recoveryPoint",
         "/properties/sizing",
         "/properties/sizing/cpu",
         "/properties/sizing/memory",
@@ -3588,10 +3590,10 @@
           "type": "string",
           "required": false,
           "section": "backup",
-          "hint": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.",
+          "hint": "Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.",
           "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
           "default": "",
-          "placeholder": "s3://tenant-bucket/postgres"
+          "placeholder": ""
         },
         {
           "jsonPointer": "/properties/backup/enabled",
@@ -3792,6 +3794,31 @@
           "minimum": 1,
           "maximum": 5,
           "default": 2
+        },
+        {
+          "jsonPointer": "/properties/restore",
+          "name": "restore",
+          "label": "Restore",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Where the server's data comes from when it is created from a recovery point rather than empty."
+        },
+        {
+          "jsonPointer": "/properties/restore/recoveryPoint",
+          "name": "recoveryPoint",
+          "label": "Recovery point",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "restore",
+          "hint": "The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database.",
+          "maxLength": 253,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new PostgreSQL server to change it.",
+          "default": ""
         },
         {
           "jsonPointer": "/properties/sizing",
@@ -4493,6 +4520,814 @@
         }
       ]
     },
+    "CyberCloud.KeyVault/vaults": {
+      "resourceType": "CyberCloud.KeyVault/vaults",
+      "apiVersion": "2026-08-01",
+      "title": "Key vault",
+      "plural": "Key vaults",
+      "summary": "Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.",
+      "overrideKey": "CyberCloud.KeyVault/vaults@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/description",
+        "/properties/enablePurgeProtection",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 7,
+      "purgePermission": "purge",
+      "purgeProtectionPointer": "/properties/enablePurgeProtection",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the vault is billed in and served from.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Key vault to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The vault's own settings."
+        },
+        {
+          "jsonPointer": "/properties/description",
+          "name": "description",
+          "label": "Description",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "What the vault is for, shown in the portal beside its name.",
+          "maxLength": 256
+        },
+        {
+          "jsonPointer": "/properties/enablePurgeProtection",
+          "name": "enablePurgeProtection",
+          "label": "Enable purge protection",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "Whether a deleted vault, secret or key may be purged before its seven-day recovery window ends. Once true it stays true: a write that sets it false is refused, and so is every purge until the window is out.",
+          "default": false
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "createKey",
+          "label": "Create key",
+          "permission": "writeKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/curve",
+              "name": "curve",
+              "label": "Curve",
+              "control": "xui-select",
+              "required": false
+            },
+            {
+              "jsonPointer": "/enabled",
+              "name": "enabled",
+              "label": "Enabled",
+              "control": "xui-switch",
+              "required": false
+            },
+            {
+              "jsonPointer": "/expiresOn",
+              "name": "expiresOn",
+              "label": "Expires on",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/keyOps",
+              "name": "keyOps",
+              "label": "Key ops",
+              "control": "xui-select",
+              "required": false
+            },
+            {
+              "jsonPointer": "/keySize",
+              "name": "keySize",
+              "label": "Key size",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/kty",
+              "name": "kty",
+              "label": "Kty",
+              "control": "xui-select",
+              "required": true
+            },
+            {
+              "jsonPointer": "/notBefore",
+              "name": "notBefore",
+              "label": "Not before",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "decrypt",
+          "label": "Decrypt",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [
+            {
+              "jsonPointer": "/alg",
+              "name": "alg",
+              "label": "Alg",
+              "control": "xui-select",
+              "required": true
+            },
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/value",
+              "name": "value",
+              "label": "Value",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "deleteKey",
+          "label": "Delete key",
+          "permission": "writeKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "deleteSecret",
+          "label": "Delete secret",
+          "permission": "writeSecrets",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/secretName",
+              "name": "secretName",
+              "label": "Secret name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "encrypt",
+          "label": "Encrypt",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/alg",
+              "name": "alg",
+              "label": "Alg",
+              "control": "xui-select",
+              "required": true
+            },
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/value",
+              "name": "value",
+              "label": "Value",
+              "control": "xui-secret-ref",
+              "required": true
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "getKey",
+          "label": "Get key",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "getSecret",
+          "label": "Get secret",
+          "permission": "readSecrets",
+          "longRunning": false,
+          "secret": true,
+          "fields": [
+            {
+              "jsonPointer": "/secretName",
+              "name": "secretName",
+              "label": "Secret name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "importKey",
+          "label": "Import key",
+          "permission": "writeKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/enabled",
+              "name": "enabled",
+              "label": "Enabled",
+              "control": "xui-switch",
+              "required": false
+            },
+            {
+              "jsonPointer": "/expiresOn",
+              "name": "expiresOn",
+              "label": "Expires on",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/keyOps",
+              "name": "keyOps",
+              "label": "Key ops",
+              "control": "xui-select",
+              "required": false
+            },
+            {
+              "jsonPointer": "/notBefore",
+              "name": "notBefore",
+              "label": "Not before",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/pkcs8",
+              "name": "pkcs8",
+              "label": "Pkcs8",
+              "control": "xui-secret-ref",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "listDeletedKeys",
+          "label": "List deleted keys",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "listDeletedSecrets",
+          "label": "List deleted secrets",
+          "permission": "readSecrets",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "listKeyVersions",
+          "label": "List key versions",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "listKeys",
+          "label": "List keys",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "listSecretVersions",
+          "label": "List secret versions",
+          "permission": "readSecrets",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/secretName",
+              "name": "secretName",
+              "label": "Secret name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "listSecrets",
+          "label": "List secrets",
+          "permission": "readSecrets",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "purge",
+          "label": "Purge",
+          "permission": "purge",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "purgeDeletedKey",
+          "label": "Purge deleted key",
+          "permission": "purgeKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "purgeDeletedSecret",
+          "label": "Purge deleted secret",
+          "permission": "purgeSecrets",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/secretName",
+              "name": "secretName",
+              "label": "Secret name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "recoverDeletedKey",
+          "label": "Recover deleted key",
+          "permission": "writeKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "recoverDeletedSecret",
+          "label": "Recover deleted secret",
+          "permission": "writeSecrets",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/secretName",
+              "name": "secretName",
+              "label": "Secret name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "restore",
+          "label": "Restore",
+          "permission": "write",
+          "longRunning": true,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "setSecret",
+          "label": "Set secret",
+          "permission": "writeSecrets",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/contentType",
+              "name": "contentType",
+              "label": "Content type",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/enabled",
+              "name": "enabled",
+              "label": "Enabled",
+              "control": "xui-switch",
+              "required": false
+            },
+            {
+              "jsonPointer": "/expiresOn",
+              "name": "expiresOn",
+              "label": "Expires on",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/notBefore",
+              "name": "notBefore",
+              "label": "Not before",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/secretName",
+              "name": "secretName",
+              "label": "Secret name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/value",
+              "name": "value",
+              "label": "Value",
+              "control": "xui-secret-ref",
+              "required": true
+            }
+          ]
+        },
+        {
+          "name": "sign",
+          "label": "Sign",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/alg",
+              "name": "alg",
+              "label": "Alg",
+              "control": "xui-suggest",
+              "required": true
+            },
+            {
+              "jsonPointer": "/digest",
+              "name": "digest",
+              "label": "Digest",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "unwrapKey",
+          "label": "Unwrap key",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": true,
+          "fields": [
+            {
+              "jsonPointer": "/alg",
+              "name": "alg",
+              "label": "Alg",
+              "control": "xui-select",
+              "required": true
+            },
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/value",
+              "name": "value",
+              "label": "Value",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "updateKey",
+          "label": "Update key",
+          "permission": "writeKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/enabled",
+              "name": "enabled",
+              "label": "Enabled",
+              "control": "xui-switch",
+              "required": false
+            },
+            {
+              "jsonPointer": "/expiresOn",
+              "name": "expiresOn",
+              "label": "Expires on",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/keyOps",
+              "name": "keyOps",
+              "label": "Key ops",
+              "control": "xui-select",
+              "required": false
+            },
+            {
+              "jsonPointer": "/notBefore",
+              "name": "notBefore",
+              "label": "Not before",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "updateSecret",
+          "label": "Update secret",
+          "permission": "writeSecrets",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/contentType",
+              "name": "contentType",
+              "label": "Content type",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/enabled",
+              "name": "enabled",
+              "label": "Enabled",
+              "control": "xui-switch",
+              "required": false
+            },
+            {
+              "jsonPointer": "/expiresOn",
+              "name": "expiresOn",
+              "label": "Expires on",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/notBefore",
+              "name": "notBefore",
+              "label": "Not before",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/secretName",
+              "name": "secretName",
+              "label": "Secret name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "verify",
+          "label": "Verify",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/alg",
+              "name": "alg",
+              "label": "Alg",
+              "control": "xui-suggest",
+              "required": true
+            },
+            {
+              "jsonPointer": "/digest",
+              "name": "digest",
+              "label": "Digest",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/signature",
+              "name": "signature",
+              "label": "Signature",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "wrapKey",
+          "label": "Wrap key",
+          "permission": "useKeys",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/alg",
+              "name": "alg",
+              "label": "Alg",
+              "control": "xui-select",
+              "required": true
+            },
+            {
+              "jsonPointer": "/keyName",
+              "name": "keyName",
+              "label": "Key name",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/value",
+              "name": "value",
+              "label": "Value",
+              "control": "xui-secret-ref",
+              "required": true
+            },
+            {
+              "jsonPointer": "/version",
+              "name": "version",
+              "label": "Version",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        }
+      ]
+    },
     "CyberCloud.Mail/domains": {
       "resourceType": "CyberCloud.Mail/domains",
       "apiVersion": "2026-08-01",
@@ -4786,6 +5621,176 @@
             }
           ],
           "default": "2.4"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "dnsRecords",
+          "label": "Dns records",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "verify",
+          "label": "Verify",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
+    },
+    "CyberCloud.Mail/domains/mailboxes": {
+      "resourceType": "CyberCloud.Mail/domains/mailboxes",
+      "apiVersion": "2026-08-01",
+      "title": "Mailbox",
+      "plural": "Mailboxes",
+      "summary": "One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.",
+      "overrideKey": "CyberCloud.Mail/domains/mailboxes@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/aliases",
+        "/properties/clusterId",
+        "/properties/forwardTo",
+        "/properties/keepCopy",
+        "/properties/localPart",
+        "/properties/passwordRef",
+        "/properties/quota",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the mailbox is billed in. The domain's.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Mailbox to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The mailbox's own settings."
+        },
+        {
+          "jsonPointer": "/properties/aliases",
+          "name": "aliases",
+          "label": "Aliases",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.",
+          "default": []
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the domain's back end runs in. Must be the domain's.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Mailbox to change it."
+        },
+        {
+          "jsonPointer": "/properties/forwardTo",
+          "name": "forwardTo",
+          "label": "Forward to",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.",
+          "default": []
+        },
+        {
+          "jsonPointer": "/properties/keepCopy",
+          "name": "keepCopy",
+          "label": "Keep copy",
+          "control": "xui-switch",
+          "type": "boolean",
+          "required": false,
+          "section": "general",
+          "hint": "With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.",
+          "default": true
+        },
+        {
+          "jsonPointer": "/properties/localPart",
+          "name": "localPart",
+          "label": "Local part",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.",
+          "maxLength": 64,
+          "pattern": "^(?:^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Mailbox to change it.",
+          "default": "postmaster",
+          "placeholder": "alice"
+        },
+        {
+          "jsonPointer": "/properties/passwordRef",
+          "name": "passwordRef",
+          "label": "Password ref",
+          "control": "xui-secret-ref",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it.",
+          "maxLength": 512,
+          "pattern": "^(?:([^#@\\s]+#[^#@\\s]+(@[^#@\\s]+)?)?)$",
+          "default": ""
+        },
+        {
+          "jsonPointer": "/properties/quota",
+          "name": "quota",
+          "label": "Quota",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.",
+          "pattern": "^(?:(\\d+(\\.\\d+)?(m|k|M|G|T|P|E|Ki|Mi|Gi|Ti|Pi|Ei)?)?)$",
+          "default": ""
         },
         {
           "jsonPointer": "/tags",
@@ -6271,6 +7276,43 @@
           "confirmOnly": true
         },
         {
+          "name": "listMetricLabels",
+          "label": "List metric labels",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/end",
+              "name": "end",
+              "label": "End",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/label",
+              "name": "label",
+              "label": "Label",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/match",
+              "name": "match",
+              "label": "Match",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/start",
+              "name": "start",
+              "label": "Start",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
           "name": "purge",
           "label": "Purge",
           "permission": "purge",
@@ -6280,6 +7322,50 @@
           "confirmOnly": true
         },
         {
+          "name": "queryMetrics",
+          "label": "Query metrics",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/end",
+              "name": "end",
+              "label": "End",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/query",
+              "name": "query",
+              "label": "Query",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/start",
+              "name": "start",
+              "label": "Start",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/stepSeconds",
+              "name": "stepSeconds",
+              "label": "Step seconds",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/time",
+              "name": "time",
+              "label": "Time",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
+        },
+        {
           "name": "restore",
           "label": "Restore",
           "permission": "write",
@@ -6287,6 +7373,85 @@
           "secret": false,
           "fields": [],
           "confirmOnly": true
+        },
+        {
+          "name": "searchLogs",
+          "label": "Search logs",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/attributes",
+              "name": "attributes",
+              "label": "Attributes",
+              "control": "xui-chip-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/bucketSeconds",
+              "name": "bucketSeconds",
+              "label": "Bucket seconds",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/estimate",
+              "name": "estimate",
+              "label": "Estimate",
+              "control": "xui-switch",
+              "required": false
+            },
+            {
+              "jsonPointer": "/from",
+              "name": "from",
+              "label": "From",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/service",
+              "name": "service",
+              "label": "Service",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/severities",
+              "name": "severities",
+              "label": "Severities",
+              "control": "xui-select",
+              "required": false
+            },
+            {
+              "jsonPointer": "/text",
+              "name": "text",
+              "label": "Text",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/to",
+              "name": "to",
+              "label": "To",
+              "control": "xui-input",
+              "required": true
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/traceId",
+              "name": "traceId",
+              "label": "Trace id",
+              "control": "xui-input",
+              "required": false
+            }
+          ]
         }
       ]
     },
@@ -6798,6 +7963,239 @@
           "secret": false,
           "fields": [],
           "confirmOnly": true
+        }
+      ]
+    },
+    "CyberCloud.Monitor/workspaces/components": {
+      "resourceType": "CyberCloud.Monitor/workspaces/components",
+      "apiVersion": "2026-08-01",
+      "title": "Application component",
+      "plural": "Application components",
+      "summary": "An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.",
+      "overrideKey": "CyberCloud.Monitor/workspaces/components@2026-08-01",
+      "coveredPointers": [
+        "/location",
+        "/properties",
+        "/properties/clusterId",
+        "/properties/collector",
+        "/properties/protocol",
+        "/tags"
+      ],
+      "supportsTags": true,
+      "requiresCluster": true,
+      "clusterIdPointer": "/properties/clusterId",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/location",
+          "name": "location",
+          "label": "Location",
+          "control": "xui-region",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The region the component is billed in — its workspace's.",
+          "format": "cybercloud-region",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Application component to change it.",
+          "placeholder": "eu-central"
+        },
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The component's own settings."
+        },
+        {
+          "jsonPointer": "/properties/clusterId",
+          "name": "clusterId",
+          "label": "Cluster id",
+          "control": "xui-cluster",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.",
+          "format": "uuid",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new Application component to change it."
+        },
+        {
+          "jsonPointer": "/properties/collector",
+          "name": "collector",
+          "label": "Collector",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.",
+          "maxLength": 63,
+          "pattern": "^(?:[a-z0-9]([-a-z0-9]*[a-z0-9])?)$",
+          "default": "gateway",
+          "placeholder": "gateway"
+        },
+        {
+          "jsonPointer": "/properties/protocol",
+          "name": "protocol",
+          "label": "Protocol",
+          "control": "xui-select",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Which OTLP protocol the connection string names. The collector must have that receiver on.",
+          "choices": [
+            {
+              "value": "grpc",
+              "label": "Grpc"
+            },
+            {
+              "value": "http/protobuf",
+              "label": "Http/protobuf"
+            }
+          ],
+          "default": "http/protobuf"
+        },
+        {
+          "jsonPointer": "/tags",
+          "name": "tags",
+          "label": "Tags",
+          "control": "xui-tag-input",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+          "maxProperties": 50
+        }
+      ],
+      "actions": [
+        {
+          "name": "applicationMap",
+          "label": "Application map",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "dependencies",
+          "label": "Dependencies",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "exceptions",
+          "label": "Exceptions",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "listConnectionString",
+          "label": "List connection string",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        },
+        {
+          "name": "requests",
+          "label": "Requests",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/top",
+              "name": "top",
+              "label": "Top",
+              "control": "xui-slider",
+              "required": false
+            }
+          ]
+        },
+        {
+          "name": "transaction",
+          "label": "Transaction",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/timespanMinutes",
+              "name": "timespanMinutes",
+              "label": "Timespan minutes",
+              "control": "xui-slider",
+              "required": false
+            },
+            {
+              "jsonPointer": "/traceId",
+              "name": "traceId",
+              "label": "Trace id",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
         }
       ]
     },
@@ -8217,6 +9615,22 @@
       ],
       "actions": [
         {
+          "name": "backupNow",
+          "label": "Backup now",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/item",
+              "name": "item",
+              "label": "Item",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
+        {
           "name": "listRecoveryPoints",
           "label": "List recovery points",
           "permission": "read",
@@ -8243,6 +9657,139 @@
               "jsonPointer": "/targetName",
               "name": "targetName",
               "label": "Target name",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        }
+      ]
+    },
+    "CyberCloud.Resources/deployments": {
+      "resourceType": "CyberCloud.Resources/deployments",
+      "apiVersion": "2026-08-01",
+      "title": "Deployment",
+      "plural": "Deployments",
+      "summary": "A template of resources deployed in dependency order, each through the write path as its creator.",
+      "overrideKey": "CyberCloud.Resources/deployments@2026-08-01",
+      "coveredPointers": [
+        "/properties",
+        "/properties/error",
+        "/properties/outputResources",
+        "/properties/parameters",
+        "/properties/rollback",
+        "/properties/steps",
+        "/properties/template"
+      ],
+      "supportsTags": false,
+      "requiresCluster": false,
+      "clusterIdPointer": "",
+      "softDeleteDays": 0,
+      "purgePermission": "",
+      "purgeProtectionPointer": "",
+      "fields": [
+        {
+          "jsonPointer": "/properties",
+          "name": "properties",
+          "label": "Properties",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "The template, its parameters, and the record of the last run."
+        },
+        {
+          "jsonPointer": "/properties/error",
+          "name": "error",
+          "label": "Error",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "Why the last run failed, naming the resource that stopped it. Empty when it did not.",
+          "readOnly": true
+        },
+        {
+          "jsonPointer": "/properties/outputResources",
+          "name": "outputResources",
+          "label": "Output resources",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "Every resource the last run created or updated, in the order it did.",
+          "readOnly": true
+        },
+        {
+          "jsonPointer": "/properties/parameters",
+          "name": "parameters",
+          "label": "Parameters",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "The parameter values, as JSON text: { \"name\": { \"value\": … } }.",
+          "maxLength": 262144
+        },
+        {
+          "jsonPointer": "/properties/rollback",
+          "name": "rollback",
+          "label": "Rollback",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "general",
+          "hint": "What a rollback would remove. Rollback is recorded and never performed.",
+          "readOnly": true
+        },
+        {
+          "jsonPointer": "/properties/steps",
+          "name": "steps",
+          "label": "Steps",
+          "control": "xui-chip-input",
+          "type": "array",
+          "required": false,
+          "section": "general",
+          "hint": "One line per template resource, in dependency order: its state, its id and the operation that drove it.",
+          "readOnly": true
+        },
+        {
+          "jsonPointer": "/properties/template",
+          "name": "template",
+          "label": "Template",
+          "control": "xui-input",
+          "type": "string",
+          "required": true,
+          "section": "general",
+          "hint": "The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.",
+          "maxLength": 1048576
+        }
+      ],
+      "actions": [
+        {
+          "name": "whatIf",
+          "label": "What if",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/properties",
+              "name": "properties",
+              "label": "Properties",
+              "control": "xui-group",
+              "required": true
+            },
+            {
+              "jsonPointer": "/properties/parameters",
+              "name": "parameters",
+              "label": "Parameters",
+              "control": "xui-input",
+              "required": false
+            },
+            {
+              "jsonPointer": "/properties/template",
+              "name": "template",
+              "label": "Template",
               "control": "xui-input",
               "required": true
             }

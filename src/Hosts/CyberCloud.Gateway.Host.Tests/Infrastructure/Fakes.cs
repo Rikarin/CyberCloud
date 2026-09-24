@@ -86,20 +86,39 @@ sealed class OneTypeRegistry : IProviderRegistry {
             ],
             SoftDeleteDays = 7,
             PurgePermission = SoftDeletePolicy.DefaultPurgePermission
+        },
+        // ⚠ THE DEPLOYMENT TYPE, STATED BY HAND FOR THE REASON THE SOFT-DELETE ACTIONS ABOVE ARE: this
+        // assembly holds no ProviderBuilder. The schema and the what-if's request are the real ones from
+        // Deployments; what is copied is the registration's shape — no reconciler, one synchronous action
+        // served by an entry point — which DeploymentDeclarationTests pins against the real builder.
+        new() {
+            Type = Deployments.Type,
+            ApiVersions = [new(ApiVersion.Parse(Deployments.V2026), Deployments.Schema2026)],
+            Actions = [
+                new(Deployments.WhatIfAction, ActionKind.Post, "write", false) {
+                    Request = Deployments.WhatIfRequest, EntryPoint = Deployments.WhatIfEntryPoint
+                }
+            ]
         }
     ];
 
     /// <inheritdoc />
-    public ImmutableArray<string> Namespaces { get; } = ["CyberCloud.DBforPostgreSQL"];
+    public ImmutableArray<string> Namespaces { get; } = ["CyberCloud.DBforPostgreSQL", Deployments.ProviderNamespace];
 
     /// <inheritdoc />
     public bool TryGetType(ResourceTypeName type, out ResourceTypeRegistration registration) {
-        registration = Types[0];
-        return type == TheType;
+        registration = Deployments.Is(type) ? Types[1] : Types[0];
+        return type == TheType || Deployments.Is(type);
     }
 
     /// <inheritdoc />
     public Result<TypeResolution> Resolve(ResourceTypeName type, string? apiVersion) {
+        if (Deployments.Is(type)) {
+            return Result<TypeResolution>.Success(
+                new(Types[1], ApiVersion.Parse(Deployments.V2026), Deployments.Schema2026)
+            );
+        }
+
         if (type != TheType) {
             return Result<TypeResolution>.Failure(ErrorCode.InvalidResourceType, $"'{type}' is unknown.");
         }
@@ -219,6 +238,22 @@ sealed class RecordingResourceManager : IResourceManager {
         CancellationToken cancellationToken = default
     ) =>
         Record(request, OnWrite);
+
+    /// <summary>
+    ///     How many times anything called <see cref="WriteChildAsync" />. ⚠ The gateway must never:
+    ///     a request's caller is the token's, and the child entry point names a caller that is not.
+    /// </summary>
+    public int ChildWrites { get; private set; }
+
+    /// <inheritdoc />
+    public Task<Result<WriteAccepted>> WriteChildAsync(
+        Guid parentOperationId,
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ChildWrites++;
+        return Record(request, OnWrite);
+    }
 
     /// <inheritdoc />
     public Task<Result<ResourceSnapshot>> ReadAsync(
@@ -741,6 +776,206 @@ sealed class RecordingResourceGraphQuery : IResourceGraphQuery {
     }
 }
 
+/// <summary>
+///     The deployment entry point stage 8 routes a deployment's <c>whatIf</c> to, recording what it was
+///     asked and answering a scripted what-if.
+/// </summary>
+sealed class RecordingDeploymentManager : IDeploymentManager {
+    /// <summary>Every what-if request, in order.</summary>
+    public ConcurrentQueue<WriteRequest> WhatIfs { get; } = new();
+
+    /// <summary>What <see cref="WhatIfAsync" /> answers. Default: one create.</summary>
+    public Func<WriteRequest, Result<DeploymentWhatIf>> OnWhatIf { get; set; } =
+        static request => Result<DeploymentWhatIf>.Success(
+            new(
+                [
+                    new(
+                        request.Path.Replace("CyberCloud.Resources/deployments/rollout", "CyberCloud.Sample/widgets/a", StringComparison.Ordinal),
+                        "CyberCloud.Sample/widgets",
+                        WhatIfChangeTypes.Create,
+                        [new("/properties/message", WhatIfChangeTypes.PropertyCreate, null, "\"hi\"")]
+                    )
+                ]
+            )
+        );
+
+    /// <inheritdoc />
+    public Task<Result<DeploymentWhatIf>> WhatIfAsync(WriteRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        WhatIfs.Enqueue(request);
+        return Task.FromResult(OnWhatIf(request));
+    }
+}
+
+/// <summary>An <see cref="IInvitationManager" /> that records what stage 8 handed it (#43).</summary>
+sealed class RecordingInvitationManager : IInvitationManager {
+    /// <summary>Every request, in order.</summary>
+    public ConcurrentQueue<InvitationManagerRequest> Requests { get; } = new();
+
+    /// <summary>What <see cref="InviteAsync" /> answers. Default: a pending invitation for the address.</summary>
+    public Func<InvitationManagerRequest, Result<InvitationSnapshot>> OnInvite { get; set; } =
+        static request => Result<InvitationSnapshot>.Success(
+            new() {
+                InvitationId = Guid.Parse("11111111-2222-4333-8444-555555555555"),
+                TenantId = request.TenantId,
+                UserId = Guid.Parse("66666666-7777-4888-8999-aaaaaaaaaaaa"),
+                Email = request.Email.ToLowerInvariant(),
+                Status = "pending",
+                ExpiresAt = DateTimeOffset.UnixEpoch.AddDays(7)
+            }
+        );
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> InviteAsync(
+        InvitationManagerRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+        Requests.Enqueue(request);
+        return Task.FromResult(OnInvite(request));
+    }
+}
+
+/// <summary>
+///     An <see cref="IIdentityAdministration" /> that records every call and answers with canned
+///     objects, so the routing tests prove which call a verb and an address reach — and nothing
+///     about the check, which is <c>IdentityAdministrationTests</c>' in <c>CyberCloud.Isolation</c>.
+///     Issue #41.
+/// </summary>
+sealed class RecordingIdentityAdministration : IIdentityAdministration {
+    /// <summary>One call: which method, with what, on which id.</summary>
+    public sealed record Call(string Operation, IdentityAdministrationRequest Request, Guid Id, ApplicationDraft? Draft);
+
+    /// <summary>The canned id every item answer carries.</summary>
+    public static Guid ItemId { get; } = Guid.Parse("0a0b0c0d-0e0f-4000-8000-00000000abcd");
+
+    /// <summary>Every call, in order.</summary>
+    public ConcurrentQueue<Call> Calls { get; } = new();
+
+    /// <summary>What every call answers instead of its canned object, when set.</summary>
+    public Error? Refuse { get; set; }
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<MemberSnapshot>>> ListMembersAsync(IdentityAdministrationRequest request, CancellationToken cancellationToken = default) =>
+        Answer(nameof(ListMembersAsync), request, Guid.Empty, null, (IReadOnlyList<MemberSnapshot>)[Member(request)]);
+
+    /// <inheritdoc />
+    public Task<Result<MemberSnapshot>> RemoveMemberAsync(IdentityAdministrationRequest request, Guid userId, CancellationToken cancellationToken = default) =>
+        Answer(nameof(RemoveMemberAsync), request, userId, null, Member(request) with { UserId = userId, Status = "deprovisioned" });
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<InvitationSnapshot>>> ListInvitationsAsync(IdentityAdministrationRequest request, CancellationToken cancellationToken = default) =>
+        Answer(nameof(ListInvitationsAsync), request, Guid.Empty, null, (IReadOnlyList<InvitationSnapshot>)[Invitation(request, ItemId)]);
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> ResendInvitationAsync(IdentityAdministrationRequest request, Guid invitationId, CancellationToken cancellationToken = default) =>
+        Answer(nameof(ResendInvitationAsync), request, invitationId, null, Invitation(request, invitationId));
+
+    /// <inheritdoc />
+    public Task<Result<InvitationSnapshot>> RevokeInvitationAsync(IdentityAdministrationRequest request, Guid invitationId, CancellationToken cancellationToken = default) =>
+        Answer(nameof(RevokeInvitationAsync), request, invitationId, null, Invitation(request, invitationId) with { Status = "revoked" });
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<ApplicationSnapshot>>> ListApplicationsAsync(IdentityAdministrationRequest request, CancellationToken cancellationToken = default) =>
+        Answer(nameof(ListApplicationsAsync), request, Guid.Empty, null, (IReadOnlyList<ApplicationSnapshot>)[Application(ItemId)]);
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationSnapshot>> GetApplicationAsync(IdentityAdministrationRequest request, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Answer(nameof(GetApplicationAsync), request, applicationId, null, Application(applicationId));
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationRegistered>> CreateApplicationAsync(IdentityAdministrationRequest request, ApplicationDraft draft, CancellationToken cancellationToken = default) =>
+        Answer(
+            nameof(CreateApplicationAsync),
+            request,
+            Guid.Empty,
+            draft,
+            new ApplicationRegistered { Application = Application(ItemId), ClientSecret = draft.IsPublicClient ? "" : "the-secret-shown-once" }
+        );
+
+    /// <inheritdoc />
+    public Task<Result<ApplicationRegistered>> RotateApplicationSecretAsync(IdentityAdministrationRequest request, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Answer(
+            nameof(RotateApplicationSecretAsync),
+            request,
+            applicationId,
+            null,
+            new ApplicationRegistered { Application = Application(applicationId), ClientSecret = "the-rotated-secret" }
+        );
+
+    /// <inheritdoc />
+    public Task<Result> DeleteApplicationAsync(IdentityAdministrationRequest request, Guid applicationId, CancellationToken cancellationToken = default) =>
+        Plain(nameof(DeleteApplicationAsync), request, applicationId);
+
+    /// <inheritdoc />
+    public Task<Result<IReadOnlyList<SessionSnapshot>>> ListOwnSessionsAsync(IdentityAdministrationRequest request, CancellationToken cancellationToken = default) =>
+        Answer(
+            nameof(ListOwnSessionsAsync),
+            request,
+            Guid.Empty,
+            null,
+            (IReadOnlyList<SessionSnapshot>)[
+                new SessionSnapshot {
+                    SessionId = ItemId,
+                    ClientId = "cyc-portal",
+                    DeviceLabel = "Firefox on Windows",
+                    CreatedAt = DateTimeOffset.UnixEpoch,
+                    LastUsedAt = DateTimeOffset.UnixEpoch,
+                    Methods = ["password", "emailOtp"],
+                    IsCurrent = request.CurrentSessionId == ItemId
+                }
+            ]
+        );
+
+    /// <inheritdoc />
+    public Task<Result> RevokeOwnSessionAsync(IdentityAdministrationRequest request, Guid sessionId, CancellationToken cancellationToken = default) =>
+        Plain(nameof(RevokeOwnSessionAsync), request, sessionId);
+
+    Task<Result<T>> Answer<T>(string operation, IdentityAdministrationRequest request, Guid id, ApplicationDraft? draft, T value)
+        where T : notnull {
+        Calls.Enqueue(new(operation, request, id, draft));
+        return Task.FromResult(Refuse is { } error ? Result<T>.Failure(error) : Result<T>.Success(value));
+    }
+
+    Task<Result> Plain(string operation, IdentityAdministrationRequest request, Guid id) {
+        Calls.Enqueue(new(operation, request, id, null));
+        return Task.FromResult(Refuse is { } error ? Result.Failure(error) : Result.Success);
+    }
+
+    static MemberSnapshot Member(IdentityAdministrationRequest request) =>
+        new() {
+            UserId = ItemId,
+            Email = "member@contoso.example",
+            DisplayName = "A Member",
+            Status = "active",
+            CreatedAt = DateTimeOffset.UnixEpoch
+        };
+
+    static InvitationSnapshot Invitation(IdentityAdministrationRequest request, Guid id) =>
+        new() {
+            InvitationId = id,
+            TenantId = request.TenantId,
+            UserId = ItemId,
+            Email = "colleague@contoso.example",
+            Status = "pending",
+            ExpiresAt = DateTimeOffset.UnixEpoch.AddDays(7),
+            SentAt = DateTimeOffset.UnixEpoch,
+            Sendings = 1
+        };
+
+    static ApplicationSnapshot Application(Guid id) =>
+        new() {
+            ApplicationId = id,
+            ClientId = "4f1e2d3c-0000-4000-8000-000000000001",
+            DisplayName = "Acme dashboard",
+            RedirectUris = ["https://acme.example/cb"],
+            Scopes = ["openid", "profile"],
+            IsPublicClient = false,
+            CreatedAt = DateTimeOffset.UnixEpoch,
+            ClientSecretIssuedAt = DateTimeOffset.UnixEpoch
+        };
+}
+
 /// <summary>A cost query that records what stage 8 asked and answers from a script.</summary>
 /// <remarks>
 ///     ⚠ It stands in for <c>GrainCostQuery</c>, whose grain — pricing and the ReBAC filter — is driven
@@ -832,5 +1067,73 @@ sealed class RecordingInvoiceReader : IInvoiceReader {
                 ? Result<Invoice>.Success(August)
                 : Result<Invoice>.Failure(ErrorCode.ResourceNotFound, $"'{new InvoiceAddress(tenantId, number).Path}' does not exist.")
         );
+    }
+}
+
+/// <summary>
+///     An <see cref="IPolicyManager" /> that records what stage 8 handed it — issue #46's routing
+///     suite asserts the address, the caller and the body, and never a decision.
+/// </summary>
+sealed class RecordingPolicyManager : IPolicyManager {
+    /// <summary>Every item request, in order.</summary>
+    public ConcurrentQueue<(string Verb, PolicyRequest Request)> Requests { get; } = new();
+
+    /// <summary>Every collection request, in order.</summary>
+    public ConcurrentQueue<PolicyListRequest> Listings { get; } = new();
+
+    /// <summary>What <see cref="PutAsync" /> answers. Default: an object that was created.</summary>
+    public Func<PolicyRequest, Result<PolicyObjectSnapshot>> OnPut { get; set; } =
+        static request => Result<PolicyObjectSnapshot>.Success(Snapshot(request.Path, true));
+
+    /// <summary>What <see cref="ReadAsync" /> answers. Default: an object that exists.</summary>
+    public Func<PolicyRequest, Result<PolicyObjectSnapshot>> OnRead { get; set; } =
+        static request => Result<PolicyObjectSnapshot>.Success(Snapshot(request.Path, false));
+
+    /// <summary>What <see cref="DeleteAsync" /> answers. Default: it went.</summary>
+    public Func<PolicyRequest, Result> OnDelete { get; set; } = static _ => Result.Success;
+
+    /// <summary>What <see cref="ListAsync" /> answers. Default: an empty last page.</summary>
+    public Func<PolicyListRequest, Result<PolicyListPage>> OnList { get; set; } =
+        static _ => Result<PolicyListPage>.Success(new());
+
+    /// <inheritdoc />
+    public Task<Result<PolicyObjectSnapshot>> PutAsync(PolicyRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Requests.Enqueue(("PUT", request));
+        return Task.FromResult(OnPut(request));
+    }
+
+    /// <inheritdoc />
+    public Task<Result<PolicyObjectSnapshot>> ReadAsync(PolicyRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Requests.Enqueue(("GET", request));
+        return Task.FromResult(OnRead(request));
+    }
+
+    /// <inheritdoc />
+    public Task<Result> DeleteAsync(PolicyRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Requests.Enqueue(("DELETE", request));
+        return Task.FromResult(OnDelete(request));
+    }
+
+    /// <inheritdoc />
+    public Task<Result<PolicyListPage>> ListAsync(PolicyListRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        Listings.Enqueue(request);
+        return Task.FromResult(OnList(request));
+    }
+
+    static PolicyObjectSnapshot Snapshot(string path, bool created) {
+        var address = PolicyAddress.ParsePath(path).GetValueOrThrow();
+
+        return new() {
+            Path = address.Path,
+            Name = address.Name,
+            Type = address.Kind == PolicyObjectKind.Definition ? PolicyAddress.DefinitionTypeName : PolicyAddress.AssignmentTypeName,
+            Scope = address.Scope.Path,
+            Properties = """{"displayName":"recorded"}""",
+            Created = created
+        };
     }
 }

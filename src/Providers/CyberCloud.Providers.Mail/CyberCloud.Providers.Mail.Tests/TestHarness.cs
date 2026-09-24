@@ -1,5 +1,7 @@
 using CyberCloud.Core.Time;
+using CyberCloud.Providers.Mail.Dns;
 using CyberCloud.ResourceManager.Conformance;
+using System.Collections.Immutable;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Concurrent;
 using System.Text.Json;
@@ -47,6 +49,20 @@ static class MailHarness {
             name,
             id ?? Guid.Parse("33333333-3333-4333-8333-333333333333")
         );
+
+    /// <summary>The platform's hosts, under the RFC 2606 <c>.example</c> TLD.</summary>
+    public static MailPlatformOptions Platform { get; } = new() {
+        InboundHost = "mx.cybercloud.example",
+        SpfInclude = "_spf.cybercloud.example",
+        MtaStsHost = "mta-sts.cybercloud.example",
+        TlsReportAddress = "tls-reports@cybercloud.example"
+    };
+
+    /// <summary>The domain's reconciler over a DNS — by default one where nothing is published.</summary>
+    /// <param name="dns">The zone the gate reads, or <see langword="null" /> for an empty one.</param>
+    /// <param name="platform">The platform's hosts, or <see langword="null" /> for <see cref="Platform" />.</param>
+    public static MailDomainReconciler Reconciler(IMailDnsResolver? dns = null, MailPlatformOptions? platform = null) =>
+        new(new FixedClock(), dns ?? new ZoneDns([]), platform ?? Platform);
 
     /// <summary>A context over a connection and a vault.</summary>
     /// <param name="connection">The cluster, or <see langword="null" /> for none.</param>
@@ -172,6 +188,56 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     puts the same domain name in two tenants.
     /// </summary>
     internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+}
+
+/// <summary>
+///     A zone as a list of records, answered the way a resolver would: joined TXT strings, every
+///     record of a kind at a name, "no such record" for the rest.
+/// </summary>
+/// <remarks>
+///     ⚠ A table, and the decision logic is what these tests are about. The resolver itself is
+///     proven against a real DNS server in <c>MailDnsResolverTests</c>; nothing here stands in for
+///     it there.
+/// </remarks>
+/// <param name="records">The zone.</param>
+sealed class ZoneDns(ImmutableArray<(string Name, string Kind, string Value)> records) : IMailDnsResolver {
+    /// <summary>Every question asked, in order.</summary>
+    public List<(string Name, string Kind)> Asked { get; } = [];
+
+    /// <summary>Whether every question times out.</summary>
+    public bool Unreachable { get; init; }
+
+    public Task<MailDnsAnswer> QueryAsync(string name, string kind, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Answer(name, kind));
+
+    /// <summary>The answer for one required record, synchronously.</summary>
+    /// <param name="record">The record whose name and kind are asked.</param>
+    public MailDnsAnswer Answer(MailDnsRecord record) => Answer(record.Name, record.Kind);
+
+    MailDnsAnswer Answer(string name, string kind) {
+        lock (Asked) {
+            Asked.Add((name, kind));
+        }
+
+        return Unreachable
+                ? new MailDnsAnswer(false, [], "no answer within 3s")
+                : new MailDnsAnswer(
+                    true,
+                    [
+                        .. records.Where(
+                                x => string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase)
+                                    && string.Equals(x.Kind, kind, StringComparison.OrdinalIgnoreCase)
+                            )
+                            .Select(static x => x.Value)
+                    ],
+                    string.Empty
+                );
+    }
+
+    /// <summary>A zone holding exactly the records a domain is told to publish.</summary>
+    /// <param name="required">What <c>MailDnsRecords.TryRequired</c> returned.</param>
+    public static ZoneDns Publishing(ImmutableArray<MailDnsRecord> required) =>
+        new([.. required.Select(static x => (x.Name, x.Kind, x.Value))]);
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

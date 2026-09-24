@@ -1,4 +1,5 @@
 using CyberCloud.Authorization.Evaluation;
+using CyberCloud.Core.Time;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace CyberCloud.Authorization;
@@ -7,7 +8,7 @@ namespace CyberCloud.Authorization;
 ///     The silo-side registration for the authorization engine.
 /// </summary>
 /// <remarks>
-///     ⚠ <b>Grain classes need no registration; the three services below do.</b> Orleans discovers
+///     ⚠ <b>Grain classes need no registration; the four services below do.</b> Orleans discovers
 ///     grain implementations from the assembly. What it cannot discover is which schema the check
 ///     grain evaluates against, which is deliberately a decision the host makes: a test silo runs a
 ///     purpose-built schema and production runs <see cref="CyberCloudSchema" />.
@@ -15,7 +16,7 @@ namespace CyberCloud.Authorization;
 public static class AuthorizationSiloBuilderExtensions {
     /// <summary>
     ///     Registers the built-in schema (docs/plan/07 § Azure RBAC, expressed in it), the
-    ///     document's caps and the no-op write interceptor.
+    ///     document's caps, the no-op write interceptor, and the system clock.
     /// </summary>
     /// <param name="silo">The silo builder.</param>
     /// <returns>The same builder, for chaining.</returns>
@@ -53,6 +54,11 @@ public static class AuthorizationSiloBuilderExtensions {
                 services.TryAddSingleton(schema);
                 services.TryAddSingleton(AuthorizationLimits.Default);
                 services.TryAddSingleton<IRelationWriteInterceptor>(NoRelationWriteInterceptor.Instance);
+
+                // The one "now" a tuple's expiry is compared with — by the object grain that hides
+                // an expired tuple, the check cache that stops serving an allow it proved, and the
+                // store's sweep. A test registers its own clock first and moves it.
+                services.TryAddSingleton<IClock, SystemClock>();
             }
         );
     }

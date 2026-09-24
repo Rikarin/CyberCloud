@@ -228,7 +228,11 @@ and a genuinely good `Cluster` CRD.
 - Connectivity: in-cluster `Service` always; external via a Kube-OVN floating IP with a firewall list;
   ⚠ **connection pooling (PgBouncer) is on by default**, because a managed Postgres without it fails
   at the first serverless workload and adding it later changes the connection string.
-- Backup: CNPG's own barman-cloud to the tenant's bucket. PITR window is a plan attribute.
+- Backup: CNPG's own barman-cloud to ~~the tenant's bucket~~ a bucket of the server's own on the
+  platform's object store, with a key the store issues and the vault holds (#30, 2026-09-24 — a tenant
+  bucket would need credentials 2026-08-01 has no property for; [15](15-storage-blob-file.md) § Backup
+  as a service). A restore is a new server created from a recovery point
+  (`/properties/restore/recoveryPoint`). PITR window is a plan attribute.
 
 ### Valkey — `CyberCloud.Cache/redis` · M1 · 1.0 EM
 

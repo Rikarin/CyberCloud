@@ -59,6 +59,35 @@ public sealed class ProjectionRoundTripTests(ProjectionFixture fixture) {
     }
 
     [Fact]
+    public async Task AJustInTimeReaderIsLeftOutOfTheAccessColumnBecauseTheColumnHasNoClock() {
+        // Issue #49. The column is recomputed on a resource change and on nothing else, so a grant
+        // that ends on its own would stay in it after every check had started denying. Leaving it
+        // out is the miss direction: the graph query shows a just-in-time reader less than a check
+        // allows, never more. ReBacResourceAccessResolver's remarks carry the argument.
+        var token = TestContext.Current.CancellationToken;
+        var resourceId = Guid.NewGuid();
+        var group = Guid.NewGuid();
+
+        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resource:{N(resourceId)}#parent@resourceGroup:{N(group)}");
+        await fixture.GrantAsync(ProjectionFixture.Tenant, $"resourceGroup:{N(group)}#reader@user:paula");
+        await fixture.GrantAsync(
+            ProjectionFixture.Tenant,
+            $"resource:{N(resourceId)}#reader@user:jit",
+            DateTimeOffset.UtcNow.AddHours(1)
+        );
+
+        var published = await fixture.Sink.PublishAsync(ProjectionFixture.Created(resourceId, "jit"), token);
+        published.IsSuccess.ShouldBeTrue(published.Error?.Message);
+
+        var row = await fixture.WaitForVersionAsync(ProjectionFixture.Tenant, resourceId, 1);
+
+        row.Access.ShouldBe(
+            ["user:paula"],
+            "a time-bounded grant reached the access column, where nothing would ever take it out at its expiry"
+        );
+    }
+
+    [Fact]
     public async Task AReplayAndAReorderedEventAreDroppedAndTheTableHoldsTheLatestVersion() {
         var token = TestContext.Current.CancellationToken;
         var resourceId = Guid.NewGuid();

@@ -111,6 +111,101 @@ export interface ScopeResource {
   type: string;
 }
 
+/** The values /type accepts. ⚠ Closed: the write path refuses anything else. */
+export type PolicyAssignmentType =
+  | 'CyberCloud.Policy/policyAssignments';
+
+/** Policy assignment, as the API renders it. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy. */
+export interface PolicyAssignment {
+  /** The assignment's own address. */
+  id: string;
+  /** The last segment of the address. */
+  name: string;
+  /** What the assignment applies, and where it doesn't. */
+  properties: {
+    /** What a person reads. */
+    displayName: string;
+    /** Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling. */
+    notScopes: string[];
+    /** The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules. */
+    policyDefinitionId: string;
+    /** The scope the assignment sits on. */
+    scope: string;
+  };
+  /** The Azure-shaped type string. */
+  type: PolicyAssignmentType;
+}
+
+/** The body of a PUT that writes a policy assignment. */
+export interface PolicyAssignmentContent {
+  /** What the assignment applies, and where it doesn't. */
+  properties: {
+    /** What a person reads. */
+    displayName?: string;
+    /** Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling. */
+    notScopes?: string[];
+    /** The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules. */
+    policyDefinitionId: string;
+  };
+}
+
+/** The values /type accepts. ⚠ Closed: the write path refuses anything else. */
+export type PolicyDefinitionType =
+  | 'CyberCloud.Policy/policyDefinitions';
+
+/** Policy definition, as the API renders it. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy. */
+export interface PolicyDefinition {
+  /** The definition's own address. An assignment names its definition by this. */
+  id: string;
+  /** The last segment of the address. */
+  name: string;
+  /** The definition's rule and its names. */
+  properties: {
+    /** The longer explanation. */
+    description: string;
+    /** What a person reads. */
+    displayName: string;
+    /** The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy. */
+    policyRule: unknown;
+  };
+  /** The Azure-shaped type string. */
+  type: PolicyDefinitionType;
+}
+
+/** The body of a PUT that writes a policy definition. */
+export interface PolicyDefinitionContent {
+  /** The definition's rule and its names. */
+  properties: {
+    /** The longer explanation. */
+    description?: string;
+    /** What a person reads. */
+    displayName?: string;
+    /** The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy. */
+    policyRule: unknown;
+  };
+}
+
+/** The values /complianceState accepts. ⚠ Closed: the write path refuses anything else. */
+export type PolicyStateComplianceState =
+  | 'Compliant'
+  | 'NonCompliant';
+
+/** Policy state, as the API renders it. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy. */
+export interface PolicyState {
+  /** Whether the audit rule matched. */
+  complianceState: PolicyStateComplianceState;
+  /** The audit assignment. */
+  policyAssignmentId: string;
+  /** Its definition. */
+  policyDefinitionId: string;
+  /** The resource's canonical path. */
+  resourceId: string;
+  /** The resource's type. */
+  resourceType: string;
+  /** When the verdict last changed. */
+  timestamp: string;
+}
+
 /** The values /provisioningState carries. ⚠ Read-only: the server sets it, and a write that carries it is refused. */
 export type ProvisioningState =
   | 'Canceled'
@@ -1287,7 +1382,7 @@ export interface DBforPostgreSQLServersData {
   properties?: {
     /** Backup to the tenant's object store, using CloudNativePG's barman-cloud. */
     backup?: {
-      /** Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property. */
+      /** Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need. */
       destinationPath?: string;
       /** Whether continuous backup and WAL archiving run. */
       enabled?: boolean;
@@ -1321,6 +1416,11 @@ export interface DBforPostgreSQLServersData {
     };
     /** Number of instances, including the primary. One is a single point of failure and is offered for development only. */
     replicas: number;
+    /** Where the server's data comes from when it is created from a recovery point rather than empty. */
+    restore?: {
+      /** The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database. */
+      recoveryPoint?: string;
+    };
     /** CPU and memory, either by preset or explicitly. */
     sizing?: {
       /** Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset. */
@@ -1500,6 +1600,748 @@ export interface DocumentDBAccountsListKeysResult {
   username: string;
 }
 
+/** Key vault. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection. */
+export interface KeyVaultVaultsData {
+  /** The region the vault is billed in and served from. */
+  location: string;
+  /** The vault's own settings. */
+  properties?: {
+    /** What the vault is for, shown in the portal beside its name. */
+    description?: string;
+    /** Whether a deleted vault, secret or key may be purged before its seven-day recovery window ends. Once true it stays true: a write that sets it false is refused, and so is every purge until the window is out. */
+    enablePurgeProtection?: boolean;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Key vault, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface KeyVaultVaultsResource extends Resource, KeyVaultVaultsData {
+  readonly type: 'CyberCloud.KeyVault/vaults';
+}
+
+/** The values /curve accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsCreateKeyContentCurve =
+  | 'P-256'
+  | 'P-384'
+  | 'P-521';
+
+/** The values /keyOps accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsCreateKeyContentKeyOps =
+  | 'encrypt'
+  | 'decrypt'
+  | 'sign'
+  | 'verify'
+  | 'wrapKey'
+  | 'unwrapKey';
+
+/** The values /kty accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsCreateKeyContentKty =
+  | 'RSA'
+  | 'EC';
+
+/** The parameters of createKey. */
+export interface KeyVaultVaultsCreateKeyContent {
+  /** An EC key's curve. P-256 when omitted; refused on an RSA key. */
+  curve?: KeyVaultVaultsCreateKeyContentCurve;
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only. */
+  keyOps?: KeyVaultVaultsCreateKeyContentKeyOps[];
+  /** An RSA key's modulus in bits: 2048, 3072 or 4096. 2048 when omitted; refused on an EC key. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: KeyVaultVaultsCreateKeyContentKty;
+  /** The version is refused before this time. */
+  notBefore?: string;
+}
+
+/** What createKey returns. */
+export interface KeyVaultVaultsCreateKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsDecryptContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of decrypt. */
+export interface KeyVaultVaultsDecryptContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsDecryptContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The ciphertext or wrapped key, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What decrypt returns. ⚠ Secret material — never log or persist this. */
+export interface KeyVaultVaultsDecryptResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The plaintext, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The parameters of deleteKey. */
+export interface KeyVaultVaultsDeleteKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What deleteKey returns. */
+export interface KeyVaultVaultsDeleteKeyResult {
+  /** When the item was deleted. */
+  deletedOn: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** When the item is purged unless it is recovered first. */
+  scheduledPurgeDate: string;
+}
+
+/** The parameters of deleteSecret. */
+export interface KeyVaultVaultsDeleteSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What deleteSecret returns. */
+export interface KeyVaultVaultsDeleteSecretResult {
+  /** When the item was deleted. */
+  deletedOn: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** When the item is purged unless it is recovered first. */
+  scheduledPurgeDate: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsEncryptContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of encrypt. */
+export interface KeyVaultVaultsEncryptContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsEncryptContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The plaintext to encrypt or the key to wrap, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What encrypt returns. */
+export interface KeyVaultVaultsEncryptResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The result, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The parameters of getKey. */
+export interface KeyVaultVaultsGetKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What getKey returns. */
+export interface KeyVaultVaultsGetKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The parameters of getSecret. */
+export interface KeyVaultVaultsGetSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What getSecret returns. ⚠ Secret material — never log or persist this. */
+export interface KeyVaultVaultsGetSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The secret's value. */
+  value: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The values /keyOps accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsImportKeyContentKeyOps =
+  | 'encrypt'
+  | 'decrypt'
+  | 'sign'
+  | 'verify'
+  | 'wrapKey'
+  | 'unwrapKey';
+
+/** The parameters of importKey. */
+export interface KeyVaultVaultsImportKeyContent {
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only. */
+  keyOps?: KeyVaultVaultsImportKeyContentKeyOps[];
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** The private key as unencrypted PKCS#8 DER, in standard base64. RSA of 2048, 3072 or 4096 bits, or EC on P-256, P-384 or P-521. Sealed on arrival and never returned. */
+  pkcs8: string;
+}
+
+/** What importKey returns. */
+export interface KeyVaultVaultsImportKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** What listDeletedKeys returns. */
+export interface KeyVaultVaultsListDeletedKeysResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** What listDeletedSecrets returns. */
+export interface KeyVaultVaultsListDeletedSecretsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** The parameters of listKeyVersions. */
+export interface KeyVaultVaultsListKeyVersionsContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What listKeyVersions returns. */
+export interface KeyVaultVaultsListKeyVersionsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** What listKeys returns. */
+export interface KeyVaultVaultsListKeysResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** The parameters of listSecretVersions. */
+export interface KeyVaultVaultsListSecretVersionsContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What listSecretVersions returns. */
+export interface KeyVaultVaultsListSecretVersionsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** What listSecrets returns. */
+export interface KeyVaultVaultsListSecretsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** The parameters of purgeDeletedKey. */
+export interface KeyVaultVaultsPurgeDeletedKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What purgeDeletedKey returns. */
+export interface KeyVaultVaultsPurgeDeletedKeyResult {
+  /** The secret's or key's name. */
+  name: string;
+  /** True: the item and every version of it are gone. */
+  purged: boolean;
+}
+
+/** The parameters of purgeDeletedSecret. */
+export interface KeyVaultVaultsPurgeDeletedSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What purgeDeletedSecret returns. */
+export interface KeyVaultVaultsPurgeDeletedSecretResult {
+  /** The secret's or key's name. */
+  name: string;
+  /** True: the item and every version of it are gone. */
+  purged: boolean;
+}
+
+/** The parameters of recoverDeletedKey. */
+export interface KeyVaultVaultsRecoverDeletedKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What recoverDeletedKey returns. */
+export interface KeyVaultVaultsRecoverDeletedKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The parameters of recoverDeletedSecret. */
+export interface KeyVaultVaultsRecoverDeletedSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What recoverDeletedSecret returns. */
+export interface KeyVaultVaultsRecoverDeletedSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The parameters of setSecret. */
+export interface KeyVaultVaultsSetSecretContent {
+  /** What the value is, for the consumer — for example text/plain. Not interpreted. */
+  contentType?: string;
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+  /** The secret's value. Sealed under the vault's root before it is stored. */
+  value: string;
+}
+
+/** What setSecret returns. */
+export interface KeyVaultVaultsSetSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsSignContentAlg =
+  | 'RS256'
+  | 'RS384'
+  | 'RS512'
+  | 'PS256'
+  | 'PS384'
+  | 'PS512'
+  | 'ES256'
+  | 'ES384'
+  | 'ES512';
+
+/** The parameters of sign. */
+export interface KeyVaultVaultsSignContent {
+  /** A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521. */
+  alg: KeyVaultVaultsSignContentAlg;
+  /** The digest to sign, base64url. Its length must be the algorithm's hash length. */
+  digest: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What sign returns. */
+export interface KeyVaultVaultsSignResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The result, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsUnwrapKeyContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of unwrapKey. */
+export interface KeyVaultVaultsUnwrapKeyContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsUnwrapKeyContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The ciphertext or wrapped key, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What unwrapKey returns. ⚠ Secret material — never log or persist this. */
+export interface KeyVaultVaultsUnwrapKeyResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The plaintext, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The values /keyOps accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsUpdateKeyContentKeyOps =
+  | 'encrypt'
+  | 'decrypt'
+  | 'sign'
+  | 'verify'
+  | 'wrapKey'
+  | 'unwrapKey';
+
+/** The parameters of updateKey. */
+export interface KeyVaultVaultsUpdateKeyContent {
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only. */
+  keyOps?: KeyVaultVaultsUpdateKeyContentKeyOps[];
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What updateKey returns. */
+export interface KeyVaultVaultsUpdateKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The parameters of updateSecret. */
+export interface KeyVaultVaultsUpdateSecretContent {
+  /** What the value is, for the consumer — for example text/plain. Not interpreted. */
+  contentType?: string;
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What updateSecret returns. */
+export interface KeyVaultVaultsUpdateSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsVerifyContentAlg =
+  | 'RS256'
+  | 'RS384'
+  | 'RS512'
+  | 'PS256'
+  | 'PS384'
+  | 'PS512'
+  | 'ES256'
+  | 'ES384'
+  | 'ES512';
+
+/** The parameters of verify. */
+export interface KeyVaultVaultsVerifyContent {
+  /** A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521. */
+  alg: KeyVaultVaultsVerifyContentAlg;
+  /** The digest to sign, base64url. Its length must be the algorithm's hash length. */
+  digest: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The signature, base64url. An EC signature is r‖s, as JWS spells it. */
+  signature: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What verify returns. */
+export interface KeyVaultVaultsVerifyResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** Whether the signature is valid. */
+  value: boolean;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsWrapKeyContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of wrapKey. */
+export interface KeyVaultVaultsWrapKeyContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsWrapKeyContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The plaintext to encrypt or the key to wrap, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What wrapKey returns. */
+export interface KeyVaultVaultsWrapKeyResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The result, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
 export type MailDomainsPreset =
   | 'c1.large'
@@ -1565,6 +2407,401 @@ export interface MailDomainsData {
 /** One Mail domain, as the API returns it: the Resource envelope, then the body, then tags. */
 export interface MailDomainsResource extends Resource, MailDomainsData {
   readonly type: 'CyberCloud.Mail/domains';
+}
+
+/** The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsDkimType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsDmarcType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsMtaStsType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsMtaStsHostType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsMxType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsSpfType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsDnsRecordsResultRecordsTlsRptType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** What dnsRecords returns. */
+export interface MailDomainsDnsRecordsResult {
+  /** The mail domain the records are for. */
+  domain: string;
+  /** The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve. */
+  mtaStsPolicy: string;
+  /** One member per record the domain must publish. */
+  records: {
+    /** The DKIM public key. Gates sending. */
+    dkim: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsDkimType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The DMARC policy. Gates sending. */
+    dmarc: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsDmarcType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MTA-STS policy announcement. */
+    mtaSts: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsMtaStsType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MTA-STS policy host. */
+    mtaStsHost: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsMtaStsHostType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MX record — where mail for the domain is delivered. */
+    mx: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsMxType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The SPF record. Gates sending. */
+    spf: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsSpfType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The TLS-RPT reporting address. */
+    tlsRpt: {
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsDnsRecordsResultRecordsTlsRptType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+  };
+  /** Every record as a zone-file line, ready to paste into a zone. */
+  zoneFile: string;
+}
+
+/** The values /records/dkim/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsDkimStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsDkimType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/dmarc/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsDmarcStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsDmarcType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mtaSts/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMtaStsStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMtaStsType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mtaStsHost/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMtaStsHostStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMtaStsHostType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/mx/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMxStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsMxType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/spf/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsSpfStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsSpfType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /records/tlsRpt/status accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsTlsRptStatus =
+  | 'verified'
+  | 'missing'
+  | 'mismatch'
+  | 'unresolvable';
+
+/** The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultRecordsTlsRptType =
+  | 'MX'
+  | 'TXT'
+  | 'CNAME';
+
+/** The values /sending accepts. ⚠ Closed: the write path refuses anything else. */
+export type MailDomainsVerifyResultSending =
+  | 'held'
+  | 'open'
+  | 'suspended';
+
+/** What verify returns. */
+export interface MailDomainsVerifyResult {
+  /** The mail domain the records are for. */
+  domain: string;
+  /** The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve. */
+  mtaStsPolicy: string;
+  /** One member per record the domain must publish. */
+  records: {
+    /** The DKIM public key. Gates sending. */
+    dkim: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsDkimStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsDkimType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The DMARC policy. Gates sending. */
+    dmarc: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsDmarcStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsDmarcType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MTA-STS policy announcement. */
+    mtaSts: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsMtaStsStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsMtaStsType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MTA-STS policy host. */
+    mtaStsHost: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsMtaStsHostStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsMtaStsHostType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The MX record — where mail for the domain is delivered. */
+    mx: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsMxStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsMxType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The SPF record. Gates sending. */
+    spf: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsSpfStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsSpfType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+    /** The TLS-RPT reporting address. */
+    tlsRpt: {
+      /** Why, in a sentence. */
+      detail: string;
+      /** What the DNS answered for the name. */
+      found: string[];
+      /** Whether sending is held until this record verifies. */
+      gatesSending: boolean;
+      /** The owner name, fully qualified. */
+      name: string;
+      /** What resolving it found. */
+      status: MailDomainsVerifyResultRecordsTlsRptStatus;
+      /** MX, TXT or CNAME. */
+      type: MailDomainsVerifyResultRecordsTlsRptType;
+      /** The value to publish, exactly. */
+      value: string;
+    };
+  };
+  /** held, open or suspended — why sendingEnabled is what it is. */
+  sending: MailDomainsVerifyResultSending;
+  /** Whether mail may leave the domain: SPF, DKIM and DMARC verify and the platform has not suspended it. Held mail is refused at RCPT TO, not queued. */
+  sendingEnabled: boolean;
+  /** Every record as a zone-file line, ready to paste into a zone. */
+  zoneFile: string;
+}
+
+/** Mailbox. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP. */
+export interface MailDomainsMailboxesData {
+  /** The region the mailbox is billed in. The domain's. */
+  location: string;
+  /** The mailbox's own settings. */
+  properties?: {
+    /** Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name. */
+    aliases?: string[];
+    /** The cluster the domain's back end runs in. Must be the domain's. */
+    clusterId: string;
+    /** Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify. */
+    forwardTo?: string[];
+    /** With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect. */
+    keepCopy?: boolean;
+    /** The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores. */
+    localPart: string;
+    /** A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it. */
+    passwordRef?: string;
+    /** The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota. */
+    quota?: string;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Mailbox, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MailDomainsMailboxesResource extends Resource, MailDomainsMailboxesData {
+  readonly type: 'CyberCloud.Mail/domains/mailboxes';
 }
 
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
@@ -1950,6 +3187,73 @@ export interface MonitorWorkspacesListKeysResult {
   sqlEndpoint: string;
 }
 
+/** The parameters of listMetricLabels. */
+export interface MonitorWorkspacesListMetricLabelsContent {
+  /** The window's end. Defaults to now. */
+  end?: string;
+  /** The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead. */
+  label?: string;
+  /** A series selector the answer is narrowed to, for example http_requests_total. */
+  match?: string;
+  /** The window's start. Defaults to a day before end. */
+  start?: string;
+}
+
+/** What listMetricLabels returns. */
+export interface MonitorWorkspacesListMetricLabelsResult {
+  /** Whether more than 10000 matched and the rest were left out. */
+  truncated: boolean;
+  /** The label values, or the label names when no label was named, sorted. */
+  values: string[];
+}
+
+/** The parameters of queryMetrics. */
+export interface MonitorWorkspacesQueryMetricsContent {
+  /** Where a range query ends. Give it with start. */
+  end?: string;
+  /** A PromQL or MetricsQL expression, run under this workspace's metrics tenancy. */
+  query: string;
+  /** Where a range query starts. Give it with end, or neither for an instant query. */
+  start?: string;
+  /** A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000. */
+  stepSeconds?: number;
+  /** The instant an instant query is evaluated at. Defaults to now. */
+  time?: string;
+}
+
+/** The values /severities accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesSearchLogsContentSeverities =
+  | 'trace'
+  | 'debug'
+  | 'info'
+  | 'warn'
+  | 'error'
+  | 'fatal';
+
+/** The parameters of searchLogs. */
+export interface MonitorWorkspacesSearchLogsContent {
+  /** Up to 10 key=value filters, each matched against the record's own attributes and its resource's. */
+  attributes?: string[];
+  /** The histogram's bucket width. Defaults to the window cut into 60. */
+  bucketSeconds?: number;
+  /** Answer how many rows the search would read, and run nothing else. */
+  estimate?: boolean;
+  /** The window's start, inclusive. */
+  from: string;
+  /** The service.name the record must come from. */
+  service?: string;
+  /** The severity classes to keep. Leave it out for every record, including those with no severity. */
+  severities?: MonitorWorkspacesSearchLogsContentSeverities[];
+  /** Text the log body must contain, compared without regard to case. */
+  text?: string;
+  /** The window's end, exclusive. At most 90 days after from. */
+  to: string;
+  /** How many records to return, newest first. Defaults to 100. */
+  top?: number;
+  /** The trace the record must belong to, 32 hex digits. */
+  traceId?: string;
+}
+
 /** The values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else. */
 export type MonitorWorkspacesAlertRulesChannel =
   | 'sms'
@@ -2090,6 +3394,228 @@ export interface MonitorWorkspacesCollectorsListEndpointsResult {
   service: string;
   /** The workspace everything sent here lands in. */
   workspace: string;
+}
+
+/** The values /properties/protocol accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesComponentsProtocol =
+  | 'grpc'
+  | 'http/protobuf';
+
+/** Application component. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs. */
+export interface MonitorWorkspacesComponentsData {
+  /** The region the component is billed in — its workspace's. */
+  location: string;
+  /** The component's own settings. */
+  properties?: {
+    /** The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address. */
+    clusterId: string;
+    /** The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names. */
+    collector: string;
+    /** Which OTLP protocol the connection string names. The collector must have that receiver on. */
+    protocol?: MonitorWorkspacesComponentsProtocol;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Application component, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface MonitorWorkspacesComponentsResource extends Resource, MonitorWorkspacesComponentsData {
+  readonly type: 'CyberCloud.Monitor/workspaces/components';
+}
+
+/** The parameters of applicationMap. */
+export interface MonitorWorkspacesComponentsApplicationMapContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The most rows to return, busiest first. */
+  top?: number;
+}
+
+/** What applicationMap returns. */
+export interface MonitorWorkspacesComponentsApplicationMapResult {
+  /** Per edge: spans in the target whose parent span is in the source, in the window. */
+  edgeCalls: number[];
+  /** Per edge: those whose status is Error. */
+  edgeFailures: number[];
+  /** Per edge: the target span's 95th percentile duration, in milliseconds. */
+  edgeP95Ms: number[];
+  /** Per edge: the calling service. */
+  edgeSources: string[];
+  /** Per edge: the called service. */
+  edgeTargets: string[];
+  /** Per node: requests it failed. */
+  nodeFailures: number[];
+  /** Per node: requests it served in the window. */
+  nodeRequests: number[];
+  /** Per node: a service in the component. */
+  nodes: string[];
+  /** The window the view read, in minutes, ending when it was asked. */
+  timespanMinutes: number;
+}
+
+/** The parameters of dependencies. */
+export interface MonitorWorkspacesComponentsDependenciesContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The most rows to return, busiest first. */
+  top?: number;
+}
+
+/** What dependencies returns. */
+export interface MonitorWorkspacesComponentsDependenciesResult {
+  /** Per row: calls in the window. */
+  counts: number[];
+  /** How many of them failed. */
+  failed: number;
+  /** Per row: failures over calls, 0 to 1. */
+  failureRate: number[];
+  /** Per row: failed calls. */
+  failures: number[];
+  /** Per row: the client span's name. */
+  names: string[];
+  /** Per row: the median duration, in milliseconds. */
+  p50Ms: number[];
+  /** Per row: the 95th percentile duration, in milliseconds. */
+  p95Ms: number[];
+  /** Per row: the 99th percentile duration, in milliseconds. */
+  p99Ms: number[];
+  /** Per row: the service that made the call. */
+  services: string[];
+  /** Per row: what was called — peer.service, else server.address, else the database or messaging system; empty when the span names none. */
+  targets: string[];
+  /** The window the view read, in minutes, ending when it was asked. */
+  timespanMinutes: number;
+  /** Every outgoing call in the window, not only the rows below. */
+  total: number;
+  /** Per row: db, http, messaging, rpc or other, from the span's attributes. */
+  types: string[];
+}
+
+/** The parameters of exceptions. */
+export interface MonitorWorkspacesComponentsExceptionsContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The most rows to return, busiest first. */
+  top?: number;
+}
+
+/** What exceptions returns. */
+export interface MonitorWorkspacesComponentsExceptionsResult {
+  /** Per row: occurrences in the window. */
+  counts: number[];
+  /** Per row: how many were an `exception` event on a span; the rest were log records carrying exception.type. */
+  fromSpans: number[];
+  /** Per row: the latest occurrence. */
+  lastSeen: string[];
+  /** Per row: the most recent exception.message of that type. */
+  messages: string[];
+  /** Per row: the service that raised it. */
+  services: string[];
+  /** The window the view read, in minutes, ending when it was asked. */
+  timespanMinutes: number;
+  /** Every exception in the window, from spans and from logs, not only the rows below. */
+  total: number;
+  /** Per row: exception.type. */
+  types: string[];
+}
+
+/** The values /otlpProtocol accepts. ⚠ Closed: the write path refuses anything else. */
+export type MonitorWorkspacesComponentsListConnectionStringResultOtlpProtocol =
+  | 'grpc'
+  | 'http/protobuf';
+
+/** What listConnectionString returns. */
+export interface MonitorWorkspacesComponentsListConnectionStringResult {
+  /** The ConfigMap in the component's namespace carrying the three variables, for a pod's envFrom. */
+  configMap: string;
+  /** The three variables as one Key=Value;… line, for a configuration that takes a single string. */
+  connectionString: string;
+  /** OTEL_EXPORTER_OTLP_ENDPOINT: the collector's in-cluster URL. */
+  otlpEndpoint: string;
+  /** OTEL_EXPORTER_OTLP_PROTOCOL. */
+  otlpProtocol: MonitorWorkspacesComponentsListConnectionStringResultOtlpProtocol;
+  /** OTEL_RESOURCE_ATTRIBUTES: the service.namespace the views filter on. */
+  resourceAttributes: string;
+}
+
+/** The parameters of requests. */
+export interface MonitorWorkspacesComponentsRequestsContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The most rows to return, busiest first. */
+  top?: number;
+}
+
+/** What requests returns. */
+export interface MonitorWorkspacesComponentsRequestsResult {
+  /** Per row: requests in the window. */
+  counts: number[];
+  /** How many of them failed — a span whose status is Error. */
+  failed: number;
+  /** Per row: failures over requests, 0 to 1. */
+  failureRate: number[];
+  /** Per row: failed requests. */
+  failures: number[];
+  /** Per row: the operation — the server span's name. */
+  operations: string[];
+  /** Per row: the median duration, in milliseconds. */
+  p50Ms: number[];
+  /** Per row: the 95th percentile duration, in milliseconds. */
+  p95Ms: number[];
+  /** Per row: the 99th percentile duration, in milliseconds. */
+  p99Ms: number[];
+  /** Per row: requests per minute over the window. */
+  ratePerMinute: number[];
+  /** Per row: the service that served the operation. */
+  services: string[];
+  /** The window the view read, in minutes, ending when it was asked. */
+  timespanMinutes: number;
+  /** Every request in the window, across every operation, not only the rows below. */
+  total: number;
+}
+
+/** The parameters of transaction. */
+export interface MonitorWorkspacesComponentsTransactionContent {
+  /** How far back to read, in minutes, ending now. */
+  timespanMinutes?: number;
+  /** The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it. */
+  traceId: string;
+}
+
+/** What transaction returns. */
+export interface MonitorWorkspacesComponentsTransactionResult {
+  /** Per span: how long it took, in milliseconds. */
+  durationsMs: number[];
+  /** Per span: Server, Client, Internal, Producer or Consumer. */
+  kinds: string[];
+  /** Per log record: its body, cut at 2048 characters. */
+  logBodies: string[];
+  /** How many log records of the trace are returned. */
+  logCount: number;
+  /** Per log record: its severity text. */
+  logSeverities: string[];
+  /** Per log record: the span it was written under. */
+  logSpanIds: string[];
+  /** Per log record: when, oldest first. */
+  logTimes: string[];
+  /** Per span: its name. */
+  names: string[];
+  /** Per span: its parent's id, empty for the root. */
+  parentSpanIds: string[];
+  /** Per span: the service that recorded it. */
+  services: string[];
+  /** How many spans are returned. */
+  spanCount: number;
+  /** Per span: its id. */
+  spanIds: string[];
+  /** Per span: when it started, oldest first. */
+  starts: string[];
+  /** Per span: Unset, Ok or Error. */
+  statuses: string[];
+  /** The trace that was read. */
+  traceId: string;
+  /** Whether the trace has more spans or log records than a transaction returns. */
+  truncated: boolean;
 }
 
 /** Public IP address. A public address allocated from the region's pool, which a load balancer or a gateway can later be given. On its own it carries no traffic. */
@@ -2489,6 +4015,20 @@ export interface RecoveryServicesVaultsResource extends Resource, RecoveryServic
   readonly type: 'CyberCloud.RecoveryServices/vaults';
 }
 
+/** The parameters of backupNow. */
+export interface RecoveryServicesVaultsBackupNowContent {
+  /** The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items. */
+  item: string;
+}
+
+/** What backupNow returns. */
+export interface RecoveryServicesVaultsBackupNowResult {
+  /** The protected server the recovery point is being taken of. */
+  item: string;
+  /** The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`. */
+  recoveryPoint: string;
+}
+
 /** What listRecoveryPoints returns. */
 export interface RecoveryServicesVaultsListRecoveryPointsResult {
   /** How many of them are restorable — CloudNativePG phase `completed`. */
@@ -2503,22 +4043,73 @@ export interface RecoveryServicesVaultsListRecoveryPointsResult {
 export interface RecoveryServicesVaultsRecoverContent {
   /** The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`. */
   recoveryPoint: string;
-  /** The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites. */
+  /** The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites. */
   targetName: string;
 }
 
 /** What recover returns. */
 export interface RecoveryServicesVaultsRecoverResult {
-  /** What was created. Always `Cluster` — a CloudNativePG cluster object. */
+  /** What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers. */
   kind: string;
-  /** The restored cluster's name, as asked for. */
+  /** The restored server's name, as asked for. */
   name: string;
   /** The namespace it was created in — the vault's resource group's. */
   namespace: string;
+  /** The create's operation, to poll for the restore's progress. */
+  operationId?: string;
   /** The recovery point it was bootstrapped from. */
   recoveryPoint: string;
+  /** The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged. */
+  resourceId?: string;
   /** The protected item the recovery point was taken of, as its resource id path. */
   source: string;
+}
+
+/** Deployment. A template of resources deployed in dependency order, each through the write path as its creator. */
+export interface ResourcesDeploymentsData {
+  /** The template, its parameters, and the record of the last run. */
+  properties?: {
+    /** Why the last run failed, naming the resource that stopped it. Empty when it did not. */
+    readonly error?: string;
+    /** Every resource the last run created or updated, in the order it did. */
+    readonly outputResources?: string[];
+    /** The parameter values, as JSON text: { "name": { "value": … } }. */
+    parameters?: string;
+    /** What a rollback would remove. Rollback is recorded and never performed. */
+    readonly rollback?: string;
+    /** One line per template resource, in dependency order: its state, its id and the operation that drove it. */
+    readonly steps?: string[];
+    /** The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list. */
+    template: string;
+  };
+}
+
+/** One Deployment, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ResourcesDeploymentsResource extends Resource, ResourcesDeploymentsData {
+  readonly type: 'CyberCloud.Resources/deployments';
+}
+
+/** The parameters of whatIf. */
+export interface ResourcesDeploymentsWhatIfContent {
+  /** The template to evaluate and its parameters. */
+  properties: {
+    /** The parameter values, as JSON text. */
+    parameters?: string;
+    /** The template, as JSON text — the same shape a PUT takes. */
+    template: string;
+  };
+}
+
+/** What whatIf returns. */
+export interface ResourcesDeploymentsWhatIfResult {
+  /** The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it. */
+  creates: string[];
+  /** The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'. */
+  modifies: string[];
+  /** The resources a deployment would leave as they are, in deployment order. */
+  noChanges: string[];
+  /** Succeeded: the template evaluated and every resource was compared. */
+  status: string;
 }
 
 /** The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else. */

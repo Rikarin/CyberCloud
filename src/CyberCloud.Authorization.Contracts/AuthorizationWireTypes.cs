@@ -218,8 +218,41 @@ public sealed record RelationTuple {
     [Id(2)]
     public SubjectRef Subject { get; init; } = new();
 
+    /// <summary>
+    ///     The instant the tuple stops granting, or <see langword="null" /> for a tuple that grants
+    ///     until it's revoked — docs/plan/07 § Time-bounded relations.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Not part of the tuple's identity.</b> <c>o#r@s</c> is one tuple whatever its
+    ///         expiry: a second write with another expiry replaces the first, and a delete removes
+    ///         it whatever expiry it carries. The record's own equality still compares this member,
+    ///         so code that means "the same tuple" compares <see cref="Object" />,
+    ///         <see cref="Relation" /> and <see cref="Subject" /> — <see cref="IsSameTupleAs" />.
+    ///     </para>
+    ///     <para>
+    ///         The tuple is expired at this instant and after it: an expiry equal to now no longer
+    ///         grants. <see cref="TupleExpiry.IsLive" /> is the one spelling of that comparison.
+    ///     </para>
+    /// </remarks>
+    [Id(3)]
+    public DateTimeOffset? ExpiresOn { get; init; }
+
     /// <summary>Whether the tuple is well formed.</summary>
     public bool IsValid => Object.IsValid && RelationNaming.IsName(Relation) && Subject.IsValid;
+
+    /// <summary>
+    ///     Whether <paramref name="other" /> names the same object, relation, and subject, whatever
+    ///     either one's expiry.
+    /// </summary>
+    /// <param name="other">The tuple to compare with.</param>
+    public bool IsSameTupleAs(RelationTuple other) {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return Object == other.Object
+            && string.Equals(Relation, other.Relation, StringComparison.Ordinal)
+            && Subject == other.Subject;
+    }
 
     /// <summary>Builds a tuple, or explains why the parts are not one.</summary>
     /// <param name="object">The object.</param>
@@ -304,14 +337,87 @@ public sealed record RelationTuple {
             );
     }
 
-    /// <summary>Renders <c>object#relation@subject</c>.</summary>
+    /// <summary>Renders <c>object#relation@subject</c>. The expiry is not part of the notation.</summary>
     public override string ToString() => Object + "#" + Relation + "@" + Subject;
+}
+
+/// <summary>
+///     The one spelling of "does this tuple still grant", and of how two expiries combine —
+///     docs/plan/07 § Time-bounded relations.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>An expiry equal to now has already passed.</b> Every comparison in the engine goes through
+///     <see cref="IsLive" /> so that the grain that filters a tuple out, the cache that stops serving
+///     an answer, and the sweep that removes the tuple all agree on the same instant. A <c>&gt;=</c> in
+///     one of them and a <c>&gt;</c> in another is a one-tick window in which a cached allow outlives
+///     the grant that proved it.
+/// </remarks>
+public static class TupleExpiry {
+    /// <summary>
+    ///     How far ahead of now a rewrite that brings a live grant's end closer must set the new end —
+    ///     and how long a check grain trusts the <see cref="CacheFence" /> list it last read.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The two are one number, and that's the whole argument.</b> A cached answer that a
+    ///     permanent grant proved carries no end, so when the grant is shortened, only the store's
+    ///     fence can stop the cache serving it. A check grain reads the fences at most once per
+    ///     notice, not on every hit, which keeps <c>MinimizeLatency</c>'s hit free of a call to the
+    ///     tenant's store. That's safe because no fence the store accepts later can take effect
+    ///     sooner than a notice after it was written. A grant that has to end sooner than this is
+    ///     revoked instead. docs/plan/07 § Time-bounded relations.
+    /// </remarks>
+    public static readonly TimeSpan ShorteningNotice = TimeSpan.FromMinutes(1);
+
+    /// <summary>Whether a tuple with this expiry still grants at <paramref name="now" />.</summary>
+    /// <param name="expiresOn">The tuple's expiry, or <see langword="null" /> for one that never expires.</param>
+    /// <param name="now">The instant being asked about.</param>
+    public static bool IsLive(DateTimeOffset? expiresOn, DateTimeOffset now) => expiresOn is not { } expiry || expiry > now;
+
+    /// <summary>
+    ///     The earlier of two expiries, where <see langword="null" /> means never — the expiry of a
+    ///     derivation that needs both.
+    /// </summary>
+    /// <param name="first">One expiry.</param>
+    /// <param name="second">The other.</param>
+    public static DateTimeOffset? Earliest(DateTimeOffset? first, DateTimeOffset? second) =>
+        first is not { } a ? second
+        : second is not { } b ? a
+        : a <= b ? a : b;
+
+    /// <summary>
+    ///     The key <see cref="ObjectRelationsSnapshot.Expiries" /> uses for one tuple on an object —
+    ///     <c>relation@subject</c>.
+    /// </summary>
+    /// <param name="relation">The relation.</param>
+    /// <param name="subject">The subject.</param>
+    /// <remarks>
+    ///     Unambiguous because <see cref="RelationNaming" /> excludes <c>@</c> from a relation name,
+    ///     which is the same exclusion that makes <see cref="RelationTuple.Parse" /> unambiguous.
+    /// </remarks>
+    public static string Key(string relation, SubjectRef subject) {
+        ArgumentNullException.ThrowIfNull(subject);
+        return relation + "@" + subject;
+    }
 }
 
 /// <summary>
 ///     Zanzibar's zookie: a per-tenant monotonic version, returned by every tuple write and accepted
 ///     by every check. docs/plan/07 § Consistency.
 /// </summary>
+/// <remarks>
+///     ⚠
+///     <b>
+///         A token orders writes and says nothing about the clock, and an expiring tuple is the one
+///         change it can't see.
+///     </b> An expiry changes what a check answers with no write and so with no new
+///     version: a token minted while a tuple was live is still the tenant's current token after
+///     the tuple has expired. The rule is that a token is a lower bound on the writes an answer
+///     reflects and never a point in time an answer is read <i>at</i> — there's no snapshot read to
+///     go back to — so every check applies expiry at the instant it's evaluated, and a check made
+///     with a token minted before an expiry, evaluated after it, denies. docs/plan/07
+///     § Time-bounded relations calls an expiry a revision boundary by wall clock and states
+///     the consequences.
+/// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Authorization.ConsistencyToken")]
 public sealed record ConsistencyToken {
@@ -415,6 +521,27 @@ public sealed record CheckResult {
     [Id(6)]
     public string CapDetail { get; init; } = string.Empty;
 
+    /// <summary>
+    ///     The instant this answer may change with no write, or <see langword="null" /> when no
+    ///     expiring tuple bears on it.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         For an allow it's the earliest expiry among the tuples of the derivation that proved
+    ///         it. For a deny it's set only where an expiring tuple under a negation is what denied
+    ///         — a <c>#suspended</c> with an expiry — because time only ever removes tuples, so a
+    ///         deny with no negation under it stays a deny until somebody writes.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The check cache stores it beside the answer and stops serving the answer at this
+    ///         instant, in every consistency mode — docs/plan/07 § Time-bounded relations' cache rule.
+    ///         It's a lower bound: a subject who also holds the permission some longer-lived way is
+    ///         re-walked at this instant and allowed again, never served a stale allow.
+    ///     </para>
+    /// </remarks>
+    [Id(7)]
+    public DateTimeOffset? ValidUntil { get; init; }
+
     /// <summary>Whether a cap truncated the walk — a deny that may be wrong.</summary>
     public bool WasTruncated => Outcome is CheckOutcome.DepthCapExceeded or CheckOutcome.BreadthCapExceeded;
 }
@@ -457,6 +584,13 @@ public sealed record RoleAssignment {
     /// <summary>The scope the tuple is actually written at. Equal to <see cref="Scope" /> when not inherited.</summary>
     [Id(4)]
     public ObjectRef InheritedFrom { get; init; } = new();
+
+    /// <summary>
+    ///     When the tuple stops granting, or <see langword="null" /> for a permanent assignment. An
+    ///     assignment whose expiry has passed isn't listed at all.
+    /// </summary>
+    [Id(5)]
+    public DateTimeOffset? ExpiresOn { get; init; }
 }
 
 /// <summary>Every tuple whose object is one object, as <c>IObjectRelationsGrain</c> returns it.</summary>
@@ -476,10 +610,30 @@ public sealed record ObjectRelationsSnapshot {
     [Id(2)]
     public int Count { get; init; }
 
+    /// <summary>
+    ///     The expiry of every tuple in <see cref="ByRelation" /> that has one, keyed by
+    ///     <see cref="TupleExpiry.Key" />. A tuple with no entry never expires.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Every tuple in the snapshot is live when it's read</b>: the grain drops a tuple whose
+    ///     expiry has passed before it builds the snapshot, so a reader never compares a clock. What
+    ///     this map is for is the cache rule — <c>CheckEvaluator</c> carries the earliest expiry of
+    ///     the tuples that proved an answer, and the cache stops serving the answer then.
+    /// </remarks>
+    [Id(3)]
+    public IReadOnlyDictionary<string, DateTimeOffset> Expiries { get; init; } =
+        new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
+
     /// <summary>The subjects of one relation, or an empty list.</summary>
     /// <param name="relation">The relation.</param>
     public IReadOnlyList<SubjectRef> Subjects(string relation) =>
         ByRelation.TryGetValue(relation, out var subjects) ? subjects : [];
+
+    /// <summary>The expiry of one tuple on this object, or <see langword="null" /> when it has none.</summary>
+    /// <param name="relation">The relation.</param>
+    /// <param name="subject">The subject.</param>
+    public DateTimeOffset? ExpiryOf(string relation, SubjectRef subject) =>
+        Expiries.Count > 0 && Expiries.TryGetValue(TupleExpiry.Key(relation, subject), out var expiry) ? expiry : null;
 }
 
 /// <summary>
@@ -503,6 +657,55 @@ public sealed record SubjectIndexEntry {
     /// </summary>
     [Id(2)]
     public string SubjectRelation { get; init; } = string.Empty;
+
+    /// <summary>The tuple's expiry, or <see langword="null" /> for a permanent one.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Not part of the entry's identity</b>, for the reason it isn't part of a tuple's:
+    ///     <c>ISubjectRelationsGrain</c> matches an entry by the other three members, so a rewrite
+    ///     with a new expiry replaces the entry rather than adding a second one. The membership
+    ///     index reads it to leave an expiring edge out of a closure.
+    /// </remarks>
+    [Id(3)]
+    public DateTimeOffset? ExpiresOn { get; init; }
+
+    /// <summary>Whether <paramref name="other" /> is the same entry, whatever either one's expiry.</summary>
+    /// <param name="other">The entry to compare with.</param>
+    public bool IsSameEntryAs(SubjectIndexEntry other) {
+        ArgumentNullException.ThrowIfNull(other);
+
+        return Object == other.Object
+            && string.Equals(Relation, other.Relation, StringComparison.Ordinal)
+            && string.Equals(SubjectRelation, other.SubjectRelation, StringComparison.Ordinal);
+    }
+}
+
+/// <summary>
+///     What one expiry sweep removed — docs/plan/07 § Time-bounded relations.
+/// </summary>
+[GenerateSerializer]
+[Alias("CyberCloud.Authorization.ExpirySweepReport")]
+public sealed record ExpirySweepReport {
+    /// <summary>How many expired tuples the sweep deleted, each one audited.</summary>
+    [Id(0)]
+    public int Removed { get; init; }
+
+    /// <summary>How many expiring tuples are still live and still registered for a later sweep.</summary>
+    [Id(1)]
+    public int Remaining { get; init; }
+
+    /// <summary>
+    ///     Whether the sweep reminder is registered once the pass ends. It stays registered while
+    ///     anything is left to sweep and is cancelled when nothing is.
+    /// </summary>
+    [Id(2)]
+    public bool Armed { get; init; }
+
+    /// <summary>
+    ///     How many deletes failed and stay registered for the next pass. A failure is logged, not
+    ///     retried in the same pass.
+    /// </summary>
+    [Id(3)]
+    public int Failed { get; init; }
 }
 
 /// <summary>
@@ -522,4 +725,52 @@ public sealed record SweepReport {
     /// <summary>How many could not be reconciled and remain in the journal.</summary>
     [Id(2)]
     public int Remaining { get; init; }
+
+    /// <summary>
+    ///     How many were dropped without a replay because a later entry for the same tuple was
+    ///     outstanding too. The later entry is the tuple's intent, and an earlier one replayed over
+    ///     it could resurrect a revoke — issue #49.
+    /// </summary>
+    [Id(3)]
+    public int Superseded { get; init; }
+}
+
+/// <summary>
+///     A point from which the check cache must stop serving older answers: an answer stamped at a
+///     relation version below <see cref="Below" /> isn't served at or after <see cref="At" />.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>What a shortened grant leaves behind.</b> An answer that a permanent grant proved
+///         carries no end (<c>CheckResult.ValidUntil</c> is <see langword="null" />), and
+///         <c>MinimizeLatency</c> never compares versions, so rewriting that grant to end at
+///         <c>T</c> would change nothing the cache looks at. The store writes a fence with
+///         <c>At = T</c> before the rewrite lands, and every check grain honours it on every hit,
+///         in every mode but <c>FullyConsistent</c>, which never reads the cache.
+///         docs/plan/07 § Time-bounded relations.
+///     </para>
+///     <para>
+///         A fence is tenant-wide, because a grant on a resource group proves answers cached on
+///         every resource under it. It's conservative, too: an unrelated answer stamped before the
+///         fence is walked again at <c>T</c>, and early only costs a walk.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Authorization.CacheFence")]
+public sealed record CacheFence {
+    /// <summary>
+    ///     The first relation version the fence leaves alone. The store sets it one past its version
+    ///     when the rewrite starts, so every answer computed before the rewrite landed is caught.
+    /// </summary>
+    [Id(0)]
+    public long Below { get; init; }
+
+    /// <summary>The instant the shortened grant ends, and from which the fence retires answers.</summary>
+    [Id(1)]
+    public DateTimeOffset At { get; init; }
+
+    /// <summary>Whether an answer stamped at <paramref name="version" /> is retired at <paramref name="now" />.</summary>
+    /// <param name="version">The relation version the cached answer was computed at.</param>
+    /// <param name="now">The instant of the check.</param>
+    public bool Retires(long version, DateTimeOffset now) => version < Below && !TupleExpiry.IsLive(At, now);
 }

@@ -48,14 +48,14 @@ namespace CyberCloud.Providers.RecoveryServices;
 ///         tell them apart either and a message that guessed would be wrong two times in three.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Retention is enforced on passes, and a converged vault has no pass of its own.</b>
+///         ⚠ <b>Retention is enforced on passes, and since #30 a converged vault has one an hour.</b>
 ///         The vault prunes every <c>Backup</c> older than <c>policy.retentionDays</c> on each pass —
-///         a <c>PUT</c>, a restore, the drift scan. What it does not have is a pass at 02:00 each
-///         night: docs/plan/08 § What the resource manager deliberately does not do records the
-///         manager-started pass as owed, and until it exists a recovery point can outlive its
-///         retention by however long the vault goes untouched. The <i>bytes</i> are bounded
-///         regardless, by the server's own <c>backup.retentionDays</c>, which the vault refuses to
-///         exceed. Recorded at <c>charts/managed/recovery-vault/conformance.yaml § owed</c>,
+///         a <c>PUT</c>, a restore, and the manager-started pass the type declares with
+///         <c>PassEvery(RecoveryVaults.PassPeriod)</c> (docs/plan/08 § The manager-started pass), so a
+///         point outlives its window by at most that period. The <i>bytes</i> are bounded regardless,
+///         by the server's own <c>backup.retentionDays</c>, which the vault refuses to exceed. What a
+///         failing periodic pass cannot yet do is say so where a tenant looks —
+///         <c>charts/managed/recovery-vault/conformance.yaml § owed</c>,
 ///         <c>retention-is-enforced-on-passes</c>.
 ///     </para>
 ///     <para>

@@ -247,6 +247,8 @@ public sealed class IdentitySerializationTests : IDisposable {
         ("ApplicationRegistration", 8, "IsPublicClient"),
         ("ApplicationRegistration", 9, "ClientSecretRef"),
         ("ApplicationRegistration", 10, "CreatedAt"),
+        // #41: when the platform issued the client's secret — appended, never renumbered.
+        ("ApplicationRegistration", 11, "ClientSecretIssuedAt"),
 
         ("ServicePrincipalDescriptor", 0, "ServicePrincipalId"),
         ("ServicePrincipalDescriptor", 1, "TenantId"),
@@ -351,7 +353,23 @@ public sealed class IdentitySerializationTests : IDisposable {
         RoundTrip(new TotpEnrollment { SecretRef = new() { Path = "p", Field = "f" } }).Digits.ShouldBe(6);
         RoundTrip(SignInOutcome.Success(Guid.NewGuid(), Guid.NewGuid(), AuthenticationMethod.Passkey))
             .Succeeded.ShouldBeTrue();
-        RoundTrip(new Invitation { Email = "b@example.com", Relation = "owner" }).Relation.ShouldBe("owner");
+        RoundTrip(new Invitation { Email = "b@example.com", Status = InvitationStatus.Accepted, TenantName = "contoso" })
+            .Status.ShouldBe(InvitationStatus.Accepted);
+        RoundTrip(new InvitationRequest { Email = "c@example.com", TenantName = "contoso" }).TenantName.ShouldBe("contoso");
+
+        // #43's device flow: every type a poll, a lookup and a redemption carry across the silo.
+        var approval = new DeviceApproval {
+            TenantId = Guid.NewGuid(), UserId = Guid.NewGuid(), Methods = [AuthenticationMethod.Password], Email = "d@example.com"
+        };
+
+        RoundTrip(new DeviceAuthorizationRequest { ClientId = "cyc-cli", Scopes = ["cyc.api"], Lifetime = TimeSpan.FromMinutes(10), Interval = TimeSpan.FromSeconds(5) })
+            .Interval.ShouldBe(TimeSpan.FromSeconds(5));
+        RoundTrip(new DeviceAuthorizationDescriptor { ClientId = "cyc-cli", Status = DeviceAuthorizationStatus.Approved })
+            .Status.ShouldBe(DeviceAuthorizationStatus.Approved);
+        RoundTrip(approval).Methods.ShouldBe([AuthenticationMethod.Password]);
+        RoundTrip(new DevicePoll(DevicePollOutcome.SlowDown, TimeSpan.FromSeconds(10), "cyc-cli", ["cyc.api"], approval))
+            .Outcome.ShouldBe(DevicePollOutcome.SlowDown);
+        RoundTrip(new DeviceRedemption(true, Guid.NewGuid(), approval, ["cyc.api"])).FirstUse.ShouldBeTrue();
         RoundTrip(new PasskeyRegistrationChallenge { OptionsJson = "{}" }).OptionsJson.ShouldBe("{}");
         RoundTrip(new PasskeyAssertionChallenge { OptionsJson = "{}" }).OptionsJson.ShouldBe("{}");
         RoundTrip(new PasskeyRegistrationRequest { Email = "c@example.com", Existing = [] }).Email
@@ -394,19 +412,31 @@ public sealed class IdentitySerializationTests : IDisposable {
         "CyberCloud.Identity.CodeConsumption",
         "CyberCloud.Identity.ConsentGrant",
         "CyberCloud.Identity.CredentialKind",
+        "CyberCloud.Identity.DeviceApproval",
+        "CyberCloud.Identity.DeviceAuthorizationDescriptor",
+        "CyberCloud.Identity.DeviceAuthorizationRequest",
+        "CyberCloud.Identity.DeviceAuthorizationStatus",
+        "CyberCloud.Identity.DevicePoll",
+        "CyberCloud.Identity.DevicePollOutcome",
+        "CyberCloud.Identity.DeviceRedemption",
         "CyberCloud.Identity.ExchangedSubject",
         "CyberCloud.Identity.GrantType",
         "CyberCloud.Identity.GroupDescriptor",
         "CyberCloud.Identity.IApplicationGrain",
         "CyberCloud.Identity.IAuthorizationCodeGrain",
         "CyberCloud.Identity.IConsentGrain",
+        "CyberCloud.Identity.IDeviceAuthorizationGrain",
+        "CyberCloud.Identity.IDirectoryIndexGrain",
         "CyberCloud.Identity.IGroupGrain",
+        "CyberCloud.Identity.IInvitationGrain",
         "CyberCloud.Identity.IManagedIdentityGrain",
         "CyberCloud.Identity.IServicePrincipalGrain",
         "CyberCloud.Identity.ISessionGrain",
         "CyberCloud.Identity.ISignUpGrain",
         "CyberCloud.Identity.IUserGrain",
         "CyberCloud.Identity.Invitation",
+        "CyberCloud.Identity.InvitationRequest",
+        "CyberCloud.Identity.InvitationStatus",
         "CyberCloud.Identity.ManagedIdentityDescriptor",
         "CyberCloud.Identity.PasskeyAssertionChallenge",
         "CyberCloud.Identity.PasskeyCredential",

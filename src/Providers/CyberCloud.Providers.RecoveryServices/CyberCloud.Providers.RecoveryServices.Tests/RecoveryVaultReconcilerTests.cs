@@ -555,7 +555,7 @@ public sealed class RecoveryVaultReconcilerTests {
                 (RecoveryVaults.ProtectedItemLabel, "main"),
                 (RecoveryVaults.RestoreRoleLabel, RecoveryVaults.RestoreRoleValue)
             )
-            .ObjectJson(RecoveryVaults.RestoredClusterJson("main-restored", "nightly-main-x", "{}"))
+            .ObjectJson("""{"metadata":{"name":"main-restored"},"spec":{"instances":1}}""")
             .ApplyAsync(TestContext.Current.CancellationToken);
 
         var reconciler = new RecoveryVaultReconciler(new FixedClock());

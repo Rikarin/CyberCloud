@@ -75,6 +75,14 @@ interface PropertyRow {
         </div>
         @if (resource(); as resource) {
           <div class="flex gap-2">
+            @if (explorers(); as explorers) {
+              <a xuiButton variant="outline" size="sm" [routerLink]="explorers.metrics" i18n="@@resourceBlade.metrics"
+                >Metrics</a
+              >
+              <a xuiButton variant="outline" size="sm" [routerLink]="explorers.logs" i18n="@@resourceBlade.logs"
+                >Logs</a
+              >
+            }
             <a xuiButton variant="outline" size="sm" [routerLink]="accessLink()" i18n="@@resourceBlade.access"
               >Access</a
             >
@@ -265,6 +273,21 @@ export class ResourceBlade {
     const address = this.address();
     return address === null ? this.groupLink() : links.resourceAccess(address, this.resourceType());
   });
+
+  /**
+   * The Metrics and Logs rail items of docs/plan/20 § Information architecture, on the one type that
+   * has data to explore: a Monitor workspace (#41). Every other type's telemetry lives in a
+   * workspace, and reaching it from the resource is owed with the resource-id enrichment docs/plan/16
+   * § Ingest describes.
+   */
+  protected readonly explorers = computed(() =>
+    this.resourceType() === 'CyberCloud.Monitor/workspaces' && this.parent() === undefined
+      ? {
+          metrics: links.workspaceMetrics(this.subscriptionId(), this.resourceGroup(), this.name()),
+          logs: links.workspaceLogs(this.subscriptionId(), this.resourceGroup(), this.name())
+        }
+      : null
+  );
 
   protected readonly tagEntries = computed(() => Object.entries(this.resource()?.tags ?? {}));
   protected readonly raw = computed(() => JSON.stringify(this.resource(), null, 2));
