@@ -2312,6 +2312,286 @@ class ImageResource:
         )
 
 
+VirtualMachineScaleSetSize = Literal["s1.large", "s1.medium", "s1.small", "s1.xlarge"]
+"""The values /properties/size accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+VirtualMachineScaleSetMode = Literal["Manual", "OnRestart", "Rolling"]
+"""The values /properties/upgradePolicy/mode accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class VirtualMachineScaleSetData:
+    """Virtual machine scale set. A set of identical virtual machines on KubeVirt: one size, one image, one subnet and one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade policy that says how running machines take a changed template. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The set's own settings."""
+
+        @dataclass
+        class CloudInit:
+            """First-boot configuration every machine gets, as cloud-init reads it."""
+
+            # A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.
+            user_data: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> VirtualMachineScaleSetData.Properties.CloudInit:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    user_data=wire.get("userData"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.user_data is not None:
+                    wire["userData"] = self.user_data
+                return wire
+
+        @dataclass
+        class Network:
+            """The tenant network every machine's interface joins. Both empty means the cluster's pod network."""
+
+            # The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.
+            subnet: Optional[str] = None
+            # The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.
+            virtual_network: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> VirtualMachineScaleSetData.Properties.Network:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    subnet=wire.get("subnet"),
+                    virtual_network=wire.get("virtualNetwork"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.subnet is not None:
+                    wire["subnet"] = self.subnet
+                if self.virtual_network is not None:
+                    wire["virtualNetwork"] = self.virtual_network
+                return wire
+
+        @dataclass
+        class UpgradePolicy:
+            """What happens to running machines when the template changes."""
+
+            # For a Rolling upgrade, how many machines may be restarting at once.
+            max_unavailable: Optional[int] = None
+            # Manual: only machines created afterwards get the new template. OnRestart: every machine's spec is updated and each guest takes it at its next restart. Rolling: the platform restarts machines onto the new template, at most maxUnavailable at a time.
+            mode: Optional[VirtualMachineScaleSetMode] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> VirtualMachineScaleSetData.Properties.UpgradePolicy:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    max_unavailable=wire.get("maxUnavailable"),
+                    mode=wire.get("mode"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.max_unavailable is not None:
+                    wire["maxUnavailable"] = self.max_unavailable
+                if self.mode is not None:
+                    wire["mode"] = self.mode
+                return wire
+
+        # How many machines the set holds: the count a new set starts at, the most the scale action may run, and what quota reserves — capacity times one machine's size and root disk. Raise it with a PUT, which reserves the difference first.
+        capacity: int
+        # The cluster the set's machines run in. Must be the one its image is in.
+        cluster_id: str
+        # The CyberCloud.Compute/images resource every machine's root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the set waits for it and says so.
+        image: str
+        # Each machine's root disk, in Kubernetes quantity form. At least the image's own size. ⚠ Immutable.
+        os_disk_size: str
+        # Every machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. A change reaches running machines as the upgrade policy says.
+        size: VirtualMachineScaleSetSize
+        # First-boot configuration every machine gets, as cloud-init reads it.
+        cloud_init: Optional[VirtualMachineScaleSetData.Properties.CloudInit] = None
+        # The tenant network every machine's interface joins. Both empty means the cluster's pod network.
+        network: Optional[VirtualMachineScaleSetData.Properties.Network] = None
+        # What happens to running machines when the template changes.
+        upgrade_policy: Optional[VirtualMachineScaleSetData.Properties.UpgradePolicy] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> VirtualMachineScaleSetData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                capacity=wire["capacity"],
+                cluster_id=wire["clusterId"],
+                image=wire["image"],
+                os_disk_size=wire["osDiskSize"],
+                size=wire["size"],
+                cloud_init=_opt(wire, "cloudInit", VirtualMachineScaleSetData.Properties.CloudInit.from_wire),
+                network=_opt(wire, "network", VirtualMachineScaleSetData.Properties.Network.from_wire),
+                upgrade_policy=_opt(wire, "upgradePolicy", VirtualMachineScaleSetData.Properties.UpgradePolicy.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["capacity"] = self.capacity
+            wire["clusterId"] = self.cluster_id
+            wire["image"] = self.image
+            wire["osDiskSize"] = self.os_disk_size
+            wire["size"] = self.size
+            if self.cloud_init is not None:
+                wire["cloudInit"] = self.cloud_init.to_wire()
+            if self.network is not None:
+                wire["network"] = self.network.to_wire()
+            if self.upgrade_policy is not None:
+                wire["upgradePolicy"] = self.upgrade_policy.to_wire()
+            return wire
+
+    # The region the set is billed in.
+    location: str
+    # The set's own settings.
+    properties: Optional[VirtualMachineScaleSetData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineScaleSetData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", VirtualMachineScaleSetData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class VirtualMachineScaleSetResource:
+    """One Virtual machine scale set, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: VirtualMachineScaleSetData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineScaleSetResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=VirtualMachineScaleSetData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class VirtualMachineScaleSetListInstancesResult:
+    """What listInstances returns."""
+
+    # The ceiling the body sets and quota reserves.
+    capacity: int
+    # The machines the pool runs, by name, in index order.
+    instances: List[str]
+    # How many machines KubeVirt reports ready. ⚠ 0 with instances listed is a set whose machines exist and have not booted.
+    ready_replicas: int
+    # The replica count the pool is asked for.
+    replicas: int
+    # KubeVirt's word for each machine, in the same order — Running, Provisioning, Starting, ErrorUnschedulable and so on; empty for one it has not reported on.
+    states: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineScaleSetListInstancesResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            capacity=wire["capacity"],
+            instances=wire["instances"],
+            ready_replicas=wire["readyReplicas"],
+            replicas=wire["replicas"],
+            states=wire["states"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["capacity"] = self.capacity
+        wire["instances"] = self.instances
+        wire["readyReplicas"] = self.ready_replicas
+        wire["replicas"] = self.replicas
+        wire["states"] = self.states
+        return wire
+
+
+@dataclass
+class VirtualMachineScaleSetScaleContent:
+    """The parameters of scale."""
+
+    # How many machines to run, from 0 to the set's capacity. ⚠ Above the capacity is refused: capacity is what quota reserved, and a PUT that raises it is how more is reserved.
+    replicas: int
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineScaleSetScaleContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            replicas=wire["replicas"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["replicas"] = self.replicas
+        return wire
+
+
+@dataclass
+class VirtualMachineScaleSetScaleResult:
+    """What scale returns."""
+
+    # The ceiling the body sets and quota reserves.
+    capacity: int
+    # The replica count now.
+    replicas: int
+    # The pool's replica count before the action.
+    replicas_before: int
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> VirtualMachineScaleSetScaleResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            capacity=wire["capacity"],
+            replicas=wire["replicas"],
+            replicas_before=wire["replicasBefore"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["capacity"] = self.capacity
+        wire["replicas"] = self.replicas
+        wire["replicasBefore"] = self.replicas_before
+        return wire
+
+
 VirtualMachineSize = Literal["s1.large", "s1.medium", "s1.small", "s1.xlarge"]
 """The values /properties/size accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -2591,6 +2871,294 @@ class VirtualMachineStopResult:
         wire["action"] = self.action
         wire["runStrategy"] = self.run_strategy
         wire["runStrategyBefore"] = self.run_strategy_before
+        return wire
+
+
+ContainerGroupRestartPolicy = Literal["Always", "OnFailure", "Never"]
+"""The values /properties/restartPolicy accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ContainerGroupData:
+    """Container group. One or more containers run together as a pod in your resource group: public or private images, a CPU and memory budget they share, environment from vault handles, ports on a subnet and an optional public address, with logs and restart as actions. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The group's own settings."""
+
+        @dataclass
+        class Network:
+            """Where the group's ports are reached. All empty means the cluster's pod network, reachable from nothing a tenant owns."""
+
+            # The IPv4 address the group answers on, inside the subnet's range, or empty for one the fabric picks. ⚠ Only with a subnet.
+            ip_address: Optional[str] = None
+            # A CyberCloud.Network/publicIpAddresses resource in this resource group, by name, translated one-to-one onto the group's address — every port the group listens on is reachable at it. Empty for none. ⚠ Only with a subnet.
+            public_ip_address: Optional[str] = None
+            # The subnet of that network the group takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the group never starts.
+            subnet: Optional[str] = None
+            # The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.
+            virtual_network: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ContainerGroupData.Properties.Network:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    ip_address=wire.get("ipAddress"),
+                    public_ip_address=wire.get("publicIpAddress"),
+                    subnet=wire.get("subnet"),
+                    virtual_network=wire.get("virtualNetwork"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.ip_address is not None:
+                    wire["ipAddress"] = self.ip_address
+                if self.public_ip_address is not None:
+                    wire["publicIpAddress"] = self.public_ip_address
+                if self.subnet is not None:
+                    wire["subnet"] = self.subnet
+                if self.virtual_network is not None:
+                    wire["virtualNetwork"] = self.virtual_network
+                return wire
+
+        @dataclass
+        class Registry:
+            """The credential a private registry's images are pulled with. All empty means every image is public."""
+
+            # A vault handle — path#field, optionally @version — whose value is the password or token. For a CyberCloud.ContainerRegistry that is its own credential: tenants/<tenantId>/CyberCloud.ContainerRegistry/registries/<registryId>#adminPassword. ⚠ Under your own tenant's prefix, or refused.
+            password: Optional[str] = None
+            # The registry's host, with a port when it is not 443 — for example registry.example.com. ⚠ The kubelet resolves it from the node, not from inside the cluster.
+            server: Optional[str] = None
+            # The user the registry knows — admin for a CyberCloud.ContainerRegistry, as its listCredentials answers.
+            username: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ContainerGroupData.Properties.Registry:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    password=wire.get("password"),
+                    server=wire.get("server"),
+                    username=wire.get("username"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.password is not None:
+                    wire["password"] = self.password
+                if self.server is not None:
+                    wire["server"] = self.server
+                if self.username is not None:
+                    wire["username"] = self.username
+                return wire
+
+        # The cluster the group runs in.
+        cluster_id: str
+        # The containers, each name=image — for example web=nginx:1.27 or app=myregistry.example/team/app:2.1. One to ten; names are lower-case DNS labels and unique in the group. The first is the main container: the command and the ports are its.
+        containers: List[str]
+        # The CPU the whole group may use, as a Kubernetes quantity — 500m is half a core. Reserved against your vCPU quota and enforced on the pod as one limit its containers share.
+        cpu: str
+        # The memory the whole group may use, as a Kubernetes quantity. Reserved against your memory quota and enforced on the pod as one limit.
+        memory: str
+        # The main container's command, replacing its image's entrypoint — for example ["sh", "-c", "echo hello; sleep 3600"]. Empty runs the image as built.
+        command: Optional[List[str]] = None
+        # Environment variables every container sees, each NAME=value. ⚠ The value is stored in this body in plaintext — anything secret goes in secureEnvironment.
+        environment: Optional[List[str]] = None
+        # Where the group's ports are reached. All empty means the cluster's pod network, reachable from nothing a tenant owns.
+        network: Optional[ContainerGroupData.Properties.Network] = None
+        # The ports the main container listens on, each a number with an optional /TCP, /UDP or /SCTP — for example 80 or 53/UDP. Reached at the group's address on its subnet, and at its public address when it has one.
+        ports: Optional[List[str]] = None
+        # The credential a private registry's images are pulled with. All empty means every image is public.
+        registry: Optional[ContainerGroupData.Properties.Registry] = None
+        # Always restarts a container whenever it exits; OnFailure only when it exits non-zero; Never lets the group run once — a batch job — and the group stays Succeeded with its logs readable.
+        restart_policy: Optional[ContainerGroupRestartPolicy] = None
+        # Environment variables whose values are vault handles, each NAME=path#field, optionally @version. Resolved when the group is rendered into a Secret the containers read; the values never enter this body. ⚠ Every path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other is refused.
+        secure_environment: Optional[List[str]] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ContainerGroupData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                containers=wire["containers"],
+                cpu=wire["cpu"],
+                memory=wire["memory"],
+                command=wire.get("command"),
+                environment=wire.get("environment"),
+                network=_opt(wire, "network", ContainerGroupData.Properties.Network.from_wire),
+                ports=wire.get("ports"),
+                registry=_opt(wire, "registry", ContainerGroupData.Properties.Registry.from_wire),
+                restart_policy=wire.get("restartPolicy"),
+                secure_environment=wire.get("secureEnvironment"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["containers"] = self.containers
+            wire["cpu"] = self.cpu
+            wire["memory"] = self.memory
+            if self.command is not None:
+                wire["command"] = self.command
+            if self.environment is not None:
+                wire["environment"] = self.environment
+            if self.network is not None:
+                wire["network"] = self.network.to_wire()
+            if self.ports is not None:
+                wire["ports"] = self.ports
+            if self.registry is not None:
+                wire["registry"] = self.registry.to_wire()
+            if self.restart_policy is not None:
+                wire["restartPolicy"] = self.restart_policy
+            if self.secure_environment is not None:
+                wire["secureEnvironment"] = self.secure_environment
+            return wire
+
+    # The region the group is billed in.
+    location: str
+    # The group's own settings.
+    properties: Optional[ContainerGroupData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ContainerGroupData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ContainerGroupData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ContainerGroupResource:
+    """One Container group, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ContainerGroupData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ContainerGroupResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ContainerGroupData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class ContainerGroupLogsContent:
+    """The parameters of logs."""
+
+    # The container whose output to read, by the name the containers property gives it. Empty means the first container.
+    container: Optional[str] = None
+    # How many lines from the end. At most 5000; 100 when not given.
+    tail_lines: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ContainerGroupLogsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            container=wire.get("container"),
+            tail_lines=wire.get("tailLines"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.container is not None:
+            wire["container"] = self.container
+        if self.tail_lines is not None:
+            wire["tailLines"] = self.tail_lines
+        return wire
+
+
+@dataclass
+class ContainerGroupLogsResult:
+    """What logs returns."""
+
+    # The container the lines are from.
+    container: str
+    # The lines, newline-separated, as the kubelet kept them. ⚠ A tail and not a stream: the last tailLines lines, capped at a mebibyte.
+    log: str
+    # When the platform read the log, RFC 3339.
+    read_at: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ContainerGroupLogsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            container=wire["container"],
+            log=wire["log"],
+            read_at=wire["readAt"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["container"] = self.container
+        wire["log"] = self.log
+        wire["readAt"] = self.read_at
+        return wire
+
+
+ContainerGroupRestartResultAction = Literal["restart"]
+"""The values /action accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ContainerGroupRestartResult:
+    """What restart returns."""
+
+    # restart.
+    action: ContainerGroupRestartResultAction
+    # The uid of the pod that replaced it.
+    pod_uid: str
+    # The uid of the pod that was replaced.
+    pod_uid_before: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ContainerGroupRestartResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            action=wire["action"],
+            pod_uid=wire["podUid"],
+            pod_uid_before=wire["podUidBefore"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["action"] = self.action
+        wire["podUid"] = self.pod_uid
+        wire["podUidBefore"] = self.pod_uid_before
         return wire
 
 
@@ -10225,6 +10793,364 @@ class VirtualNetworkShowIsolationResult:
         return wire
 
 
+ApplicationGatewayPreset = Literal["c1.large", "c1.medium", "c1.small"]
+"""The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+ApplicationGatewayCrsVersion = Literal["4.25"]
+"""The values /properties/waf/crsVersion accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+ApplicationGatewayMode = Literal["detection", "off", "prevention"]
+"""The values /properties/waf/mode accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ApplicationGatewayData:
+    """Application gateway. An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The gateway's own settings."""
+
+        @dataclass
+        class Frontend:
+            """The address clients connect to."""
+
+            # The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.
+            v4: str
+            # The IPv6 address the gateway also answers on, or empty. Lower case only.
+            v6: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Frontend:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    v4=wire["v4"],
+                    v6=wire.get("v6"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["v4"] = self.v4
+                if self.v6 is not None:
+                    wire["v6"] = self.v6
+                return wire
+
+        @dataclass
+        class Health:
+            """How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off."""
+
+            # How many successful probes put a member back.
+            healthy_after: Optional[int] = None
+            # How often each member is probed.
+            interval_seconds: Optional[int] = None
+            # The path every member is probed on.
+            path: Optional[str] = None
+            # How many failed probes take a member out of its pool.
+            unhealthy_after: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Health:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    healthy_after=wire.get("healthyAfter"),
+                    interval_seconds=wire.get("intervalSeconds"),
+                    path=wire.get("path"),
+                    unhealthy_after=wire.get("unhealthyAfter"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.healthy_after is not None:
+                    wire["healthyAfter"] = self.healthy_after
+                if self.interval_seconds is not None:
+                    wire["intervalSeconds"] = self.interval_seconds
+                if self.path is not None:
+                    wire["path"] = self.path
+                if self.unhealthy_after is not None:
+                    wire["unhealthyAfter"] = self.unhealthy_after
+                return wire
+
+        @dataclass
+        class Limits:
+            """What the gateway refuses rather than passes on."""
+
+            # How many client connections the gateway accepts at once.
+            max_connections: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Limits:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    max_connections=wire.get("maxConnections"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.max_connections is not None:
+                    wire["maxConnections"] = self.max_connections
+                return wire
+
+        @dataclass
+        class Listeners:
+            """The HTTP listener, and the HTTPS listener when a certificate is given."""
+
+            # The port plain HTTP is served on.
+            http_port: int
+            # A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.
+            certificate: Optional[str] = None
+            # The port HTTPS is served on. Used only when a certificate is given.
+            https_port: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Listeners:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    http_port=wire["httpPort"],
+                    certificate=wire.get("certificate"),
+                    https_port=wire.get("httpsPort"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["httpPort"] = self.http_port
+                if self.certificate is not None:
+                    wire["certificate"] = self.certificate
+                if self.https_port is not None:
+                    wire["httpsPort"] = self.https_port
+                return wire
+
+        @dataclass
+        class Sizing:
+            """CPU and memory for the proxy and the firewall, each."""
+
+            # How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.
+            preset: Optional[ApplicationGatewayPreset] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Sizing:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    preset=wire.get("preset"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.preset is not None:
+                    wire["preset"] = self.preset
+                return wire
+
+        @dataclass
+        class Waf:
+            """The web application firewall: the OWASP Core Rule Set on Coraza."""
+
+            # The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.
+            crs_version: Optional[ApplicationGatewayCrsVersion] = None
+            # Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. A host is matched in any case and with any port; a path after percent-decoding and resolving //, . and .. segments. ⚠ allow skips the rule set for that request entirely.
+            custom_rules: Optional[List[str]] = None
+            # Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).
+            exclusions: Optional[List[str]] = None
+            # prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.
+            mode: Optional[ApplicationGatewayMode] = None
+            # The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.
+            paranoia_level: Optional[int] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties.Waf:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    crs_version=wire.get("crsVersion"),
+                    custom_rules=wire.get("customRules"),
+                    exclusions=wire.get("exclusions"),
+                    mode=wire.get("mode"),
+                    paranoia_level=wire.get("paranoiaLevel"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.crs_version is not None:
+                    wire["crsVersion"] = self.crs_version
+                if self.custom_rules is not None:
+                    wire["customRules"] = self.custom_rules
+                if self.exclusions is not None:
+                    wire["exclusions"] = self.exclusions
+                if self.mode is not None:
+                    wire["mode"] = self.mode
+                if self.paranoia_level is not None:
+                    wire["paranoiaLevel"] = self.paranoia_level
+                return wire
+
+        # The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. An address is written in its usual form (10.0.0.1, not 10.1) and may not be loopback, link-local, multicast or the gateway's own. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.
+        backend_pools: List[str]
+        # The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.
+        cluster_id: str
+        # Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.
+        routing_rules: List[str]
+        # The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.
+        subnet: str
+        # The address clients connect to.
+        frontend: Optional[ApplicationGatewayData.Properties.Frontend] = None
+        # How a pool member is decided to be up: an HTTP GET that answers 2xx or 3xx. ⚠ Probing cannot be turned off.
+        health: Optional[ApplicationGatewayData.Properties.Health] = None
+        # What the gateway refuses rather than passes on.
+        limits: Optional[ApplicationGatewayData.Properties.Limits] = None
+        # The HTTP listener, and the HTTPS listener when a certificate is given.
+        listeners: Optional[ApplicationGatewayData.Properties.Listeners] = None
+        # CPU and memory for the proxy and the firewall, each.
+        sizing: Optional[ApplicationGatewayData.Properties.Sizing] = None
+        # The web application firewall: the OWASP Core Rule Set on Coraza.
+        waf: Optional[ApplicationGatewayData.Properties.Waf] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ApplicationGatewayData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                backend_pools=wire["backendPools"],
+                cluster_id=wire["clusterId"],
+                routing_rules=wire["routingRules"],
+                subnet=wire["subnet"],
+                frontend=_opt(wire, "frontend", ApplicationGatewayData.Properties.Frontend.from_wire),
+                health=_opt(wire, "health", ApplicationGatewayData.Properties.Health.from_wire),
+                limits=_opt(wire, "limits", ApplicationGatewayData.Properties.Limits.from_wire),
+                listeners=_opt(wire, "listeners", ApplicationGatewayData.Properties.Listeners.from_wire),
+                sizing=_opt(wire, "sizing", ApplicationGatewayData.Properties.Sizing.from_wire),
+                waf=_opt(wire, "waf", ApplicationGatewayData.Properties.Waf.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["backendPools"] = self.backend_pools
+            wire["clusterId"] = self.cluster_id
+            wire["routingRules"] = self.routing_rules
+            wire["subnet"] = self.subnet
+            if self.frontend is not None:
+                wire["frontend"] = self.frontend.to_wire()
+            if self.health is not None:
+                wire["health"] = self.health.to_wire()
+            if self.limits is not None:
+                wire["limits"] = self.limits.to_wire()
+            if self.listeners is not None:
+                wire["listeners"] = self.listeners.to_wire()
+            if self.sizing is not None:
+                wire["sizing"] = self.sizing.to_wire()
+            if self.waf is not None:
+                wire["waf"] = self.waf.to_wire()
+            return wire
+
+    # The region the gateway is billed in. ⚠ It must be its virtual network's region.
+    location: str
+    # The gateway's own settings.
+    properties: Optional[ApplicationGatewayData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationGatewayData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ApplicationGatewayData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ApplicationGatewayResource:
+    """One Application gateway, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ApplicationGatewayData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationGatewayResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ApplicationGatewayData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class ApplicationGatewayShowRoutingResult:
+    """What showRouting returns."""
+
+    # Each listener, as address:port and protocol.
+    listeners: List[str]
+    # Every pool member as the gateway was configured with it, a machine's resolved address beside its resource id.
+    members: List[str]
+    # What the answer is and is not.
+    note: str
+    # How many gateway pods are ready. ⚠ 0 is a gateway configured and carrying no traffic.
+    ready_replicas: int
+    # The routing rules in evaluation order.
+    rules: List[str]
+    # When the platform read the cluster, RFC 3339.
+    sampled_at: str
+    # Machine members that did not resolve to an address and are not in the configuration.
+    unresolved: List[str]
+    # The firewall's mode, rule set and paranoia level.
+    waf: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationGatewayShowRoutingResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            listeners=wire["listeners"],
+            members=wire["members"],
+            note=wire["note"],
+            ready_replicas=wire["readyReplicas"],
+            rules=wire["rules"],
+            sampled_at=wire["sampledAt"],
+            unresolved=wire["unresolved"],
+            waf=wire["waf"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["listeners"] = self.listeners
+        wire["members"] = self.members
+        wire["note"] = self.note
+        wire["readyReplicas"] = self.ready_replicas
+        wire["rules"] = self.rules
+        wire["sampledAt"] = self.sampled_at
+        wire["unresolved"] = self.unresolved
+        wire["waf"] = self.waf
+        return wire
+
+
 LoadBalancerPreset = Literal["c1.large", "c1.medium", "c1.small"]
 """The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -13066,6 +13992,13 @@ __all__ = [
     "ImageName",
     "ImageData",
     "ImageResource",
+    "VirtualMachineScaleSetSize",
+    "VirtualMachineScaleSetMode",
+    "VirtualMachineScaleSetData",
+    "VirtualMachineScaleSetResource",
+    "VirtualMachineScaleSetListInstancesResult",
+    "VirtualMachineScaleSetScaleContent",
+    "VirtualMachineScaleSetScaleResult",
     "VirtualMachineSize",
     "VirtualMachineData",
     "VirtualMachineResource",
@@ -13081,6 +14014,13 @@ __all__ = [
     "VirtualMachineStopResultRunStrategy",
     "VirtualMachineStopResultRunStrategyBefore",
     "VirtualMachineStopResult",
+    "ContainerGroupRestartPolicy",
+    "ContainerGroupData",
+    "ContainerGroupResource",
+    "ContainerGroupLogsContent",
+    "ContainerGroupLogsResult",
+    "ContainerGroupRestartResultAction",
+    "ContainerGroupRestartResult",
     "ArtifactFeedKind",
     "ArtifactFeedData",
     "ArtifactFeedResource",
@@ -13272,6 +14212,12 @@ __all__ = [
     "VirtualNetworkData",
     "VirtualNetworkResource",
     "VirtualNetworkShowIsolationResult",
+    "ApplicationGatewayPreset",
+    "ApplicationGatewayCrsVersion",
+    "ApplicationGatewayMode",
+    "ApplicationGatewayData",
+    "ApplicationGatewayResource",
+    "ApplicationGatewayShowRoutingResult",
     "LoadBalancerPreset",
     "LoadBalancerVersion",
     "LoadBalancerData",

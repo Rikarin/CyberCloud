@@ -4388,6 +4388,571 @@
           },
           "alias": "image"
         },
+        "virtual-machine-scale-sets": {
+          "name": "virtual-machine-scale-sets",
+          "resourceType": "CyberCloud.Compute/virtualMachineScaleSets",
+          "title": "Virtual machine scale set",
+          "plural": "Virtual machine scale sets",
+          "summary": "A set of identical virtual machines on KubeVirt: one size, one image, one subnet and one cloud-init, a capacity quota reserves, a scale action within it, and an upgrade policy that says how running machines take a changed template.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Virtual machine scale set.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachineScaleSets/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--capacity",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "How many machines the set holds: the count a new set starts at, the most the scale action may run, and what quota reserves — capacity times one machine's size and root disk. Raise it with a PUT, which reserves the difference first.",
+                  "jsonPointer": "/properties/capacity",
+                  "default": 2
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster the set's machines run in. Must be the one its image is in.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--image",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The CyberCloud.Compute/images resource every machine's root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the set waits for it and says so.",
+                  "jsonPointer": "/properties/image",
+                  "immutable": true,
+                  "default": "ubuntu",
+                  "example": "ubuntu"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the set is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-unavailable",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "For a Rolling upgrade, how many machines may be restarting at once.",
+                  "jsonPointer": "/properties/upgradePolicy/maxUnavailable",
+                  "default": 1
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Manual: only machines created afterwards get the new template. OnRestart: every machine's spec is updated and each guest takes it at its next restart. Rolling: the platform restarts machines onto the new template, at most maxUnavailable at a time.",
+                  "jsonPointer": "/properties/upgradePolicy/mode",
+                  "choices": [
+                    "Manual",
+                    "OnRestart",
+                    "Rolling"
+                  ],
+                  "default": "Rolling"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--os-disk-size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Each machine's root disk, in Kubernetes quantity form. At least the image's own size. ⚠ Immutable.",
+                  "jsonPointer": "/properties/osDiskSize",
+                  "immutable": true,
+                  "default": "20Gi",
+                  "example": "20Gi"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Every machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. A change reaches running machines as the upgrade policy says.",
+                  "jsonPointer": "/properties/size",
+                  "choices": [
+                    "s1.large",
+                    "s1.medium",
+                    "s1.small",
+                    "s1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.",
+                  "jsonPointer": "/properties/network/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": ""
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--user-data",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.",
+                  "jsonPointer": "/properties/cloudInit/userData",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--virtual-network",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.",
+                  "jsonPointer": "/properties/network/virtualNetwork",
+                  "immutable": true,
+                  "default": ""
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Virtual machine scale set. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachineScaleSets/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Virtual machine scale sets in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachineScaleSets",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "list-instances": {
+              "name": "list-instances",
+              "summary": "listInstances a Virtual machine scale set.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachineScaleSets/{resourceName}/listInstances",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "listInstances",
+              "permission": "read",
+              "rawBody": true
+            },
+            "scale": {
+              "name": "scale",
+              "summary": "scale a Virtual machine scale set.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachineScaleSets/{resourceName}/scale",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--replicas",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "How many machines to run, from 0 to the set's capacity. ⚠ Above the capacity is refused: capacity is what quota reserved, and a PUT that raises it is how more is reserved.",
+                  "jsonPointer": "/replicas"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "scale",
+              "permission": "write"
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Virtual machine scale set.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachineScaleSets/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Virtual machine scale set. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Compute/virtualMachineScaleSets/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--capacity",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many machines the set holds: the count a new set starts at, the most the scale action may run, and what quota reserves — capacity times one machine's size and root disk. Raise it with a PUT, which reserves the difference first.",
+                  "jsonPointer": "/properties/capacity",
+                  "default": 2
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster the set's machines run in. Must be the one its image is in.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--image",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The CyberCloud.Compute/images resource every machine's root disk is cloned from, by name, in this resource group. ⚠ The image must have finished importing: the set waits for it and says so.",
+                  "jsonPointer": "/properties/image",
+                  "immutable": true,
+                  "default": "ubuntu",
+                  "example": "ubuntu"
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the set is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-unavailable",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "For a Rolling upgrade, how many machines may be restarting at once.",
+                  "jsonPointer": "/properties/upgradePolicy/maxUnavailable",
+                  "default": 1
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Manual: only machines created afterwards get the new template. OnRestart: every machine's spec is updated and each guest takes it at its next restart. Rolling: the platform restarts machines onto the new template, at most maxUnavailable at a time.",
+                  "jsonPointer": "/properties/upgradePolicy/mode",
+                  "choices": [
+                    "Manual",
+                    "OnRestart",
+                    "Rolling"
+                  ],
+                  "default": "Rolling"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--os-disk-size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Each machine's root disk, in Kubernetes quantity form. At least the image's own size. ⚠ Immutable.",
+                  "jsonPointer": "/properties/osDiskSize",
+                  "immutable": true,
+                  "default": "20Gi",
+                  "example": "20Gi"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--size",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Every machine's size, from the platform's sizing catalogue: s1.small is 1 vCPU and 4 GiB, and each rung doubles both. A change reaches running machines as the upgrade policy says.",
+                  "jsonPointer": "/properties/size",
+                  "choices": [
+                    "s1.large",
+                    "s1.medium",
+                    "s1.small",
+                    "s1.xlarge"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "s1.small"
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subnet of that network the interface takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the machine never starts.",
+                  "jsonPointer": "/properties/network/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": ""
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--user-data",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A vault handle — path#field, optionally @version — whose value is the cloud-init user data: the #cloud-config with your users, SSH keys and packages. Resolved when the machine is rendered and written into a Secret the machine mounts; the value never enters this body. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other path is refused. Empty means no cloud-init at all.",
+                  "jsonPointer": "/properties/cloudInit/userData",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--virtual-network",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.",
+                  "jsonPointer": "/properties/network/virtualNetwork",
+                  "immutable": true,
+                  "default": ""
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "vmss"
+        },
         "virtual-machines": {
           "name": "virtual-machines",
           "resourceType": "CyberCloud.Compute/virtualMachines",
@@ -4955,6 +5520,716 @@
             }
           },
           "alias": "vm"
+        }
+      }
+    },
+    "containerinstance": {
+      "name": "containerinstance",
+      "summary": "Commands for the CyberCloud.ContainerInstance provider.",
+      "commands": {
+        "container-groups": {
+          "name": "container-groups",
+          "resourceType": "CyberCloud.ContainerInstance/containerGroups",
+          "title": "Container group",
+          "plural": "Container groups",
+          "summary": "One or more containers run together as a pod in your resource group: public or private images, a CPU and memory budget they share, environment from vault handles, ports on a subnet and an optional public address, with logs and restart as actions.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Container group.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerInstance/containerGroups/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster the group runs in.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--command",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The main container's command, replacing its image's entrypoint — for example [\"sh\", \"-c\", \"echo hello; sleep 3600\"]. Empty runs the image as built.",
+                  "jsonPointer": "/properties/command",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "sh",
+                    "-c",
+                    "echo hello; sleep 3600"
+                  ]
+                },
+                {
+                  "name": "--containers",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The containers, each name=image — for example web=nginx:1.27 or app=myregistry.example/team/app:2.1. One to ten; names are lower-case DNS labels and unique in the group. The first is the main container: the command and the ports are its.",
+                  "jsonPointer": "/properties/containers",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "web=nginx:1.27",
+                    "log=busybox:1.37"
+                  ]
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The CPU the whole group may use, as a Kubernetes quantity — 500m is half a core. Reserved against your vCPU quota and enforced on the pod as one limit its containers share.",
+                  "jsonPointer": "/properties/cpu",
+                  "default": "500m",
+                  "example": "1"
+                },
+                {
+                  "name": "--environment",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Environment variables every container sees, each NAME=value. ⚠ The value is stored in this body in plaintext — anything secret goes in secureEnvironment.",
+                  "jsonPointer": "/properties/environment",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "LOG_LEVEL=info"
+                  ]
+                },
+                {
+                  "name": "--ip-address",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv4 address the group answers on, inside the subnet's range, or empty for one the fabric picks. ⚠ Only with a subnet.",
+                  "jsonPointer": "/properties/network/ipAddress",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": ""
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the group is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The memory the whole group may use, as a Kubernetes quantity. Reserved against your memory quota and enforced on the pod as one limit.",
+                  "jsonPointer": "/properties/memory",
+                  "default": "256Mi",
+                  "example": "1Gi"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--password",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A vault handle — path#field, optionally @version — whose value is the password or token. For a CyberCloud.ContainerRegistry that is its own credential: tenants/<tenantId>/CyberCloud.ContainerRegistry/registries/<registryId>#adminPassword. ⚠ Under your own tenant's prefix, or refused.",
+                  "jsonPointer": "/properties/registry/password",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The ports the main container listens on, each a number with an optional /TCP, /UDP or /SCTP — for example 80 or 53/UDP. Reached at the group's address on its subnet, and at its public address when it has one.",
+                  "jsonPointer": "/properties/ports",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "80",
+                    "53/UDP"
+                  ]
+                },
+                {
+                  "name": "--public-ip-address",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A CyberCloud.Network/publicIpAddresses resource in this resource group, by name, translated one-to-one onto the group's address — every port the group listens on is reachable at it. Empty for none. ⚠ Only with a subnet.",
+                  "jsonPointer": "/properties/network/publicIpAddress",
+                  "immutable": true,
+                  "default": ""
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--restart-policy",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Always restarts a container whenever it exits; OnFailure only when it exits non-zero; Never lets the group run once — a batch job — and the group stays Succeeded with its logs readable.",
+                  "jsonPointer": "/properties/restartPolicy",
+                  "choices": [
+                    "Always",
+                    "OnFailure",
+                    "Never"
+                  ],
+                  "default": "Always"
+                },
+                {
+                  "name": "--secure-environment",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Environment variables whose values are vault handles, each NAME=path#field, optionally @version. Resolved when the group is rendered into a Secret the containers read; the values never enter this body. ⚠ Every path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other is refused.",
+                  "jsonPointer": "/properties/secureEnvironment",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "DB_PASSWORD=tenants/00000000-0000-0000-0000-000000000000/db#password"
+                  ]
+                },
+                {
+                  "name": "--server",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The registry's host, with a port when it is not 443 — for example registry.example.com. ⚠ The kubelet resolves it from the node, not from inside the cluster.",
+                  "jsonPointer": "/properties/registry/server",
+                  "default": ""
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subnet of that network the group takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the group never starts.",
+                  "jsonPointer": "/properties/network/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": ""
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--username",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The user the registry knows — admin for a CyberCloud.ContainerRegistry, as its listCredentials answers.",
+                  "jsonPointer": "/properties/registry/username",
+                  "default": ""
+                },
+                {
+                  "name": "--virtual-network",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.",
+                  "jsonPointer": "/properties/network/virtualNetwork",
+                  "immutable": true,
+                  "default": ""
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Container group. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerInstance/containerGroups/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Container groups in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerInstance/containerGroups",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "logs": {
+              "name": "logs",
+              "summary": "logs a Container group.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerInstance/containerGroups/{resourceName}/logs",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--container",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The container whose output to read, by the name the containers property gives it. Empty means the first container.",
+                  "jsonPointer": "/container"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tail-lines",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many lines from the end. At most 5000; 100 when not given.",
+                  "jsonPointer": "/tailLines"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "logs",
+              "permission": "read"
+            },
+            "restart": {
+              "name": "restart",
+              "summary": "restart a Container group.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerInstance/containerGroups/{resourceName}/restart",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ],
+              "action": "restart",
+              "permission": "write",
+              "rawBody": true
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Container group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerInstance/containerGroups/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                }
+              ]
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Container group. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.ContainerInstance/containerGroups/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster the group runs in.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--command",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The main container's command, replacing its image's entrypoint — for example [\"sh\", \"-c\", \"echo hello; sleep 3600\"]. Empty runs the image as built.",
+                  "jsonPointer": "/properties/command",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "sh",
+                    "-c",
+                    "echo hello; sleep 3600"
+                  ]
+                },
+                {
+                  "name": "--containers",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The containers, each name=image — for example web=nginx:1.27 or app=myregistry.example/team/app:2.1. One to ten; names are lower-case DNS labels and unique in the group. The first is the main container: the command and the ports are its.",
+                  "jsonPointer": "/properties/containers",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "web=nginx:1.27",
+                    "log=busybox:1.37"
+                  ]
+                },
+                {
+                  "name": "--cpu",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The CPU the whole group may use, as a Kubernetes quantity — 500m is half a core. Reserved against your vCPU quota and enforced on the pod as one limit its containers share.",
+                  "jsonPointer": "/properties/cpu",
+                  "default": "500m",
+                  "example": "1"
+                },
+                {
+                  "name": "--environment",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Environment variables every container sees, each NAME=value. ⚠ The value is stored in this body in plaintext — anything secret goes in secureEnvironment.",
+                  "jsonPointer": "/properties/environment",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "LOG_LEVEL=info"
+                  ]
+                },
+                {
+                  "name": "--ip-address",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv4 address the group answers on, inside the subnet's range, or empty for one the fabric picks. ⚠ Only with a subnet.",
+                  "jsonPointer": "/properties/network/ipAddress",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": ""
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the group is billed in.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--memory",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The memory the whole group may use, as a Kubernetes quantity. Reserved against your memory quota and enforced on the pod as one limit.",
+                  "jsonPointer": "/properties/memory",
+                  "default": "256Mi",
+                  "example": "1Gi"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--password",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A vault handle — path#field, optionally @version — whose value is the password or token. For a CyberCloud.ContainerRegistry that is its own credential: tenants/<tenantId>/CyberCloud.ContainerRegistry/registries/<registryId>#adminPassword. ⚠ Under your own tenant's prefix, or refused.",
+                  "jsonPointer": "/properties/registry/password",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--ports",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The ports the main container listens on, each a number with an optional /TCP, /UDP or /SCTP — for example 80 or 53/UDP. Reached at the group's address on its subnet, and at its public address when it has one.",
+                  "jsonPointer": "/properties/ports",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "80",
+                    "53/UDP"
+                  ]
+                },
+                {
+                  "name": "--public-ip-address",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A CyberCloud.Network/publicIpAddresses resource in this resource group, by name, translated one-to-one onto the group's address — every port the group listens on is reachable at it. Empty for none. ⚠ Only with a subnet.",
+                  "jsonPointer": "/properties/network/publicIpAddress",
+                  "immutable": true,
+                  "default": ""
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--restart-policy",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Always restarts a container whenever it exits; OnFailure only when it exits non-zero; Never lets the group run once — a batch job — and the group stays Succeeded with its logs readable.",
+                  "jsonPointer": "/properties/restartPolicy",
+                  "choices": [
+                    "Always",
+                    "OnFailure",
+                    "Never"
+                  ],
+                  "default": "Always"
+                },
+                {
+                  "name": "--secure-environment",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Environment variables whose values are vault handles, each NAME=path#field, optionally @version. Resolved when the group is rendered into a Secret the containers read; the values never enter this body. ⚠ Every path must be under your own tenant's vault prefix, tenants/<tenantId>/; any other is refused.",
+                  "jsonPointer": "/properties/secureEnvironment",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "DB_PASSWORD=tenants/00000000-0000-0000-0000-000000000000/db#password"
+                  ]
+                },
+                {
+                  "name": "--server",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The registry's host, with a port when it is not 443 — for example registry.example.com. ⚠ The kubelet resolves it from the node, not from inside the cluster.",
+                  "jsonPointer": "/properties/registry/server",
+                  "default": ""
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subnet of that network the group takes its address from, by name, or empty. ⚠ A name that is not a subnet of the network is refused by the fabric rather than by this API, and the group never starts.",
+                  "jsonPointer": "/properties/network/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": ""
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--username",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The user the registry knows — admin for a CyberCloud.ContainerRegistry, as its listCredentials answers.",
+                  "jsonPointer": "/properties/registry/username",
+                  "default": ""
+                },
+                {
+                  "name": "--virtual-network",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The CyberCloud.Network/virtualNetworks resource in this resource group, by name, or empty.",
+                  "jsonPointer": "/properties/network/virtualNetwork",
+                  "immutable": true,
+                  "default": ""
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "cg"
         }
       }
     },
@@ -18074,6 +19349,776 @@
             }
           },
           "alias": "vnet"
+        },
+        "virtual-networks-application-gateways": {
+          "name": "virtual-networks-application-gateways",
+          "resourceType": "CyberCloud.Network/virtualNetworks/applicationGateways",
+          "title": "Application gateway",
+          "plural": "Application gateways",
+          "summary": "An HTTP and HTTPS gateway on an address inside a virtual network, routing by host and path to pools of workload addresses or virtual machines, behind the OWASP Core Rule Set in detection or prevention mode.",
+          "verbs": {
+            "create": {
+              "name": "create",
+              "summary": "Create or replace a Application gateway.",
+              "method": "PUT",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--backend-pools",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. An address is written in its usual form (10.0.0.1, not 10.1) and may not be loopback, link-local, multicast or the gateway's own. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.",
+                  "jsonPointer": "/properties/backendPools",
+                  "repeated": true,
+                  "default": [
+                    "web=10.20.1.11:8080"
+                  ],
+                  "example": [
+                    "web=10.20.1.11:8080",
+                    "web=10.20.1.12:8080"
+                  ]
+                },
+                {
+                  "name": "--certificate",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.",
+                  "jsonPointer": "/properties/listeners/certificate",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": true,
+                  "alias": "--cluster",
+                  "summary": "The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--crs-version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.",
+                  "jsonPointer": "/properties/waf/crsVersion",
+                  "choices": [
+                    "4.25"
+                  ],
+                  "default": "4.25"
+                },
+                {
+                  "name": "--custom-rules",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. A host is matched in any case and with any port; a path after percent-decoding and resolving //, . and .. segments. ⚠ allow skips the rule set for that request entirely.",
+                  "jsonPointer": "/properties/waf/customRules",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "deny ip 203.0.113.0/24"
+                  ]
+                },
+                {
+                  "name": "--exclusions",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).",
+                  "jsonPointer": "/properties/waf/exclusions",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "942100:ARGS:password"
+                  ]
+                },
+                {
+                  "name": "--healthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many successful probes put a member back.",
+                  "jsonPointer": "/properties/health/healthyAfter",
+                  "default": 2
+                },
+                {
+                  "name": "--http-port",
+                  "type": "integer",
+                  "required": true,
+                  "summary": "The port plain HTTP is served on.",
+                  "jsonPointer": "/properties/listeners/httpPort",
+                  "default": 80
+                },
+                {
+                  "name": "--https-port",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The port HTTPS is served on. Used only when a certificate is given.",
+                  "jsonPointer": "/properties/listeners/httpsPort",
+                  "default": 443
+                },
+                {
+                  "name": "--interval-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How often each member is probed.",
+                  "jsonPointer": "/properties/health/intervalSeconds",
+                  "default": 5
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The region the gateway is billed in. ⚠ It must be its virtual network's region.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-connections",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many client connections the gateway accepts at once.",
+                  "jsonPointer": "/properties/limits/maxConnections",
+                  "default": 2000
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.",
+                  "jsonPointer": "/properties/waf/mode",
+                  "choices": [
+                    "detection",
+                    "off",
+                    "prevention"
+                  ],
+                  "default": "prevention"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--paranoia-level",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.",
+                  "jsonPointer": "/properties/waf/paranoiaLevel",
+                  "default": 1
+                },
+                {
+                  "name": "--path",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The path every member is probed on.",
+                  "jsonPointer": "/properties/health/path",
+                  "default": "/"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--routing-rules",
+                  "type": "string",
+                  "required": true,
+                  "summary": "Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.",
+                  "jsonPointer": "/properties/routingRules",
+                  "repeated": true,
+                  "default": [
+                    "*/=web"
+                  ],
+                  "example": [
+                    "shop.example.com/api=api",
+                    "*/=web"
+                  ]
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.",
+                  "jsonPointer": "/properties/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": "web",
+                  "example": "web"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--unhealthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many failed probes take a member out of its pool.",
+                  "jsonPointer": "/properties/health/unhealthyAfter",
+                  "default": 3
+                },
+                {
+                  "name": "--v4",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.",
+                  "jsonPointer": "/properties/frontend/v4",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "10.20.1.20",
+                  "example": "10.20.1.20"
+                },
+                {
+                  "name": "--v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 address the gateway also answers on, or empty. Lower case only.",
+                  "jsonPointer": "/properties/frontend/v6",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "fd00:20:1::20"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "delete": {
+              "name": "delete",
+              "summary": "Delete a Application gateway. Permanent.",
+              "method": "DELETE",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            },
+            "list": {
+              "name": "list",
+              "summary": "List the Application gateways in a resource group.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--skip-token",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+                  "queryParameter": "$skipToken"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--top",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+                  "queryParameter": "$top"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "paged": true,
+              "pageFlags": [
+                "--all"
+              ]
+            },
+            "show": {
+              "name": "show",
+              "summary": "Read a Application gateway.",
+              "method": "GET",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ]
+            },
+            "show-routing": {
+              "name": "show-routing",
+              "summary": "showRouting a Application gateway.",
+              "method": "POST",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}/showRouting",
+              "apiVersion": "2026-08-01",
+              "longRunning": false,
+              "flags": [
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "action": "showRouting",
+              "permission": "read",
+              "rawBody": true
+            },
+            "update": {
+              "name": "update",
+              "summary": "Amend a Application gateway. Only the flags given are changed.",
+              "method": "PATCH",
+              "path": "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Network/virtualNetworks/{virtualNetworksName}/applicationGateways/{resourceName}",
+              "apiVersion": "2026-08-01",
+              "longRunning": true,
+              "flags": [
+                {
+                  "name": "--backend-pools",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The pool members, one per entry, as pool=target:port. The target is an IPv4 address, an IPv6 address in brackets, or the resource id of a virtual machine in this network — for example web=10.20.1.11:8080 or api=/tenants/…/providers/CyberCloud.Compute/virtualMachines/api-1:8080. An address is written in its usual form (10.0.0.1, not 10.1) and may not be loopback, link-local, multicast or the gateway's own. ⚠ A machine is resolved to its address only once this gateway has been granted read on it.",
+                  "jsonPointer": "/properties/backendPools",
+                  "repeated": true,
+                  "default": [
+                    "web=10.20.1.11:8080"
+                  ],
+                  "example": [
+                    "web=10.20.1.11:8080",
+                    "web=10.20.1.12:8080"
+                  ]
+                },
+                {
+                  "name": "--certificate",
+                  "type": "string",
+                  "required": false,
+                  "summary": "A vault handle — path#field, optionally @version — whose value is a PEM bundle: the certificate chain followed by its private key. Empty means no HTTPS listener. ⚠ The path must be under your own tenant's vault prefix, tenants/<tenantId>/. The value is written into a Secret the proxy mounts and never into this body.",
+                  "jsonPointer": "/properties/listeners/certificate",
+                  "widget": "secret-ref",
+                  "default": ""
+                },
+                {
+                  "name": "--cluster-id",
+                  "type": "string",
+                  "required": false,
+                  "alias": "--cluster",
+                  "summary": "The cluster the gateway runs in. ⚠ It must be the cluster the virtual network was created in.",
+                  "jsonPointer": "/properties/clusterId",
+                  "immutable": true,
+                  "widget": "cluster"
+                },
+                {
+                  "name": "--crs-version",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The OWASP Core Rule Set version. ⚠ One is offered: the rule set is compiled into the firewall image, so a second version is a second image.",
+                  "jsonPointer": "/properties/waf/crsVersion",
+                  "choices": [
+                    "4.25"
+                  ],
+                  "default": "4.25"
+                },
+                {
+                  "name": "--custom-rules",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Rules evaluated before the rule set, in order: deny or allow, then ip <address or range>, path <prefix>, host <name>, useragent <text> or method <METHOD> — for example deny ip 203.0.113.0/24 or allow path /healthz. A host is matched in any case and with any port; a path after percent-decoding and resolving //, . and .. segments. ⚠ allow skips the rule set for that request entirely.",
+                  "jsonPointer": "/properties/waf/customRules",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "deny ip 203.0.113.0/24"
+                  ]
+                },
+                {
+                  "name": "--exclusions",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Rules to turn off, as a rule id (942100), a range (942100-942199), or a rule id and one request field it stops inspecting (942100:ARGS:password).",
+                  "jsonPointer": "/properties/waf/exclusions",
+                  "repeated": true,
+                  "default": [],
+                  "example": [
+                    "942100:ARGS:password"
+                  ]
+                },
+                {
+                  "name": "--healthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many successful probes put a member back.",
+                  "jsonPointer": "/properties/health/healthyAfter",
+                  "default": 2
+                },
+                {
+                  "name": "--http-port",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The port plain HTTP is served on.",
+                  "jsonPointer": "/properties/listeners/httpPort",
+                  "default": 80
+                },
+                {
+                  "name": "--https-port",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The port HTTPS is served on. Used only when a certificate is given.",
+                  "jsonPointer": "/properties/listeners/httpsPort",
+                  "default": 443
+                },
+                {
+                  "name": "--interval-seconds",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How often each member is probed.",
+                  "jsonPointer": "/properties/health/intervalSeconds",
+                  "default": 5
+                },
+                {
+                  "name": "--location",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The region the gateway is billed in. ⚠ It must be its virtual network's region.",
+                  "jsonPointer": "/location",
+                  "immutable": true,
+                  "widget": "region",
+                  "example": "eu-central"
+                },
+                {
+                  "name": "--max-connections",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many client connections the gateway accepts at once.",
+                  "jsonPointer": "/properties/limits/maxConnections",
+                  "default": 2000
+                },
+                {
+                  "name": "--mode",
+                  "type": "string",
+                  "required": false,
+                  "summary": "prevention answers 403 to a request the rule set scores as an attack; detection evaluates and logs every rule and blocks nothing; off runs no firewall at all. ⚠ In prevention mode a firewall that does not answer in time is a 503, never a pass.",
+                  "jsonPointer": "/properties/waf/mode",
+                  "choices": [
+                    "detection",
+                    "off",
+                    "prevention"
+                  ],
+                  "default": "prevention"
+                },
+                {
+                  "name": "--name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource's name within its group.",
+                  "pathPlaceholder": "resourceName"
+                },
+                {
+                  "name": "--paranoia-level",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "The CRS paranoia level. 1 is the default and blocks little that is legitimate; each level above adds rules and false positives.",
+                  "jsonPointer": "/properties/waf/paranoiaLevel",
+                  "default": 1
+                },
+                {
+                  "name": "--path",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The path every member is probed on.",
+                  "jsonPointer": "/properties/health/path",
+                  "default": "/"
+                },
+                {
+                  "name": "--preset",
+                  "type": "string",
+                  "required": false,
+                  "summary": "How much the proxy and the firewall each get. With the firewall on, the firewall is where the CPU goes.",
+                  "jsonPointer": "/properties/sizing/preset",
+                  "choices": [
+                    "c1.large",
+                    "c1.medium",
+                    "c1.small"
+                  ],
+                  "widget": "cozy-preset",
+                  "default": "c1.small"
+                },
+                {
+                  "name": "--resource-group",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The resource group. docs/plan/06 § The hierarchy.",
+                  "pathPlaceholder": "resourceGroupName"
+                },
+                {
+                  "name": "--routing-rules",
+                  "type": "string",
+                  "required": false,
+                  "summary": "Where each request goes, as host/path=pool — for example shop.example.com/api=api, *.example.com/=web or */=web. The host is *, a name, or *. and a suffix; the path is a prefix, matched on whole segments. ⚠ The first rule that matches wins, in the order written. A request no rule matches gets 404.",
+                  "jsonPointer": "/properties/routingRules",
+                  "repeated": true,
+                  "default": [
+                    "*/=web"
+                  ],
+                  "example": [
+                    "shop.example.com/api=api",
+                    "*/=web"
+                  ]
+                },
+                {
+                  "name": "--subnet",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subnet of this virtual network the gateway sits on. The frontend address below must be inside its range.",
+                  "jsonPointer": "/properties/subnet",
+                  "immutable": true,
+                  "widget": "subnet",
+                  "default": "web",
+                  "example": "web"
+                },
+                {
+                  "name": "--subscription",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The subscription. Defaults to the current profile.",
+                  "pathPlaceholder": "subscriptionId",
+                  "env": "CYC_SUBSCRIPTION"
+                },
+                {
+                  "name": "--tags",
+                  "type": "keyValue",
+                  "required": false,
+                  "summary": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+                  "jsonPointer": "/tags",
+                  "widget": "tag-input"
+                },
+                {
+                  "name": "--tenant",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The tenant. Defaults to the current profile.",
+                  "pathPlaceholder": "tenantId",
+                  "env": "CYC_TENANT"
+                },
+                {
+                  "name": "--unhealthy-after",
+                  "type": "integer",
+                  "required": false,
+                  "summary": "How many failed probes take a member out of its pool.",
+                  "jsonPointer": "/properties/health/unhealthyAfter",
+                  "default": 3
+                },
+                {
+                  "name": "--v4",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv4 address the gateway answers on, inside the subnet's range. ⚠ Required: there is no DNS inside a virtual network, so an address nobody picked is an address nothing can be pointed at.",
+                  "jsonPointer": "/properties/frontend/v4",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "10.20.1.20",
+                  "example": "10.20.1.20"
+                },
+                {
+                  "name": "--v6",
+                  "type": "string",
+                  "required": false,
+                  "summary": "The IPv6 address the gateway also answers on, or empty. Lower case only.",
+                  "jsonPointer": "/properties/frontend/v6",
+                  "immutable": true,
+                  "widget": "cidr",
+                  "default": "",
+                  "example": "fd00:20:1::20"
+                },
+                {
+                  "name": "--virtual-networks-name",
+                  "type": "string",
+                  "required": true,
+                  "summary": "The name of the parent this Application gateway lives inside. docs/plan/12 § Child resources: a child is addressed '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is part of the address rather than part of the body.",
+                  "pathPlaceholder": "virtualNetworksName"
+                }
+              ],
+              "waitFlags": [
+                "--wait",
+                "--no-wait"
+              ]
+            }
+          },
+          "alias": "appgateway"
         },
         "virtual-networks-load-balancers": {
           "name": "virtual-networks-load-balancers",
