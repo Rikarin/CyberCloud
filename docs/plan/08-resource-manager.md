@@ -900,6 +900,25 @@ is torn down and its `PersistentVolumeClaim`s are what a restore restores from**
 delete during a window turns every restore in that group into a lie — and the tenant is *told* it came
 back, which § Deleting a parent resource that has children already names as worse than not restoring.
 
+**Decided (#96): the reclaim looks at the namespace and nothing else — a cluster-scoped object is not
+its business.** Kube-OVN's `Vpc`, `Subnet`, `SecurityGroup`, `OvnEip` and `OvnSnatRule` belong to
+resources in a group and are in no namespace, so the occupant listing never holds them, and the
+question was whether the reclaim should learn to see them by their ADR-013 labels. It should not,
+because seeing them protects nothing: a namespace delete removes namespaced objects only, and the
+garbage collector treats a namespaced owner on a cluster-scoped dependent as unresolvable and never
+collects it — the recursive delete the verdict authorizes cannot reach a `Vpc`. What protects a live
+resource of *any* scope is the member half of the evidence, which the seal refuses over; what removes
+a cluster-scoped object is its own resource's teardown; and one that outlives its resource is an orphan
+for the drift scan to find, which refusing the namespace would not remove — it would only keep an empty
+namespace for ever beside the leak. ⚠ **Nothing finds that orphan today.** The drift scan's diff exists,
+but the shipped `IClusterObjectInventory` refuses rather than reporting an empty cluster
+(`DriftScanner`'s remarks), so a cluster-scoped leak stays unseen until the informer-backed inventory of
+docs/plan/09 § Observing lands; `src/Providers/README.md` carries it as owed. `ClusterConformanceTests.ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt`
+asserts it per family from the scope of what the family renders: the namespaced objects are in the
+listing and refuse a reclaim on their own, the cluster-scoped ones are in the cluster and nowhere in
+the namespace, the live resource is a member either way, and after the teardown nothing of it is left
+on either side.
+
 ⚠ **The volume claims carried none of ADR-013's seven labels, and the half of that which is now closed
 does not move the design.** `KubeCommandBuilder` injected the labels into an object's own
 `metadata.labels` and did not descend into a `volumeClaimTemplate`, so the claims the StatefulSet
@@ -917,6 +936,10 @@ delete at all — it is to record the namespace as reclaimable and let an operat
 work**: it requires every occupant to be unmanaged, which was true only while the claims were
 unlabelled. **Making the purge remove the disks it kept is what would turn that back into a delete**,
 and it is the same owed item, reached from the other end.
+
+⚠ **The next paragraph and its list are spent** — `ResourceGroupReclaimer` is the caller, membership is
+recorded, and `INamespaceInventory` has a real implementation; `src/Providers/README.md` § Closed: a
+resource group's delete removes its namespaces carries what landed. They are kept for the reasoning.
 
 **What exists: the rule, the seam and the gate. What does not: a caller.** `NamespaceReclaim.Decide`
 weighs the group's members against a listing of everything in the namespace;

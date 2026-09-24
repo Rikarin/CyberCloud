@@ -4,6 +4,7 @@ using CyberCloud.ResourceManager.Drift;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ServiceDefaults.Storage;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -350,11 +351,13 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         }
 
         // ── The property the window is made of, observed rather than assumed ────────────────────
+        // ⚠ Contains, not equals. "claims" is a floor read while the controller was still working:
+        // ordinal 1's claim can appear between that read and the delete, and it's kept like the
+        // rest. What the window depends on is that nothing read before the delete is gone after it.
         var kept = await ClaimsOfResourceAsync(harness, accepted.Resource.Id, token);
 
-        kept.Keys.ShouldBe(
-            claims.Keys,
-            true,
+        claims.Keys.ShouldBeSubsetOf(
+            kept.Keys,
             "a soft delete removed a claim on a real API server. Deleting a StatefulSet is not "
             + "supposed to delete the claims its volumeClaimTemplate made, and that behaviour is the "
             + "whole of what this type's recovery window hands back."
@@ -418,6 +421,19 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
     ///         <c>volumeClaimTemplate</c>. Before that this scoping could not have been written —
     ///         which is why the test was, correctly, namespace-wide when it was drafted.
     ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The poll waits for a floor, and the claims can still grow past it.
+    ///         </b> The floor is what the controller creates without waiting on a pod: ordinal 0's
+    ///         claims, one per <c>volumeClaimTemplate</c> of every set of this resource with a
+    ///         replica. Ordinal 1's claim waits for ordinal 0 to be ready, which depends on an image
+    ///         pull, so no count past the floor is one a read can wait for. Returning on the first
+    ///         claim instead let <c>CyberCloud.ContainerRegistry/registries</c>, which renders three
+    ///         sets, read one claim before the delete and three after it. So a caller comparing two
+    ///         reads compares by containment, and a floor the controller never reaches fails here
+    ///         rather than coming back as a partial set.
+    ///     </para>
     /// </remarks>
     static async Task<Dictionary<string, IDictionary<string, string>?>> ClaimsOfResourceAsync(
         ClusterConformanceHarness<TSource> harness,
@@ -426,11 +442,23 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         bool expectSome = true
     ) {
         Dictionary<string, IDictionary<string, string>?> found = [];
+        var selector = $"{KubeLabels.ResourceId}={KubeLabels.GuidValue(resourceId)}";
+
+        using var sets = await harness.Raw.AppsV1.ListNamespacedStatefulSetWithHttpMessagesAsync(
+            ClusterConformanceHarness<TSource>.Namespace,
+            labelSelector: selector,
+            cancellationToken: cancellationToken
+        );
+
+        var promised = sets.Body.Items.Where(static x => (x.Spec.Replicas ?? 1) > 0)
+            .Sum(static x => x.Spec.VolumeClaimTemplates?.Count ?? 0);
+
+        var floor = Math.Max(1, promised);
 
         for (var attempt = 0; attempt < 10; attempt++) {
             using var listed = await harness.Raw.CoreV1.ListNamespacedPersistentVolumeClaimWithHttpMessagesAsync(
                 ClusterConformanceHarness<TSource>.Namespace,
-                labelSelector: $"{KubeLabels.ResourceId}={KubeLabels.GuidValue(resourceId)}",
+                labelSelector: selector,
                 cancellationToken: cancellationToken
             );
 
@@ -440,11 +468,21 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
                 StringComparer.Ordinal
             );
 
-            if (expectSome ? found.Count > 0 : found.Count == 0) {
+            if (expectSome ? found.Count >= floor : found.Count == 0) {
                 return found;
             }
 
             await Task.Delay(BetweenDrives, cancellationToken);
+        }
+
+        if (expectSome && found.Count < promised) {
+            Assert.Fail(
+                $"the resource's StatefulSets declare {promised} volumeClaimTemplate(s) across the sets "
+                + $"with a replica, and after ten reads the API server holds {found.Count} claim(s) "
+                + $"carrying its resource-id ({string.Join(", ", found.Keys)}). Ordinal 0's claims "
+                + "don't wait on a pod, so the StatefulSet controller never made them, or they "
+                + "don't carry the label WithTemplateLabels puts in a template."
+            );
         }
 
         return found;
@@ -770,6 +808,66 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
 
     // ── 3b. What a real namespace actually holds ────────────────────────────────────────────────
 
+    /// <summary>
+    ///     What a resource-group reclaim sees of this family's resource on a real API server — while
+    ///     it's live, and after it's gone.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The listing has to succeed, or the cluster's age picks what's asserted.
+    ///         </b> An aggregated API that isn't answering yet makes discovery refuse the whole
+    ///         listing, and a test that accepted a refusal as an outcome asserts one thing on a young
+    ///         k3s and another on an old one — <c>CyberCloud.Network</c>'s suite went green or red on
+    ///         one tree that way. So the recipe installs no metrics-server
+    ///         (<see cref="Infrastructure.ClusterInfrastructure.DisableMetricsServer" />),
+    ///         <see cref="ListNamespaceAsync" /> waits for every <c>APIService</c> and fails on a
+    ///         refusal, and the refusal itself is asserted where it's provoked on purpose,
+    ///         <c>NamespaceDiscoveryRefusalTests</c>. ⚠ And a verdict is never checked against the
+    ///         listing it was computed from: <see cref="NamespaceReclaim.Decide" /> weighed against its
+    ///         own input can't fail, so each assertion below is about an object the test put there.
+    ///     </para>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             Decided: the reclaim looks at the namespace and nothing else, and a cluster-scoped
+    ///             object is not its business.
+    ///         </b> Teaching it to see the cluster-scoped objects the
+    ///         group's resources own would protect nothing. A namespace delete
+    ///         removes namespaced objects only, and the garbage collector can't reach a cluster-scoped
+    ///         object through a namespaced owner: Kubernetes treats that owner reference as
+    ///         unresolvable and never collects the dependent. So the recursive delete the verdict
+    ///         authorizes can't harm a <c>Vpc</c>. What protects a live resource of any scope is the
+    ///         other half of the evidence — the group's members, which
+    ///         <c>IResourceGroupGrain.BeginGroupDeleteAsync</c> refuses over — and what removes a
+    ///         cluster-scoped object is its own resource's teardown. One that outlives its resource is
+    ///         an orphan for the drift scan to find, and refusing a namespace over it would keep an
+    ///         empty namespace forever without removing the leak. ⚠ Nothing finds such an orphan
+    ///         today: the shipped cluster inventory refuses, so the scan can't run against a real
+    ///         cluster (<c>DriftScanner</c>'s remarks). docs/plan/08 § Reclaiming a resource group's
+    ///         namespace records the same decision and the same gap.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>So what's asserted follows from the scope of what the case renders.</b>
+    ///         <c>ObjectRef.IsClusterScoped</c> is the declaration — each object the case names carries
+    ///         its own, and the lifecycle test proves each against the REST path the API server
+    ///         actually serves. For every family, the live resource is a real member and the verdict
+    ///         refuses over it. For the namespaced objects, the listing holds each one and the
+    ///         namespace evidence refuses on its own, naming it. For the cluster-scoped ones, they're in
+    ///         the cluster and nowhere in the namespace — and a family with nothing namespaced leaves
+    ///         the namespace as deletable as it found it. After the teardown, nothing labelled as the
+    ///         resource is left in the namespace and nothing it rendered is left outside it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Scoped to this test's own resource, by <c>cybercloud.io/resource-id</c>.</b> Every
+    ///         class in a provider's assembly shares one namespace, and a harness leaves its ancestors,
+    ///         siblings and companions standing, so anything keyed on the whole namespace is an
+    ///         assertion about which of those a family happens to have. The limit is the test's and
+    ///         not the product's: an object a controller made from ours and didn't label is invisible
+    ///         to this filter and still counted by the real reclaim, which weighs every occupant.
+    ///     </para>
+    /// </remarks>
     [Fact]
     public async Task ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt() {
         // ⚠ THIS IS THE ONLY PLACE THE NAMESPACE INVENTORY MEETS A REAL API SERVER, AND IT IS WHERE
@@ -782,15 +880,17 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         // being true in every unit test. NamespaceReclaim.IsAmbient is the answer and this is the
         // measurement behind it.
         var harness = Fixture.Require(
-            "that a namespace listing is a real API discovery plus a list per served kind. A "
-            + "dictionary cannot fail discovery, cannot serve a CRD, and — most of all — does not "
-            + "put anything in a namespace on its own."
+            "that a namespace listing is a real API discovery plus a list per served kind, and that "
+            + "a reclaim weighing it refuses over this family's live resource and not over its "
+            + "remains. A dictionary cannot fail discovery, cannot serve a CRD, and — most of all — "
+            + "does not put anything in a namespace on its own."
         );
 
         var token = TestContext.Current.CancellationToken;
         var ns = ClusterConformanceHarness<TSource>.Namespace;
+        var clusterId = ClusterConformanceHarness<TSource>.ClusterId;
 
-        // ── The finding, read AROUND our own code ───────────────────────────────────────────────
+        // ── 1. What Kubernetes puts there, read AROUND our own code ─────────────────────────────
         //
         // ⚠ The raw client, deliberately. What is being measured is what KUBERNETES puts in a
         // namespace, and reading it through the seam under test would let a bug in the seam hide the
@@ -812,95 +912,349 @@ public abstract class ClusterConformanceTests<TSource>(ClusterConformanceFixture
         ambient[0].IsManaged.ShouldBeFalse();
         ambient[1].IsManaged.ShouldBeFalse();
 
-        NamespaceReclaim.Decide(ClusterConformanceHarness<TSource>.ClusterId, ns, [], ambient)
+        NamespaceReclaim.Decide(clusterId, ns, [], ambient)
             .Deletable
-                .ShouldBeTrue(
-                    "a namespace holding nothing but Kubernetes' own objects is the state a finished "
-                    + "resource group leaves behind, and under the original 'nothing at all' rule it was "
-                    + "never deletable — which no test could show while nothing could list."
-                );
+            .ShouldBeTrue(
+                "a namespace holding nothing but Kubernetes' own objects is the state a finished "
+                + "resource group leaves behind, and under the original 'nothing at all' rule it was "
+                + "never deletable — which no test could show while nothing could list."
+            );
 
-        // ── And the enumeration is complete or it refuses, never partial ────────────────────────
-        //
-        // ⚠ BOTH ARMS ARE ASSERTED, because the disjunction IS the contract. A namespace listing that
-        // came back short would not look wrong — it would look like an emptier namespace, and an
-        // empty namespace is the one answer that authorises a recursive delete.
-        //
-        // ⚠ THE REFUSING ARM IS THE ONE THIS HARNESS USUALLY TAKES, AND IT IS A REAL OPERATIONAL
-        // FINDING RATHER THAN A TEST ARTEFACT. k3s registers `metrics.k8s.io/v1beta1` as an
-        // aggregated APIService whose backend is not up in a short-lived container, so discovery of
-        // that group answers 503 and the whole enumeration refuses. Kubernetes' own namespace
-        // controller behaves the same way — an incomplete discovery leaves a namespace stuck in
-        // Terminating with NamespaceDeletionDiscoveryFailure — so refusing BEFORE issuing the delete
-        // is strictly better than issuing one that hangs. What the platform owes the operator is a
-        // message that names the group, and that is what is asserted.
-        var listed = await harness.Connection.ListNamespaceAsync(ns, token);
+        // ── 2. This family's resource, live ─────────────────────────────────────────────────────
+        const string name = "real-reclaim";
 
-        if (listed.TryGetError(out var refusal)) {
-            // A refusal that does not say which namespace could not be read, and which group would
-            // not answer, tells an operator a namespace could not be enumerated and nothing about
-            // what to fix. Both are asserted; the group is recognised by its `group/version` slash.
-            refusal.Message.ShouldContain(ns);
-            refusal.Message.ShouldContain("/");
+        harness.Registry.TryGetType(Case.Type, out var registration).ShouldBeTrue();
 
-            return;
-        }
+        var accepted = (await WriteAsync(harness, name)).GetValueOrThrow();
+        var status = await ConvergeAsync(harness, accepted.OperationId);
+        status.State.ShouldBe(OperationState.Succeeded, status.Error?.Message);
 
-        var occupants = listed.GetValueOrThrow();
+        var id = accepted.Resource.Id;
+        var rendered = ObjectsOf(id, name);
+        var inside = rendered.Where(static x => !x.IsClusterScoped).ToList();
+        var outside = rendered.Where(static x => x.IsClusterScoped).ToList();
 
-        // ⚠ NAMESPACE-WIDE ON PURPOSE, AND THE ASSERTIONS ARE WRITTEN FOR THAT. Every class in this
-        // suite shares one namespace, so anything keyed on a count or on "only these" would be an
-        // assertion about which siblings had run.
-        occupants.ShouldContain(x => x.Kind.Kind == "ServiceAccount" && x.Name == "default");
-        occupants.ShouldContain(x => x.Kind.Kind == "ConfigMap" && x.Name == "kube-root-ca.crt");
+        var scope = inside.Count == 0
+            ? "cluster-scoped"
+            : outside.Count == 0
+                ? "namespaced"
+                : "mixed";
 
-        var verdict = NamespaceReclaim.Decide(
-            ClusterConformanceHarness<TSource>.ClusterId,
-            ns,
-            [],
-            [.. occupants.Select(static x => Occupant(x))]
+        // ⚠ THE MEMBERS, FROM THE REAL GROUP GRAIN. This is the half of the evidence that protects a
+        // live resource of every scope — a cluster-scoped one has nothing else — and it is read, not
+        // supplied: a verdict weighed against a member list this test wrote would prove Decide and
+        // nothing about the write path that is supposed to record membership.
+        var members = await MembersAsync(harness);
+
+        members.ShouldContain(
+            x => x.ResourceId == id,
+            $"'{accepted.Resource.Path}' converged and its resource group does not list it, so a "
+            + "group delete would find no member to refuse over."
         );
 
-        // ⚠ THIS ARM WAS REACHED FOR THE FIRST TIME ON 2026-09-17, AND WHAT IT ASSERTED WAS FALSE FOR
-        // FOUR FAMILIES. It read `verdict.Deletable.ShouldBeFalse("the namespace this suite runs in
-        // holds its own resources")`, on the assumption that something of this suite is still in the
-        // namespace when this test runs. Two things make that untrue: every test above tears its
-        // resource down, and a family whose objects are CLUSTER-SCOPED — Kube-OVN's Vpc, Subnet,
-        // SecurityGroup, NAT rule — never puts anything in the namespace at all. Nobody had seen it
-        // because the refusing arm is the one a young k3s takes; in a full `./build.sh Test`, where
-        // the suite reaches this test four minutes into the cluster's life, `metrics.k8s.io` had come
-        // up, discovery succeeded, and CyberCloud.Network's four cluster-scoped classes failed on a
-        // namespace that held nothing but Kubernetes' own two objects — which IS deletable, and
-        // correctly so. So the verdict is asserted against what the raw listing actually holds, in
-        // both directions, rather than against a leftover the suite never promised to leave.
-        var significant = occupants.Where(static x => !NamespaceReclaim.IsAmbient(Occupant(x))).ToList();
+        var live = await ListNamespaceAsync(harness, token);
 
-        if (significant.Count > 0) {
-            verdict.Deletable.ShouldBeFalse(
-                $"the namespace holds {significant.Count} object(s) beyond Kubernetes' own — "
-                + string.Join(", ", significant.Select(static x => x.Kind.Kind + "/" + x.Name))
-                + " — so a reclaim must refuse, and it did not: "
-                + verdict.Explain()
+        var verdict = NamespaceReclaim.Decide(clusterId, ns, members, [.. live.Select(static x => Occupant(x))]);
+
+        verdict.Deletable.ShouldBeFalse(
+            $"a reclaim authorized a recursive delete of '{ns}' while '{accepted.Resource.Path}' is "
+            + "live in it: " + verdict.Explain()
+        );
+
+        verdict.Explain()
+            .ShouldContain(
+                $"still holds {members.Count} member(s)",
+                Shouldly.Case.Sensitive,
+                "the refusal must count the members it refused over, or an operator cannot tell the "
+                + "group's own resources from the namespace's other occupants."
+            );
+
+        var ours = OursIn(live, id);
+
+        if (inside.Count > 0) {
+            // ⚠ THE NAMESPACED HALF. Every namespaced object the case says it renders is in the
+            // listing — the listing is what the reclaim reads — and the namespace evidence refuses on
+            // its own. "On its own" is the point: membership is a bookkeeping write that can fail
+            // (docs/plan/06 § Two-phase create), and a resource whose member record went missing must
+            // still not have its objects deleted by a namespace delete.
+            foreach (var target in inside) {
+                live.ShouldContain(
+                    x => x.Kind.Kind == target.Kind.Kind && x.Name == target.Name,
+                    $"'{target}' is in the real cluster — the lifecycle test reads it back — and the "
+                    + $"listing of '{ns}' does not hold it, so a reclaim would delete it without "
+                    + "having seen it."
+                );
+            }
+
+            var alone = NamespaceReclaim.Decide(clusterId, ns, [], Evidence(live, id));
+
+            alone.Deletable.ShouldBeFalse(
+                $"'{accepted.Resource.Path}' is {scope} and its namespaced objects are in '{ns}', and "
+                + "with no member list a reclaim would delete them: " + alone.Explain()
             );
 
             // ⚠ The ordinal-first one, because the refusal samples its names sorted and takes five.
-            var named = significant.Select(static x => x.Kind.Kind + "/" + x.Name)
-                .Order(StringComparer.Ordinal)
-                .First();
+            var named = ours.Select(static x => x.Kind.Kind + "/" + x.Name).Order(StringComparer.Ordinal).First();
 
-            verdict.Explain()
+            alone.Explain()
                 .ShouldContain(
                     named,
                     Shouldly.Case.Sensitive,
                     "the refusal must name what it found, so an operator knows what would be deleted."
                 );
-        } else {
-            verdict.Deletable.ShouldBeTrue(
-                "the namespace holds nothing but Kubernetes' own ServiceAccount/default and "
-                + "ConfigMap/kube-root-ca.crt — every test above tore its resource down, or this "
-                + "family's objects are cluster-scoped — and a reclaim refused anyway: "
-                + verdict.Explain()
+        }
+
+        if (outside.Count > 0) {
+            // ⚠ THE CLUSTER-SCOPED HALF. In the cluster, at the path with no namespace segment, and
+            // attributed to this resource — so it exists, and it is not the namespace's.
+            foreach (var target in outside) {
+                var json = await ReadFromClusterAsync(harness, target, token);
+
+                json.ShouldNotBeNull($"'{target}' is not in the real cluster while its resource is live.");
+
+                var metadata = JsonNode.Parse(json)!["metadata"]!;
+
+                (metadata["namespace"]?.GetValue<string>()).ShouldBeNullOrEmpty(
+                    $"'{target}' is declared cluster-scoped and the API server stored it in a namespace."
+                );
+
+                (metadata["labels"]?[KubeLabels.ResourceId]?.GetValue<string>()).ShouldBe(
+                    KubeLabels.GuidValue(id),
+                    $"'{target}' does not carry this resource's id, so nothing attributes it to the "
+                    + "resource whose teardown has to remove it."
+                );
+            }
+        }
+
+        if (inside.Count == 0) {
+            // ⚠ A FAMILY WITH NOTHING NAMESPACED PUTS NOTHING OF THIS RESOURCE IN THE NAMESPACE, and
+            // the namespace evidence alone therefore says "deletable" — which is correct, because the
+            // delete it authorizes cannot reach a cluster-scoped object. This is the arm the old
+            // assertion had no way to state.
+            ours.ShouldBeEmpty(
+                $"'{Case.Type}' renders only cluster-scoped objects, and '{ns}' holds something "
+                + "labelled as this resource: "
+                + string.Join(", ", ours.Select(static x => x.Kind.Kind + "/" + x.Name))
+                + ". Either the case's Objects omits a namespaced object it renders — which would make "
+                + "the family mixed — or a controller made it."
             );
+
+            var alone = NamespaceReclaim.Decide(clusterId, ns, [], Evidence(live, id));
+
+            alone.Deletable.ShouldBeTrue(
+                "the namespace holds nothing of this cluster-scoped resource, and the namespace "
+                + "evidence refused anyway: " + alone.Explain()
+            );
+        }
+
+        // ── 3. Gone ─────────────────────────────────────────────────────────────────────────────
+        await TearDownAsync(harness, name);
+
+        // ⚠ A type with a recovery window keeps its claims on a delete — on purpose, and a namespace
+        // holding them must not be reclaimed (docs/plan/08 § Soft delete). The purge is what ends
+        // that, so the purge is what "gone" is measured after.
+        if (registration.SoftDeleteDays > 0) {
+            var purged = await harness.Manager.PurgeAsync(
+                new() {
+                    Path = ClusterConformanceHarness<TSource>.Address(name).Path,
+                    ApiVersion = Case.ApiVersion,
+                    Caller = ClusterConformanceHarness<TSource>.Caller()
+                },
+                token
+            );
+
+            purged.IsSuccess.ShouldBeTrue(purged.Error?.Message);
+
+            var ended = await ConvergeAsync(harness, purged.GetValueOrThrow().OperationId);
+            ended.State.ShouldBe(OperationState.Succeeded, $"the purge ended {ended.State}: {ended.Error?.Message}");
+        }
+
+        (await MembersAsync(harness)).ShouldNotContain(
+            x => x.ResourceId == id,
+            $"'{accepted.Resource.Path}' was torn down and its group still lists it, so a group delete "
+            + "would refuse over a resource that no longer exists."
+        );
+
+        // ⚠ Outside the namespace, the teardown is the only thing that removes it: the reclaim never
+        // looks there, by the decision in the remarks.
+        foreach (var target in outside) {
+            (await ReadFromClusterAsync(harness, target, token)).ShouldBeNull(
+                $"'{target}' outlived its resource. A namespace reclaim will never see a cluster-scoped "
+                + "object, so nothing but the teardown was ever going to remove it."
+            );
+        }
+
+        // ⚠ AND INSIDE IT, NOTHING OF THIS RESOURCE — WAITED FOR, BECAUSE A TEARDOWN THAT CONVERGED
+        // CAN STILL HAVE A CONTROLLER'S WORK IN FLIGHT. A background cascade removes a set's pods after
+        // the set, and pvc-protection holds a claim until they are gone; the reclaim refuses over both
+        // until then, which is right. What never clears is an object the family forgot, and that
+        // fails here with the reclaim's own words naming it.
+        var remains = await RemainsAsync(harness, id, token);
+
+        remains.Deletable.ShouldBeTrue(
+            $"'{accepted.Resource.Path}' ({scope}) was torn down and left something in '{ns}' that a "
+            + "group reclaim refuses over: " + remains.Explain()
+        );
+    }
+
+    /// <summary>Every member the real resource-group grain lists for the harness's group.</summary>
+    /// <param name="harness">The harness.</param>
+    static async Task<IReadOnlyList<ResourceGroupMember>> MembersAsync(ClusterConformanceHarness<TSource> harness) {
+        var group = harness.For(ConformanceIds.Tenant)
+            .GetGrain<IResourceGroupGrain>(GrainKeys.ResourceGroup(ConformanceIds.Subscription, ConformanceIds.ResourceGroup));
+
+        return (await group.ListAsync()).GetValueOrThrow();
+    }
+
+    /// <summary>
+    ///     The harness namespace's whole contents through the shipped listing, once every aggregated
+    ///     API the cluster registers is answering.
+    /// </summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <remarks>
+    ///     ⚠ <b>A refusal here fails the test.</b> A
+    ///     discovery refusal on this harness means an <c>APIService</c> wasn't answering yet — the
+    ///     fixture not waiting, not the platform misbehaving — so the wait comes first, and whatever
+    ///     is still unavailable after it is named in the failure. The refusal itself is asserted
+    ///     where it can be provoked on purpose, <c>NamespaceDiscoveryRefusalTests</c>.
+    /// </remarks>
+    static async Task<IReadOnlyList<KubeObjectSummary>> ListNamespaceAsync(
+        ClusterConformanceHarness<TSource> harness,
+        CancellationToken cancellationToken
+    ) {
+        await WaitForEveryApiServiceAsync(harness, cancellationToken);
+
+        var listed = await harness.Connection.ListNamespaceAsync(
+            ClusterConformanceHarness<TSource>.Namespace,
+            cancellationToken
+        );
+
+        listed.IsSuccess.ShouldBeTrue(
+            "every APIService reports Available and the namespace listing still refused, so the "
+            + $"enumeration failed for a reason of its own: {listed.Error?.Message}"
+        );
+
+        return listed.GetValueOrThrow();
+    }
+
+    /// <summary>Waits until every <c>APIService</c> reports <c>Available=True</c>.</summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <remarks>
+    ///     ⚠ With metrics-server off this returns on its first read — every <c>APIService</c> k3s
+    ///     registers is served in-process. It's here for the next aggregated API, so that a
+    ///     component with a pod behind its discovery makes this test wait rather than race.
+    /// </remarks>
+    static async Task WaitForEveryApiServiceAsync(
+        ClusterConformanceHarness<TSource> harness,
+        CancellationToken cancellationToken
+    ) {
+        List<string> waiting = [];
+
+        for (var attempt = 0; attempt < 120; attempt++) {
+            using var services = await harness.Raw.ApiregistrationV1.ListAPIServiceWithHttpMessagesAsync(
+                cancellationToken: cancellationToken
+            );
+
+            waiting = [
+                .. services.Body.Items
+                    .Select(static x => (
+                        x.Metadata.Name,
+                        Available: x.Status?.Conditions?.FirstOrDefault(static c => c.Type == "Available")
+                    ))
+                    .Where(static x => x.Available?.Status != "True")
+                    .Select(static x => $"{x.Name} ({x.Available?.Reason}: {x.Available?.Message})")
+            ];
+
+            if (waiting.Count == 0) {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+        }
+
+        waiting.ShouldBeEmpty(
+            "these APIServices never became Available, and discovery of their groups answers 503 "
+            + "until they do — so a namespace listing would refuse over them: "
+            + string.Join(", ", waiting)
+        );
+    }
+
+    /// <summary>
+    ///     The occupants a reclaim would refuse over that carry <paramref name="resourceId" />'s
+    ///     <c>cybercloud.io/resource-id</c>.
+    /// </summary>
+    /// <param name="occupants">A namespace listing.</param>
+    /// <param name="resourceId">The resource under test.</param>
+    static List<KubeObjectSummary> OursIn(IReadOnlyList<KubeObjectSummary> occupants, Guid resourceId) {
+        var value = KubeLabels.GuidValue(resourceId);
+
+        return [
+            .. occupants.Where(x => x.Labels.TryGetValue(KubeLabels.ResourceId, out var label)
+                && string.Equals(label, value, StringComparison.Ordinal)
+                && !NamespaceReclaim.IsAmbient(Occupant(x))
+            )
+        ];
+    }
+
+    /// <summary>
+    ///     A listing cut down to what the namespace would hold if <paramref name="resourceId" /> were
+    ///     the group's only resource: Kubernetes' own objects and whatever carries its label.
+    /// </summary>
+    /// <param name="occupants">A namespace listing.</param>
+    /// <param name="resourceId">The resource under test.</param>
+    /// <remarks>
+    ///     ⚠ The shared namespace also holds the harness's ancestors, siblings and companions, and a
+    ///     verdict over all of them says which of those a family has — see the test's remarks.
+    /// </remarks>
+    static ImmutableArray<NamespaceOccupant> Evidence(IReadOnlyList<KubeObjectSummary> occupants, Guid resourceId) => [
+        .. occupants.Select(static x => Occupant(x)).Where(static x => NamespaceReclaim.IsAmbient(x)),
+        .. OursIn(occupants, resourceId).Select(static x => Occupant(x))
+    ];
+
+    /// <summary>
+    ///     Lists the namespace until nothing of <paramref name="resourceId" /> is left in it, or the
+    ///     budget runs out, and returns the reclaim's verdict over what was left.
+    /// </summary>
+    /// <param name="harness">The harness.</param>
+    /// <param name="resourceId">The resource that was torn down.</param>
+    /// <param name="cancellationToken">The test's token.</param>
+    /// <remarks>
+    ///     ⚠ <b>Ninety seconds, and it's paid only by a family that leaves something.</b> A pod's
+    ///     default grace period is thirty; a claim waits for its pod. One that clears returns on
+    ///     the first read that finds it gone.
+    ///     <para>
+    ///         ⚠ <b>A clock, not a count.</b> One pass is a discovery plus a list per served kind
+    ///         and then <see cref="BetweenDrives" />, which is two to three seconds on k3s, so ninety
+    ///         passes was four minutes. The sabotage run that proved this test fails a family
+    ///         leaving a <c>ConfigMap</c> behind is what measured it.
+    ///     </para>
+    /// </remarks>
+    static async Task<NamespaceReclaim> RemainsAsync(
+        ClusterConformanceHarness<TSource> harness,
+        Guid resourceId,
+        CancellationToken cancellationToken
+    ) {
+        var ns = ClusterConformanceHarness<TSource>.Namespace;
+        var budget = Stopwatch.StartNew();
+        NamespaceReclaim verdict;
+
+        while (true) {
+            var listed = await ListNamespaceAsync(harness, cancellationToken);
+
+            verdict = NamespaceReclaim.Decide(
+                ClusterConformanceHarness<TSource>.ClusterId,
+                ns,
+                [],
+                Evidence(listed, resourceId)
+            );
+
+            if (verdict.Deletable || budget.Elapsed > TimeSpan.FromSeconds(90)) {
+                return verdict;
+            }
+
+            await Task.Delay(BetweenDrives, cancellationToken);
         }
     }
 
