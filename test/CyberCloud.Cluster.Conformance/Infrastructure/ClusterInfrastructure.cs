@@ -383,12 +383,24 @@ public static class ClusterInfrastructure {
     ///         k3s pays nothing; a process that does not yet hold it waits here, which is the whole
     ///         point of the permit.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b><paramref name="customize" /> adds to the k3s container and replaces nothing.</b>
+    ///         The first caller to need it is <c>MailDeliveryOnK3sTests</c>, which publishes two
+    ///         NodePorts so an SMTP and an IMAP client outside the cluster can reach a pod inside it —
+    ///         the one thing a kubeconfig does not give a test. Everything <see cref="K3s" /> sets up
+    ///         stays, so a customised cluster is still one every other suite would recognise.
+    ///     </para>
     /// </remarks>
-    public static async Task<ClusterContainers> StartContainersAsync(CancellationToken cancellationToken) {
+    /// <param name="cancellationToken">The caller's token.</param>
+    /// <param name="customize">Additions to the k3s container's builder, or <see langword="null" />.</param>
+    public static async Task<ClusterContainers> StartContainersAsync(
+        CancellationToken cancellationToken,
+        Func<K3sBuilder, K3sBuilder>? customize = null
+    ) {
         // ⚠ Taken BEFORE the containers, and released only when the process exits. See the remarks.
         ClusterSlot.Acquire();
 
-        var k3s = K3s().Build();
+        var k3s = (customize is null ? K3s() : customize(K3s())).Build();
 
         var postgres = new PostgreSqlBuilder(PostgresImage)
             .WithDatabase("cybercloud")

@@ -133,7 +133,11 @@ from .models import (
     LoadBalancerResource,
     LoadBalancerShowBackendsResult,
     MailDomainData,
+    MailDomainDnsRecordsResult,
     MailDomainResource,
+    MailDomainVerifyResult,
+    MailboxData,
+    MailboxResource,
     ManagedDiskData,
     ManagedDiskResource,
     ManagedGrafanaData,
@@ -1507,12 +1511,62 @@ class MailDomainClient:
         """Lists the Mail domains in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
         return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains", top, MailDomainResource.from_wire)
 
+    def dns_records(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> MailDomainDnsRecordsResult:
+        """dnsRecords — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(resource_name)}/dnsRecords"))
+        raise_for_status(response)
+        return MailDomainDnsRecordsResult.from_wire(wire_of(response))
+
+    def verify(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> MailDomainVerifyResult:
+        """verify — permission 'write'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(resource_name)}/verify"))
+        raise_for_status(response)
+        return MailDomainVerifyResult.from_wire(wire_of(response))
+
+
+class MailboxClient:
+    """Mailboxes — CyberCloud.Mail/domains/mailboxes. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP."""
+
+    def __init__(self, transport: Transport) -> None:
+        self._transport = transport
+
+    def get(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, resource_name: str) -> MailboxResource:
+        """Reads one Mailbox."""
+        response = self._transport.send(Request("GET", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return MailboxResource.from_wire(wire_of(response))
+
+    def begin_create_or_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, resource_name: str, data: MailboxData) -> Operation[MailboxResource]:
+        """Creates or replaces one Mailbox. ⚠ Long-running: wait() on the result."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes/{_segment(resource_name)}"
+        response = self._transport.send(Request("PUT", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, MailboxResource.from_wire, path)
+
+    def begin_update(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, resource_name: str, data: MailboxData) -> Operation[MailboxResource]:
+        """Amends one Mailbox. A merge patch: what is not set is not changed."""
+        path = f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes/{_segment(resource_name)}"
+        response = self._transport.send(Request("PATCH", path, body=data.to_wire()))
+        raise_for_status(response)
+        return Operation(self._transport, response, MailboxResource.from_wire, path)
+
+    def begin_delete(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, resource_name: str) -> Operation[None]:
+        """Deletes one Mailbox. ⚠ Permanent: this type declares no soft-delete window."""
+        response = self._transport.send(Request("DELETE", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes/{_segment(resource_name)}"))
+        raise_for_status(response)
+        return Operation(self._transport, response, _nothing, None)
+
+    def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, domains_name: str, *, top: Optional[int] = None) -> Pager[MailboxResource]:
+        """Lists the Mailboxes in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
+        return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Mail/domains/{_segment(domains_name)}/mailboxes", top, MailboxResource.from_wire)
+
 
 class MailProvider:
     """The resource types of CyberCloud.Mail."""
 
     def __init__(self, transport: Transport) -> None:
         self.domains = MailDomainClient(transport)
+        self.domains_mailboxes = MailboxClient(transport)
 
 
 class KafkaClusterClient:

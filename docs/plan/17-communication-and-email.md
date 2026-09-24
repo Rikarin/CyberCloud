@@ -313,16 +313,116 @@ CyberCloud.Mail/domains/{name}          ⚠ an ordinary DNS-1123 name, NOT the d
   └─ actions: verify, sendTest, exportMailbox
 ```
 
-⚠ **None of the three actions is declared, and `verify` is the one that cannot be.** It answers
-whether a domain's records resolve, which needs to ask the public DNS — and **this repository has no
-DNS resolution seam at all**. `actions-without-handlers.txt` is not the escape hatch: it permits a
-handler-less action only on an *already published* api-version, and `CyberCloud.Mail/domains`'
-`2026-08-01` is published by the same change that would declare one. ⚠ The half that *is* derivable
-is derived and needs no action to reach: `MailDomains.TryRequiredRecords` is a pure function of the
-domain and the resolved DKIM key, so "the exact records to add" above is answerable today. What is
-owed is reading them back — and `CyberCloud.Network/dnsZones`, which would provide it, is itself
-unbuilt. **The consequence is that "the platform will not enable sending until the DNS records
-verify", below, is NOT built and cannot be until that seam exists.**
+⚠ **As built (#34, 2026-09-23), the block above reads:** `mailboxes/{name}` with `localPart` as a
+required immutable property — the name rule that moved `domain` off the address moves the local
+part too, since `john.doe` is not a DNS-1123 label — carrying `quota`, `aliases`, `forwardTo`,
+`keepCopy` and `passwordRef`, a vault handle and never a value. Sieve rules are edited over
+ManageSieve and are not a property. `verification` is two actions rather than a stored field —
+`dnsRecords` (read: the seven records and a zone file) and `verify` (write: resolve them and move the
+sending gate) — because verification is an observation of a DNS the platform does not own, not state.
+`groups`, `sendTest` and `exportMailbox` are not built. [§ Mailboxes and the sending gate](#mailboxes-and-the-sending-gate--landed-2026-09-23-34)
+below has the rest.
+
+⚠ **CORRECTED 2026-09-23 — this paragraph said `verify` could not be declared, and the reason has
+gone.** It argued that verifying needs the public DNS and that the repository had no DNS resolution
+seam, so the gate below — "the platform will not enable sending until the DNS records verify" — could
+not be built. `IMailDnsResolver` is that seam: a hand-written RFC 1035 stub resolver in the provider,
+proven against CoreDNS serving the zone file the platform hands the tenant. `verify` and `dnsRecords`
+are declared with handlers and the gate is built — [§ Mailboxes and the sending gate](#mailboxes-and-the-sending-gate--landed-2026-09-23-34).
+`CyberCloud.Network/dnsZones` was never going to be the seam: it would *host* zones, not ask the
+internet about them.
+
+### Mailboxes and the sending gate — landed 2026-09-23 (#34)
+
+**What a mailbox is.** Dovecot opens one password file per login and Postfix builds one map of every
+address, and both run in the *domain's* pod — so a mailbox owns no object. It is four keys of the
+domain's `{name}-mail-users` Secret, written as a second writer through `ReconcileContext.CoWriter`
+([09 § A second writer on an object](09-kubernetes-fabric.md)), the shape `virtualNetworks/peerings`
+established: `{local}.passwd` (the Dovecot `passwd-file` line), `{local}.virtual` (its alias-map lines)
+and a `{address}.claim` holding the mailbox's GUID for its own address and each alias. Two mailboxes
+claiming one address write one key with two values, which the co-writer's merge refuses atomically —
+no check-then-write race. The kubelet refreshes the mounted files and a loop in the Postfix container
+rebuilds its maps on a checksum change, so no pod restarts for a mailbox.
+
+**The password is a vault handle.** `passwordRef` names a field in the tenant's own vault (a path
+outside `tenants/{tenantId}/` is refused before the vault is asked, the rule
+`VirtualMachines.ParseCloudInitRef` set); the reconciler resolves it for one pass and writes a
+`SHA512-CRYPT` hash at 100,000 rounds. ⚠ The salt is derived from the mailbox's GUID, not random —
+a hash rendered every pass must be the same every pass or the co-owned apply never settles. ⚠ A
+mailbox with no handle is `{CRYPT}!` and `nologin=y`: Dovecot reads an empty password field as "any
+password". App passwords (a second credential per client) are not built.
+
+**The seven records and the gate.** `dnsRecords` returns MX, SPF, DKIM, DMARC, the MTA-STS TXT and
+policy-host CNAME, and TLS-RPT, each typed and as a zone file split into 255-byte strings; the platform's
+hosts they name are configuration (`CyberCloud:Mail`), and a region that has not configured them is
+refused rather than handed invented names. SPF, DKIM and DMARC **gate**; the MX and the TLS records do
+not, because a domain can send before it receives. `verify` resolves all seven and decides the gate;
+every reconcile pass decides it too, through the same function. A closed gate is **refused at `RCPT
+TO`** for any recipient outside the domain — "held until its SPF, DKIM and DMARC records verify" — and
+defers the smtp transport so a mailbox's `forwardTo` cannot leave either. ⚠ A tenant in
+`CyberCloud:Mail:SuspendedTenants` is closed whatever its records say: the abuse desk's lever. It is
+deliberately **not** [06](06-tenancy-and-resource-model.md)'s `Suspended` tenant status, which an
+overdue invoice sets and whose data plane keeps running.
+
+**Proven how.** On a real k3s through the real write path (`MailDeliveryOnK3sTests`): the pod starts
+from the real images, a mailbox signs in over IMAP, a message submitted with `AUTH` is fetched by
+another carrying a `DKIM-Signature` that a verifier knowing only the record resolved from CoreDNS
+accepts, a relay is refused until `verify` sees the published records and accepted after, and mail to
+an alias reaches its mailbox. Each rendered configuration is run by its daemon without a cluster too
+(`MailDataPlaneTests`, both Dovecot majors and Rspamd).
+
+⚠ **Four defects in the first cut, found only by running it.** The milter was Rspamd's normal worker
+(11333, HTTP) rather than its proxy (11332), which with `milter_default_action = tempfail` defers every
+message; the catch-all was `luser_relay`, which a virtual domain never consults; the antivirus module
+pointed at a ClamAV socket nothing served; and the DKIM key was mounted `0400` into all three
+containers, unreadable by Rspamd's user. And one trap the second cut walked into: a key path that is
+valid base64 — `/etc/mail/secrets/dkimPrivateKey` is — is taken by Rspamd for an *inline key*, and it
+signs every message `ed25519` under the path's own bytes while reporting `DKIM_SIGNED`. The key is now
+`/etc/mail/dkim/cc.key`, and the dot is what keeps it a path.
+
+⚠ **What is still owed**, each with its row in `charts/managed/mail/conformance.yaml § owed` or
+`charts/managed/mail-mailbox/conformance.yaml § owed`: the Postfix image is built from
+`deploy/images/mail-postfix` and published by nothing; the gate is decided on a pass or a `verify` and
+nothing re-decides it for a converged domain, so records removed later keep sending until something
+re-verifies; a suspension needs a trigger to reach a converged domain; the shared front doors (so
+submission and IMAP are plaintext on a `ClusterIP` until then), the outbound pool and warm-up, the
+MTA-STS policy host, SRS for forwards, DKIM rotation (designed as a `dkimKeys` child type), groups,
+and roughly four hundred mailboxes per domain before the Secret's annotation budget refuses the next.
+
+⚠ **CORRECTED 2026-09-24 by the #34 review — four things the landing above got wrong.**
+
+- **An open gate relayed for a mailbox as anyone.** `permit_sasl_authenticated` says who signed in,
+  not who the mail is from, and every tenant's SPF includes the same platform include — so one
+  tenant's mailbox could send as another tenant's domain and pass SPF, and DMARC through SPF
+  alignment. Submission now refuses any envelope sender the login does not own
+  (`smtpd_sender_login_maps`, built from each mailbox's own claimed addresses, and
+  `reject_sender_login_mismatch`), and Rspamd rejects an authenticated message whose `From:` is not
+  that envelope sender. Both run on k3s against a real client.
+- **Inbound mail never met the alias map.** [§ Topology](#topology--the-briefs-question-answered)
+  above says the pool delivers "to the tenant's Dovecot over LMTP", and the back end exposed exactly
+  that. Dovecot knows mailboxes and nothing else: aliases, `forwardTo` and the catch-all are
+  Postfix's `virtual_alias_maps`, and spam filtering is Postfix's milter — so internet mail to an
+  alias was refused and nothing inbound was scanned. **The inbound pool delivers over SMTP to the
+  domain's own Postfix on 25**, which hands Dovecot LMTP inside the pod; the Service carries no LMTP.
+  The Cyrus argument moves one hop in and still holds.
+- **A vault path could climb out of its prefix.** `tenants/{mine}/../{theirs}/db` starts with the
+  tenant's prefix, and the resolver's HTTP client collapses the dot segments before OpenBao sees the
+  path. Every tenant-spelled path — the mailbox's and `Compute/virtualMachines`' cloud-init, where the
+  check was copied from — is now confined by `SecretRef.IsConfinedTo`, and the resolver itself refuses
+  a path with an empty, `.` or `..` segment.
+- **The Postfix image was named under somebody else's namespace.** `docker.io/cybercloud` is a Docker
+  Hub organisation an unrelated party registered in 2018; an unpublished tag there is a tag they could
+  publish. It is `ghcr.io/rikarin/cybercloud/mail-postfix` now.
+
+Also from the review: a mailbox's observed state no longer carries the Secret (every mailbox's hash
+had been persisted in every mailbox's grain), and a DNS that did not answer no longer closes a gate a
+previous answer opened. ⚠ **Still owed after it, and said plainly:** DKIM rotation (the selector is
+the constant `cc`, and rotating needs desired state naming the active selector — a new property is a
+new api-version, and the `dkimKeys/{selector}` child type is new public surface in five SDKs, which is
+the issue's scope decision rather than a review fix); the suspension's *trigger* (nothing re-drives a
+converged resource anywhere on the platform, and the lever that works within the hour without one is
+the shared submission pool, which knows the tenant from the credential); and Rspamd's rate limits and
+greylisting, both of which keep their counters in Redis this pod does not have.
 
 Webmail is a portal app (Angular + xUI) against a JMAP-shaped API. ⚠ **Building a good webmail client
 is 2 EM on its own** and is not in the 3.5 above — the M2 deliverable is IMAP/SMTP access with a

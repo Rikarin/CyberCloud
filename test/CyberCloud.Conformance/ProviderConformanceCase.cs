@@ -646,19 +646,35 @@ public interface IProviderCaseSource {
     static virtual void ConfigureSilo(ISiloBuilder silo) { }
 
     /// <summary>
-    ///     What the <i>dispatcher's</i> container must hold for this case's synchronous handlers to
-    ///     reach the world a suite built for them — the client-side half of
-    ///     <see cref="ConfigureSilo" />. Nothing, for every case before
-    ///     <c>CyberCloud.Monitor/workspaces/components</c>.
+    ///     What the harness's action-handler container must hold beyond its own doubles for this
+    ///     case's handlers to be constructible — the handler-side twin of <see cref="ConfigureSilo" />.
+    ///     Nothing, for every case before <c>CyberCloud.Mail/domains</c> and
+    ///     <c>CyberCloud.Monitor/workspaces/components</c>, which found the gap on two branches at once
+    ///     and added this member twice (one survives the 2026-09-24 merge).
     /// </summary>
     /// <param name="services">The container <c>ActionDispatcher</c> resolves handlers from.</param>
     /// <remarks>
-    ///     ⚠ <b>A synchronous action runs inside <c>ResourceManagerService</c>, not in the silo</b>,
-    ///     so what a handler holds is registered in the container the harness builds for the
-    ///     dispatcher — the gateway's, in production. A clusterless case gets there through
-    ///     <see cref="IConvergedModule.ConfigureHandlers" />; a cluster-backed case whose views read a
-    ///     store the suite started (the component's ClickHouse) gets there through this. Registered
-    ///     after the harness's own doubles, so a case can replace one.
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             WHY <see cref="ConfigureSilo" /> COULD NOT CARRY IT, AND WHY
+    ///             <see cref="ConvergedModule" /> COULD NOT EITHER.
+    ///         </b> A synchronous action is dispatched from a container each harness builds for the
+    ///         purpose — the clock, the vault and the cluster factory, then the handlers — not from the
+    ///         silo's. <see cref="ConfigureSilo" /> reaches the silo, where the reconcilers live; a
+    ///         module's <c>ConfigureHandlers</c> reaches this container but a module is refused to a
+    ///         cluster-backed case by name. So the first cluster-backed family whose handler took a
+    ///         seam of its own — mail's <c>dnsRecords</c>, which needs the platform's mail hosts —
+    ///         failed its POST assertion with <i>"Unable to resolve service for type
+    ///         'MailPlatformOptions'"</i>: the harness quietly agreeing with every provider so far,
+    ///         the third time this suite has found that shape.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both harnesses call it</b> — <c>ProviderTestCluster</c> and
+    ///         <c>ClusterConformanceHarness</c> — for the reason their handler containers were fixed
+    ///         together once already: a fix in one leaves the other failing later, on a Docker-backed
+    ///         run, for a reason the Docker-free run had solved.
+    ///     </para>
     /// </remarks>
     static virtual void ConfigureHandlers(IServiceCollection services) { }
 

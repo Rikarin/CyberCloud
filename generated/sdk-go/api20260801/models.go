@@ -2927,6 +2927,528 @@ func (r *MailDomainResource) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &r.Data)
 }
 
+// MailDomainDnsRecordsResultRecordsDkimType is the values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsDkimType string
+
+const (
+	MailDomainDnsRecordsResultRecordsDkimTypeMX    MailDomainDnsRecordsResultRecordsDkimType = "MX"
+	MailDomainDnsRecordsResultRecordsDkimTypeTXT   MailDomainDnsRecordsResultRecordsDkimType = "TXT"
+	MailDomainDnsRecordsResultRecordsDkimTypeCNAME MailDomainDnsRecordsResultRecordsDkimType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsDmarcType is the values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsDmarcType string
+
+const (
+	MailDomainDnsRecordsResultRecordsDmarcTypeMX    MailDomainDnsRecordsResultRecordsDmarcType = "MX"
+	MailDomainDnsRecordsResultRecordsDmarcTypeTXT   MailDomainDnsRecordsResultRecordsDmarcType = "TXT"
+	MailDomainDnsRecordsResultRecordsDmarcTypeCNAME MailDomainDnsRecordsResultRecordsDmarcType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsMtaStsType is the values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsMtaStsType string
+
+const (
+	MailDomainDnsRecordsResultRecordsMtaStsTypeMX    MailDomainDnsRecordsResultRecordsMtaStsType = "MX"
+	MailDomainDnsRecordsResultRecordsMtaStsTypeTXT   MailDomainDnsRecordsResultRecordsMtaStsType = "TXT"
+	MailDomainDnsRecordsResultRecordsMtaStsTypeCNAME MailDomainDnsRecordsResultRecordsMtaStsType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsMtaStsHostType is the values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsMtaStsHostType string
+
+const (
+	MailDomainDnsRecordsResultRecordsMtaStsHostTypeMX    MailDomainDnsRecordsResultRecordsMtaStsHostType = "MX"
+	MailDomainDnsRecordsResultRecordsMtaStsHostTypeTXT   MailDomainDnsRecordsResultRecordsMtaStsHostType = "TXT"
+	MailDomainDnsRecordsResultRecordsMtaStsHostTypeCNAME MailDomainDnsRecordsResultRecordsMtaStsHostType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsMxType is the values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsMxType string
+
+const (
+	MailDomainDnsRecordsResultRecordsMxTypeMX    MailDomainDnsRecordsResultRecordsMxType = "MX"
+	MailDomainDnsRecordsResultRecordsMxTypeTXT   MailDomainDnsRecordsResultRecordsMxType = "TXT"
+	MailDomainDnsRecordsResultRecordsMxTypeCNAME MailDomainDnsRecordsResultRecordsMxType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsSpfType is the values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsSpfType string
+
+const (
+	MailDomainDnsRecordsResultRecordsSpfTypeMX    MailDomainDnsRecordsResultRecordsSpfType = "MX"
+	MailDomainDnsRecordsResultRecordsSpfTypeTXT   MailDomainDnsRecordsResultRecordsSpfType = "TXT"
+	MailDomainDnsRecordsResultRecordsSpfTypeCNAME MailDomainDnsRecordsResultRecordsSpfType = "CNAME"
+)
+
+// MailDomainDnsRecordsResultRecordsTlsRptType is the values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainDnsRecordsResultRecordsTlsRptType string
+
+const (
+	MailDomainDnsRecordsResultRecordsTlsRptTypeMX    MailDomainDnsRecordsResultRecordsTlsRptType = "MX"
+	MailDomainDnsRecordsResultRecordsTlsRptTypeTXT   MailDomainDnsRecordsResultRecordsTlsRptType = "TXT"
+	MailDomainDnsRecordsResultRecordsTlsRptTypeCNAME MailDomainDnsRecordsResultRecordsTlsRptType = "CNAME"
+)
+
+// MailDomainDnsRecordsResult is what dnsRecords returns.
+type MailDomainDnsRecordsResult struct {
+	// The mail domain the records are for.
+	Domain string `json:"domain"`
+	// The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.
+	MtaStsPolicy string `json:"mtaStsPolicy"`
+	// One member per record the domain must publish.
+	Records MailDomainDnsRecordsResultRecords `json:"records"`
+	// Every record as a zone-file line, ready to paste into a zone.
+	ZoneFile string `json:"zoneFile"`
+}
+
+// MailDomainDnsRecordsResultRecords is One member per record the domain must publish.
+type MailDomainDnsRecordsResultRecords struct {
+	// The DKIM public key. Gates sending.
+	Dkim MailDomainDnsRecordsResultRecordsDkim `json:"dkim"`
+	// The DMARC policy. Gates sending.
+	Dmarc MailDomainDnsRecordsResultRecordsDmarc `json:"dmarc"`
+	// The MTA-STS policy announcement.
+	MtaSts MailDomainDnsRecordsResultRecordsMtaSts `json:"mtaSts"`
+	// The MTA-STS policy host.
+	MtaStsHost MailDomainDnsRecordsResultRecordsMtaStsHost `json:"mtaStsHost"`
+	// The MX record — where mail for the domain is delivered.
+	Mx MailDomainDnsRecordsResultRecordsMx `json:"mx"`
+	// The SPF record. Gates sending.
+	Spf MailDomainDnsRecordsResultRecordsSpf `json:"spf"`
+	// The TLS-RPT reporting address.
+	TlsRpt MailDomainDnsRecordsResultRecordsTlsRpt `json:"tlsRpt"`
+}
+
+// MailDomainDnsRecordsResultRecordsDkim is The DKIM public key. Gates sending.
+type MailDomainDnsRecordsResultRecordsDkim struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsDkimType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsDmarc is The DMARC policy. Gates sending.
+type MailDomainDnsRecordsResultRecordsDmarc struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsDmarcType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsMtaSts is The MTA-STS policy announcement.
+type MailDomainDnsRecordsResultRecordsMtaSts struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsMtaStsType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsMtaStsHost is The MTA-STS policy host.
+type MailDomainDnsRecordsResultRecordsMtaStsHost struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsMtaStsHostType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsMx is The MX record — where mail for the domain is delivered.
+type MailDomainDnsRecordsResultRecordsMx struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsMxType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsSpf is The SPF record. Gates sending.
+type MailDomainDnsRecordsResultRecordsSpf struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsSpfType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainDnsRecordsResultRecordsTlsRpt is The TLS-RPT reporting address.
+type MailDomainDnsRecordsResultRecordsTlsRpt struct {
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// MX, TXT or CNAME.
+	Type MailDomainDnsRecordsResultRecordsTlsRptType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsDkimStatus is the values /records/dkim/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsDkimStatus string
+
+const (
+	MailDomainVerifyResultRecordsDkimStatusVerified     MailDomainVerifyResultRecordsDkimStatus = "verified"
+	MailDomainVerifyResultRecordsDkimStatusMissing      MailDomainVerifyResultRecordsDkimStatus = "missing"
+	MailDomainVerifyResultRecordsDkimStatusMismatch     MailDomainVerifyResultRecordsDkimStatus = "mismatch"
+	MailDomainVerifyResultRecordsDkimStatusUnresolvable MailDomainVerifyResultRecordsDkimStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsDkimType is the values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsDkimType string
+
+const (
+	MailDomainVerifyResultRecordsDkimTypeMX    MailDomainVerifyResultRecordsDkimType = "MX"
+	MailDomainVerifyResultRecordsDkimTypeTXT   MailDomainVerifyResultRecordsDkimType = "TXT"
+	MailDomainVerifyResultRecordsDkimTypeCNAME MailDomainVerifyResultRecordsDkimType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsDmarcStatus is the values /records/dmarc/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsDmarcStatus string
+
+const (
+	MailDomainVerifyResultRecordsDmarcStatusVerified     MailDomainVerifyResultRecordsDmarcStatus = "verified"
+	MailDomainVerifyResultRecordsDmarcStatusMissing      MailDomainVerifyResultRecordsDmarcStatus = "missing"
+	MailDomainVerifyResultRecordsDmarcStatusMismatch     MailDomainVerifyResultRecordsDmarcStatus = "mismatch"
+	MailDomainVerifyResultRecordsDmarcStatusUnresolvable MailDomainVerifyResultRecordsDmarcStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsDmarcType is the values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsDmarcType string
+
+const (
+	MailDomainVerifyResultRecordsDmarcTypeMX    MailDomainVerifyResultRecordsDmarcType = "MX"
+	MailDomainVerifyResultRecordsDmarcTypeTXT   MailDomainVerifyResultRecordsDmarcType = "TXT"
+	MailDomainVerifyResultRecordsDmarcTypeCNAME MailDomainVerifyResultRecordsDmarcType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsMtaStsStatus is the values /records/mtaSts/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMtaStsStatus string
+
+const (
+	MailDomainVerifyResultRecordsMtaStsStatusVerified     MailDomainVerifyResultRecordsMtaStsStatus = "verified"
+	MailDomainVerifyResultRecordsMtaStsStatusMissing      MailDomainVerifyResultRecordsMtaStsStatus = "missing"
+	MailDomainVerifyResultRecordsMtaStsStatusMismatch     MailDomainVerifyResultRecordsMtaStsStatus = "mismatch"
+	MailDomainVerifyResultRecordsMtaStsStatusUnresolvable MailDomainVerifyResultRecordsMtaStsStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsMtaStsType is the values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMtaStsType string
+
+const (
+	MailDomainVerifyResultRecordsMtaStsTypeMX    MailDomainVerifyResultRecordsMtaStsType = "MX"
+	MailDomainVerifyResultRecordsMtaStsTypeTXT   MailDomainVerifyResultRecordsMtaStsType = "TXT"
+	MailDomainVerifyResultRecordsMtaStsTypeCNAME MailDomainVerifyResultRecordsMtaStsType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsMtaStsHostStatus is the values /records/mtaStsHost/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMtaStsHostStatus string
+
+const (
+	MailDomainVerifyResultRecordsMtaStsHostStatusVerified     MailDomainVerifyResultRecordsMtaStsHostStatus = "verified"
+	MailDomainVerifyResultRecordsMtaStsHostStatusMissing      MailDomainVerifyResultRecordsMtaStsHostStatus = "missing"
+	MailDomainVerifyResultRecordsMtaStsHostStatusMismatch     MailDomainVerifyResultRecordsMtaStsHostStatus = "mismatch"
+	MailDomainVerifyResultRecordsMtaStsHostStatusUnresolvable MailDomainVerifyResultRecordsMtaStsHostStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsMtaStsHostType is the values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMtaStsHostType string
+
+const (
+	MailDomainVerifyResultRecordsMtaStsHostTypeMX    MailDomainVerifyResultRecordsMtaStsHostType = "MX"
+	MailDomainVerifyResultRecordsMtaStsHostTypeTXT   MailDomainVerifyResultRecordsMtaStsHostType = "TXT"
+	MailDomainVerifyResultRecordsMtaStsHostTypeCNAME MailDomainVerifyResultRecordsMtaStsHostType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsMxStatus is the values /records/mx/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMxStatus string
+
+const (
+	MailDomainVerifyResultRecordsMxStatusVerified     MailDomainVerifyResultRecordsMxStatus = "verified"
+	MailDomainVerifyResultRecordsMxStatusMissing      MailDomainVerifyResultRecordsMxStatus = "missing"
+	MailDomainVerifyResultRecordsMxStatusMismatch     MailDomainVerifyResultRecordsMxStatus = "mismatch"
+	MailDomainVerifyResultRecordsMxStatusUnresolvable MailDomainVerifyResultRecordsMxStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsMxType is the values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsMxType string
+
+const (
+	MailDomainVerifyResultRecordsMxTypeMX    MailDomainVerifyResultRecordsMxType = "MX"
+	MailDomainVerifyResultRecordsMxTypeTXT   MailDomainVerifyResultRecordsMxType = "TXT"
+	MailDomainVerifyResultRecordsMxTypeCNAME MailDomainVerifyResultRecordsMxType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsSpfStatus is the values /records/spf/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsSpfStatus string
+
+const (
+	MailDomainVerifyResultRecordsSpfStatusVerified     MailDomainVerifyResultRecordsSpfStatus = "verified"
+	MailDomainVerifyResultRecordsSpfStatusMissing      MailDomainVerifyResultRecordsSpfStatus = "missing"
+	MailDomainVerifyResultRecordsSpfStatusMismatch     MailDomainVerifyResultRecordsSpfStatus = "mismatch"
+	MailDomainVerifyResultRecordsSpfStatusUnresolvable MailDomainVerifyResultRecordsSpfStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsSpfType is the values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsSpfType string
+
+const (
+	MailDomainVerifyResultRecordsSpfTypeMX    MailDomainVerifyResultRecordsSpfType = "MX"
+	MailDomainVerifyResultRecordsSpfTypeTXT   MailDomainVerifyResultRecordsSpfType = "TXT"
+	MailDomainVerifyResultRecordsSpfTypeCNAME MailDomainVerifyResultRecordsSpfType = "CNAME"
+)
+
+// MailDomainVerifyResultRecordsTlsRptStatus is the values /records/tlsRpt/status accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsTlsRptStatus string
+
+const (
+	MailDomainVerifyResultRecordsTlsRptStatusVerified     MailDomainVerifyResultRecordsTlsRptStatus = "verified"
+	MailDomainVerifyResultRecordsTlsRptStatusMissing      MailDomainVerifyResultRecordsTlsRptStatus = "missing"
+	MailDomainVerifyResultRecordsTlsRptStatusMismatch     MailDomainVerifyResultRecordsTlsRptStatus = "mismatch"
+	MailDomainVerifyResultRecordsTlsRptStatusUnresolvable MailDomainVerifyResultRecordsTlsRptStatus = "unresolvable"
+)
+
+// MailDomainVerifyResultRecordsTlsRptType is the values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultRecordsTlsRptType string
+
+const (
+	MailDomainVerifyResultRecordsTlsRptTypeMX    MailDomainVerifyResultRecordsTlsRptType = "MX"
+	MailDomainVerifyResultRecordsTlsRptTypeTXT   MailDomainVerifyResultRecordsTlsRptType = "TXT"
+	MailDomainVerifyResultRecordsTlsRptTypeCNAME MailDomainVerifyResultRecordsTlsRptType = "CNAME"
+)
+
+// MailDomainVerifyResultSending is the values /sending accepts. ⚠ Closed: the write path refuses anything else.
+type MailDomainVerifyResultSending string
+
+const (
+	MailDomainVerifyResultSendingHeld      MailDomainVerifyResultSending = "held"
+	MailDomainVerifyResultSendingOpen      MailDomainVerifyResultSending = "open"
+	MailDomainVerifyResultSendingSuspended MailDomainVerifyResultSending = "suspended"
+)
+
+// MailDomainVerifyResult is what verify returns.
+type MailDomainVerifyResult struct {
+	// The mail domain the records are for.
+	Domain string `json:"domain"`
+	// The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.
+	MtaStsPolicy string `json:"mtaStsPolicy"`
+	// One member per record the domain must publish.
+	Records MailDomainVerifyResultRecords `json:"records"`
+	// held, open or suspended — why sendingEnabled is what it is.
+	Sending MailDomainVerifyResultSending `json:"sending"`
+	// Whether mail may leave the domain: SPF, DKIM and DMARC verify and the platform has not suspended it. Held mail is refused at RCPT TO, not queued.
+	SendingEnabled bool `json:"sendingEnabled"`
+	// Every record as a zone-file line, ready to paste into a zone.
+	ZoneFile string `json:"zoneFile"`
+}
+
+// MailDomainVerifyResultRecords is One member per record the domain must publish.
+type MailDomainVerifyResultRecords struct {
+	// The DKIM public key. Gates sending.
+	Dkim MailDomainVerifyResultRecordsDkim `json:"dkim"`
+	// The DMARC policy. Gates sending.
+	Dmarc MailDomainVerifyResultRecordsDmarc `json:"dmarc"`
+	// The MTA-STS policy announcement.
+	MtaSts MailDomainVerifyResultRecordsMtaSts `json:"mtaSts"`
+	// The MTA-STS policy host.
+	MtaStsHost MailDomainVerifyResultRecordsMtaStsHost `json:"mtaStsHost"`
+	// The MX record — where mail for the domain is delivered.
+	Mx MailDomainVerifyResultRecordsMx `json:"mx"`
+	// The SPF record. Gates sending.
+	Spf MailDomainVerifyResultRecordsSpf `json:"spf"`
+	// The TLS-RPT reporting address.
+	TlsRpt MailDomainVerifyResultRecordsTlsRpt `json:"tlsRpt"`
+}
+
+// MailDomainVerifyResultRecordsDkim is The DKIM public key. Gates sending.
+type MailDomainVerifyResultRecordsDkim struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsDkimStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsDkimType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsDmarc is The DMARC policy. Gates sending.
+type MailDomainVerifyResultRecordsDmarc struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsDmarcStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsDmarcType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsMtaSts is The MTA-STS policy announcement.
+type MailDomainVerifyResultRecordsMtaSts struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsMtaStsStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsMtaStsType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsMtaStsHost is The MTA-STS policy host.
+type MailDomainVerifyResultRecordsMtaStsHost struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsMtaStsHostStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsMtaStsHostType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsMx is The MX record — where mail for the domain is delivered.
+type MailDomainVerifyResultRecordsMx struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsMxStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsMxType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsSpf is The SPF record. Gates sending.
+type MailDomainVerifyResultRecordsSpf struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsSpfStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsSpfType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailDomainVerifyResultRecordsTlsRpt is The TLS-RPT reporting address.
+type MailDomainVerifyResultRecordsTlsRpt struct {
+	// Why, in a sentence.
+	Detail string `json:"detail"`
+	// What the DNS answered for the name.
+	Found []string `json:"found"`
+	// Whether sending is held until this record verifies.
+	GatesSending bool `json:"gatesSending"`
+	// The owner name, fully qualified.
+	Name string `json:"name"`
+	// What resolving it found.
+	Status MailDomainVerifyResultRecordsTlsRptStatus `json:"status"`
+	// MX, TXT or CNAME.
+	Type MailDomainVerifyResultRecordsTlsRptType `json:"type"`
+	// The value to publish, exactly.
+	Value string `json:"value"`
+}
+
+// MailboxData is Mailbox: the body a caller writes. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.
+type MailboxData struct {
+	// The region the mailbox is billed in. The domain's.
+	Location string `json:"location"`
+	// The mailbox's own settings.
+	Properties *MailboxProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// MailboxProperties is The mailbox's own settings.
+type MailboxProperties struct {
+	// Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.
+	Aliases []string `json:"aliases,omitempty"`
+	// The cluster the domain's back end runs in. Must be the domain's.
+	ClusterID string `json:"clusterId"`
+	// Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.
+	ForwardTo []string `json:"forwardTo,omitempty"`
+	// With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.
+	KeepCopy *bool `json:"keepCopy,omitempty"`
+	// The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.
+	LocalPart string `json:"localPart"`
+	// A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it.
+	PasswordRef *string `json:"passwordRef,omitempty"`
+	// The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.
+	Quota *string `json:"quota,omitempty"`
+}
+
+// MailboxResource is one Mailbox, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type MailboxResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data MailboxData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *MailboxResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
 // KafkaClusterPreset is the values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.
 type KafkaClusterPreset string
 

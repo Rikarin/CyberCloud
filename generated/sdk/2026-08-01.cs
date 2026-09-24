@@ -6507,6 +6507,914 @@ public sealed partial class MailDomainResource {
     public partial Task<Operation> DeleteAsync(
         WaitUntil waitUntil,
         CancellationToken cancellationToken = default);
+
+    /// <summary>The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsDkimType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsDmarcType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsMtaStsType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsMtaStsHostType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsMxType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsSpfType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum DnsRecordsResultRecordsTlsRptType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>What dnsRecords returns.</summary>
+    public sealed partial class DnsRecordsResult {
+
+        /// <summary>The mail domain the records are for.</summary>
+        [JsonPropertyName("domain")]
+        public required string Domain { get; set; }
+
+        /// <summary>The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.</summary>
+        [JsonPropertyName("mtaStsPolicy")]
+        public required string MtaStsPolicy { get; set; }
+
+        /// <summary>One member per record the domain must publish.</summary>
+        [JsonPropertyName("records")]
+        public required RecordsData Records { get; set; }
+
+        /// <summary>Every record as a zone-file line, ready to paste into a zone.</summary>
+        [JsonPropertyName("zoneFile")]
+        public required string ZoneFile { get; set; }
+
+        /// <summary>One member per record the domain must publish.</summary>
+        public sealed partial class RecordsData {
+
+            /// <summary>The DKIM public key. Gates sending.</summary>
+            [JsonPropertyName("dkim")]
+            public required DkimData Dkim { get; set; }
+
+            /// <summary>The DMARC policy. Gates sending.</summary>
+            [JsonPropertyName("dmarc")]
+            public required DmarcData Dmarc { get; set; }
+
+            /// <summary>The MTA-STS policy announcement.</summary>
+            [JsonPropertyName("mtaSts")]
+            public required MtaStsData MtaSts { get; set; }
+
+            /// <summary>The MTA-STS policy host.</summary>
+            [JsonPropertyName("mtaStsHost")]
+            public required MtaStsHostData MtaStsHost { get; set; }
+
+            /// <summary>The MX record — where mail for the domain is delivered.</summary>
+            [JsonPropertyName("mx")]
+            public required MxData Mx { get; set; }
+
+            /// <summary>The SPF record. Gates sending.</summary>
+            [JsonPropertyName("spf")]
+            public required SpfData Spf { get; set; }
+
+            /// <summary>The TLS-RPT reporting address.</summary>
+            [JsonPropertyName("tlsRpt")]
+            public required TlsRptData TlsRpt { get; set; }
+
+            /// <summary>The DKIM public key. Gates sending.</summary>
+            public sealed partial class DkimData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsDkimType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The DMARC policy. Gates sending.</summary>
+            public sealed partial class DmarcData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsDmarcType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MTA-STS policy announcement.</summary>
+            public sealed partial class MtaStsData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsMtaStsType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MTA-STS policy host.</summary>
+            public sealed partial class MtaStsHostData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsMtaStsHostType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MX record — where mail for the domain is delivered.</summary>
+            public sealed partial class MxData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsMxType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The SPF record. Gates sending.</summary>
+            public sealed partial class SpfData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsSpfType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The TLS-RPT reporting address.</summary>
+            public sealed partial class TlsRptData {
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required DnsRecordsResultRecordsTlsRptType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+        }
+    }
+
+    /// <summary>DnsRecords. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<DnsRecordsResult>> DnsRecordsAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>The values /records/dkim/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsDkimStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsDkimType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/dmarc/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsDmarcStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsDmarcType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mtaSts/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMtaStsStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMtaStsType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mtaStsHost/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMtaStsHostStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMtaStsHostType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/mx/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMxStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsMxType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/spf/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsSpfStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsSpfType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /records/tlsRpt/status accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsTlsRptStatus {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>verified</summary>
+        [JsonStringEnumMemberName("verified")]
+        Verified = 1,
+
+        /// <summary>missing</summary>
+        [JsonStringEnumMemberName("missing")]
+        Missing = 2,
+
+        /// <summary>mismatch</summary>
+        [JsonStringEnumMemberName("mismatch")]
+        Mismatch = 3,
+
+        /// <summary>unresolvable</summary>
+        [JsonStringEnumMemberName("unresolvable")]
+        Unresolvable = 4
+    }
+
+    /// <summary>The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultRecordsTlsRptType {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>MX</summary>
+        [JsonStringEnumMemberName("MX")]
+        MX = 1,
+
+        /// <summary>TXT</summary>
+        [JsonStringEnumMemberName("TXT")]
+        TXT = 2,
+
+        /// <summary>CNAME</summary>
+        [JsonStringEnumMemberName("CNAME")]
+        CNAME = 3
+    }
+
+    /// <summary>The values /sending accepts. ⚠ Closed: the write path refuses anything else.</summary>
+    public enum VerifyResultSending {
+        /// <summary>Never assigned. Not a value the API accepts.</summary>
+        Unknown = 0,
+
+        /// <summary>held</summary>
+        [JsonStringEnumMemberName("held")]
+        Held = 1,
+
+        /// <summary>open</summary>
+        [JsonStringEnumMemberName("open")]
+        Open = 2,
+
+        /// <summary>suspended</summary>
+        [JsonStringEnumMemberName("suspended")]
+        Suspended = 3
+    }
+
+    /// <summary>What verify returns.</summary>
+    public sealed partial class VerifyResult {
+
+        /// <summary>The mail domain the records are for.</summary>
+        [JsonPropertyName("domain")]
+        public required string Domain { get; set; }
+
+        /// <summary>The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.</summary>
+        [JsonPropertyName("mtaStsPolicy")]
+        public required string MtaStsPolicy { get; set; }
+
+        /// <summary>One member per record the domain must publish.</summary>
+        [JsonPropertyName("records")]
+        public required RecordsData Records { get; set; }
+
+        /// <summary>held, open or suspended — why sendingEnabled is what it is.</summary>
+        [JsonPropertyName("sending")]
+        public required VerifyResultSending Sending { get; set; }
+
+        /// <summary>Whether mail may leave the domain: SPF, DKIM and DMARC verify and the platform has not suspended it. Held mail is refused at RCPT TO, not queued.</summary>
+        [JsonPropertyName("sendingEnabled")]
+        public required bool SendingEnabled { get; set; }
+
+        /// <summary>Every record as a zone-file line, ready to paste into a zone.</summary>
+        [JsonPropertyName("zoneFile")]
+        public required string ZoneFile { get; set; }
+
+        /// <summary>One member per record the domain must publish.</summary>
+        public sealed partial class RecordsData {
+
+            /// <summary>The DKIM public key. Gates sending.</summary>
+            [JsonPropertyName("dkim")]
+            public required DkimData Dkim { get; set; }
+
+            /// <summary>The DMARC policy. Gates sending.</summary>
+            [JsonPropertyName("dmarc")]
+            public required DmarcData Dmarc { get; set; }
+
+            /// <summary>The MTA-STS policy announcement.</summary>
+            [JsonPropertyName("mtaSts")]
+            public required MtaStsData MtaSts { get; set; }
+
+            /// <summary>The MTA-STS policy host.</summary>
+            [JsonPropertyName("mtaStsHost")]
+            public required MtaStsHostData MtaStsHost { get; set; }
+
+            /// <summary>The MX record — where mail for the domain is delivered.</summary>
+            [JsonPropertyName("mx")]
+            public required MxData Mx { get; set; }
+
+            /// <summary>The SPF record. Gates sending.</summary>
+            [JsonPropertyName("spf")]
+            public required SpfData Spf { get; set; }
+
+            /// <summary>The TLS-RPT reporting address.</summary>
+            [JsonPropertyName("tlsRpt")]
+            public required TlsRptData TlsRpt { get; set; }
+
+            /// <summary>The DKIM public key. Gates sending.</summary>
+            public sealed partial class DkimData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsDkimStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsDkimType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The DMARC policy. Gates sending.</summary>
+            public sealed partial class DmarcData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsDmarcStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsDmarcType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MTA-STS policy announcement.</summary>
+            public sealed partial class MtaStsData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsMtaStsStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsMtaStsType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MTA-STS policy host.</summary>
+            public sealed partial class MtaStsHostData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsMtaStsHostStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsMtaStsHostType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The MX record — where mail for the domain is delivered.</summary>
+            public sealed partial class MxData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsMxStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsMxType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The SPF record. Gates sending.</summary>
+            public sealed partial class SpfData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsSpfStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsSpfType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+
+            /// <summary>The TLS-RPT reporting address.</summary>
+            public sealed partial class TlsRptData {
+
+                /// <summary>Why, in a sentence.</summary>
+                [JsonPropertyName("detail")]
+                public required string Detail { get; set; }
+
+                /// <summary>What the DNS answered for the name.</summary>
+                [JsonPropertyName("found")]
+                public IList<string> Found { get; set; } = new List<string>();
+
+                /// <summary>Whether sending is held until this record verifies.</summary>
+                [JsonPropertyName("gatesSending")]
+                public required bool GatesSending { get; set; }
+
+                /// <summary>The owner name, fully qualified.</summary>
+                [JsonPropertyName("name")]
+                public required string Name { get; set; }
+
+                /// <summary>What resolving it found.</summary>
+                [JsonPropertyName("status")]
+                public required VerifyResultRecordsTlsRptStatus Status { get; set; }
+
+                /// <summary>MX, TXT or CNAME.</summary>
+                [JsonPropertyName("type")]
+                public required VerifyResultRecordsTlsRptType Type { get; set; }
+
+                /// <summary>The value to publish, exactly.</summary>
+                [JsonPropertyName("value")]
+                public required string Value { get; set; }
+            }
+        }
+    }
+
+    /// <summary>Verify. ⚠ An action never creates — a POST to a name that does not exist is a 404.</summary>
+    public partial Task<Response<VerifyResult>> VerifyAsync(
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>The Mail domains in one resource group.</summary>
@@ -6544,6 +7452,144 @@ public sealed partial class MailDomainCollection {
 
     /// <summary>The Mail domains in this group, paged.</summary>
     public partial AsyncPageable<MailDomainResource> GetAllAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>The body of a CyberCloud.Mail/domains/mailboxes.</summary>
+/// <remarks>One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.</remarks>
+public sealed partial class MailboxData {
+
+    /// <summary>The region the mailbox is billed in. The domain's.</summary>
+    /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+    [JsonPropertyName("location")]
+    public required string Location { get; set; }
+
+    /// <summary>The mailbox's own settings.</summary>
+    [JsonPropertyName("properties")]
+    public PropertiesData? Properties { get; set; }
+
+    /// <summary>Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.</summary>
+    [JsonPropertyName("tags")]
+    public IDictionary<string, string> Tags { get; set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>The mailbox's own settings.</summary>
+    public sealed partial class PropertiesData {
+
+        /// <summary>Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("aliases")]
+        public IList<string> Aliases { get; set; } = new List<string>();
+
+        /// <summary>The cluster the domain's back end runs in. Must be the domain's.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create.</remarks>
+        [JsonPropertyName("clusterId")]
+        public required Guid ClusterId { get; set; }
+
+        /// <summary>Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.</summary>
+        /// <remarks>Defaults to [] when left unset.</remarks>
+        [JsonPropertyName("forwardTo")]
+        public IList<string> ForwardTo { get; set; } = new List<string>();
+
+        /// <summary>With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.</summary>
+        /// <remarks>Defaults to true when left unset.</remarks>
+        [JsonPropertyName("keepCopy")]
+        public bool? KeepCopy { get; set; }
+
+        /// <summary>The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.</summary>
+        /// <remarks>Required on a create. ⚠ Cannot change after create. Defaults to "postmaster" when left unset.</remarks>
+        [JsonPropertyName("localPart")]
+        public required string LocalPart { get; set; }
+
+        /// <summary>A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/&lt;tenantId&gt;/. Empty means the mailbox receives mail and nobody can sign in to it.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("passwordRef")]
+        public string? PasswordRef { get; set; }
+
+        /// <summary>The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.</summary>
+        /// <remarks>Defaults to "" when left unset.</remarks>
+        [JsonPropertyName("quota")]
+        public string? Quota { get; set; }
+    }
+}
+
+/// <summary>One Mailbox, as the API returns it, and the operations on it.</summary>
+public sealed partial class MailboxResource {
+    /// <summary>The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end. Always present on a read.</summary>
+    [JsonPropertyName("etag")]
+    public string Etag { get; init; } = string.Empty;
+
+    /// <summary>The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from. Always present on a read.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; init; } = string.Empty;
+
+    /// <summary>The last segment of the path: the name the caller chose on the PUT. Always present on a read.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered. Always present on a read.</summary>
+    [JsonPropertyName("provisioningState")]
+    public ProvisioningState ProvisioningState { get; init; }
+
+    /// <summary>The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries. Always present on a read.</summary>
+    [JsonPropertyName("type")]
+    public string Type { get; init; } = string.Empty;
+
+    /// <summary>The body, projected at this api-version.</summary>
+    public required MailboxData Data { get; init; }
+
+    /// <summary>Re-reads the resource.</summary>
+    public partial Task<Response<MailboxResource>> GetAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Amends the resource. A merge patch: what is not set is not changed.</summary>
+    public partial Task<Operation<MailboxResource>> UpdateAsync(
+        WaitUntil waitUntil,
+        MailboxData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the resource. ⚠ Permanent: this type declares no soft-delete window.</summary>
+    public partial Task<Operation> DeleteAsync(
+        WaitUntil waitUntil,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>The Mailboxes in one parent.</summary>
+/// <remarks>⚠ Every write is long-running: docs/plan/08 § The write path, end to end
+/// ends in a 202 for every verb, so there is no synchronous overload to offer.
+/// ⚠ The leading parameter(s) name the ancestors this type nests inside —
+/// docs/plan/12 § Child resources addresses a child
+/// '…/{parentType}/{parentName}/{childType}/{childName}', so the parent's name is
+/// part of the address rather than part of the body.</remarks>
+public sealed partial class MailboxCollection {
+    /// <summary>The resource type these address.</summary>
+    public const string ResourceType = "CyberCloud.Mail/domains/mailboxes";
+
+    /// <summary>The URL template, with the api-version this file was generated at.</summary>
+    public const string PathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{domainsName}/mailboxes/{resourceName}";
+
+    /// <summary>The collection URL template GetAllAsync pages.</summary>
+    /// <remarks>⚠ It ends on the type rather than on a name, which is what makes it a
+    /// collection address and not a resource one — the two grammars are disjoint, see
+    /// ResourceCollectionId. Empty when this api-version's document declares no such
+    /// path, in which case GetAllAsync has nothing to page.</remarks>
+    public const string CollectionPathTemplate = "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains/{domainsName}/mailboxes";
+
+    /// <inheritdoc cref="GeneratedApiVersion.Value" />
+    public const string ApiVersion = "2026-08-01";
+
+    /// <summary>Creates or replaces one Mailbox.</summary>
+    /// <remarks>⚠ Poll with GetProgressAsync() rather than only WaitForCompletionAsync():
+    /// docs/plan/21 § The .NET SDK — "Azure's LROs expose no progress; ours do and the
+    /// SDK should not hide it".</remarks>
+    public partial Task<Operation<MailboxResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string domainsName, string name,
+        MailboxData data,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Reads one Mailbox by name.</summary>
+    public partial Task<Response<MailboxResource>> GetAsync(string domainsName, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>The Mailboxes in one parent, paged.</summary>
+    public partial AsyncPageable<MailboxResource> GetAllAsync(string domainsName, CancellationToken cancellationToken = default);
 }
 
 /// <summary>The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.</summary>

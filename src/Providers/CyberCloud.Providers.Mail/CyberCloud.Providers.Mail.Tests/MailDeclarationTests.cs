@@ -27,25 +27,37 @@ public sealed class MailDeclarationTests {
     }
 
     [Fact]
-    public void ItDeclaresNoActionAtAll() {
-        // ⚠ THE ONLY TYPE IN THE CATALOGUE THAT DECLARES NONE, AND THE ASSERTION IS HERE SO THAT
-        // ADDING ONE IS A DELIBERATE ACT. docs/plan/17 names verify, sendTest and exportMailbox, and
-        // MailProvider carries the argument for why none is declared: actions-without-handlers.txt
-        // permits a handler-less action ONLY on an already-published api-version, and 2026-08-01 of
-        // this type was published by the change that would have declared them.
-        //
-        // ⚠ If this test goes red because somebody added an action, the question to answer is not
-        // "may I add a line to actions-without-handlers.txt" — it is "does this action have a
-        // handler". For verify the honest answer is still no: it needs a DNS resolution seam that
-        // this repository does not have.
+    public void TheDomainDeclaresDnsRecordsAndVerifyEachWithAHandler() {
+        // ⚠ THIS TEST USED TO ASSERT THAT THE DOMAIN DECLARED NO ACTION AT ALL, AND ITS OWN COMMENT
+        // SAID WHAT WOULD CHANGE THAT: "does this action have a handler". Both do now — IMailDnsResolver
+        // is the DNS seam the first pass did not have. What it still pins is that neither is declared
+        // bare: actions-without-handlers.txt is not the door for an api-version this type is growing.
         var registry = ProviderRegistry.Build([new MailProvider()]);
 
         registry.TryGetType(MailDomains.Type, out var registration).ShouldBeTrue();
 
-        registration.Actions.ShouldBeEmpty(
-            "an action was declared. If it has a handler, delete this assertion and say so; if it "
-            + "does not, it must not be declared — see MailProvider."
-        );
+        var actions = registration.Actions.ToDictionary(static x => x.Name, StringComparer.Ordinal);
+
+        actions.Keys.Order(StringComparer.Ordinal).ShouldBe([MailDomains.DnsRecordsAction, MailDomains.VerifyAction]);
+        actions[MailDomains.DnsRecordsAction].HandlerType.ShouldBe(typeof(MailDnsRecordsHandler));
+        actions[MailDomains.DnsRecordsAction].Permission.ShouldBe("read");
+
+        // ⚠ Write, because a verify that finds the records opens the gate — MailVerifyHandler.
+        actions[MailDomains.VerifyAction].HandlerType.ShouldBe(typeof(MailVerifyHandler));
+        actions[MailDomains.VerifyAction].Permission.ShouldBe("write");
+    }
+
+    [Fact]
+    public void TheMailboxIsANestedClusterTypeWithNoAction() {
+        var registry = ProviderRegistry.Build([new MailProvider()]);
+
+        registry.TryGetType(MailMailboxes.Type, out var registration).ShouldBeTrue();
+
+        registration.RequiresCluster.ShouldBeTrue();
+        registration.Chart.ShouldBe(MailMailboxes.ChartName);
+        registration.ReconcilerType.ShouldBe(typeof(MailMailboxReconciler));
+        registration.Display.Alias.ShouldBe("mailbox");
+        registration.Actions.ShouldBeEmpty();
     }
 
     [Fact]
@@ -132,8 +144,8 @@ public sealed class MailDeclarationTests {
 
         MailDomains.RelayHosts(first.RootElement).ShouldBe(MailDomains.RelayHosts(second.RootElement));
 
-        MailDomains.PostfixMainCf("example-com", first.RootElement)
-            .ShouldBe(MailDomains.PostfixMainCf("example-com", second.RootElement));
+        MailDomains.PostfixMainCf(first.RootElement, MailSending.Held)
+            .ShouldBe(MailDomains.PostfixMainCf(second.RootElement, MailSending.Held));
     }
 
     [Fact]

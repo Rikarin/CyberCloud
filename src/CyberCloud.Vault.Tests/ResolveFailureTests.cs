@@ -196,6 +196,25 @@ public sealed class ResolveFailureTests(OpenBaoFixture vault) {
     }
 
     [Fact]
+    public async Task ADotSegmentIsRefusedRatherThanCollapsedIntoAnotherPath() {
+        await Seed();
+
+        // ⚠ THE #34 REVIEW'S PROBE, AT THE LAST PLACE THAT CAN STOP IT. `…/main/../main` is collapsed
+        // by the HTTP client, before OpenBao sees it, back into the seeded secret itself — so a
+        // resolver that let the segments through would come back with its value, and the reader
+        // token would answer for any other path a traversal named just as readily.
+        var resolved = await vault.Resolver(await Reader())
+            .ResolveAsync(
+                new() { Path = Path + "/../" + Path.Split('/')[^1], Field = "adminPassword" },
+                TestContext.Current.CancellationToken
+            );
+
+        resolved.IsFailure.ShouldBeTrue("a path with a '..' segment was resolved");
+        resolved.Error!.Code.ShouldBe(ErrorCode.InternalError);
+        resolved.Error.Message.ShouldContain("malformed handle");
+    }
+
+    [Fact]
     public async Task AnEmptyHandleIsRefusedWithoutAskingTheVault() {
         // ⚠ No seeding and a token that is not a token: if this reached OpenBao it would come back
         // as a permission denial rather than as the handle fault it is. SecretRef.IsEmpty's own

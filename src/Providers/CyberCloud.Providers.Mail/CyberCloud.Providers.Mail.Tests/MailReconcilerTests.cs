@@ -17,7 +17,7 @@ public sealed class MailReconcilerTests {
         // ⚠ The cross-tenant half of this claim is asserted separately, in
         // MailDkimTests.TwoTenantsWithTheSameDomainNameGetDifferentKeys, because a structural check
         // cannot see mixing and only the two together cover it.
-        ReconcilerConformance.CheckNoHiddenState(new MailDomainReconciler(new FixedClock()))
+        ReconcilerConformance.CheckNoHiddenState(MailHarness.Reconciler())
             .ShouldBeEmpty();
     }
 
@@ -31,7 +31,7 @@ public sealed class MailReconcilerTests {
         var connection = new RecordingConnection();
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
 
-        var reconciler = new MailDomainReconciler(new FixedClock());
+        var reconciler = MailHarness.Reconciler();
         var context = MailHarness.Context(connection, body.RootElement, vault);
 
         await reconciler.ReconcileAsync(context, TestContext.Current.CancellationToken);
@@ -54,7 +54,7 @@ public sealed class MailReconcilerTests {
         var connection = new RecordingConnection();
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
 
-        await new MailDomainReconciler(new FixedClock()).ReconcileAsync(
+        await MailHarness.Reconciler().ReconcileAsync(
             MailHarness.Context(connection, body.RootElement),
             TestContext.Current.CancellationToken
         );
@@ -76,7 +76,7 @@ public sealed class MailReconcilerTests {
         var connection = new RecordingConnection();
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
 
-        await new MailDomainReconciler(new FixedClock()).ReconcileAsync(
+        await MailHarness.Reconciler().ReconcileAsync(
             MailHarness.Context(connection, body.RootElement),
             TestContext.Current.CancellationToken
         );
@@ -98,7 +98,7 @@ public sealed class MailReconcilerTests {
         var vault = new InMemorySecretVault { RefuseMint = true };
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
 
-        var outcome = await new MailDomainReconciler(new FixedClock()).ReconcileAsync(
+        var outcome = await MailHarness.Reconciler().ReconcileAsync(
             MailHarness.Context(connection, body.RootElement, vault),
             TestContext.Current.CancellationToken
         );
@@ -115,14 +115,16 @@ public sealed class MailReconcilerTests {
         var connection = new RecordingConnection();
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
         var context = MailHarness.Context(connection, body.RootElement);
-        var reconciler = new MailDomainReconciler(new FixedClock());
+        var reconciler = MailHarness.Reconciler();
 
         await reconciler.ReconcileAsync(context, TestContext.Current.CancellationToken);
         await reconciler.DeleteAsync(context, TestContext.Current.CancellationToken);
 
-        var order = connection.Deleted.Select(static x => x.Kind.Kind).ToList();
-
-        order.IndexOf("Secret").ShouldBe(order.Count - 1, "the Secret was not removed last");
+        // ⚠ By name, since the domain has two Secrets: the one holding the key goes last.
+        connection.Deleted[^1].Name.ShouldBe(
+            MailDomains.CredentialsSecretName("example-com"),
+            "the credentials Secret was not removed last"
+        );
 
         // ⚠ And the claim is NOT among them. A PersistentVolumeClaim made from a volumeClaimTemplate
         // has no owner reference to the set, so it survives; RetainedVolumesAsync is what makes that
@@ -141,7 +143,7 @@ public sealed class MailReconcilerTests {
         var connection = new RecordingConnection { Suspend = true };
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
 
-        var outcome = await new MailDomainReconciler(new FixedClock()).ReconcileAsync(
+        var outcome = await MailHarness.Reconciler().ReconcileAsync(
             MailHarness.Context(connection, body.RootElement),
             TestContext.Current.CancellationToken
         );
@@ -156,7 +158,7 @@ public sealed class MailReconcilerTests {
         // and permanent, for a wiring reason.
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
 
-        var outcome = await new MailDomainReconciler(new FixedClock()).DeleteAsync(
+        var outcome = await MailHarness.Reconciler().DeleteAsync(
             MailHarness.Context(null, body.RootElement),
             TestContext.Current.CancellationToken
         );
@@ -174,7 +176,7 @@ public sealed class MailReconcilerTests {
             var connection = new RecordingConnection();
             using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId, sieve: sieve));
 
-            await new MailDomainReconciler(new FixedClock()).ReconcileAsync(
+            await MailHarness.Reconciler().ReconcileAsync(
                 MailHarness.Context(connection, body.RootElement),
                 TestContext.Current.CancellationToken
             );
