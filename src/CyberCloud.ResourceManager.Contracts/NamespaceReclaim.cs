@@ -175,6 +175,22 @@ public readonly record struct NamespaceOccupant {
 ///         on that list is an object no restore reads and no tenant can own.
 ///     </para>
 ///     <para>
+///         ⚠
+///         <b>
+///             A cluster-scoped object is outside this verdict on purpose, and #96 decided it
+///             rather than leaving it unsaid.
+///         </b> Kube-OVN's <c>Vpc</c> and <c>Subnet</c> belong to a resource in
+///         the group and aren't in its namespace, so the occupant listing never holds them. Counting
+///         them would protect nothing: a namespace delete removes namespaced objects only, and the
+///         garbage collector treats a namespaced owner on a cluster-scoped dependent as unresolvable
+///         and never collects it, so the delete this verdict authorizes can't reach one. A live
+///         resource of any scope is protected by the member half; a cluster-scoped object that
+///         outlived its resource is the drift scan's orphan, and refusing the namespace over it would
+///         keep an empty namespace forever without removing the leak.
+///         <c>ClusterConformanceTests.ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt</c>
+///         asserts both halves per family, from the scope of what the family renders.
+///     </para>
+///     <para>
 ///         ⚠ <b>What this rule does <i>not</i> close is the race, and it cannot from here.</b> A
 ///         resource created between the listing and the delete has its objects destroyed. Closing that
 ///         needs the group to stop accepting members before the evidence is read — a group-delete

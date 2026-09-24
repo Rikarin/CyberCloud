@@ -60,8 +60,22 @@ public sealed class K3sFixture : IAsyncLifetime {
     /// </summary>
     const string SharedVarRunScript = "mount --make-rshared /var/run && exec /bin/k3s \"$@\"";
 
+    /// <summary>
+    ///     The k3s component switched off beside the module's own <c>--disable=traefik</c> — the
+    ///     same flag as <c>ClusterInfrastructure.DisableMetricsServer</c>, whose remarks say why.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>It matters here for one test and it matters exactly.</b>
+    ///     <c>NamespaceDiscoveryRefusalTests</c> registers an <c>APIService</c> nobody serves and
+    ///     asserts the refusal names <i>its</i> group. With metrics-server installed, a young cluster
+    ///     has a second unanswering group, and whichever of the two discovery reached first would
+    ///     be the one named.
+    /// </remarks>
+    public const string DisableMetricsServer = "--disable=metrics-server";
+
     readonly K3sContainer container = new K3sBuilder(Image)
         .WithEntrypoint("/bin/sh", "-c", SharedVarRunScript, "k3s")
+        .WithCommand(DisableMetricsServer)
         .WithResourceMapping(
             Encoding.UTF8.GetBytes(KubeletDropIn),
             "/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/99-cybercloud-cgroup-v1.conf"

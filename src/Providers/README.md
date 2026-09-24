@@ -2600,8 +2600,16 @@ apply, get and delete and no list member at all**, which is why there was nowher
   incomplete discovery leaves a namespace stuck in `Terminating` with
   `NamespaceDeletionDiscoveryFailure` — so refusing *before* issuing the delete is strictly better
   than issuing one that hangs, and the condition clears on its own when the apiserver comes back.
-  What the platform owes is a refusal that names the group, and
-  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` asserts it.
+  What the platform owes is a refusal that names the group.
+- **⚠ That refusal was proved by a race, and #96 replaced the race with a provocation.** Which arm of
+  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` ran depended on whether
+  metrics-server had come up by the time the suite reached it, and `CyberCloud.Network`'s cluster
+  suite went red and green on one tree for that reason alone. The test k3s recipes now pass
+  `--disable=metrics-server`, as the AppHost's always has (`ClusterInfrastructure.DisableMetricsServer`);
+  the listing there waits for every `APIService` to report `Available` and must succeed; and
+  `NamespaceDiscoveryRefusalTests` registers an `APIService` whose service does not exist, against
+  `CyberCloud.Kubernetes.Tests`' k3s, and asserts the refusal names that group and the namespace —
+  then removes it and asserts the listing succeeds again.
 - **Two smaller repairs fell out.** A list body that would not parse was returned as an *empty page with
   no cursor*, which reads as "this kind holds nothing"; it is now a failure. And an empty
   `labelSelector` was sent as `labelSelector=` rather than omitted, which only mattered once a caller
@@ -2631,6 +2639,14 @@ on the next pass; not forgetting when it was gone costs an hour of failed reconc
   nothing performs.
 - **A cross-silo broadcast** would close the memo from the writing end rather than the reading end.
   Nothing needs it while the `404` channel exists.
+- **The cluster suite's "nothing of it is left" sees only what carries its `resource-id` (#96).**
+  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` scopes its after-teardown check to
+  the resource under test by that label, because every class in a provider's assembly shares one
+  namespace with the harness's ancestors, siblings and companions. An object a controller made from
+  ours without copying the label — an operator's own `Secret`, a `Service`'s `EndpointSlice` — is
+  outside it. The limit is the test's and not the product's: the real reclaim weighs every occupant
+  and refuses over such an object. Closing it needs `KubeObjectSummary` to carry `ownerReferences`, so
+  the test can follow the chain rather than the label.
 
 ### Closed: the drift scan no longer calls a namespace an orphan
 

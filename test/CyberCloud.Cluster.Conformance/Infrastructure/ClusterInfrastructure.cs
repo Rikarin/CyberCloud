@@ -179,14 +179,53 @@ public static class ClusterInfrastructure {
     public const string SharedVarRunScript = "mount --make-rshared /var/run && exec /bin/k3s \"$@\"";
 
     /// <summary>
-    ///     A k3s builder on <see cref="K3sImage" /> that comes up on a cgroup v1 host as well as a
-    ///     v2 one, with <c>/var/run</c> shared so KubeVirt's handler can run on it. Every k3s under
-    ///     <c>test/</c> goes through here; <c>CyberCloud.Kubernetes.Tests.Infrastructure.K3sFixture</c>
-    ///     cannot reference this assembly and carries the same lines beside its own copy of the pin.
+    ///     The k3s packaged component this recipe switches off, beside the <c>--disable=traefik</c>
+    ///     <c>Testcontainers.K3s</c> already passes.
     /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             metrics-server is the one aggregated API a stock k3s registers, and it made the
+    ///             namespace listing a race (#96).
+    ///         </b> k3s ships it as an <c>APIService</c> for
+    ///         <c>metrics.k8s.io/v1beta1</c> whose backend is a pod, and a pod needs an image pull
+    ///         and a kubelet. Until it answers, discovery of that group returns 503 and
+    ///         <c>NamespaceContents</c> refuses the whole enumeration — correctly, see
+    ///         <c>KubeApiClient.DiscoverNamespacedKindsAsync</c>. So which arm
+    ///         <c>ClusterConformanceTests.ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt</c>
+    ///         took depended on how old the cluster was when the test reached it: the refusing arm
+    ///         on a young k3s, the listing arm four minutes into a full <c>./build.sh Test</c>. The
+    ///         Network family's cluster suite went red and green on the same tree for exactly that
+    ///         reason.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Off, and not waited for, because nothing here reads a metric.</b> The AppHost's
+    ///         k3s has passed <c>--disable=metrics-server</c> since it was written ("nothing in Cyber
+    ///         Cloud uses either"); this is the test recipe agreeing with it. Waiting instead would
+    ///         cost every suite an image pull inside a fresh container. The refusal it used to
+    ///         provoke by accident is now provoked on purpose, with an <c>APIService</c> that names a
+    ///         service nobody runs, in <c>CyberCloud.Kubernetes.Tests</c>
+    ///         § <c>NamespaceDiscoveryRefusalTests</c>.
+    ///     </para>
+    /// </remarks>
+    public const string DisableMetricsServer = "--disable=metrics-server";
+
+    /// <summary>
+    ///     A k3s builder on <see cref="K3sImage" /> that comes up on a cgroup v1 host as well as a
+    ///     v2 one, with <c>/var/run</c> shared so KubeVirt's handler can run on it and no
+    ///     metrics-server (<see cref="DisableMetricsServer" />). Every k3s under <c>test/</c> goes
+    ///     through here; <c>CyberCloud.Kubernetes.Tests.Infrastructure.K3sFixture</c> cannot
+    ///     reference this assembly and carries the same lines beside its own copy of the pin.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>WithCommand</c> <b>appends</b> to the module's own <c>server --disable=traefik</c>
+    ///     rather than replacing it, which is why the flag is passed alone.
+    /// </remarks>
     public static K3sBuilder K3s() =>
         new K3sBuilder(K3sImage)
             .WithEntrypoint("/bin/sh", "-c", SharedVarRunScript, "k3s")
+            .WithCommand(DisableMetricsServer)
             .WithResourceMapping(Encoding.UTF8.GetBytes(KubeletDropIn), KubeletDropInPath);
 
     /// <summary>The PostgreSQL image, matching <c>CyberCloud.ServiceDefaults.Tests</c>'s durable shards.</summary>
