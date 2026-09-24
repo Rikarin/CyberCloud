@@ -248,4 +248,21 @@ public sealed class MailMailboxConformance(ProviderTestCluster<MailMailboxCase> 
 public sealed class MailDomainClusterBackedConformance() : ClusterBackedConformanceTests(MailDomainCase.ProviderCase);
 
 /// <summary>The container-backed half, skipped loudly, against the mailbox child type.</summary>
-public sealed class MailMailboxClusterBackedConformance() : ClusterBackedConformanceTests(MailMailboxCase.ProviderCase);
+/// <remarks>
+///     ⚠ <b>With its own sentence, because the shared one overclaimed.</b> It says five cluster-backed
+///     criteria run in the cluster project; for a mailbox one does — the silo kill — and the #34
+///     review read the shared sentence as the claim it was.
+/// </remarks>
+public sealed class MailMailboxClusterBackedConformance()
+    : ClusterBackedConformanceTests(
+        MailMailboxCase.ProviderCase,
+        "of the five cluster-backed criteria, ONE runs for this type in "
+        + "CyberCloud.Providers.Mail.Cluster.Conformance — killing the silo mid-create still converging "
+        + "(MailMailboxSiloKillConformance). The lifecycle, drift after a real kubectl delete, a field "
+        + "conflict and the serialization round trip do NOT run: that class presumes a type owns its "
+        + "objects, and a mailbox co-writes its domain's Secret "
+        + "(charts/managed/kube-ovn-vpc-peering/conformance.yaml § owed, "
+        + "`the-shared-cluster-suite-presumes-ownership`). The mailbox's co-write against a real API "
+        + "server is MailDeliveryOnK3sTests', which writes three mailboxes into one Secret and signs in "
+        + "as them."
+    );

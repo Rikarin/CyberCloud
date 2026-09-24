@@ -8,7 +8,12 @@
 #
 # ⚠ TWO NUMBERS PER PROTOCOL. Dovecot 2.4 runs unprivileged and cannot bind below 1024, so it listens
 # on the 31xxx ports its own image uses; the Service maps the conventional port onto each, and a
-# pool dials 24 and 143 without knowing.
+# pool dials 143 without knowing.
+#
+# ⚠ INBOUND IS SMTP TO POSTFIX, AND THERE IS NO LMTP PORT HERE. The first two cuts exposed Dovecot's
+# LMTP for the inbound pool, as docs/plan/17 § Topology drew it — and LMTP skips Postfix, so an alias,
+# a forward or the catch-all never saw internet mail and Rspamd never scanned it. Port 25 is the
+# domain's own Postfix, unauthenticated and relaying nowhere. MailDomains.SmtpPort.
 #
 # ⚠ SUBMISSION IS PLAINTEXT AUTH ON A ClusterIP, WHICH IS ONLY ACCEPTABLE BECAUSE OF WHERE IT IS. The
 # shared submission pool terminates TLS and relays here; until it exists the port is reachable from
@@ -25,9 +30,9 @@ spec:
   selector:
     {{- include "mail.selectorLabels" . | nindent 4 }}
   ports:
-    - name: lmtp
-      port: 24
-      targetPort: 31024
+    - name: smtp
+      port: 25
+      targetPort: 25
     - name: imap
       port: 143
       targetPort: 31143

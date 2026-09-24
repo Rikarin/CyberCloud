@@ -8,7 +8,7 @@ resource body.
 
 {{/*
 The Service's name. It is also the StatefulSet's `serviceName`, which is what gives the single pod a
-stable DNS record for the shared inbound pool to deliver to over LMTP. Defining it once is what keeps
+stable DNS record for the shared inbound pool to deliver to over SMTP. Defining it once is what keeps
 those two the same string.
 */}}
 {{- define "mail.service" -}}

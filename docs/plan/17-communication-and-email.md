@@ -375,6 +375,41 @@ submission and IMAP are plaintext on a `ClusterIP` until then), the outbound poo
 MTA-STS policy host, SRS for forwards, DKIM rotation (designed as a `dkimKeys` child type), groups,
 and roughly four hundred mailboxes per domain before the Secret's annotation budget refuses the next.
 
+⚠ **CORRECTED 2026-09-24 by the #34 review — four things the landing above got wrong.**
+
+- **An open gate relayed for a mailbox as anyone.** `permit_sasl_authenticated` says who signed in,
+  not who the mail is from, and every tenant's SPF includes the same platform include — so one
+  tenant's mailbox could send as another tenant's domain and pass SPF, and DMARC through SPF
+  alignment. Submission now refuses any envelope sender the login does not own
+  (`smtpd_sender_login_maps`, built from each mailbox's own claimed addresses, and
+  `reject_sender_login_mismatch`), and Rspamd rejects an authenticated message whose `From:` is not
+  that envelope sender. Both run on k3s against a real client.
+- **Inbound mail never met the alias map.** [§ Topology](#topology--the-briefs-question-answered)
+  above says the pool delivers "to the tenant's Dovecot over LMTP", and the back end exposed exactly
+  that. Dovecot knows mailboxes and nothing else: aliases, `forwardTo` and the catch-all are
+  Postfix's `virtual_alias_maps`, and spam filtering is Postfix's milter — so internet mail to an
+  alias was refused and nothing inbound was scanned. **The inbound pool delivers over SMTP to the
+  domain's own Postfix on 25**, which hands Dovecot LMTP inside the pod; the Service carries no LMTP.
+  The Cyrus argument moves one hop in and still holds.
+- **A vault path could climb out of its prefix.** `tenants/{mine}/../{theirs}/db` starts with the
+  tenant's prefix, and the resolver's HTTP client collapses the dot segments before OpenBao sees the
+  path. Every tenant-spelled path — the mailbox's and `Compute/virtualMachines`' cloud-init, where the
+  check was copied from — is now confined by `SecretRef.IsConfinedTo`, and the resolver itself refuses
+  a path with an empty, `.` or `..` segment.
+- **The Postfix image was named under somebody else's namespace.** `docker.io/cybercloud` is a Docker
+  Hub organisation an unrelated party registered in 2018; an unpublished tag there is a tag they could
+  publish. It is `ghcr.io/rikarin/cybercloud/mail-postfix` now.
+
+Also from the review: a mailbox's observed state no longer carries the Secret (every mailbox's hash
+had been persisted in every mailbox's grain), and a DNS that did not answer no longer closes a gate a
+previous answer opened. ⚠ **Still owed after it, and said plainly:** DKIM rotation (the selector is
+the constant `cc`, and rotating needs desired state naming the active selector — a new property is a
+new api-version, and the `dkimKeys/{selector}` child type is new public surface in five SDKs, which is
+the issue's scope decision rather than a review fix); the suspension's *trigger* (nothing re-drives a
+converged resource anywhere on the platform, and the lever that works within the hour without one is
+the shared submission pool, which knows the tenant from the credential); and Rspamd's rate limits and
+greylisting, both of which keep their counters in Redis this pod does not have.
+
 Webmail is a portal app (Angular + xUI) against a JMAP-shaped API. ⚠ **Building a good webmail client
 is 2 EM on its own** and is not in the 3.5 above — the M2 deliverable is IMAP/SMTP access with a
 minimal web client (list, read, compose, search). A full client is M3 and it is honest to say so

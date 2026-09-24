@@ -82,7 +82,9 @@ namespace CyberCloud.Providers.Mail.Contracts;
 ///         <i>
 ///             Dovecot back end and
 ///             its per-tenant volume
-///         </i>, reachable over LMTP from the shared inbound pool. ⚠
+///         </i>, reachable over SMTP from the shared inbound pool — ⚠ through the domain's own
+///         Postfix and not over LMTP to Dovecot as doc 17 drew it, or aliases, forwards and spam
+///         filtering never see internet mail (<see cref="SmtpPort" />). ⚠
 ///         <b>
 ///             The
 ///             shared pools are not built and are not this type
@@ -232,8 +234,8 @@ public static class MailDomains {
     /// <summary>The field the Dovecot master password is filed under.</summary>
     /// <remarks>
     ///     The credential the shared inbound pool authenticates with when it hands a message to this
-    ///     back end over LMTP, and the one the shared submission pool uses to check a mailbox
-    ///     password. ⚠ It is not a tenant-visible credential and no action returns it.
+    ///     back end (over SMTP since the #34 review — <see cref="SmtpPort" />), and the one the
+    ///     shared submission pool uses to check a mailbox password. ⚠ It is not a tenant-visible credential and no action returns it.
     /// </remarks>
     public const string MasterPasswordField = "masterPassword";
 
@@ -372,17 +374,39 @@ public static class MailDomains {
     // ⚠ TWO NUMBERS PER PROTOCOL, AND THE SERVICE IS WHAT KEEPS THEM APART. Dovecot 2.4's image runs
     // as the unprivileged `vmail` user and cannot bind below 1024, so every Dovecot listener is in the
     // 31xxx range the upstream image itself uses, and the Service maps the conventional port onto it.
-    // A shared pool dials 24 and 143 and never learns the difference.
+    // A shared pool dials 143 and never learns the difference.
 
-    /// <summary>LMTP, on the Service. How the shared inbound pool delivers into this back end.</summary>
+    /// <summary>
+    ///     SMTP, on the Service and in the pod alike — how the shared inbound pool delivers into this
+    ///     back end: to the domain's own Postfix, which expands aliases, forwards and the catch-all,
+    ///     filters through Rspamd, and hands the result to Dovecot over LMTP.
+    /// </summary>
     /// <remarks>
-    ///     ⚠ <b>This is the seam doc 17 says survives a Cyrus answer.</b> The shared pool speaks LMTP
-    ///     to whatever is behind this Service; nothing about the pool changes if the container on the
-    ///     other side is Cyrus rather than Dovecot.
+    ///     <para>
+    ///         ⚠ <b>NOT LMTP, WHICH IS WHAT doc 17 § Topology SAID AND WHAT THE FIRST TWO CUTS
+    ///         EXPOSED.</b> An LMTP delivery goes straight to Dovecot, and Dovecot knows mailboxes and
+    ///         nothing else: the alias map, <c>forwardTo</c> and the catch-all are Postfix's
+    ///         <c>virtual_alias_maps</c>, and spam filtering is Postfix's milter. So with the pool on
+    ///         LMTP, mail from the internet to an alias was refused at <c>RCPT</c>, a forward never
+    ///         left, and nothing inbound was ever scanned — aliases worked only for mail submitted
+    ///         through this domain's own Postfix (the #34 review). The Service now carries SMTP to
+    ///         Postfix and no LMTP at all, so there is no path into the mail store that skips the
+    ///         map. <c>MailDeliveryOnK3sTests</c> delivers to an alias from outside, unauthenticated.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Unauthenticated, and it relays nowhere.</b> The port-25 <c>smtpd</c> offers no
+    ///         <c>AUTH</c>, so every client here is a stranger, and both gate states' relay restrictions
+    ///         let a stranger reach this domain's own addresses and nothing else. The Cyrus argument
+    ///         doc 17 made for LMTP holds one hop further in: the pool speaks SMTP to this Service,
+    ///         and what Postfix speaks to behind it is the back end's business.
+    ///     </para>
     /// </remarks>
-    public const int LmtpPort = 24;
+    public const int SmtpPort = 25;
 
-    /// <summary>LMTP, in the pod — where Dovecot listens and Postfix's virtual transport delivers.</summary>
+    /// <summary>
+    ///     LMTP, in the pod only — where Dovecot listens and Postfix's virtual transport delivers.
+    ///     Not on the Service: <see cref="SmtpPort" /> says why.
+    /// </summary>
     public const int LmtpContainerPort = 31024;
 
     /// <summary>IMAP, in-cluster and plaintext, on the Service. ⚠ TLS is terminated at the shared front door.</summary>
@@ -494,8 +518,19 @@ public static class MailDomains {
     ///     postfix package and nothing else (3.10.13 on the day it was built); the cluster-backed
     ///     suite builds it and imports it into its own k3s, and no pipeline pushes it here —
     ///     <c>charts/managed/mail/conformance.yaml § owed</c>, <c>the-postfix-image-is-not-published</c>.
+    ///     <para>
+    ///         ⚠ <b>UNDER THE REPOSITORY OWNER'S GHCR NAMESPACE, BECAUSE THE FIRST NAME BELONGED TO
+    ///         SOMEBODY ELSE.</b> The first cut named <c>docker.io/cybercloud/postfix</c>, and the
+    ///         <c>cybercloud</c> organisation on Docker Hub was registered in 2018 by an unrelated
+    ///         party (the #34 review read <c>hub.docker.com/v2/users/cybercloud/</c>). "Published by
+    ///         nothing" was only true until they published that tag — and then every mail pod would
+    ///         have run their image with the mailbox <c>Secret</c> mounted. <c>ghcr.io/rikarin</c> is
+    ///         bound to the GitHub account that owns this repository, where the agent image already
+    ///         lives (<c>charts/agent/values.yaml</c>), so an unpublished tag there is a pull that
+    ///         fails rather than a pull somebody else can answer.
+    ///     </para>
     /// </remarks>
-    public const string PostfixImage = "docker.io/cybercloud/postfix:1.0.0";
+    public const string PostfixImage = "ghcr.io/rikarin/cybercloud/mail-postfix:1.0.0";
 
     /// <summary>The group every file the three containers share is readable by.</summary>
     /// <remarks>
@@ -1167,7 +1202,8 @@ public static class MailDomains {
                 [PostfixStartKey] = PostfixStartScript(desired),
                 [RspamdProxyKey] = RspamdWorkerProxy(),
                 [RspamdDkimKey] = RspamdDkimSigning(desired),
-                [RspamdActionsKey] = RspamdActions(desired)
+                [RspamdActionsKey] = RspamdActions(desired),
+                [RspamdSenderKey] = RspamdSenderRule()
             }
         }.ToJsonString();
     }
@@ -1189,6 +1225,9 @@ public static class MailDomains {
 
     /// <summary>The <c>ConfigMap</c> key mounted as Rspamd's <c>local.d/actions.conf</c>.</summary>
     public const string RspamdActionsKey = "rspamd-actions.conf";
+
+    /// <summary>The <c>ConfigMap</c> key mounted as Rspamd's <c>local.d/rspamd.lua</c> — <see cref="RspamdSenderRule" />.</summary>
+    public const string RspamdSenderKey = "rspamd-sender.lua";
 
     /// <summary>Where the <c>ConfigMap</c> is mounted in the Dovecot and Postfix containers.</summary>
     public const string ConfigDirectory = "/etc/mail/config";
@@ -1470,6 +1509,20 @@ public static class MailDomains {
     ///         which is why both closed spellings end in <c>reject</c> after the explanatory map.
     ///     </para>
     ///     <para>
+    ///         ⚠ <b>AN OPEN GATE RELAYS FOR A MAILBOX AS ITSELF AND AS NOBODY ELSE — AND THE FIRST CUT
+    ///         RELAYED FOR IT AS ANYONE.</b> <c>permit_sasl_authenticated</c> says who signed in, not who
+    ///         the mail is from, and every tenant's SPF includes the same platform include
+    ///         (<c>MailDnsRecords</c>), so alice of tenant A could submit <c>MAIL FROM:&lt;ceo@b.example&gt;</c>
+    ///         with a matching <c>From:</c>, pass SPF for tenant B's domain, and pass DMARC through SPF
+    ///         alignment (the #34 review). Rspamd's <c>allow_username_mismatch</c> only withholds the
+    ///         DKIM signature; it refuses nothing. Two locks close it, one per sender field:
+    ///         <c>smtpd_sender_login_maps</c> names the login that owns each address the domain's
+    ///         mailboxes answer for, and the submission service's
+    ///         <c>reject_sender_login_mismatch</c> refuses any other envelope sender at
+    ///         <c>RCPT TO</c>; <see cref="RspamdSenderRule" /> then refuses a <c>From:</c> header that is
+    ///         not that envelope sender. <c>MailDeliveryOnK3sTests</c> submits all three forgeries.
+    ///     </para>
+    ///     <para>
     ///         ⚠ <b>The first cut rendered a catch-all as <c>luser_relay</c> and
     ///         <c>mydestination = {domain}</c> beside <c>virtual_mailbox_domains = {domain}</c>.</b>
     ///         <c>luser_relay</c> belongs to <c>local(8)</c> and does nothing for a virtual domain, and
@@ -1495,6 +1548,9 @@ public static class MailDomains {
             .Append(CultureInfo.InvariantCulture, $"virtual_mailbox_domains = {domain}\n")
             .Append("virtual_mailbox_maps = texthash:/etc/postfix/mailboxes\n")
             .Append("virtual_alias_maps = texthash:/etc/postfix/virtual\n")
+            // ⚠ Who may send as whom — the submission service refuses any other MAIL FROM. See the
+            // remarks on this method and on PostfixStartScript, which builds the map.
+            .Append("smtpd_sender_login_maps = texthash:/etc/postfix/senders\n")
             .Append(CultureInfo.InvariantCulture, $"virtual_transport = lmtp:inet:127.0.0.1:{Text(LmtpContainerPort)}\n")
             .Append("smtpd_sasl_type = dovecot\n")
             .Append(CultureInfo.InvariantCulture, $"smtpd_sasl_path = inet:127.0.0.1:{Text(AuthContainerPort)}\n")
@@ -1547,6 +1603,32 @@ public static class MailDomains {
                 + domain + " is held until its SPF, DKIM and DMARC records verify}, reject"
         };
 
+    /// <summary>The gate a domain's <c>ConfigMap</c>, as read back, renders — or <see langword="null" />.</summary>
+    /// <param name="configMapJson">The <c>ConfigMap</c> as the API server returned it.</param>
+    /// <param name="domain">The mail domain, which each state's relay line names.</param>
+    /// <returns>
+    ///     The state whose <see cref="RelayRestrictions" /> line <c>main.cf</c> carries, or
+    ///     <see langword="null" /> when it carries none of the three — an object from before the gate,
+    ///     or one somebody edited.
+    /// </returns>
+    public static MailSending? RunningGate(string configMapJson, string domain) {
+        string mainCf;
+
+        try {
+            mainCf = JsonNode.Parse(configMapJson)?["data"]?[PostfixMainCfKey]?.GetValue<string>() ?? string.Empty;
+        } catch (Exception ex) when (ex is JsonException or InvalidOperationException) {
+            return null;
+        }
+
+        foreach (var state in new[] { MailSending.Open, MailSending.Held, MailSending.Suspended }) {
+            if (mainCf.Contains("smtpd_relay_restrictions = " + RelayRestrictions(domain, state) + "\n", StringComparison.Ordinal)) {
+                return state;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>The script the Postfix container runs: build the maps, start, and reload on change.</summary>
     /// <param name="desired">The validated desired body, which carries the domain and the catch-all.</param>
     /// <remarks>
@@ -1564,6 +1646,14 @@ public static class MailDomains {
     ///         chroots most of them into <c>/var/spool/postfix</c>, which needs a copy of
     ///         <c>resolv.conf</c> and friends that only Debian's init script makes. The container is
     ///         the isolation boundary here, as it is for Dovecot's login services.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE SENDER MAP IS THE ALIAS MAP'S FIRST COLUMN, OWNED BY THE FILE IT CAME FROM.</b>
+    ///         Every line of <c>{local}.virtual</c> starts with an address that mailbox answers for —
+    ///         its own and each alias, each claimed through <c>{local}.claim</c> so no two mailboxes
+    ///         can hold one — so <c>senders</c> maps each to <c>{local}@{domain}</c>, the login Dovecot
+    ///         authenticates. No fifth key per mailbox, and no address a mailbox did not claim. The
+    ///         catch-all's <c>@domain</c> line is not in any mailbox's file and is nobody's to send as.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>The domain and the catch-all are interpolated into shell, and both are safe by
@@ -1589,6 +1679,7 @@ public static class MailDomains {
             .Append(CultureInfo.InvariantCulture, $"    cp {ConfigDirectory}/{PostfixMainCfKey} /etc/postfix/main.cf\n")
             .Append("    : > /etc/postfix/mailboxes.next\n")
             .Append("    : > /etc/postfix/virtual.next\n")
+            .Append("    : > /etc/postfix/senders.next\n")
             .Append(CultureInfo.InvariantCulture, $"    for file in {UsersDirectory}/*.passwd; do\n")
             .Append("        [ -e \"$file\" ] || continue\n")
             .Append("        printf '%s@%s OK\\n' \"$(basename \"$file\" .passwd)\" \"$domain\" >> /etc/postfix/mailboxes.next\n")
@@ -1596,12 +1687,19 @@ public static class MailDomains {
             .Append(CultureInfo.InvariantCulture, $"    for file in {UsersDirectory}/*.virtual; do\n")
             .Append("        [ -e \"$file\" ] || continue\n")
             .Append("        cat \"$file\" >> /etc/postfix/virtual.next\n")
+            .Append("        owner=\"$(basename \"$file\" .virtual)@$domain\"\n")
+            .Append("        while read -r address rest; do\n")
+            .Append("            if [ -n \"$address\" ]; then\n")
+            .Append("                printf '%s %s\\n' \"$address\" \"$owner\" >> /etc/postfix/senders.next\n")
+            .Append("            fi\n")
+            .Append("        done < \"$file\"\n")
             .Append("    done\n")
             .Append("    if [ -n \"$catch_all\" ]; then\n")
             .Append("        printf '@%s %s@%s\\n' \"$domain\" \"$catch_all\" \"$domain\" >> /etc/postfix/virtual.next\n")
             .Append("    fi\n")
             .Append("    mv /etc/postfix/mailboxes.next /etc/postfix/mailboxes\n")
             .Append("    mv /etc/postfix/virtual.next /etc/postfix/virtual\n")
+            .Append("    mv /etc/postfix/senders.next /etc/postfix/senders\n")
             .Append("}\n")
             .Append("build\n")
             .Append("postconf -F '*/*/chroot = n'\n")
@@ -1609,7 +1707,8 @@ public static class MailDomains {
             .Append("postconf -P 'submission/inet/syslog_name=postfix/submission' \\\n")
             .Append("    'submission/inet/smtpd_sasl_auth_enable=yes' \\\n")
             .Append("    'submission/inet/smtpd_tls_security_level=none' \\\n")
-            .Append("    'submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject'\n")
+            .Append("    'submission/inet/smtpd_client_restrictions=permit_sasl_authenticated,reject' \\\n")
+            .Append("    'submission/inet/smtpd_sender_restrictions=reject_sender_login_mismatch'\n")
             .Append("postfix check\n")
             .Append("trap 'postfix stop; exit 0' TERM INT\n")
             .Append("postfix start-fg &\n")
@@ -1645,10 +1744,13 @@ public static class MailDomains {
     /// <summary>Rspamd's DKIM signer: this domain, <see cref="DkimSelector" />, the key the vault holds.</summary>
     /// <param name="desired">The validated desired body, which carries the domain.</param>
     /// <remarks>
-    ///     ⚠ <b>Authenticated senders only, and only as themselves.</b> <c>sign_local</c> is off, so a
-    ///     message that reached Postfix unauthenticated is never signed with the tenant's key, and
+    ///     ⚠ <b>Authenticated senders only, and only for this domain.</b> <c>sign_local</c> is off, so
+    ///     a message that reached Postfix unauthenticated is never signed with the tenant's key, and
     ///     <c>allow_username_mismatch</c> is off, so an authenticated <c>alice@</c> is signed for
-    ///     only when the <c>From</c> domain is this domain.
+    ///     only when the <c>From</c> domain is this domain. ⚠ That WITHHOLDS a signature and refuses
+    ///     nothing — a forged <c>From</c> left unsigned still passed DMARC through SPF alignment. The
+    ///     refusals are <c>reject_sender_login_mismatch</c> and <see cref="RspamdSenderRule" />;
+    ///     <see cref="PostfixMainCf" /> has the argument.
     /// </remarks>
     public static string RspamdDkimSigning(JsonElement desired) =>
         new StringBuilder()
@@ -1665,6 +1767,64 @@ public static class MailDomains {
             .Append("  }\n")
             .Append("}\n")
             .ToString();
+
+    /// <summary>
+    ///     Rspamd's <c>local.d/rspamd.lua</c>: a prefilter that rejects an authenticated message whose
+    ///     <c>From:</c> header is not exactly its envelope sender.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE HEADER HALF OF THE SENDER LOCK, AND THE HALF A RECEIVER SHOWS A PERSON.</b>
+    ///         Postfix's <c>reject_sender_login_mismatch</c> pins the envelope to an address the login
+    ///         owns; nothing in Postfix compares the header to anything. Without this, bob could submit
+    ///         as himself on the envelope and <c>From: alice@</c> — or <c>From: ceo@another-tenant</c>,
+    ///         left unsigned by <c>allow_username_mismatch</c> but still displayed. Pinning the header
+    ///         to the envelope pins it to the login, since the envelope already is.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Authenticated mail only</b> — <c>task:get_user()</c> is the milter's
+    ///         <c>{auth_authen}</c>, set by the submission service and by nothing else. Mail arriving
+    ///         on port 25 from the inbound pool is somebody else's and keeps whatever <c>From</c> its
+    ///         sender wrote. A message with no <c>From</c>, two addresses in it, or an empty envelope
+    ///         sender is refused too: each is a way to be nobody in particular.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>local.d/rspamd.lua</c>, because it is the one Lua file Rspamd loads from
+    ///         <c>local.d</c></b> (<c>/usr/share/rspamd/rules/rspamd.lua</c> in the 4.1.5 image), which
+    ///         is the directory this pod already mounts from the <c>ConfigMap</c>.
+    ///         <c>MailDataPlaneTests.RspamdLoadsTheRenderedConfigurationAndTheKeyFileItNames</c>
+    ///         scans a forged and an honest message with it loaded.
+    ///     </para>
+    /// </remarks>
+    public static string RspamdSenderRule() =>
+        new StringBuilder()
+            .Append("-- Generated by CyberCloud.Mail/domains. Do not edit in place.\n")
+            .Append("rspamd_config:register_symbol({\n")
+            .Append(CultureInfo.InvariantCulture, $"  name = '{SenderRuleSymbol}',\n")
+            .Append("  type = 'prefilter',\n")
+            .Append("  priority = 10,\n")
+            .Append("  callback = function(task)\n")
+            .Append("    if not task:get_user() then\n")
+            .Append("      return false\n")
+            .Append("    end\n")
+            .Append("    local envelope = task:get_from('smtp')\n")
+            .Append("    local header = task:get_from('mime')\n")
+            .Append("    local sender = envelope and envelope[1] and envelope[1].addr or ''\n")
+            .Append("    if sender ~= '' and header and #header == 1\n")
+            .Append("        and string.lower(header[1].addr or '') == string.lower(sender) then\n")
+            .Append("      return false\n")
+            .Append("    end\n")
+            .Append(CultureInfo.InvariantCulture, $"    task:set_pre_result('reject', '{SenderRuleMessage}', 'cybercloud')\n")
+            .Append("    return true\n")
+            .Append("  end\n")
+            .Append("})\n")
+            .ToString();
+
+    /// <summary>The symbol <see cref="RspamdSenderRule" /> registers, as Rspamd's scan results name it.</summary>
+    public const string SenderRuleSymbol = "CYBERCLOUD_FROM_NOT_SENDER";
+
+    /// <summary>What an SMTP client is told when <see cref="RspamdSenderRule" /> rejects its message.</summary>
+    public const string SenderRuleMessage = "The From header must be the address you are signed in to send as";
 
     /// <summary>Rspamd's action thresholds.</summary>
     /// <param name="desired">The validated desired body.</param>
@@ -1698,7 +1858,7 @@ public static class MailDomains {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         var ports = new JsonArray {
-            Port("lmtp", LmtpPort, LmtpContainerPort),
+            Port("smtp", SmtpPort, SmtpPort),
             Port("imap", ImapPort, ImapContainerPort),
             Port("submission", SubmissionPort, SubmissionPort)
         };
@@ -1778,7 +1938,7 @@ public static class MailDomains {
             ["name"] = MtaComponent,
             ["image"] = PostfixImage,
             ["command"] = new JsonArray { "sh", ConfigDirectory + "/" + PostfixStartKey },
-            ["ports"] = new JsonArray { ContainerPort("submission", SubmissionPort) },
+            ["ports"] = new JsonArray { ContainerPort("smtp", SmtpPort), ContainerPort("submission", SubmissionPort) },
             ["volumeMounts"] = new JsonArray { Mount("config", ConfigDirectory), Mount("users", UsersDirectory) }
         };
 
@@ -1812,7 +1972,8 @@ public static class MailDomains {
                                     ["items"] = new JsonArray {
                                         Item(RspamdProxyKey, "worker-proxy.inc"),
                                         Item(RspamdDkimKey, "dkim_signing.conf"),
-                                        Item(RspamdActionsKey, "actions.conf")
+                                        Item(RspamdActionsKey, "actions.conf"),
+                                        Item(RspamdSenderKey, "rspamd.lua")
                                     }
                                 }
                             },

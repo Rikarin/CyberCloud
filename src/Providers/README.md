@@ -2055,6 +2055,16 @@ M2 · 3.5 EM. Dovecot, Postfix and Rspamd, per tenant, on five core kinds.
   signed every message `ed25519` under the path's own bytes while reporting `DKIM_SIGNED`.
   `MailDeliveryOnK3sTests` is the suite that makes "managed mail works" a readable green now; the
   mailbox type beside it (`domains/mailboxes`) is the second co-writer in the tree, after peerings.
+- **⚠ CORRECTED 2026-09-24 by the #34 review — a green that was not yet secure.** Every suite passed
+  over four defects no document-level or delivery test was written to see: an open gate relayed for a
+  mailbox as *any* sender, and every tenant's SPF includes the same platform include; the inbound
+  seam was Dovecot's LMTP, which skips the alias map and the spam filter; a tenant-spelled vault path
+  with `..` in it passed a `StartsWith` prefix check that the resolver's HTTP client then collapsed
+  into another tenant's path (the same check `Compute/virtualMachines` had, and was copied from); and
+  the Postfix image was named under a Docker Hub organisation somebody else owns. The lesson worth
+  keeping for the next provider: **a check on a string a tenant spells has to be a check on what the
+  consumer will resolve it to**, which for a path means refusing anything that is not already
+  canonical — `SecretRef.IsConfinedTo` is that rule, once, for every type.
 
 ### What the fifteenth provider measured
 

@@ -45,6 +45,17 @@ assertions:
       hashed with SHA512-CRYPT at 100,000 rounds under a salt derived from the mailbox's GUID, and only
       the hash is written. A handle naming another tenant's path is refused with AuthorizationFailed
       before the vault is asked — MailMailboxTests.AForeignHandleIsRefusedBeforeTheVaultIsAskedAndNothingIsWritten.
+      ⚠ So is one that STARTS with the tenant's prefix and climbs out of it: an empty, `.` or `..`
+      segment is refused (SecretRef.IsConfinedTo), because the resolver's HTTP client collapses
+      `tenants/{mine}/../{theirs}/db` into tenant B's path before OpenBao sees it — the #34 review's
+      probe, and a password oracle for another tenant's secret under the first cut's StartsWith check.
+      The resolver refuses such a path too, as the last place that can.
+  - id: the-hash-is-in-no-grain
+    says: >
+      A mailbox's observed state names the Secret and the keys of its own fragment and carries no
+      value. The first cut stored the whole Secret as the observation, so every mailbox's grain — and
+      the durable tier's backups — held every other mailbox's hash.
+      MailMailboxTests.TheObservationNamesTheKeysAndCarriesNoHash.
   - id: a-mailbox-without-a-password-cannot-be-signed-in-to
     says: >
       An empty passwordRef renders `{CRYPT}!` and `nologin=y`, never an empty password field, which
@@ -64,7 +75,8 @@ assertions:
     says: >
       On a real k3s, through the real write path, three mailboxes written into one Secret by three
       second writers are each found by Dovecot: bob signs in over IMAP, alice submits with AUTH and bob
-      fetches the message, mail to alice's alias lands in alice. MailDeliveryOnK3sTests.
+      fetches the message, mail from outside to alice's alias — unauthenticated, on the inbound port —
+      lands in alice, and alice may send as her alias and as nobody else. MailDeliveryOnK3sTests.
   - id: forwarding-and-aliases-cannot-inject-a-map-line
     says: >
       Every alias must be a local part and every forward an address with no whitespace, comma or
@@ -109,13 +121,16 @@ owed:
       platform watches. The new password takes effect on the mailbox's next reconcile — a PUT — and
       then within the kubelet's sync period. Pinning a handle's `@version` makes the change a body
       change, which is the way to make it explicit.
-  - id: aliases-bypass-the-inbound-pool
+  - id: hashes-ride-in-the-fragment-annotation
     says: >
-      Aliases and forwards live in the domain's Postfix alias map. The shared inbound pool delivers
-      over LMTP straight to Dovecot (docs/plan/17 § Topology), which knows mailboxes and not aliases —
-      so mail from the internet to an alias is refused at RCPT until the pool either delivers through
-      this back end's Postfix or expands the map itself. Mail submitted through the domain's own
-      Postfix reaches aliases today; MailDeliveryOnK3sTests delivers to one.
+      The co-owned apply keeps each co-writer's fragment as an annotation on the owner's object, so
+      every mailbox's SHA512-CRYPT hash is on the domain's Secret twice — in data and in
+      cybercloud.io/fragment.{mailboxId}. Reading either takes `get secrets`, so no new principal can,
+      but `kubectl describe secret` prints annotations where it prints only a byte count for data,
+      and a pasted describe carries every hash. ⚠ WHAT WOULD CLOSE IT: the co-writer storing, for a
+      Secret target, a digest of the fragment rather than the fragment — which means it could no
+      longer re-apply the other writers' slices from the annotation and would have to read them from
+      data, a change to KubeCoWriter for every co-writer rather than to this type.
   - id: the-shared-cluster-suite-presumes-ownership
     says: >
       As charts/managed/kube-ovn-vpc-peering/conformance.yaml records: ClusterConformanceTests<TSource>

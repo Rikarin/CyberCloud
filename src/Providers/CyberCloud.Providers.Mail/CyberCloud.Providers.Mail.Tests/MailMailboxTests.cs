@@ -81,9 +81,17 @@ public sealed class MailMailboxTests {
     [InlineData("tenants/11111111-1111-4111-8111-222222222222/x#password")]
     [InlineData("tenants/11111111-1111-4111-8111-111111111111#password")]
     [InlineData("platform/root#token")]
+    [InlineData("tenants/11111111-1111-4111-8111-111111111111/../11111111-1111-4111-8111-222222222222/db#password")]
+    [InlineData("tenants/11111111-1111-4111-8111-111111111111/mail/../../../platform/root#token")]
+    [InlineData("tenants/11111111-1111-4111-8111-111111111111/./mail#alice")]
+    [InlineData("tenants/11111111-1111-4111-8111-111111111111//mail#alice")]
+    [InlineData("tenants/11111111-1111-4111-8111-111111111111/mail/..#alice")]
     public void APasswordHandleOutsideTheTenantsOwnVaultIsRefused(string handle) {
         // ⚠ A handle into another tenant's vault would hash THEIR secret into a password file THIS
-        // tenant can log in against — a password oracle for a value they cannot read.
+        // tenant can log in against — a password oracle for a value they cannot read. ⚠ The dot
+        // segments are the #34 review's finding: each of those handles STARTS WITH tenant A's prefix,
+        // and the resolver's HTTP client collapses `..` before OpenBao sees the path, so the first one
+        // read tenant B's `db` secret under the first cut's StartsWith check.
         var parsed = MailMailboxes.ParsePasswordRef(handle, MailHarness.TenantA);
 
         parsed.IsFailure.ShouldBeTrue();
@@ -141,22 +149,82 @@ public sealed class MailMailboxTests {
     }
 
     [Fact]
+    public async Task TheObservationNamesTheKeysAndCarriesNoHash() {
+        // ⚠ THE #34 REVIEW'S FINDING. ObservedState.Json is persisted in the mailbox's grain on every
+        // observe, and the object observed holds EVERY mailbox's hash — in data, and again in each
+        // co-writer's fragment annotation. The first cut stored the object; this holds the observation
+        // to key names, over a Secret carrying two mailboxes' hashes in both places.
+        var bob = Guid.Parse("44444444-4444-4444-8444-000000000002");
+        var aliceFragment = MailMailboxes.FragmentJson(
+            Mailbox,
+            "alice",
+            MailMailboxes.PasswdLine("alice@example.com", "$6$alicesalt$ALICEHASH", string.Empty),
+            MailMailboxes.VirtualLines("example.com", "alice", ["info"], [], true),
+            ["info"]
+        );
+        var bobFragment = MailMailboxes.FragmentJson(
+            bob,
+            "bob",
+            MailMailboxes.PasswdLine("bob@example.com", "$6$bobsalt$BOBHASH", string.Empty),
+            MailMailboxes.VirtualLines("example.com", "bob", [], [], true),
+            []
+        );
+
+        var data = new JsonObject();
+
+        foreach (var fragment in new[] { aliceFragment, bobFragment }) {
+            foreach (var (key, value) in JsonNode.Parse(fragment)!["data"]!.AsObject()) {
+                data[key] = value!.DeepClone();
+            }
+        }
+
+        var target = MailDomains.UsersSecretRef(ResourceManager.Reconcile.ReconcileDriver.NamespaceFor(MailboxId()), "example-com");
+        var connection = new RecordingConnection();
+        connection.Objects[RecordingConnection.Key(target)] = new JsonObject {
+            ["kind"] = "Secret",
+            ["metadata"] = new JsonObject {
+                ["name"] = target.Name,
+                ["annotations"] = new JsonObject {
+                    [MailMailboxes.DomainAnnotation] = "example.com",
+                    [KubeLabels.FragmentAnnotation(Mailbox)] = aliceFragment,
+                    [KubeLabels.FragmentAnnotation(bob)] = bobFragment
+                }
+            },
+            ["data"] = data
+        }.ToJsonString();
+
+        using var body = JsonDocument.Parse(MailMailboxes.Body(MailHarness.ClusterId, aliases: ["info"]));
+
+        var observed = await new MailMailboxReconciler(new FixedClock()).ObserveAsync(
+            new ObserveContext(MailboxId(), MailMailboxes.V2026, body.RootElement, target.Namespace, connection),
+            TestContext.Current.CancellationToken
+        );
+
+        observed.Exists.ShouldBeTrue();
+
+        foreach (var leak in new[] { "ALICEHASH", "BOBHASH", "$6$", "SHA512-CRYPT", data["alice.passwd"]!.GetValue<string>(), data["bob.passwd"]!.GetValue<string>() }) {
+            observed.Json.ShouldNotContain(leak, Case.Sensitive, "the observation persisted in the grain carries a password hash");
+        }
+
+        using var kept = JsonDocument.Parse(observed.Json);
+        kept.RootElement.GetProperty("secret").GetString().ShouldBe(target.Name);
+        kept.RootElement.GetProperty("keys").EnumerateArray().Select(static x => x.GetString()).ShouldBe(
+            ["alice.claim", "alice.passwd", "alice.virtual", "info.claim"]
+        );
+    }
+
+    [Fact]
     public void TheDomainTellsItsMailboxesTheDomainOnTheObjectTheyWriteOnto() {
         using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId, domain: "Example.COM"));
 
         MailMailboxes.DomainOf(MailDomains.UsersSecretJson("example-com", body.RootElement)).ShouldBe("example.com");
     }
 
+    static ResourceId MailboxId() =>
+        new(MailHarness.TenantA, MailHarness.SubscriptionA, "prod", MailMailboxes.Type, "alice", Mailbox, "example-com");
+
     static ReconcileContext MailboxContext(IKubeClusterConnection connection, JsonElement desired, CountingVault vault) {
-        var id = new ResourceId(
-            MailHarness.TenantA,
-            MailHarness.SubscriptionA,
-            "prod",
-            MailMailboxes.Type,
-            "alice",
-            Mailbox,
-            "example-com"
-        );
+        var id = MailboxId();
 
         return new(
             id,

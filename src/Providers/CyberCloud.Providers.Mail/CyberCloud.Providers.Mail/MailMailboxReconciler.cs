@@ -224,8 +224,20 @@ public sealed class MailMailboxReconciler(IClock clock) : IResourceReconciler {
 
     /// <inheritdoc />
     /// <remarks>
-    ///     A mailbox exists when its domain's mailbox <c>Secret</c> carries its fragment — the same
-    ///     test a drift scan joins a co-writer on.
+    ///     <para>
+    ///         A mailbox exists when its domain's mailbox <c>Secret</c> carries its fragment — the same
+    ///         test a drift scan joins a co-writer on.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>THE OBSERVATION NAMES KEYS AND NEVER CARRIES THE <c>Secret</c>.</b>
+    ///         <see cref="ObservedState.Json" /> is grain state — <c>ResourceGrain</c> persists it on
+    ///         every observe — and the object read here holds every mailbox's password hash, as
+    ///         <c>data</c> and again in each co-writer's fragment annotation. The first cut stored
+    ///         <c>found.Json</c>, so each mailbox's grain held every other mailbox's hash, N times over
+    ///         in the durable tier and its backups (the #34 review). What is kept is
+    ///         <see cref="MailMailboxes.Observation" />: the object's name, and the names of the keys
+    ///         this mailbox's fragment holds. <c>MailMailboxTests.TheObservationNamesTheKeysAndCarriesNoHash</c>.
+    ///     </para>
     /// </remarks>
     public async Task<ObservedState> ObserveAsync(
         ObserveContext context,
@@ -246,7 +258,7 @@ public sealed class MailMailboxReconciler(IClock clock) : IResourceReconciler {
 
         return new() {
             Exists = present,
-            Json = present ? found.Json : string.Empty,
+            Json = present ? MailMailboxes.Observation(found.Json, context.Id.Id) : string.Empty,
             ObservedAt = clock.UtcNow,
             Revision = found.ResourceVersion,
             Summary = present

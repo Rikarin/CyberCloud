@@ -192,6 +192,52 @@ public sealed class MailDeliverabilityTests {
     }
 
     [Fact]
+    public async Task AnUnansweredDnsNeverClosesAGateThatIsOpen() {
+        // ⚠ THE #34 REVIEW'S LOW FINDING. A verified domain met one pass whose resolver timed out, and
+        // the first cut rendered that Held — the same as records withdrawn — so the domain's outbound
+        // mail waited until the tenant happened to call verify. An unanswered question is not an
+        // answer: the open gate stays open, from a pass and from verify alike. An ANSWER that says the
+        // record is gone still closes it on the spot.
+        var vault = new InMemorySecretVault();
+        var connection = new RecordingConnection();
+        using var body = JsonDocument.Parse(MailDomains.Body(MailHarness.ClusterId));
+        var context = MailHarness.Context(connection, body.RootElement, vault);
+
+        await MailHarness.Reconciler().ReconcileAsync(context, TestContext.Current.CancellationToken);
+
+        var pem = vault.Peek(MailDomains.SecretPath(context.Id), MailDomains.DkimPrivateKeyField)!;
+        MailDnsRecords.TryRequired("example.com", pem, MailHarness.Platform, out var records).ShouldBeTrue();
+
+        await MailHarness.Reconciler(ZoneDns.Publishing(records)).ReconcileAsync(context, TestContext.Current.CancellationToken);
+        MainCf(connection).ShouldContain(Gate(MailSending.Open));
+
+        var silent = new ZoneDns([]) { Unreachable = true };
+
+        (await MailHarness.Reconciler(silent).ReconcileAsync(context, TestContext.Current.CancellationToken))
+            .IsConverged.ShouldBeTrue();
+        MainCf(connection).ShouldContain(Gate(MailSending.Open), customMessage: "one unanswered pass closed a verified domain");
+
+        var verified = await new MailVerifyHandler(MailHarness.Platform, silent).InvokeAsync(
+            new(context.Id, context.ApiVersion, MailDomains.VerifyAction, default, body.RootElement, context.Namespace, connection, vault),
+            TestContext.Current.CancellationToken
+        );
+        JsonNode.Parse(verified.GetValueOrThrow())!["sendingEnabled"]!.GetValue<bool>().ShouldBeTrue();
+        MainCf(connection).ShouldContain(Gate(MailSending.Open));
+
+        // An answer — the DKIM record is gone — closes it.
+        var withdrawn = new ZoneDns([
+            .. records.Where(static x => x.Role != MailDnsRecords.Dkim).Select(static x => (x.Name, x.Kind, x.Value))
+        ]);
+
+        await MailHarness.Reconciler(withdrawn).ReconcileAsync(context, TestContext.Current.CancellationToken);
+        MainCf(connection).ShouldContain(Gate(MailSending.Held));
+
+        // ⚠ And a domain that was never open is not opened by silence: fail closed where nothing was verified.
+        await MailHarness.Reconciler(silent).ReconcileAsync(context, TestContext.Current.CancellationToken);
+        MainCf(connection).ShouldContain(Gate(MailSending.Held));
+    }
+
+    [Fact]
     public async Task VerifyOpensTheGateByReapplyingTheConfigMapAndReportsEveryRecord() {
         // ⚠ How a converged domain learns the DNS changed: nothing reconciles it again by itself, so
         // verify decides the same way the reconciler does and re-applies the ConfigMap.
@@ -239,6 +285,9 @@ public sealed class MailDeliverabilityTests {
         result.IsFailure.ShouldBeTrue();
         result.Error!.Message.ShouldContain(MailPlatformOptions.Section);
     }
+
+    static string Gate(MailSending sending) =>
+        "smtpd_relay_restrictions = " + MailDomains.RelayRestrictions("example.com", sending) + "\n";
 
     /// <summary>The <c>main.cf</c> of the last <c>ConfigMap</c> applied.</summary>
     static string MainCf(RecordingConnection connection) =>

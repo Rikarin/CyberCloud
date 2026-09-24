@@ -62,9 +62,13 @@ spec:
             - name: mail
               mountPath: /srv/mail
         - name: postfix
-          image: "docker.io/cybercloud/postfix:1.0.0"
+          # ⚠ The repository owner's GHCR namespace and never docker.io/cybercloud, which an unrelated
+          # party registered in 2018 — MailDomains.PostfixImage.
+          image: "ghcr.io/rikarin/cybercloud/mail-postfix:1.0.0"
           command: ["sh", "/etc/mail/config/postfix-start.sh"]
           ports:
+            - name: smtp
+              containerPort: 25
             - name: submission
               containerPort: 587
           volumeMounts:
@@ -96,6 +100,9 @@ spec:
                 path: dkim_signing.conf
               - key: rspamd-actions.conf
                 path: actions.conf
+              # ⚠ The one Lua file Rspamd loads from local.d — the sender rule. MailDomains.RspamdSenderRule.
+              - key: rspamd-sender.lua
+                path: rspamd.lua
         - name: users
           secret:
             secretName: {{ include "mail.name" . }}-mail-users

@@ -10,8 +10,10 @@
 # command rather than relying on this CMD.
 #
 # ⚠ BUILT BY NOTHING BUT THE TEST THAT NEEDS IT. MailDeliveryOnK3sTests builds it with Testcontainers
-# and imports it into its own k3s; no pipeline pushes it to docker.io/cybercloud. That is
-# charts/managed/mail/conformance.yaml § owed, `the-postfix-image-is-not-published`.
+# and imports it into its own k3s; no pipeline pushes it to ghcr.io/rikarin/cybercloud/mail-postfix.
+# That is charts/managed/mail/conformance.yaml § owed, `the-postfix-image-is-not-published`.
+# ⚠ NOT docker.io/cybercloud, which the first cut named: that Docker Hub organisation belongs to an
+# unrelated party, so an unpublished tag there was a tag somebody else could publish.
 #
 # ⚠ debian:13-slim, the base the Dovecot 2.4 image is also built on, so the three containers of one
 # pod share a libc and a CA bundle. The postfix package version is whatever trixie ships on the day

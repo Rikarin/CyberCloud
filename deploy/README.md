@@ -339,9 +339,16 @@ image and every third-party one rewrites `main.cf` from its environment at start
 the configuration `CyberCloud.Mail/domains` renders. It is Debian's postfix package and nothing else.
 
 ⚠ **Built by the test that needs it and published by nothing.** `MailDeliveryOnK3sTests` builds it
-and imports it into its own k3s; no pipeline pushes `docker.io/cybercloud/postfix`, so a real cluster
-pulling the tag the pod spec names fails on one container of three —
+and imports it into its own k3s; no pipeline pushes `ghcr.io/rikarin/cybercloud/mail-postfix`, so a
+real cluster pulling the tag the pod spec names fails on one container of three —
 `charts/managed/mail/conformance.yaml § owed`, `the-postfix-image-is-not-published`.
+
+⚠ **An image this repository builds is named under a namespace this repository's owner controls.**
+The first cut named `docker.io/cybercloud/postfix`, and the `cybercloud` organisation on Docker Hub
+was registered in 2018 by an unrelated party. "The pull fails" held only while they had not
+published that tag; the day they did, every mail pod would have run their image with the mailbox
+`Secret` mounted. `ghcr.io/rikarin` is bound to the GitHub account that owns the repository, which is
+where the agent image already lives.
 
 ## What does not live here
 

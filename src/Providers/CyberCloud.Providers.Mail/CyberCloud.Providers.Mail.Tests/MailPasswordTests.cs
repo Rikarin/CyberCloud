@@ -55,13 +55,21 @@ public sealed class MailPasswordTests {
 
     [Fact]
     public void AMailboxHashFitsInsideOneReconcilePass() {
-        // ⚠ Clause 3 gives a pass thirty seconds and a mailbox pass hashes once. Measured rather than
-        // assumed, because MailboxRounds is a number somebody will be tempted to raise.
+        // ⚠ Clause 3 gives a pass thirty seconds and a mailbox pass hashes once. MailboxRounds is a
+        // number somebody will be tempted to raise, so the number is pinned, and the measurement is
+        // held to half the pass rather than to a guess at this machine's speed.
+        //
+        // ⚠ The first cut asserted under two seconds, and one cold run failed it unexplained on a
+        // machine running a dozen other suites (the #34 review): the hash takes about 30 ms alone, so
+        // two seconds measured the neighbours, not the rounds. A regression that matters — rounds
+        // raised tenfold, or a quadratic slip in the hand-written loop — is still far past fifteen.
+        Sha512Crypt.MailboxRounds.ShouldBe(100_000, "raising the rounds raises every Dovecot login's cost too");
+
         var started = Stopwatch.GetTimestamp();
 
         Sha512Crypt.Hash("a password of ordinary length", Sha512Crypt.SaltFor(Guid.NewGuid()), Sha512Crypt.MailboxRounds);
 
-        Stopwatch.GetElapsedTime(started).ShouldBeLessThan(TimeSpan.FromSeconds(2));
+        Stopwatch.GetElapsedTime(started).ShouldBeLessThan(TimeSpan.FromSeconds(15));
     }
 
     [Fact]

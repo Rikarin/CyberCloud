@@ -50,9 +50,12 @@ public sealed class MailChartTests {
         set.ShouldContain("key: " + MailDomains.DkimPrivateKeyField);
         set.ShouldContain("path: " + MailDomains.DkimKeyFile);
 
+        // ⚠ The sender rule, under the one Lua name Rspamd loads from local.d — MailDomains.RspamdSenderRule.
+        set.ShouldContain("key: " + MailDomains.RspamdSenderKey + "\n                path: rspamd.lua");
+
         foreach (var port in new[] {
                      MailDomains.LmtpContainerPort, MailDomains.ImapContainerPort, MailDomains.SieveContainerPort,
-                     MailDomains.SubmissionPort, MailDomains.MetricsPort
+                     MailDomains.SmtpPort, MailDomains.SubmissionPort, MailDomains.MetricsPort
                  }) {
             set.ShouldContain("containerPort: " + Text(port));
         }
@@ -63,12 +66,15 @@ public sealed class MailChartTests {
         var service = Embedded("mail.service.yaml");
 
         foreach (var (port, target) in new[] {
-                     (MailDomains.LmtpPort, MailDomains.LmtpContainerPort), (MailDomains.ImapPort, MailDomains.ImapContainerPort),
+                     (MailDomains.SmtpPort, MailDomains.SmtpPort), (MailDomains.ImapPort, MailDomains.ImapContainerPort),
                      (MailDomains.SubmissionPort, MailDomains.SubmissionPort), (MailDomains.SievePort, MailDomains.SieveContainerPort)
                  }) {
             service.ShouldContain("port: " + Text(port) + "\n      targetPort: " + Text(target));
         }
 
+        // ⚠ No LMTP on the Service: it skips Postfix, and with it the alias map, forwarding, the
+        // catch-all and the spam filter — the #34 review's finding. MailDomains.SmtpPort.
+        service.ShouldNotContain("targetPort: " + Text(MailDomains.LmtpContainerPort));
         service.ShouldContain("type: ClusterIP");
         service.ShouldNotContain("LoadBalancer\n");
     }
@@ -80,9 +86,17 @@ public sealed class MailChartTests {
 
         foreach (var key in new[] {
                      MailDomains.DovecotConfKey, MailDomains.PostfixMainCfKey, MailDomains.PostfixStartKey,
-                     MailDomains.RspamdProxyKey, MailDomains.RspamdDkimKey, MailDomains.RspamdActionsKey
+                     MailDomains.RspamdProxyKey, MailDomains.RspamdDkimKey, MailDomains.RspamdActionsKey,
+                     MailDomains.RspamdSenderKey
                  }) {
             map.ShouldContain("  " + key + ": |");
+        }
+
+        // ⚠ Both halves of the sender lock, which the chart would otherwise install without.
+        map.ShouldContain("smtpd_sender_login_maps = texthash:/etc/postfix/senders");
+
+        foreach (var line in MailDomains.RspamdSenderRule().Split('\n').Where(static x => x.Length > 0)) {
+            map.ShouldContain(line, Case.Sensitive, "the chart's rspamd-sender.lua is missing a line the reconciler renders");
         }
 
         // The ports and paths the three containers find each other on.

@@ -124,7 +124,10 @@ public sealed class MailDataPlaneTests {
             .WithResourceMapping(Encoding.UTF8.GetBytes(MailDomains.RspamdWorkerProxy()), "/etc/rspamd/local.d/worker-proxy.inc")
             .WithResourceMapping(Encoding.UTF8.GetBytes(MailDomains.RspamdDkimSigning(body.RootElement)), "/etc/rspamd/local.d/dkim_signing.conf")
             .WithResourceMapping(Encoding.UTF8.GetBytes(MailDomains.RspamdActions(body.RootElement)), "/etc/rspamd/local.d/actions.conf")
+            .WithResourceMapping(Encoding.UTF8.GetBytes(MailDomains.RspamdSenderRule()), "/etc/rspamd/local.d/rspamd.lua")
             .WithResourceMapping(Encoding.UTF8.GetBytes(pem), MailDomains.DkimDirectory + "/" + MailDomains.DkimKeyFile)
+            .WithResourceMapping(Encoding.UTF8.GetBytes(Message("CEO <ceo@victim.example>")), "/tmp/forged.eml")
+            .WithResourceMapping(Encoding.UTF8.GetBytes(Message("Alice <Alice@Example.com>")), "/tmp/honest.eml")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged("prepare to fork process rspamd_proxy"))
             .Build();
 
@@ -137,7 +140,45 @@ public sealed class MailDataPlaneTests {
         // The milter worker is on the port Postfix dials, and it is the proxy, not the normal worker.
         var dump = await rspamd.ExecAsync(["rspamadm", "configdump", "worker"], token);
         dump.Stdout.ShouldContain(MailDomains.MilterPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        // ── The sender rule: the header half of the #34 review's forgery ─────────────────────────
+        //
+        // ⚠ alice, signed in, with alice on the envelope and the CEO of another domain in From: —
+        // the message a receiver would have shown with SPF passing. Rejected, by this rule and by name.
+        // The same message from a client that did not sign in is inbound mail and is not this rule's.
+        var forged = await ScanAsync(rspamd, "/tmp/forged.eml", "alice@example.com", token);
+        forged.ShouldContain("Action: reject", Case.Sensitive, forged);
+        forged.ShouldContain(MailDomains.SenderRuleSymbol, Case.Sensitive, forged);
+
+        var inbound = await ScanAsync(rspamd, "/tmp/forged.eml", null, token);
+        inbound.ShouldNotContain(MailDomains.SenderRuleSymbol, Case.Sensitive, inbound);
+
+        // ⚠ Case-insensitive, as addresses' domains are: Alice@Example.com is the envelope's sender.
+        var honest = await ScanAsync(rspamd, "/tmp/honest.eml", "alice@example.com", token);
+        honest.ShouldNotContain(MailDomains.SenderRuleSymbol, Case.Sensitive, honest);
+        honest.ShouldNotContain("Action: reject", Case.Sensitive, honest);
     }
+
+    /// <summary>What <c>rspamc</c> reports for one message, as the milter would hand it over.</summary>
+    /// <param name="rspamd">The running container.</param>
+    /// <param name="path">The message file inside it.</param>
+    /// <param name="user">The SASL login, or <see langword="null" /> for a client that did not sign in.</param>
+    /// <param name="token">The test's token.</param>
+    static async Task<string> ScanAsync(IContainer rspamd, string path, string? user, CancellationToken token) {
+        string[] command = user is null
+            ? ["rspamc", "--connect", "127.0.0.1:11333", "--from", "alice@example.com", "--rcpt", "bob@example.com", path]
+            : ["rspamc", "--connect", "127.0.0.1:11333", "--user", user, "--from", "alice@example.com", "--rcpt", "bob@example.com", path];
+
+        var scanned = await rspamd.ExecAsync(command, token);
+
+        scanned.ExitCode.ShouldBe(0, scanned.Stdout + scanned.Stderr);
+
+        return scanned.Stdout;
+    }
+
+    static string Message(string from) =>
+        "From: " + from + "\r\nTo: bob@example.com\r\nSubject: a scan\r\nDate: Thu, 24 Sep 2026 12:00:00 +0000\r\n"
+        + "Message-ID: <" + Guid.NewGuid().ToString("N") + "@example.com>\r\n\r\nhello\r\n";
 }
 
 /// <summary>A line-oriented TCP conversation — SMTP, LMTP and IMAP are all this.</summary>

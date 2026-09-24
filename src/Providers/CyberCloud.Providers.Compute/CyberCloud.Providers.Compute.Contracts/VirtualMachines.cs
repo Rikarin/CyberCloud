@@ -604,11 +604,16 @@ public static class VirtualMachines {
         var path = spelled[..hash];
         var prefix = TenantVaultPrefix(tenantId);
 
-        if (!path.StartsWith(prefix, StringComparison.Ordinal) || path.Length == prefix.Length) {
+        // ⚠ SecretRef.IsConfinedTo and not StartsWith alone: `tenants/{mine}/../{theirs}/x` starts
+        // with this tenant's prefix, and the resolver's HTTP client collapses the dot segments into
+        // the other tenant's path. Found by the #34 review in the mailbox's copy of this check, which
+        // was copied from here.
+        if (!SecretRef.IsConfinedTo(path, prefix)) {
             return Result<SecretRef>.Failure(
                 ErrorCode.AuthorizationFailed,
                 $"cloudInit.userData names '{path}', which is not under your tenant's vault prefix "
-                + $"'{prefix}'. A machine can only be given a value your own tenant holds.",
+                + $"'{prefix}'. A machine can only be given a value your own tenant holds, and the path "
+                + "may not contain an empty, '.' or '..' segment.",
                 "/properties/cloudInit/userData"
             );
         }

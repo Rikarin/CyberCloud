@@ -3,8 +3,6 @@
 using CyberCloud.Core;
 using CyberCloud.Providers.Mail.Dns;
 using System.Collections.Immutable;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace CyberCloud.Providers.Mail;
 
@@ -122,30 +120,39 @@ public sealed class MailVerifyHandler(MailPlatformOptions platform, IMailDnsReso
             cancellationToken
         );
 
+        var sending = decision.Sending;
+
         if (context.Cluster is { } cluster) {
-            var moved = await MoveGateAsync(context, cluster, decision.Sending, cancellationToken);
+            var moved = await MoveGateAsync(context, cluster, decision, cancellationToken);
 
             if (moved.TryGetError(out var moveError)) {
                 return Result<string>.Failure(moveError);
             }
+
+            sending = moved.GetValueOrThrow();
         }
 
         var checks = decision.Checks.IsDefaultOrEmpty
             ? [.. required.GetValueOrThrow().Records.Select(static x => new MailDnsCheck(x, MailDnsRecords.Unresolvable, [], "not resolved"))]
             : decision.Checks;
 
-        return Result<string>.Success(MailDnsRecords.VerificationJson(domain, checks, platform, decision.Sending));
+        return Result<string>.Success(MailDnsRecords.VerificationJson(domain, checks, platform, sending));
     }
 
-    /// <summary>Re-applies the domain's <c>ConfigMap</c> when the gate it carries is not the one decided.</summary>
+    /// <summary>
+    ///     Re-applies the domain's <c>ConfigMap</c> when the gate it carries is not the one decided, and
+    ///     answers the gate the domain now runs.
+    /// </summary>
     /// <remarks>
     ///     ⚠ Only when it differs: an apply that changed nothing would still bump nothing, but reading
-    ///     first keeps a <c>verify</c> on a converged domain from being a write at all.
+    ///     first keeps a <c>verify</c> on a converged domain from being a write at all. ⚠ And settled
+    ///     against what is running, the way the reconciler settles it, so an unanswered DNS never
+    ///     closes an open gate from here either — <see cref="MailDeliverability.Settle" />.
     /// </remarks>
-    static async Task<Result> MoveGateAsync(
+    static async Task<Result<MailSending>> MoveGateAsync(
         ActionContext context,
         IKubeClusterConnection cluster,
-        MailSending sending,
+        MailDeliverabilityDecision decision,
         CancellationToken cancellationToken
     ) {
         var target = MailDomains.ConfigMapRef(context.Namespace, context.Id.Name);
@@ -154,13 +161,16 @@ public sealed class MailVerifyHandler(MailPlatformOptions platform, IMailDnsReso
         if (live.TryGetError(out var readError)) {
             // A domain whose back end is not there yet has no gate to move; its first pass will
             // render the decision itself.
-            return readError.Code == ErrorCode.ResourceNotFound ? Result.Success : Result.Failure(readError);
+            return readError.Code == ErrorCode.ResourceNotFound
+                ? Result<MailSending>.Success(decision.Sending)
+                : Result<MailSending>.Failure(readError);
         }
 
-        var wanted = "smtpd_relay_restrictions = " + MailDomains.RelayRestrictions(MailDomains.Domain(context.Desired), sending) + "\n";
+        var running = MailDomains.RunningGate(live.GetValueOrThrow().Json, MailDomains.Domain(context.Desired));
+        var sending = MailDeliverability.Settle(decision, running);
 
-        if (RunningMainCf(live.GetValueOrThrow().Json).Contains(wanted, StringComparison.Ordinal)) {
-            return Result.Success;
+        if (running == sending) {
+            return Result<MailSending>.Success(sending);
         }
 
         var applied = await MailDomainReconciler.ApplyAsync(
@@ -173,14 +183,8 @@ public sealed class MailVerifyHandler(MailPlatformOptions platform, IMailDnsReso
             cancellationToken
         );
 
-        return applied.TryGetError(out var applyError) ? Result.Failure(applyError) : Result.Success;
-    }
-
-    static string RunningMainCf(string configMapJson) {
-        try {
-            return JsonNode.Parse(configMapJson)?["data"]?[MailDomains.PostfixMainCfKey]?.GetValue<string>() ?? string.Empty;
-        } catch (JsonException) {
-            return string.Empty;
-        }
+        return applied.TryGetError(out var applyError)
+            ? Result<MailSending>.Failure(applyError)
+            : Result<MailSending>.Success(sending);
     }
 }

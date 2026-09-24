@@ -115,6 +115,10 @@ public sealed class OpenBaoSecretResolver(
             return Refuse(VaultFailures.EmptyHandle(reference));
         }
 
+        if (!reference.IsCanonical) {
+            return Refuse(VaultFailures.NonCanonicalPath(reference));
+        }
+
         var token = await tokens.GetAsync(cancellationToken);
 
         if (token.IsFailure) {

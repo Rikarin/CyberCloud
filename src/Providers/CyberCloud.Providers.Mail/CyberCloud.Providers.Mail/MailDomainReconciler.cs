@@ -57,8 +57,8 @@ namespace CyberCloud.Providers.Mail;
 ///             catalogue has.
 ///         </item>
 ///         <item>
-///             <b>Bounded.</b> One mint, two resolves, seven DNS questions asked at once, six applies
-///             and six reads, all on the caller's token. ⚠ There is no wait for Dovecot to be <i>serving</i> — the mail store
+///             <b>Bounded.</b> One mint, two resolves, seven DNS questions asked at once, a read of
+///             the running gate, six applies and six reads, all on the caller's token. ⚠ There is no wait for Dovecot to be <i>serving</i> — the mail store
 ///             is opened and indexed on first start and clause 3's budget is thirty seconds, so
 ///             readiness is <see cref="ReconcileOutcome.InProgress" /> and the reminder comes back.
 ///         </item>
@@ -93,9 +93,11 @@ namespace CyberCloud.Providers.Mail;
 ///         <see cref="MailDeliverability" /> resolves the seven records and renders the answer into
 ///         <c>main.cf</c>. A zone the tenant has not published, a resolver that times out, a region
 ///         whose hosts are not configured: each renders <see cref="MailSending.Held" /> and the domain
-///         converges, because receiving mail does not wait on the DNS. ⚠ A converged domain is not
-///         reconciled again by itself, so a tenant who publishes their records later opens the gate
-///         with <c>verify</c>, which decides the same way and re-applies the <c>ConfigMap</c>.
+///         converges, because receiving mail does not wait on the DNS. ⚠ Except that an UNANSWERED
+///         question never closes a gate that is open — <see cref="MailDeliverability.Settle" />.
+///         ⚠ A converged domain is not reconciled again by itself, so a tenant who publishes their
+///         records later opens the gate with <c>verify</c>, which decides the same way and re-applies
+///         the <c>ConfigMap</c>.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -165,12 +167,25 @@ public sealed class MailDomainReconciler(IClock clock, IMailDnsResolver dns, Mai
             cancellationToken
         );
 
-        context.Log.Report("verifying", $"outbound mail is {decision.Sending.ToString().ToLowerInvariant()}: {decision.Reason}");
+        // ⚠ AN UNANSWERED DNS DOES NOT CLOSE A GATE A PREVIOUS ANSWER OPENED. The running ConfigMap
+        // says what the gate is now; MailDeliverability.Settle keeps it open when the only thing this
+        // pass learned is that the resolver did not answer. A read that fails leaves `running` null,
+        // which is the fail-closed reading.
+        var live = await cluster.GetAsync(MailDomains.ConfigMapRef(context.Namespace, name), cancellationToken);
+        var running = live.IsSuccess ? MailDomains.RunningGate(live.GetValueOrThrow().Json, MailDomains.Domain(context.Desired)) : null;
+        var sending = MailDeliverability.Settle(decision, running);
+
+        context.Log.Report(
+            "verifying",
+            sending == decision.Sending
+                ? $"outbound mail is {sending.ToString().ToLowerInvariant()}: {decision.Reason}"
+                : $"outbound mail stays open: the DNS did not answer ({decision.Reason}), and an unanswered question is not a withdrawn record"
+        );
 
         // ── The six applies, in dependency order ───────────────────────────────────────────────
         var percent = 20;
 
-        foreach (var (target, body) in Documents(context.Namespace, name, context.Desired, secrets, decision.Sending)) {
+        foreach (var (target, body) in Documents(context.Namespace, name, context.Desired, secrets, sending)) {
             context.Log.Report(
                 "applying",
                 $"applying {target.Kind.Kind} '{target.Name}' to {context.Namespace}",

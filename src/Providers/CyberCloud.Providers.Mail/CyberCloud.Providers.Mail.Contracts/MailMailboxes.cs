@@ -53,6 +53,16 @@ namespace CyberCloud.Providers.Mail.Contracts;
 ///         the mailbox: the handle did not change, so nothing else tells the platform to look.
 ///     </para>
 ///     <para>
+///         ⚠ <b>THE HASH IS IN NO GRAIN EITHER, AND THE FIRST CUT GOT THAT HALF WRONG.</b> The
+///         mailbox's observation stored the whole <c>Secret</c> — every mailbox's hash — as grain
+///         state; it now stores key names (<see cref="Observation" />). ⚠ The hash IS on the object
+///         twice: in <c>data</c> and in the co-writer's fragment annotation, which
+///         <c>kubectl describe</c> prints where it prints only a byte count for <c>data</c>. Reading
+///         either takes <c>get secrets</c>, so no new principal can read it, but a pasted
+///         <c>describe</c> carries it — <c>charts/managed/mail-mailbox/conformance.yaml § owed</c>,
+///         <c>hashes-ride-in-the-fragment-annotation</c>.
+///     </para>
+///     <para>
 ///         ⚠ <b>ONE CEILING THIS SHAPE HAS, NAMED:</b> every co-writer's fragment is also stored as
 ///         an annotation on the <c>Secret</c>, and Kubernetes caps an object's annotations at 256 KiB.
 ///         A mailbox's fragment is roughly 600 bytes, so a domain holds about four hundred mailboxes
@@ -250,6 +260,14 @@ public static class MailMailboxes {
     ///     password file this tenant can log in against — a password oracle for a value they cannot
     ///     read. Refused with <see cref="ErrorCode.AuthorizationFailed" />, naming the tenant's own
     ///     prefix and never whether the other path exists.
+    ///     <para>
+    ///         ⚠ <b>A PREFIX IS NOT ENOUGH: <c>tenants/{mine}/../{theirs}/db</c> STARTS WITH MINE.</b>
+    ///         The first cut checked <c>StartsWith</c> alone, and the resolver's HTTP client collapses
+    ///         the dot segments before OpenBao sees the path — the #34 review's probe. The check is
+    ///         <see cref="SecretRef.IsConfinedTo" />, which refuses an empty, <c>.</c> or <c>..</c>
+    ///         segment outright; <c>MailMailboxTests.APasswordHandleOutsideTheTenantsOwnVaultIsRefused</c>
+    ///         holds the traversal spellings.
+    ///     </para>
     /// </remarks>
     public static Result<SecretRef> ParsePasswordRef(string spelled, Guid tenantId) {
         if (string.IsNullOrWhiteSpace(spelled)) {
@@ -270,11 +288,12 @@ public static class MailMailboxes {
         var path = spelled[..hash];
         var prefix = string.Create(CultureInfo.InvariantCulture, $"tenants/{tenantId:D}/");
 
-        if (!path.StartsWith(prefix, StringComparison.Ordinal) || path.Length == prefix.Length) {
+        if (!SecretRef.IsConfinedTo(path, prefix)) {
             return Result<SecretRef>.Failure(
                 ErrorCode.AuthorizationFailed,
                 $"passwordRef names '{path}', which is not under your tenant's vault prefix '{prefix}'. A "
-                + "mailbox can only be given a password your own tenant holds.",
+                + "mailbox can only be given a password your own tenant holds, and the path may not "
+                + "contain an empty, '.' or '..' segment.",
                 "/properties/passwordRef"
             );
         }
@@ -435,6 +454,41 @@ public static class MailMailboxes {
                 && wanted.All(x => data[x.Key]?.GetValue<string>() == x.Value?.GetValue<string>());
         } catch (JsonException) {
             return false;
+        }
+    }
+
+    /// <summary>
+    ///     What a mailbox keeps of its domain's mailbox <c>Secret</c> as its observed state: the
+    ///     object's name and the names of the keys its own fragment holds — never a value.
+    /// </summary>
+    /// <param name="objectJson">The <c>Secret</c> as the API server returned it.</param>
+    /// <param name="mailboxId">The mailbox resource's GUID, which keys its fragment annotation.</param>
+    /// <returns>
+    ///     <c>{"secret":"…","keys":["alice.claim","alice.passwd",…]}</c>, or <c>{}</c> when the object
+    ///     carries no readable fragment of this mailbox's.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>Names only, and the rule is structural rather than careful.</b> The object's
+    ///     <c>data</c> and its fragment annotations hold every mailbox's password hash, and whatever is
+    ///     returned here is persisted in the mailbox's grain on every observe. So nothing is copied out
+    ///     of either but key names, which the mailbox's own body already determines.
+    /// </remarks>
+    public static string Observation(string objectJson, Guid mailboxId) {
+        try {
+            var metadata = JsonNode.Parse(objectJson)?["metadata"];
+            var fragment = metadata?["annotations"]?[KubeLabels.FragmentAnnotation(mailboxId)]?.GetValue<string>();
+            var keys = fragment is null ? null : JsonNode.Parse(fragment)?["data"] as JsonObject;
+
+            if (keys is null) {
+                return "{}";
+            }
+
+            return new JsonObject {
+                ["secret"] = metadata?["name"]?.GetValue<string>() ?? string.Empty,
+                ["keys"] = new JsonArray([.. keys.Select(static x => x.Key).Order(StringComparer.Ordinal).Select(static x => (JsonNode?)JsonValue.Create(x))])
+            }.ToJsonString();
+        } catch (Exception ex) when (ex is JsonException or InvalidOperationException) {
+            return "{}";
         }
     }
 

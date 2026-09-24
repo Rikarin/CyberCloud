@@ -5,6 +5,7 @@ using CyberCloud.ResourceManager;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using System.Collections.Immutable;
 using System.Globalization;
 using Volo.Abp.Application;
 using Volo.Abp.Modularity;
@@ -52,30 +53,78 @@ public sealed class MailApplicationModule : AbpModule {
 
         var configuration = context.Services.GetConfiguration();
 
-        context.Services.TryAddSingleton(PlatformFrom(configuration.GetSection(MailPlatformOptions.Section)));
+        context.Services.TryAddSingleton(PlatformFrom(configuration));
         context.Services.TryAddSingleton(DnsFrom(configuration.GetSection(MailDnsOptions.Section)));
         context.Services.TryAddSingleton<IMailDnsResolver, DnsWireResolver>();
         context.Services.AddCyberCloudProvider(new MailProvider());
     }
 
-    /// <summary>Reads <see cref="MailPlatformOptions" /> by hand.</summary>
+    /// <summary>
+    ///     Reads <see cref="MailPlatformOptions" /> out of <see cref="MailPlatformOptions.Section" />, by
+    ///     hand, refusing a suspension entry that is not a tenant id.
+    /// </summary>
+    /// <param name="configuration">The host's configuration root.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     An entry of <c>SuspendedTenants</c> is not a GUID. The message names the configuration key
+    ///     and the value, so the operator who typed it finds it.
+    /// </exception>
     /// <remarks>
-    ///     ⚠ By hand because the configuration binder does not populate an
-    ///     <see cref="System.Collections.Immutable.ImmutableArray{T}" />, and a suspension list that
-    ///     silently bound to empty is an abuse desk whose suspensions do nothing.
+    ///     <para>
+    ///         ⚠ By hand because the configuration binder does not populate an
+    ///         <see cref="System.Collections.Immutable.ImmutableArray{T}" />, and a suspension list that
+    ///         silently bound to empty is an abuse desk whose suspensions do nothing.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>TWO SPELLINGS, BECAUSE THE SECOND ONE IS WHAT AN OPERATOR IN A HURRY TYPES.</b> The
+    ///         array form (<c>SuspendedTenants:0</c>, <c>CyberCloud__Mail__SuspendedTenants__0</c>) is
+    ///         the binder's; a single comma-separated value
+    ///         (<c>CyberCloud__Mail__SuspendedTenants=a,b</c>) has no children at all, and the first
+    ///         cut read children only — so that spelling suspended nobody and said nothing. Both are
+    ///         read now, and anything that is not a GUID stops the host from starting rather than
+    ///         suspending less than the desk asked for. The first cut had no test of this at all (the
+    ///         #34 review); <c>MailPlatformConfigurationTests</c> is it.
+    ///     </para>
     /// </remarks>
-    static MailPlatformOptions PlatformFrom(IConfigurationSection section) =>
-        new() {
+    public static MailPlatformOptions PlatformFrom(IConfiguration configuration) {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var section = configuration.GetSection(MailPlatformOptions.Section);
+
+        return new() {
             InboundHost = section["InboundHost"] ?? string.Empty,
             SpfInclude = section["SpfInclude"] ?? string.Empty,
             MtaStsHost = section["MtaStsHost"] ?? string.Empty,
             TlsReportAddress = section["TlsReportAddress"] ?? string.Empty,
-            SuspendedTenants = [
-                .. section.GetSection("SuspendedTenants")
-                    .GetChildren()
-                    .Select(static x => Guid.Parse(x.Value ?? string.Empty, CultureInfo.InvariantCulture))
-            ]
+            SuspendedTenants = SuspendedTenantsFrom(section.GetSection("SuspendedTenants"))
         };
+    }
+
+    static ImmutableArray<Guid> SuspendedTenantsFrom(IConfigurationSection list) {
+        var spelled = list.GetChildren().Select(static x => (x.Path, x.Value)).ToList();
+
+        if (list.Value is { Length: > 0 } scalar) {
+            spelled.AddRange(
+                scalar.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(x => (list.Path, (string?)x))
+            );
+        }
+
+        var tenants = ImmutableArray.CreateBuilder<Guid>(spelled.Count);
+
+        foreach (var (path, value) in spelled) {
+            if (!Guid.TryParse(value, CultureInfo.InvariantCulture, out var tenant)) {
+                throw new InvalidOperationException(
+                    $"Configuration '{path}' is '{value}', which is not a tenant id. Every entry of "
+                    + $"{MailPlatformOptions.Section}:SuspendedTenants must be a tenant GUID — the host refuses to "
+                    + "start rather than run an abuse desk whose suspension silently did nothing."
+                );
+            }
+
+            tenants.Add(tenant);
+        }
+
+        return tenants.ToImmutable();
+    }
 
     static MailDnsOptions DnsFrom(IConfigurationSection section) =>
         new() {

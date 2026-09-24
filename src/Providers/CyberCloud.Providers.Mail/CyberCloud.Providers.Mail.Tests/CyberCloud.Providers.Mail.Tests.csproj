@@ -55,6 +55,13 @@
         <ProjectReference Include="../CyberCloud.Providers.Mail/CyberCloud.Providers.Mail.csproj"/>
         <!-- ProviderRegistry.Build, so the declaration is checked the way a silo checks it at start. -->
         <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+        <!--
+          ⚠ The module, for MailApplicationModule.PlatformFrom: the abuse desk's suspension list is read
+          there, and the #34 review found nothing had ever fed it a configuration. docs/plan/03 § Assembly
+          graph rules, rule 4 is over shipping assemblies, which a test project is not — the Sample
+          provider's application tests reference theirs the same way.
+        -->
+        <ProjectReference Include="../CyberCloud.Providers.Mail.Application/CyberCloud.Providers.Mail.Application.csproj"/>
     </ItemGroup>
 
 </Project>

@@ -67,7 +67,9 @@ public sealed class MailDeliveryCase : IProviderCaseSource {
 ///     mailboxes are created, the back end starts from the real images, a message is submitted with
 ///     <c>AUTH</c> and fetched over IMAP carrying a DKIM signature that verifies against the record
 ///     the platform told the tenant to publish — and outbound mail stays held until that record is
-///     in the DNS and <c>verify</c> has seen it.
+///     in the DNS and <c>verify</c> has seen it. Since the #34 review, also: mail from outside reaches
+///     an alias through the inbound port, and an open gate relays for a mailbox as itself and as
+///     nobody else, on the envelope or in the header.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -96,6 +98,7 @@ public sealed class MailDeliveryOnK3sTests : IAsyncLifetime {
     const string Password = "correct horse battery staple";
     const int SubmissionNodePort = 30587;
     const int ImapNodePort = 30143;
+    const int InboundNodePort = 30025;
 
     /// <summary>How long the pod may take: three image pulls, a claim, and Dovecot's first start.</summary>
     static readonly TimeSpan PodBudget = TimeSpan.FromMinutes(8);
@@ -148,10 +151,12 @@ public sealed class MailDeliveryOnK3sTests : IAsyncLifetime {
 
             await postfix.CreateAsync(token);
 
-            // ── A k3s with two NodePorts reachable from here ──────────────────────────────────
+            // ── A k3s with three NodePorts reachable from here ────────────────────────────────
             containers = await ClusterInfrastructure.StartContainersAsync(
                 token,
-                static k3s => k3s.WithPortBinding(SubmissionNodePort, true).WithPortBinding(ImapNodePort, true)
+                static k3s => k3s.WithPortBinding(SubmissionNodePort, true)
+                    .WithPortBinding(ImapNodePort, true)
+                    .WithPortBinding(InboundNodePort, true)
             );
 
             await ImportAsync(containers, MailDomains.PostfixImage, token);
@@ -222,6 +227,7 @@ public sealed class MailDeliveryOnK3sTests : IAsyncLifetime {
         var host = containers!.K3s.Hostname;
         var submission = containers.K3s.GetMappedPublicPort(SubmissionNodePort);
         var imap = containers.K3s.GetMappedPublicPort(ImapNodePort);
+        var inbound = containers.K3s.GetMappedPublicPort(InboundNodePort);
 
         // ── 4. Dovecot sees the mailboxes a second writer put in its Secret ────────────────────
         await EventuallyAsync(
@@ -385,30 +391,91 @@ public sealed class MailDeliveryOnK3sTests : IAsyncLifetime {
             token
         );
 
-        // ── 10. An alias delivers to its mailbox ───────────────────────────────────────────────
+        // ── 10. Mail from the internet reaches an alias — through the inbound door ─────────────
+        //
+        // ⚠ THE #34 REVIEW'S FINDING, AND WHY THIS STEP CHANGED. The first cut proved the alias with an
+        // AUTHENTICATED submission from bob, which runs through Postfix's alias map; the inbound pool
+        // it documented would have delivered over LMTP straight to Dovecot, which has no alias map, and
+        // refused info@ at RCPT. The Service now offers SMTP to Postfix and no LMTP (MailDomains
+        // .SmtpPort), so this is the pool's own path: a stranger, no AUTH, port 25.
         var aliasId = "<" + Guid.NewGuid().ToString("N") + "@" + Domain + ">";
 
-        using (var smtp = await MailWire.ConnectAsync(host, submission, token)) {
+        using (var smtp = await MailWire.ConnectAsync(host, inbound, token)) {
             await smtp.ExpectAsync("220", token);
-            await smtp.CommandAsync("EHLO e2e.test", "250", token);
-            await smtp.CommandAsync("AUTH PLAIN " + MailWire.Plain("bob@" + Domain, Password), "235", token);
-            await smtp.CommandAsync("MAIL FROM:<bob@" + Domain + ">", "250", token);
+            await smtp.CommandAsync("EHLO mx.elsewhere.example", "250", token);
+            await smtp.CommandAsync("MAIL FROM:<someone@elsewhere.example>", "250", token);
+
+            // ⚠ A stranger reaches this domain's addresses and nothing else, with the gate open.
+            var relay = await Should.ThrowAsync<InvalidOperationException>(
+                () => smtp.CommandAsync("RCPT TO:<victim@third.example>", "250", token)
+            );
+            relay.Message.ShouldStartWith("554");
+
             await smtp.CommandAsync("RCPT TO:<info@" + Domain + ">", "250", token);
             await smtp.CommandAsync("DATA", "354", token);
             await smtp.CommandAsync(
-                "From: bob@" + Domain + "\r\nTo: info@" + Domain + "\r\nSubject: to the alias\r\nMessage-ID: " + aliasId + "\r\n\r\nx\r\n.",
+                "From: someone@elsewhere.example\r\nTo: info@" + Domain + "\r\nSubject: to the alias\r\n"
+                + "Date: " + DateTimeOffset.UtcNow.ToString("r", CultureInfo.InvariantCulture) + "\r\n"
+                + "Message-ID: " + aliasId + "\r\n\r\nFrom outside, to an alias.\r\n.",
                 "250",
                 token
             );
+            await smtp.CommandAsync("QUIT", "221", token);
         }
 
         await EventuallyAsync(
             async () => await FetchAsync(host, imap, "alice@" + Domain, aliasId, token) is not null,
-            "mail for info@ never reached alice",
+            "inbound mail for info@ never reached alice",
             rm.Raw,
             ns,
             token
         );
+
+        // ── 11. With the gate open, a mailbox relays as itself and as nobody else ──────────────
+        //
+        // ⚠ THE #34 REVIEW'S OTHER FINDING. Every tenant's SPF includes the platform's include, so a
+        // relay that let alice write another domain on the envelope would pass SPF — and, through SPF
+        // alignment, DMARC — for a domain she does not own. The envelope is refused at RCPT
+        // (reject_sender_login_mismatch; smtpd_delay_reject moves a MAIL FROM refusal there); the
+        // header, at the end of DATA, by the Rspamd rule.
+        using (var smtp = await MailWire.ConnectAsync(host, submission, token)) {
+            await smtp.ExpectAsync("220", token);
+            await smtp.CommandAsync("EHLO e2e.test", "250", token);
+            await smtp.CommandAsync("AUTH PLAIN " + MailWire.Plain("alice@" + Domain, Password), "235", token);
+
+            foreach (var forged in new[] { "ceo@victim.example", "bob@" + Domain }) {
+                await smtp.CommandAsync("MAIL FROM:<" + forged + ">", "250", token);
+
+                var refused = await Should.ThrowAsync<InvalidOperationException>(
+                    () => smtp.CommandAsync("RCPT TO:<someone@elsewhere.example>", "250", token)
+                );
+                refused.Message.ShouldStartWith("553", customMessage: forged);
+                refused.Message.ShouldContain("not owned by user alice@" + Domain, Case.Insensitive, forged);
+
+                await smtp.CommandAsync("RSET", "250", token);
+            }
+
+            // Her alias is hers to send as — it is in her own .virtual file, and claimed.
+            await smtp.CommandAsync("MAIL FROM:<info@" + Domain + ">", "250", token);
+            await smtp.CommandAsync("RCPT TO:<someone@elsewhere.example>", "250", token);
+            await smtp.CommandAsync("RSET", "250", token);
+
+            // ⚠ Her own envelope and somebody else's From: refused at the end of DATA, by the milter.
+            await smtp.CommandAsync("MAIL FROM:<alice@" + Domain + ">", "250", token);
+            await smtp.CommandAsync("RCPT TO:<bob@" + Domain + ">", "250", token);
+            await smtp.CommandAsync("DATA", "354", token);
+
+            var header = await Should.ThrowAsync<InvalidOperationException>(
+                () => smtp.CommandAsync(
+                    "From: The CEO <ceo@victim.example>\r\nTo: bob@" + Domain + "\r\nSubject: wire the money\r\n"
+                    + "Date: " + DateTimeOffset.UtcNow.ToString("r", CultureInfo.InvariantCulture) + "\r\n"
+                    + "Message-ID: <" + Guid.NewGuid().ToString("N") + "@" + Domain + ">\r\n\r\nx\r\n.",
+                    "250",
+                    token
+                )
+            );
+            header.Message.ShouldStartWith("5", customMessage: header.Message);
+        }
     }
 
     // ── The story's steps ─────────────────────────────────────────────────────────────────────
@@ -461,6 +528,7 @@ public sealed class MailDeliveryOnK3sTests : IAsyncLifetime {
                     Type = "NodePort",
                     Selector = new Dictionary<string, string>(MailDomains.SelectorLabels(DomainName)),
                     Ports = [
+                        new() { Name = "smtp", Port = MailDomains.SmtpPort, TargetPort = MailDomains.SmtpPort, NodePort = InboundNodePort },
                         new() { Name = "submission", Port = MailDomains.SubmissionPort, TargetPort = MailDomains.SubmissionPort, NodePort = SubmissionNodePort },
                         new() { Name = "imap", Port = MailDomains.ImapPort, TargetPort = MailDomains.ImapContainerPort, NodePort = ImapNodePort }
                     ]

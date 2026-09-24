@@ -11,7 +11,31 @@ public readonly record struct MailDeliverabilityDecision(
     MailSending Sending,
     ImmutableArray<MailDnsCheck> Checks,
     string Reason
-);
+) {
+    /// <summary>
+    ///     Whether the decision is <see cref="MailSending.Held" /> only because the DNS did not answer:
+    ///     every gating record that failed to verify is <see cref="MailDnsRecords.Unresolvable" />, and
+    ///     none was answered <see cref="MailDnsRecords.Missing" /> or <see cref="MailDnsRecords.Mismatch" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Not evidence, so it never closes an open gate</b> — see
+    ///     <see cref="MailDeliverability.Settle" />. A resolver that timed out learned nothing about the
+    ///     tenant's zone, and the first cut treated that the same as records withdrawn: one pass that met
+    ///     a DNS blip held a verified domain's outbound mail until the tenant happened to call
+    ///     <c>verify</c> (the #34 review).
+    /// </remarks>
+    public bool Inconclusive {
+        get {
+            if (Sending != MailSending.Held || Checks.IsDefaultOrEmpty) {
+                return false;
+            }
+
+            var failed = Checks.Where(static x => x.Record.GatesSending && x.Status != MailDnsRecords.Verified).ToArray();
+
+            return failed.Length > 0 && failed.All(static x => x.Status == MailDnsRecords.Unresolvable);
+        }
+    }
+}
 
 /// <summary>
 ///     Decides doc 17 § Deliverability's gate for one domain: resolve the required records, compare
@@ -32,6 +56,26 @@ public readonly record struct MailDeliverabilityDecision(
 ///     </para>
 /// </remarks>
 public static class MailDeliverability {
+    /// <summary>
+    ///     The gate to render, given a decision and the gate the domain's running <c>ConfigMap</c>
+    ///     carries: the decision, unless it is <see cref="MailDeliverabilityDecision.Inconclusive" />
+    ///     and the domain is already open.
+    /// </summary>
+    /// <param name="decision">What <see cref="DecideAsync" /> returned.</param>
+    /// <param name="running">
+    ///     The gate the live <c>ConfigMap</c> renders (<see cref="MailDomains.RunningGate" />), or
+    ///     <see langword="null" /> when there is none yet or it could not be read.
+    /// </param>
+    /// <remarks>
+    ///     ⚠ <b>Fail closed still holds where it matters.</b> A domain that has never verified has no
+    ///     open gate to keep, so an unanswered DNS holds it; a records answer that says missing or
+    ///     mismatched closes an open gate on the spot; a suspension wins over everything. Only "the
+    ///     resolver did not answer" is refused the power to close a gate a previous answer opened.
+    ///     <c>MailDeliverabilityTests.AnUnansweredDnsNeverClosesAGateThatIsOpen</c>.
+    /// </remarks>
+    public static MailSending Settle(MailDeliverabilityDecision decision, MailSending? running) =>
+        decision.Inconclusive && running == MailSending.Open ? MailSending.Open : decision.Sending;
+
     /// <summary>Resolves, compares and decides.</summary>
     /// <param name="tenantId">The domain's tenant, for the suspension seam.</param>
     /// <param name="domain">The mail domain.</param>
