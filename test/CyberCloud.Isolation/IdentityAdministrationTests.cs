@@ -309,6 +309,8 @@ public sealed class IdentityAdministrationTests(IsolationCluster cluster) {
             new() { DisplayName = "Scopes", RedirectUris = ["https://a.example/cb"], Scopes = ["email"], IsPublicClient = true },
             new() { DisplayName = "Fragment", RedirectUris = ["https://a.example/cb#x"], Scopes = ["openid"], IsPublicClient = true },
             new() { DisplayName = "Relative", RedirectUris = ["/cb"], Scopes = ["openid"], IsPublicClient = true },
+            new() { DisplayName = "Plain http", RedirectUris = ["http://a.example/cb"], Scopes = ["openid"], IsPublicClient = true },
+            new() { DisplayName = "Script", RedirectUris = ["javascript:alert(1)"], Scopes = ["openid"], IsPublicClient = true },
             new() { DisplayName = "", RedirectUris = ["https://a.example/cb"], Scopes = ["openid"], IsPublicClient = true },
             new() { DisplayName = "No redirect", RedirectUris = [], Scopes = ["openid"], IsPublicClient = true }
         ];

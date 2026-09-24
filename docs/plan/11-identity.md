@@ -52,7 +52,11 @@ a reader skips as "not found" and never an object nothing lists. It records exis
 membership: who belongs to a *group* is still the tuples. Capped at ten thousand ids a list, refused
 past it rather than trimmed. ⚠ A tenant created before #41 lists only the users created since —
 nothing can backfill a list of ids no index ever held, and the dev run's tenants are the only ones
-that exist.
+that exist. ⚠ Only a deleted application leaves its list. A user is deprovisioned, never deleted, and
+an invitation is kept for its history, so for those two the cap is a lifetime cap: the ten-thousandth
+invitation a tenant ever sends is its last, and so is its ten-thousandth user. A reader reads a list
+in batches of 64 rather than all at once. **Owed:** a retention rule that prunes spent invitations
+(accepted, revoked, withdrawn or long expired) out of the list, and a paged store past the cap.
 
 ## Protocol
 
@@ -414,7 +418,12 @@ enrolled since. Since #41 an owner withdraws one directly: `DELETE …/invitatio
 a new invitation reuses them; `POST …/invitations/{id}/resend` replaces the link's secret, restarts
 the seven days and mails again under its own idempotency key (`invite-{t}-{i}-{n}` from the second
 mail — the first key alone made the communication service answer a resend with the first mail's
-receipt and send nothing). ⚠ (2) stands as a departure rather than a gap: signing in as the account
+receipt and send nothing). ⚠ A resend is refused for an invitation nobody is waiting on, and an
+expired one counts: `withdrawn` wins over `expired`, so an invitation that expired before its user
+was removed, or before they joined through another link, reads `withdrawn` and isn't mailed again.
+The first cut asked the user only about a pending invitation, and #41's review traced a fresh link
+mailed to a removed member (`InvitationExpiryTests`). One invitation is mailed at most
+`InvitationPolicy.MaxSendings` (5) times, then the resend is `429 QuotaExceeded`. ⚠ (2) stands as a departure rather than a gap: signing in as the account
 elsewhere would need that account found by address across tenants (the global index this section
 rules out) or a credential shared between two users (`IUserGrain` hands out no hash, by design), and
 cross-tenant identity is the M3 question below. `InvitationThroughTheGatewayTests` (the `POST` through
@@ -422,8 +431,9 @@ the real gateway with a device-flow token), `InvitationsOverHttpTests` (Mailpit)
 `CyberCloud.Isolation § InvitationTests` pin it. ⚠ **Owed:** a registered Communication template in place of the
 code template ([17 § The outbound carrier](17-communication-and-email.md)); a passkey at acceptance
 (the page takes a password, the sign-up page's passkey ceremony is not reused yet); an idempotency
-key the sender supplies, so a retried `POST` resumes one invitation rather than making a second; and
-the welcome mail, which is still [§ the owed paragraph above](#sign-up-and-tenant-creation)'s.
+key the sender supplies, so a retried `POST` resumes one invitation rather than making a second; a
+per-tenant rate on invitation mail (the per-invitation count bounds a resend, and nothing but the
+invitation list's cap bounds revoking and inviting again); and the welcome mail, which is still [§ the owed paragraph above](#sign-up-and-tenant-creation)'s.
 ~~Listing and revoking pending invitations~~ and ~~the portal page that sends one~~ landed with #41's
 identity administration pages — [20 § The pages that are not generated](20-portal.md) and the
 administration API below.
@@ -441,7 +451,10 @@ The sessions need no role: the address names no user, the list is read off the c
 and a session that isn't theirs is one `404` whether it exists or not. Removing a member deprovisions
 the user (every session revoked, every credential cleared) *then* deletes every tuple naming them
 through the reverse index, so a removed member holds no role anywhere and is out of every group;
-nobody removes themselves. `IdentityRoutingTests`, `CyberCloud.Isolation § IdentityAdministrationTests`
+nobody removes themselves. A registered redirect URI is https, http on a loopback host, or a
+private-use scheme named after a domain in reverse order (`com.example.app:/cb`), OAuth 2.1's three.
+The check #94 wrote refused only a relative URI and a fragment, and #41's review found
+`http://any.host/cb` and `javascript:` registrable once an owner could register over HTTP. `IdentityRoutingTests`, `CyberCloud.Isolation § IdentityAdministrationTests`
 and `IdentityAdministrationThroughTheGatewayTests` pin it. ⚠ **Owed:** an update of a registration
 (redirect URIs and scopes are fixed at registration today — delete and re-register); a second live
 secret for a rotation window, Entra's answer to rotating without downtime; a last-person rule (only

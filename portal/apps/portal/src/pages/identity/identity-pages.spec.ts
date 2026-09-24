@@ -338,6 +338,41 @@ describe('the identity pages, signed in', () => {
       expect(host().querySelector('[data-issued-secret]')).toBeNull();
       expect(host().querySelector(`[data-application="${APP}"]`)).toBeNull();
     });
+
+    it("drops a secret it's showing when the tenant switches, and reads the other tenant's list", async () => {
+      // docs/plan/20 says the secret is dropped on a tenant switch; #41's review found no spec
+      // that held the page to it.
+      const context = TestBed.inject(TenantContextStore);
+      context.load(
+        [
+          { id: TENANT, displayName: 'Acme' },
+          { id: 't-other', displayName: 'Other' }
+        ],
+        []
+      );
+      await openApplications();
+
+      click('Rotate secret', row('data-application', APP));
+      await settle();
+      click('Issue a new secret', row('data-application', APP));
+      await settle();
+      await answer('POST', `/applications/${APP}/rotateSecret`, application('acme-secret-on-screen'));
+      await answer('GET', '/applications', { value: [application()] });
+      expect(host().querySelector('[data-secret]')?.textContent).toBe('acme-secret-on-screen');
+
+      context.selectTenant('t-other');
+      await settle();
+
+      // Other's list is asked for at Other's address, and Acme's secret is nowhere on the page.
+      const other = http.expectOne(
+        r => r.method === 'GET' && r.url === '/api/tenants/t-other/providers/CyberCloud.Identity/applications'
+      );
+      expect(host().querySelector('[data-issued-secret]')).toBeNull();
+      expect(host().textContent).not.toContain('acme-secret-on-screen');
+      other.flush({ value: [] });
+      await settle();
+      expect(host().textContent).not.toContain('acme-secret-on-screen');
+    });
   });
 
   describe('sessions', () => {

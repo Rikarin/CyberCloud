@@ -133,6 +133,9 @@ public interface IInvitationGrain : IGrainWithStringKey {
     ///     The invitation; <see cref="ErrorCode.ResourceNotFound" /> for one never created;
     ///     <see cref="ErrorCode.Conflict" /> when it was accepted, revoked or withdrawn — nobody is
     ///     waiting for the link. An expired invitation can be resent: that's the point of resending.
+    ///     ⚠ An expired one whose user is no longer invited reads withdrawn, not expired, so it is
+    ///     refused like any other withdrawn one. <see cref="ErrorCode.QuotaExceeded" /> once it has
+    ///     been sent <see cref="InvitationPolicy.MaxSendings" /> times.
     ///     A delivery failure is the seam's refusal, with the new link already in force.
     /// </returns>
     /// <remarks>
@@ -165,6 +168,20 @@ public static class InvitationPolicy {
 
     /// <summary>The page an invitation link opens, under the identity app's base address.</summary>
     public const string PagePath = "/invitation";
+
+    /// <summary>
+    ///     How many times one invitation is mailed, the first sending included. Past it,
+    ///     <see cref="IInvitationGrain.ResendAsync" /> answers <see cref="ErrorCode.QuotaExceeded" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A count, not an interval. Each resend mails an address outside the tenant, and before
+    ///     #41's review nothing limited how often an owner could have the platform do it. An interval
+    ///     needs a clock the suites can move, and the harnesses resend in the instant they invite.
+    ///     Revoking and inviting again starts a new count, and that path is bounded by the
+    ///     invitation list's <see cref="DirectoryIndexPolicy.MaxEntries" />. A per-tenant rate on
+    ///     invitation mail is still owed (docs/plan/11).
+    /// </remarks>
+    public const int MaxSendings = 5;
 }
 
 /// <summary>What an invitation stands at.</summary>
@@ -176,7 +193,10 @@ public enum InvitationStatus {
     /// <summary>Used: the invitee is a member.</summary>
     Accepted = 1,
 
-    /// <summary>Past its seven days without being used.</summary>
+    /// <summary>
+    ///     Past its seven days without being used, with its user still <see cref="UserStatus.Invited" />.
+    ///     Otherwise it reads <see cref="Withdrawn" />, which is the more useful thing to know.
+    /// </summary>
     Expired = 2,
 
     /// <summary>

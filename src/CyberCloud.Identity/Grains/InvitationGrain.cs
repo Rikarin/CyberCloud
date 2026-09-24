@@ -166,6 +166,15 @@ public sealed class InvitationGrain(
             );
         }
 
+        if (state.State.Sendings >= InvitationPolicy.MaxSendings) {
+            return Result<Invitation>.Failure(
+                ErrorCode.QuotaExceeded,
+                $"Invitation {invitationId:D} has been sent {state.State.Sendings} times, the most one "
+                + "invitation is sent. If the mail isn't arriving, check the address; revoke this one "
+                + "and invite again to start over."
+            );
+        }
+
         // ⚠ The new link is in force before the mail goes — IInvitationGrain.ResendAsync's remarks.
         var now = clock.UtcNow;
 
@@ -376,18 +385,30 @@ public sealed class InvitationGrain(
         };
 
     /// <summary>
-    ///     <see cref="Snapshot" />, with a pending invitation whose user is no longer
-    ///     <see cref="UserStatus.Invited" /> read as <see cref="InvitationStatus.Withdrawn" />.
+    ///     <see cref="Snapshot" />, with an unused invitation — pending or expired — whose user is no
+    ///     longer <see cref="UserStatus.Invited" /> read as <see cref="InvitationStatus.Withdrawn" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Read from the user on every call rather than stored here: the status is the user
-    ///     grain's, and a copy would go stale the moment an administrator suspended somebody without
-    ///     knowing an invitation existed.
+    ///     <para>
+    ///         ⚠ Read from the user on every call rather than stored here: the status is the user
+    ///         grain's, and a copy would go stale the moment an administrator suspended somebody
+    ///         without knowing an invitation existed.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Expired is asked too, and Withdrawn wins over it.</b> The first cut asked only
+    ///         for Pending, so an invitation that had expired read <c>expired</c> after its user was
+    ///         removed or joined through another link, and <see cref="ResendAsync" /> — which resends
+    ///         an expired one on purpose — mailed a fresh link to a removed member. The link opened
+    ///         nothing, because <see cref="IUserGrain.AcceptInvitationAsync" /> checks Invited, but the
+    ///         mail went. #41's review found it by reading, and
+    ///         <c>InvitationExpiryTests.AnExpiredInvitationWhoseUserIsNoLongerInvitedIsWithdrawnAndNotResent</c>
+    ///         pins it.
+    ///     </para>
     /// </remarks>
     async Task<Invitation> ViewAsync() {
         var snapshot = Snapshot();
 
-        if (snapshot.Status != InvitationStatus.Pending) {
+        if (snapshot.Status is not (InvitationStatus.Pending or InvitationStatus.Expired)) {
             return snapshot;
         }
 

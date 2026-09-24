@@ -33,6 +33,9 @@ namespace CyberCloud.Identity.Contracts;
 ///         kept for its history. A deleted application has no record to show, so
 ///         <c>ApplicationGrain.DeleteAsync</c> removes its id. Each list is capped at
 ///         <see cref="DirectoryIndexPolicy.MaxEntries" />, and the cap refuses rather than drops.
+///         ⚠ So for users and invitations the cap is a lifetime cap: the tenant's ten-thousandth
+///         invitation ever sent is its last. Pruning spent invitations is owed (docs/plan/11
+///         § The object model).
 ///     </para>
 /// </remarks>
 [Alias("CyberCloud.Identity.IDirectoryIndexGrain")]

@@ -420,14 +420,30 @@ public sealed class ApplicationGrain(
             // A `file:` redirect URI is never a legitimate one: the authorization response has
             // nowhere to go and the browser resolves `//host/path` against the page's own scheme,
             // which is exactly the "resolves against the attacker's choice" the message names. A
-            // custom scheme is left alone — `com.example.app:/oauth` is how OAuth 2.1 says a native
-            // client registers, and it parses correctly on every platform.
+            // custom scheme gets past this check — `com.example.app:/oauth` is how OAuth 2.1 says a
+            // native client registers, and it parses correctly on every platform — and the next one
+            // asks it for its dot.
             if (parsed.IsFile) {
                 return Result<ApplicationRegistration>.Failure(
                     ErrorCode.InvalidRequestBody,
                     $"'{uri}' has no scheme of its own, so it is a relative or protocol-relative "
                     + "reference that this platform's URI parser turned into a 'file:' URI. What it "
                     + "resolves against is the browser's context and therefore the attacker's choice."
+                );
+            }
+
+            // ⚠ WHERE THE CODE MAY GO, WHICH #94'S CHECK NEVER ASKED. Once #41 let an owner register a
+            // client over HTTP, `http://anyhost/cb` and `javascript:…` or `data:…` were accepted. OAuth
+            // 2.1 allows three shapes: https; http on a loopback host, where a native app listens on
+            // its own machine; and a private-use scheme named after a domain the app controls, in
+            // reverse order (`com.example.app`). The dot is the check. javascript, data, vbscript,
+            // blob and about have none.
+            if (!IsRedirectTarget(parsed)) {
+                return Result<ApplicationRegistration>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"'{uri}' is not a redirect URI a client can register. Use https, http on a "
+                    + "loopback host (localhost, 127.0.0.1 or [::1]) for a native app, or a private-use "
+                    + "scheme named after a domain you control, such as com.example.app:/callback."
                 );
             }
 
@@ -468,6 +484,18 @@ public sealed class ApplicationGrain(
 
         return Result<ApplicationRegistration>.Success(registration);
     }
+
+    /// <summary>
+    ///     Reports whether an authorization response may be sent to <paramref name="uri" />: https,
+    ///     http on a loopback host, or a private-use scheme with a dot in it.
+    /// </summary>
+    /// <param name="uri">An absolute URI that is not a <c>file:</c> one.</param>
+    static bool IsRedirectTarget(Uri uri) =>
+        uri.Scheme switch {
+            "https" => true,
+            "http" => uri.IsLoopback,
+            _ => uri.Scheme.Contains('.', StringComparison.Ordinal)
+        };
 
     Result<T> NotFound<T>()
         where T : notnull =>

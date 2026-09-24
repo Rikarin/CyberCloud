@@ -296,6 +296,9 @@ public sealed class GrainIdentityDirectory(IGrainFactory grains) : IIdentityDire
 
     // ── Internals ──────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>How many directory objects one list reads at a time.</summary>
+    const int ListBatch = 64;
+
     /// <summary>Reads one directory index and each object it lists, skipping ids that were never created.</summary>
     static async Task<Result<IReadOnlyList<T>>> ListAsync<T>(
         TenantGrainFactory tenant,
@@ -309,7 +312,15 @@ public sealed class GrainIdentityDirectory(IGrainFactory grains) : IIdentityDire
             return Result<IReadOnlyList<T>>.Failure(unlisted);
         }
 
-        var reads = await Task.WhenAll(listed.GetValueOrThrow().Select(read));
+        // ⚠ In batches of ListBatch, not all at once. A list holds up to DirectoryIndexPolicy.MaxEntries
+        // ids, and one Task.WhenAll over ten thousand grain calls is ten thousand activations queued on
+        // the silo by one page load. #41's review.
+        List<Result<T>> reads = [];
+
+        foreach (var batch in listed.GetValueOrThrow().Chunk(ListBatch)) {
+            reads.AddRange(await Task.WhenAll(batch.Select(read)));
+        }
+
         List<T> found = [];
 
         foreach (var item in reads) {
