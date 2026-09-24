@@ -239,11 +239,17 @@ owed:
       path (`recover-creates-a-new-server-resource-and-never-overwrites`), using the server's new
       /properties/restore/recoveryPoint, which 2026-08-01 gained as an optional property (an addition
       the compatibility gate allows). WHAT REMAINS OF THE ROW is where a restore can land and what it
-      reads: (1) only into the vault's own resource group, because the Backup objects and the source's
-      {name}-backup-s3 Secret that bootstrap.recovery reads live in that group's namespace — a restore
-      into another group, or of a server whose group was deleted (its namespace reclaimed with the
-      Secret), needs the point's store coordinates carried in the body instead of a Backup name,
-      which is CloudNativePG's externalClusters form; (2) a point-in-time target — the restore is to
+      reads: (1) only into the vault's own resource group, because the restored server reads its
+      origin — the source's bucket, folder and base-backup id — off the Backup object in its own
+      namespace on its first pass. ✅ THE SOURCE'S SECRET IS NO LONGER READ (#30's reclaim): the
+      restored Cluster bootstraps through CloudNativePG's externalClusters form with a
+      {name}-restore-s3 of its own, rendered from the source's key as the vault holds it, so a restore
+      works after the source's teardown removed {source}-backup-s3
+      (RecoveryVaultAgainstCloudNativePg restores the same point again after purging the source). A
+      restore into another group, or of a server whose group was deleted (its namespace reclaimed with
+      the Backups), still needs those coordinates carried in the body instead of a Backup name — the
+      rendering already takes them as an origin, and the vault path of the key is the tenant's, not
+      the group's; (2) a point-in-time target — the restore is to
       the end of a base backup, and `recoveryTarget.targetTime` on the same property is the next field;
       (3) clusters the first cut of recover created are objects under the vault's labels and stay
       standing through the vault's teardown (`deleting-the-vault-leaves-restored-clusters-standing`)

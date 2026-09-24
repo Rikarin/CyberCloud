@@ -206,6 +206,31 @@ public static class ObjectStoreCredentials {
         return Result<ObjectStoreKey>.Success(key);
     }
 
+    /// <summary>
+    ///     The key the vault already holds at a path, issuing nothing — for a reader of a bucket that
+    ///     is not its own.
+    /// </summary>
+    /// <param name="secrets">Where the key is read from.</param>
+    /// <param name="vaultPath">The path — see <see cref="VaultPathFor" />.</param>
+    /// <param name="cancellationToken">Cancels the reads.</param>
+    /// <returns>The key, or <see cref="ErrorCode.ResourceNotFound" /> when the path holds none.</returns>
+    /// <remarks>
+    ///     ⚠ <b>A restored PostgreSQL server reads its SOURCE's key this way</b> (#30's reclaim): the
+    ///     source may be gone, its <c>Secret</c> with it, and the key outlives both in the vault until
+    ///     a purge reclaims the path. <see cref="EnsureAsync" /> would be wrong there twice over — it
+    ///     would make the source's bucket if it were missing and issue a second key to it.
+    /// </remarks>
+    public static async Task<Result<ObjectStoreKey>> HeldAsync(
+        ISecretResolver secrets,
+        string vaultPath,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(secrets);
+        ArgumentException.ThrowIfNullOrEmpty(vaultPath);
+
+        return await ReadAsync(secrets, vaultPath, cancellationToken);
+    }
+
     static async Task<Result<ObjectStoreKey>> ReadAsync(
         ISecretResolver secrets,
         string vaultPath,

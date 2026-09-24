@@ -126,6 +126,14 @@ platform:
   backupBucket: ""
   ## @param backupEndpoint {string} The platform object store's data-plane endpoint, as a pod in this cluster reaches it.
   backupEndpoint: ""
+  ## @param restoreBucket {string} For a restore, the SOURCE server's bucket, pg-{sourceId}, read off the recovery point. Written by the reconciler, which also writes the {name}-restore-s3 Secret holding the source's key as the vault holds it. Empty renders the restore from the Backup object instead.
+  restoreBucket: ""
+  ## @param restoreServerName {string} For a restore, the folder under the source's bucket the base backup is in: the source server's name.
+  restoreServerName: ""
+  ## @param restoreBackupId {string} For a restore, barman's id of the recovery point's base backup.
+  restoreBackupId: ""
+  ## @param restoreEndpoint {string} For a restore, the store endpoint the recovery point recorded.
+  restoreEndpoint: ""
 
 ## @param imageName {string} Override the operator's default PostgreSQL image. Empty means the operator chooses, which is what keeps minor upgrades automatic.
 ## @internal A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.

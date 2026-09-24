@@ -203,6 +203,42 @@
           "x-cybercloud-order": 4,
           "x-cybercloud-pointer": "/properties/platform/resourceType"
         },
+        "restoreBackupId": {
+          "default": "",
+          "description": "For a restore, barman's id of the recovery point's base backup.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 11,
+          "x-cybercloud-pointer": "/properties/platform/restoreBackupId"
+        },
+        "restoreBucket": {
+          "default": "",
+          "description": "For a restore, the SOURCE server's bucket, pg-{sourceId}, read off the recovery point. Written by the reconciler, which also writes the {name}-restore-s3 Secret holding the source's key as the vault holds it. Empty renders the restore from the Backup object instead.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 9,
+          "x-cybercloud-pointer": "/properties/platform/restoreBucket"
+        },
+        "restoreEndpoint": {
+          "default": "",
+          "description": "For a restore, the store endpoint the recovery point recorded.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 12,
+          "x-cybercloud-pointer": "/properties/platform/restoreEndpoint"
+        },
+        "restoreServerName": {
+          "default": "",
+          "description": "For a restore, the folder under the source's bucket the base backup is in: the source server's name.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 10,
+          "x-cybercloud-pointer": "/properties/platform/restoreServerName"
+        },
         "subscriptionId": {
           "default": "",
           "description": "Subscription GUID, rendered into the cybercloud.io/subscription-id label.",
