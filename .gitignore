@@ -236,3 +236,12 @@ src/Hosts/CyberCloud.AppHost/.identity/
 __pycache__/
 *.pyc
 .mypy_cache/
+
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Agent worktrees
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# Each is a whole checkout of this repository, and git records a nested repository it is asked to
+# add as a gitlink — a submodule entry with no .gitmodules behind it. The first merge of #39
+# (7dfbf20) swept thirteen of them into master with an `add -A` and had to be amended; ignoring the
+# directory is what makes that impossible rather than merely noticed.
+.claude/worktrees/

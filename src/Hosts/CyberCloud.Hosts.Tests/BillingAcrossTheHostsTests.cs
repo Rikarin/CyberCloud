@@ -148,6 +148,7 @@ public sealed class BillingAcrossTheHostsTests : IAsyncLifetime {
         answer.IsSuccess.ShouldBeTrue(answer.Error?.Message);
         answer.GetValueOrThrow().Rows.ShouldHaveSingleItem().Name.ShouldBe(path);
         answer.GetValueOrThrow().Total.ShouldBe(1.00m, "40 vCPU-hours at 0.025");
+        answer.GetValueOrThrow().PricedAlone.ShouldBeFalse("alice reads the whole subscription, so she sees its ladder");
 
         var stranger = await costs.QueryAsync(
             tenant,
@@ -243,10 +244,11 @@ public sealed class BillingAcrossTheHostsTests : IAsyncLifetime {
 
         // ── 6. A new silo over the same storage ──────────────────────────────────────────────────────
         //
-        // ⚠ A RESTART, NOT A DEACTIVATION. The first version deactivated the account alone and re-read an
-        // invoice with no lines. Below, every activation is gone: the account, the budget, the ledger and
-        // the numbering singleton each load their state from PostgreSQL through the durable tier's JSON
-        // serializer, the round trip CyberCloud.Billing.Tests' in-memory storage can't make.
+        // ⚠ A RESTART, NOT A DEACTIVATION. Deactivating the account alone would re-read one grain, and an
+        // invoice with no lines proves little about its serializer. Below, every activation is gone: the
+        // account, the budget, the ledger and the numbering singleton each load their state from
+        // PostgreSQL through the durable tier's JSON serializer, the round trip CyberCloud.Billing.Tests'
+        // in-memory storage can't make.
         await gateway.StopAsync(ct);
         await silo.StopAsync(ct);
         await gateway.DisposeAsync();
@@ -272,6 +274,13 @@ public sealed class BillingAcrossTheHostsTests : IAsyncLifetime {
         var audit = (await numbering.AuditAsync("cc-hosts-test", DocumentSeries.Invoice)).GetValueOrThrow();
         audit.Allocated.ShouldBe(1, "one invoice, one number, and the counter kept it");
         audit.Unconfirmed.ShouldBeEmpty();
+
+        // An allocation's answer crosses as well: the number and the instant the document is dated by.
+        var issuer = new InvoiceIssuer { Code = "cc-hosts-test", LegalName = "Cyber Cloud Hosts Test s.r.o.", Country = "CZ", NumberPrefix = "HT" };
+        var taken = (await numbering.AllocateAsync(issuer, DocumentSeries.Invoice, $"{tenant:N}/probe")).GetValueOrThrow();
+        taken.Number.ShouldBe("HT-INV-00000002");
+        taken.AllocatedAt.ShouldBeGreaterThanOrEqualTo(finalized.FinalizedAt!.Value, "a higher number never carries an earlier date");
+        (await numbering.ConfirmAsync("cc-hosts-test", DocumentSeries.Invoice, taken.Number)).IsSuccess.ShouldBeTrue();
 
         await gateway.StopAsync(ct);
         await silo.StopAsync(ct);

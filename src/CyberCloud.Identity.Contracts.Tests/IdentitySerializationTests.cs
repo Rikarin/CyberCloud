@@ -357,6 +357,12 @@ public sealed class IdentitySerializationTests : IDisposable {
             .Status.ShouldBe(InvitationStatus.Accepted);
         RoundTrip(new InvitationRequest { Email = "c@example.com", TenantName = "contoso" }).TenantName.ShouldBe("contoso");
 
+        // #43's second review: a member who joined with an account elsewhere.
+        var home = new HomeAccount { TenantId = Guid.NewGuid(), UserId = Guid.NewGuid() };
+
+        RoundTrip(new UserProfile { Email = "h@example.com", HomeAccount = home }).HomeAccount.ShouldBe(home);
+        RoundTrip(new UserProfile { Email = "i@example.com" }).HomeAccount.ShouldBeNull();
+
         // #43's device flow: every type a poll, a lookup and a redemption carry across the silo.
         var approval = new DeviceApproval {
             TenantId = Guid.NewGuid(), UserId = Guid.NewGuid(), Methods = [AuthenticationMethod.Password], Email = "d@example.com"
@@ -422,6 +428,7 @@ public sealed class IdentitySerializationTests : IDisposable {
         "CyberCloud.Identity.ExchangedSubject",
         "CyberCloud.Identity.GrantType",
         "CyberCloud.Identity.GroupDescriptor",
+        "CyberCloud.Identity.HomeAccount",
         "CyberCloud.Identity.IApplicationGrain",
         "CyberCloud.Identity.IAuthorizationCodeGrain",
         "CyberCloud.Identity.IConsentGrain",
@@ -462,6 +469,29 @@ public sealed class IdentitySerializationTests : IDisposable {
         // silo had ever run, this would instead be a burned entry with a comment. The full argument,
         // including when it stops being available, is at the top of IdentityWireTypes.cs.
     ];
+
+    /// <summary>
+    ///     <see cref="Invitation" />'s <c>[Id(3)]</c> stays empty: v0.1.0 published <c>Relation</c>
+    ///     there (<c>build/wire/v0.1.0.txt</c>), and a new member at 3 would be read by a v0.1.0 peer
+    ///     as that string.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The Wire compatibility gate would catch a reuse by comparing against the v0.1.0
+    ///     manifest, but only once <c>git tag</c> names v0.1.0 — until then the gate is vacuous and
+    ///     this is the only machine check the retirement has. The review of #43 found the remark on
+    ///     <see cref="Invitation" /> leaning on a gate that had never run against it.
+    /// </remarks>
+    [Fact]
+    public void TheInvitationsRetiredRelationNumberIsNeverReused() {
+        var numbers = typeof(Invitation)
+            .GetProperties()
+            .Select(static x => x.GetCustomAttribute<IdAttribute>()?.Id)
+            .Where(static x => x is not null)
+            .ToList();
+
+        numbers.ShouldNotContain(3u, "Invitation reused [Id(3)], which v0.1.0 published as Relation");
+        numbers.ShouldContain(0u, "the reflection found no [Id] at all, so the assertion above proves nothing");
+    }
 
     [Fact]
     public void TheAliasesAreTheOnesRecordedHere() {

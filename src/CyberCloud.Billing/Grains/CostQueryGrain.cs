@@ -14,8 +14,9 @@ namespace CyberCloud.Billing.Grains;
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Read <see cref="ICostQueryGrain" /> first</b> for the visibility rule. This class is
-///         the order it is applied in: price the scope, ask the subscription, and only when the
-///         subscription says no, ask each resource group and then each resource the answer contains.
+///         the order it is applied in: ask the subscription, net the scope's hours, and only when the
+///         subscription says no, ask each resource group and then each resource the hours contain —
+///         and price last, over what the caller may read.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The ReBAC object ids are spelled here a second time</b> — <c>{subscription:N}</c>,
@@ -76,33 +77,39 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
         // ── 1. The subscription, which answers everything when it answers yes. ─────────────────
         var wholeSubscription = await MayReadAsync(ObjectTypes.Subscription, SubscriptionObjectId(), caller);
 
-        // ── 2. The priced usage in scope. ─────────────────────────────────────────────────────
+        // ── 2. The usage in scope, netted and not yet priced. ─────────────────────────────────
         //
         // ⚠ BEFORE THE NO IS KNOWN, AND A STRANGER PAYS FOR THE READ. A caller who may read nothing still
-        // makes this grain read the ledger and rate up to CostQueryRequest.MaxDays before the 404. It
-        // can't be decided earlier: a reader of one resource is found only by the resource ids the rows
-        // carry, since no list of a subscription's resources exists here, and ListObjects' reverse index
-        // may miss (IListObjectsGrain's remarks), which would turn that reader's answer into a 404. The
-        // bound is the one every caller has: one ledger read, one period cap.
-        var rated = await pricing.RateAsync(tenantId, subscriptionId, from, to);
-        if (rated.TryGetError(out var rateError)) {
-            return Result<CostQueryResult>.Failure(rateError);
+        // makes this grain read the ledger before the 404. It can't be decided earlier: a reader of one
+        // resource is found only by the resource ids the hours carry, since no list of a subscription's
+        // resources exists here, and ListObjects' reverse index may miss (IListObjectsGrain's remarks),
+        // which would turn that reader's answer into a 404. The bound is the one every caller has: one
+        // ledger read, one period cap. Nothing is priced until the no is known.
+        var netted = await pricing.NetAsync(tenantId, subscriptionId, from, to);
+        if (netted.TryGetError(out var readError)) {
+            // ⚠ The 404 is decided before any failure is shown, or the failure would tell a stranger the
+            // subscription exists. Without the hours, only the groups can be asked, so a reader of
+            // single resources gets the 404 while the ledger can't be read.
+            return wholeSubscription || await MayReadAnyGroupAsync(scope, caller)
+                ? Result<CostQueryResult>.Failure(readError)
+                : NotFound(scope);
         }
 
-        var inScope = rated.GetValueOrThrow()
-            .Where(x => scope.Kind == ScopeKind.Subscription
-                || string.Equals(x.ResourceGroup, request.ResourceGroup, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+        var hours = netted.GetValueOrThrow();
+        var inScope = hours.Where(x => InScope(scope, x.ResourceGroup)).ToList();
 
         // ── 3. Groups, then resources, when the subscription said no. ─────────────────────────
-        var visible = inScope;
+        //
+        // Over the whole months the period touches, not only the period, because those are the hours
+        // that climb the ladder in step 4 — a day's figure must not depend on which days were asked for.
+        IReadOnlyCollection<UsageHour> visible = inScope;
         var mayReadSomething = wholeSubscription;
         var mayReadWholeScope = wholeSubscription;
 
         if (!wholeSubscription) {
             var readableGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var group in await GroupsInScopeAsync(scope, inScope)) {
+            foreach (var group in await GroupsInScopeAsync(scope, inScope.Select(static x => x.ResourceGroup))) {
                 if (await MayReadAsync(ObjectTypes.ResourceGroup, GroupObjectId(group), caller)) {
                     readableGroups.Add(group);
                 }
@@ -126,16 +133,31 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
         }
 
         // ⚠ The same answer an absent scope gets. A caller who can see nothing here learns nothing —
-        // not that the subscription exists, not that it has usage.
+        // not that the subscription exists, not that it has usage, and not why it couldn't be priced.
         if (!mayReadSomething) {
             return NotFound(scope);
         }
 
-        // ⚠ FILTERED IS ABOUT THE CALLER, NOT ABOUT THE USAGE. It first said whether any row was
-        // withheld, which told a reader of one group whether the others had usage in the period—ask
-        // day by day and it drew their activity. It now says whether the caller's access covers less
-        // than the scope, which is the same answer whatever anyone else used, at either granularity.
-        return Answer(request.Grouping, request.Granularity, from, to, visible, !mayReadWholeScope);
+        // ── 4. Priced, over what the caller may read. ─────────────────────────────────────────
+        //
+        // ⚠ ONLY A SUBSCRIPTION READER SEES THE SUBSCRIPTION'S LADDER. Tiers are climbed per
+        // subscription, so an hour priced over the whole ledger costs less when it's the month's first
+        // and more when another group used the free tier before it: a group reader dividing an amount
+        // by its quantity would learn how much the other groups used. Anyone else gets what they may
+        // read priced as if it were the subscription's only usage (Rating.PriceMonth's remarks), and
+        // PricedAlone says so. A rating failure is shown only after this point, and names nothing the
+        // caller may not read, because nothing else was rated.
+        var rated = wholeSubscription ? pricing.Price(hours, from, to) : pricing.Price(visible, from, to);
+        if (rated.TryGetError(out var rateError)) {
+            return Result<CostQueryResult>.Failure(rateError);
+        }
+
+        var answered = rated.GetValueOrThrow().Where(x => InScope(scope, x.ResourceGroup)).ToList();
+
+        // ⚠ Filtered is about the caller's access, never about the usage: whether anyone else used
+        // anything must not change it, or a reader of one group asking day by day would draw the
+        // other groups' activity from it.
+        return Answer(request.Grouping, request.Granularity, from, to, answered, !mayReadWholeScope, !wholeSubscription);
     }
 
     // ── The answer ───────────────────────────────────────────────────────────────────────────────
@@ -146,7 +168,8 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
         DateTimeOffset from,
         DateTimeOffset to,
         IReadOnlyCollection<RatedHour> visible,
-        bool filtered
+        bool filtered,
+        bool pricedAlone
     ) {
         var currencies = visible.Select(static x => x.Currency).Distinct(StringComparer.Ordinal).ToList();
         if (currencies.Count > 1) {
@@ -187,7 +210,8 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
                 Granularity = granularity,
                 Rows = rows,
                 Total = MoneyRounding.Round(visible.Sum(static x => x.Amount), currency).GetValueOrThrow(),
-                Filtered = filtered
+                Filtered = filtered,
+                PricedAlone = pricedAlone
             }
         );
     }
@@ -258,15 +282,15 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
 
     /// <summary>
     ///     Every group the question could have rows for — the scope's one group, or the subscription's
-    ///     groups plus any a row names — so that a caller who may read a group with no usage in the
+    ///     groups plus any an hour names — so that a caller who may read a group with no usage in the
     ///     period gets an empty answer and not a 404.
     /// </summary>
-    async Task<IReadOnlyCollection<string>> GroupsInScopeAsync(ScopeId scope, IEnumerable<RatedHour> rows) {
+    async Task<IReadOnlyCollection<string>> GroupsInScopeAsync(ScopeId scope, IEnumerable<string> named) {
         if (scope.Kind == ScopeKind.ResourceGroup) {
             return [scope.ResourceGroup];
         }
 
-        var groups = new HashSet<string>(rows.Select(static x => x.ResourceGroup).Where(static x => x.Length > 0), StringComparer.OrdinalIgnoreCase);
+        var groups = new HashSet<string>(named.Where(static x => x.Length > 0), StringComparer.OrdinalIgnoreCase);
 
         var listed = await Tenant().GetGrain<ISubscriptionGrain>(GrainKeys.Subscription(subscriptionId)).ListResourceGroupsAsync();
         if (listed.TryGetValue(out var names)) {
@@ -275,6 +299,20 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
 
         return groups;
     }
+
+    /// <summary>Whether the caller may read any group in scope — all that can be asked without the hours.</summary>
+    async Task<bool> MayReadAnyGroupAsync(ScopeId scope, SubjectRef caller) {
+        foreach (var group in await GroupsInScopeAsync(scope, [])) {
+            if (await MayReadAsync(ObjectTypes.ResourceGroup, GroupObjectId(group), caller)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    static bool InScope(ScopeId scope, string group) =>
+        scope.Kind == ScopeKind.Subscription || string.Equals(group, scope.ResourceGroup, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>One <c>read</c> check. A check that could not be answered is a no — docs/plan/07 § The enforcement seam.</summary>
     async Task<bool> MayReadAsync(string objectType, string objectId, SubjectRef subject) {

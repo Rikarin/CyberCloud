@@ -82,7 +82,8 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
         ResourceSchema? response = null,
         bool longRunning = false,
         Type? handler = null,
-        string entryPoint = ""
+        string entryPoint = "",
+        bool fullyConsistent = false
     ) {
         if (handler is not null && !Handlers.Contains(handler)) {
             Handlers.Add(handler);

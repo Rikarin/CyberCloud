@@ -527,6 +527,160 @@ public sealed class DeploymentTests(ResourceManagerCluster cluster) {
         answered.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
     }
 
+    /// <summary>
+    ///     A tenant suspended between a deployment's two children: the first, already accepted, finishes,
+    ///     and the second is refused before step 1 with the <c>TenantSuspended</c> a direct write gets at
+    ///     the gateway.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The review of #39 found this written.</b> <c>ResolveTenantStage</c> was the only place a
+    ///     suspended tenant's writes were refused, a child never passes it, and so billing's suspension
+    ///     let a running template create every resource it had left.
+    /// </remarks>
+    [Fact]
+    public async Task ATenantSuspendedBetweenTwoChildrenStopsTheDeploymentAtTheSecond() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var accepted = await PutAsync(Deployment("suspended-midway"), TwoWidgets(), Parameters("frozen"));
+        var parent = cluster.Operation(ResourceManagerCluster.Tenant, accepted.OperationId);
+
+        // One pass: the back end is accepted as Alice, and nothing drives it yet.
+        var first = (await parent.DriveAsync()).GetValueOrThrow();
+        first.Children.Length.ShouldBe(1, Describe(first));
+
+        var directory = cluster.Grains.GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory());
+        (await directory.SetStatusAsync(ResourceManagerCluster.Tenant, TenantStatus.Suspended)).IsSuccess.ShouldBeTrue();
+
+        try {
+            var ended = await DriveToEndAsync(accepted.OperationId);
+
+            ended.State.ShouldBe(OperationState.Failed, Describe(ended));
+            ended.Children.Length.ShouldBe(1, "a child was written after its tenant was suspended.");
+            ended.Error!.Message.ShouldContain("TenantSuspended");
+            ended.Error.Message.ShouldContain(Widget("frozen-frontend").Path);
+
+            (await cluster.Index(Widget("frozen-frontend")).ResolveAsync()).IsFailure.ShouldBeTrue(
+                "the refused child holds its name."
+            );
+
+            SwitchableAuthorizer.Checks.ShouldNotContain(
+                x => x.Path == Widget("frozen-frontend").Path,
+                "the refusal is before step 1, so no check should have been made for the second child."
+            );
+
+            // The child accepted before the suspension ends normally: the data plane keeps running, and
+            // an operation already accepted is not a new control-plane write.
+            var backEnd = (await cluster.Operation(ResourceManagerCluster.Tenant, ended.Children[0]).GetAsync()).GetValueOrThrow();
+            backEnd.State.ShouldBe(OperationState.Succeeded);
+        } finally {
+            (await directory.SetStatusAsync(ResourceManagerCluster.Tenant, TenantStatus.Active)).IsSuccess.ShouldBeTrue();
+        }
+    }
+
+    /// <summary>
+    ///     A creator who may no longer act — suspended, in the identity grains' words — is refused at the
+    ///     next child, before step 1, although every role tuple they held is still there.
+    /// </summary>
+    [Fact]
+    public async Task ACreatorWhoMayNoLongerActIsRefusedAtTheNextChild() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var accepted = await PutAsync(Deployment("creator-suspended"), TwoWidgets(), Parameters("orphaned"));
+        var first = (await cluster.Operation(ResourceManagerCluster.Tenant, accepted.OperationId).DriveAsync()).GetValueOrThrow();
+        first.Children.Length.ShouldBe(1, Describe(first));
+
+        SwitchablePrincipalStanding.Refused[Alice.SubjectId] = "user:alice is Suspended, and only an active user may act.";
+
+        var ended = await DriveToEndAsync(accepted.OperationId);
+
+        ended.State.ShouldBe(OperationState.Failed, Describe(ended));
+        ended.Children.Length.ShouldBe(1, "a child was written as a creator who may no longer act.");
+        ended.Error!.Message.ShouldContain("AuthorizationFailed");
+        ended.Error.Message.ShouldContain("Suspended");
+
+        SwitchablePrincipalStanding.Asked.ShouldContain(
+            $"user:{Alice.SubjectId}@{ResourceManagerCluster.Tenant:D}",
+            "the recorded caller was never asked about."
+        );
+
+        (await cluster.Index(Widget("orphaned-frontend")).ResolveAsync()).IsFailure.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     A deployment created under impersonation is accepted and writes nothing: its first child is
+    ///     refused naming the operator.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Its children used to carry <see cref="CallerContext.ImpersonatedBy" /> onward, which made the
+    ///     operator's sixty-minute box (docs/plan/06 § Platform administration) last as long as the
+    ///     template, since nothing recorded can say when the box closes.
+    /// </remarks>
+    [Fact]
+    public async Task AnImpersonatedDeploymentWritesNoChild() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var operatorCaller = Alice with { ImpersonatedBy = "support-operator" };
+        var accepted = await PutAsync(Deployment("impersonated"), TwoWidgets(), Parameters("borrowed"), operatorCaller);
+
+        var ended = await DriveToEndAsync(accepted.OperationId);
+
+        ended.State.ShouldBe(OperationState.Failed, Describe(ended));
+        ended.Children.ShouldBeEmpty("a child was written under impersonation.");
+        ended.Error!.Message.ShouldContain("support-operator");
+        ended.Error.Message.ShouldContain("AuthorizationFailed");
+
+        (await cluster.Index(Widget("borrowed-backend")).ResolveAsync()).IsFailure.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     The one secret step 2 can't see — a partial patch whose template names the child's api-version
+    ///     by expression — is refused at the child's own door, so it never reaches a resource.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Step 2 reads a template structurally and evaluates it only when the body carries its
+    ///     parameters too; this patch carries neither what the structural read can resolve nor what the
+    ///     evaluator needs. <c>DeploymentSecrets</c>' remarks own the residue: the template is stored.
+    /// </remarks>
+    [Fact]
+    public async Task ASecretStepTwoCouldNotSeeIsRefusedAtTheChildsDoor() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var deployment = Deployment("secret-by-expression");
+        var plain = new JsonObject { ["resources"] = new JsonArray(Resource("keyed", new() { ["size"] = 1 })) };
+
+        var created = await PutAsync(deployment, plain.ToJsonString(), "{}");
+        (await DriveToEndAsync(created.OperationId)).State.ShouldBe(OperationState.Succeeded);
+
+        var hidden = Resource("keyed", new() { ["size"] = 1, ["adminPassword"] = "hunter2" });
+        hidden["apiVersion"] = "[variables('version')]";
+
+        var patched = await cluster.Manager.WriteAsync(
+            new() {
+                Path = deployment.Path,
+                ApiVersion = Deployments.V2026,
+                Verb = WriteVerb.Patch,
+                Body = new JsonObject {
+                    ["properties"] = new JsonObject {
+                        ["template"] = new JsonObject {
+                            ["variables"] = new JsonObject { ["version"] = TestingProvider.V2026 },
+                            ["resources"] = new JsonArray(hidden)
+                        }.ToJsonString()
+                    }
+                }.ToJsonString(),
+                Caller = Alice
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        patched.IsSuccess.ShouldBeTrue(patched.Error?.Message);
+
+        var ended = await DriveToEndAsync(patched.GetValueOrThrow().OperationId);
+
+        ended.State.ShouldBe(OperationState.Failed, Describe(ended));
+        ended.Children.ShouldBeEmpty("the child carrying the secret was accepted.");
+        ended.Error!.Message.ShouldContain("'/properties/adminPassword' on CyberCloud.Testing/widgets is a secret property");
+    }
+
     static JsonObject Resource(string name, JsonObject properties) =>
         new() {
             ["type"] = WidgetType,
@@ -536,14 +690,14 @@ public sealed class DeploymentTests(ResourceManagerCluster cluster) {
             ["properties"] = properties
         };
 
-    async Task<WriteAccepted> PutAsync(ResourceId deployment, string template, string parameters) {
+    async Task<WriteAccepted> PutAsync(ResourceId deployment, string template, string parameters, CallerContext? caller = null) {
         var written = await cluster.Manager.WriteAsync(
             new() {
                 Path = deployment.Path,
                 ApiVersion = Deployments.V2026,
                 Verb = WriteVerb.Put,
                 Body = DeploymentBody(template, parameters),
-                Caller = Alice
+                Caller = caller ?? Alice
             }
         );
 

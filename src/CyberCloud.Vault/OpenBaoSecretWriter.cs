@@ -77,6 +77,19 @@ public sealed class OpenBaoSecretWriter(
             );
         }
 
+        // ⚠ The resolver's rule on the write side. A mint to tenants/{a}/../../platform/x would land
+        // under platform/, and cas=0 would then hold that path for whoever aimed it there.
+        if (!SecretRef.IsCanonicalPath(path)) {
+            return Refuse(
+                ErrorCode.AuthorizationFailed,
+                "A credential cannot be minted at a vault path with an empty, '.' or '..' segment, or "
+                + "a '\\' or '%'.",
+                $"MintAsync was called for '{path}', which is not canonical, so the write could land "
+                + "somewhere other than where it reads. Nothing was written. SecretRef.IsCanonicalPath "
+                + "says why."
+            );
+        }
+
         // ⚠ An empty document is refused rather than written. A path that exists and holds no fields
         // reads back as a missing field from every consumer, which is indistinguishable from the mint
         // never having happened — except that cas=0 will now never fire again, so the credential can
@@ -291,7 +304,9 @@ public sealed class OpenBaoSecretWriter(
     /// <summary>Builds the <c>kv-v2</c> write URL for a path.</summary>
     /// <remarks>
     ///     ⚠ Each segment is escaped separately so the hierarchy survives and nothing else does — the
-    ///     same rule, and the same reason, as <c>OpenBaoSecretResolver.Url</c>.
+    ///     same rule, and the same reason, as <c>OpenBaoSecretResolver.Url</c>. ⚠ Escaping leaves a
+    ///     <c>..</c> segment for <see cref="Uri" /> to collapse, so <see cref="MintAsync" /> refuses one
+    ///     before it gets here.
     /// </remarks>
     string Url(string path) {
         var escaped = string.Join('/', path.Split('/').Select(Uri.EscapeDataString));

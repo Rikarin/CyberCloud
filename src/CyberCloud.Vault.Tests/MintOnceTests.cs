@@ -177,6 +177,23 @@ public sealed class MintOnceTests(OpenBaoFixture vault) {
             .ShouldBe("two");
     }
 
+    [Fact]
+    public async Task AMintToADotSegmentPathIsRefusedAndWritesNothingAnywhere() {
+        // ⚠ The root token, so OpenBao's policy isn't what refuses: '..' collapses in System.Uri,
+        // and cas=0 would then hold platform/… for whoever aimed the write there.
+        var landing = "platform/mint-under-test/" + Guid.NewGuid().ToString("N");
+
+        var minted = await vault.Writer(OpenBaoFixture.RootToken)
+            .MintAsync(Path + "/../../../../../" + landing, Pair("AKIA", "aimed"), TestContext.Current.CancellationToken);
+
+        minted.IsFailure.ShouldBeTrue("a mint through '..' was sent");
+        minted.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+
+        (await vault.Resolver(OpenBaoFixture.RootToken)
+                .ResolveAsync(new() { Path = landing, Field = "secretAccessKey" }, TestContext.Current.CancellationToken))
+            .Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "the collapsed path was written");
+    }
+
     static Dictionary<string, string> Pair(string keyId, string secret) =>
         new(StringComparer.Ordinal) { ["accessKeyId"] = keyId, ["secretAccessKey"] = secret };
 

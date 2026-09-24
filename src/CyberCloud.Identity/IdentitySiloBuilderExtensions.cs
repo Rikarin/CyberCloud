@@ -93,6 +93,15 @@ public static class IdentitySiloBuilderExtensions {
         builder.Services.TryAddSingleton(static _ => SignInOptions.Default);
         builder.Services.TryAddSingleton<SignInService>();
 
+        // ⚠ Whether a deployment's recorded creator may still act, for the resource manager's child
+        // writes (IPrincipalStanding's remarks). Replace rather than TryAdd, because the manager
+        // TryAdds a refusing default and a silo may compose the two modules in either order — a
+        // TryAdd here would lose to it whenever the manager came first, and every deployment on
+        // that silo would fail at its first child.
+        builder.Services.Replace(
+            ServiceDescriptor.Singleton<Tenancy.Contracts.IPrincipalStanding, GrainPrincipalStanding>()
+        );
+
         return builder;
     }
 

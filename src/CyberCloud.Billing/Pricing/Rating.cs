@@ -4,6 +4,31 @@ using System.Globalization;
 namespace CyberCloud.Billing.Pricing;
 
 /// <summary>
+///     One hour of one meter on one resource, netted and not yet priced — what <see cref="Rating.NetMonth" />
+///     returns and <see cref="Rating.PriceMonth" /> prices.
+/// </summary>
+/// <param name="ResourceId">The resource.</param>
+/// <param name="ResourcePath">Its path, as the ledger recorded it.</param>
+/// <param name="Meter">The meter.</param>
+/// <param name="WindowStart">The hour, inclusive.</param>
+/// <param name="WindowEnd">The hour, exclusive.</param>
+/// <param name="Quantity">
+///     The net quantity — the ledger entry plus every correction to it. It can be zero, and it can be
+///     negative when a correction is wrong; pricing refuses the second.
+/// </param>
+public sealed record UsageHour(
+    Guid ResourceId,
+    string ResourcePath,
+    BillingMeter Meter,
+    DateTimeOffset WindowStart,
+    DateTimeOffset WindowEnd,
+    decimal Quantity
+) {
+    /// <summary>The resource group the path names, or empty when the path does not parse.</summary>
+    public string ResourceGroup => ResourcePaths.GroupOf(ResourcePath);
+}
+
+/// <summary>
 ///     One hour of one meter on one resource, priced — the rated line item docs/plan/22 § The
 ///     pipeline's <c>rating (meter × plan × price) → charges</c> produces.
 /// </summary>
@@ -31,13 +56,19 @@ public sealed record RatedHour(
     DateTimeOffset PriceVersion
 ) {
     /// <summary>The resource group the path names, or empty when the path does not parse.</summary>
-    public string ResourceGroup => Parsed is { } id ? id.ResourceGroup : string.Empty;
+    public string ResourceGroup => ResourcePaths.GroupOf(ResourcePath);
 
     /// <summary>The resource type the path names — <c>{namespace}/{type}</c> — or empty.</summary>
-    public string ResourceType => Parsed is { } id ? id.Type.ToString() : string.Empty;
+    public string ResourceType => ResourcePaths.TypeOf(ResourcePath);
+}
 
-    // ⚠ Qualified: the positional member ResourceId is a Guid and shadows the type inside this record.
-    Core.Resources.ResourceId? Parsed => Core.Resources.ResourceId.TryParsePath(ResourcePath, out var id) ? id : null;
+/// <summary>The two parts of a ledger path the cost views key by.</summary>
+static class ResourcePaths {
+    /// <summary>The resource group a path names, or empty when the path does not parse.</summary>
+    public static string GroupOf(string path) => ResourceId.TryParsePath(path, out var id) ? id.ResourceGroup : string.Empty;
+
+    /// <summary>The <c>{namespace}/{type}</c> a path names, or empty when the path does not parse.</summary>
+    public static string TypeOf(string path) => ResourceId.TryParsePath(path, out var id) ? id.Type.ToString() : string.Empty;
 }
 
 /// <summary>
@@ -57,7 +88,8 @@ public sealed record RatedHour(
 ///         what pricing the monthly aggregate would give, to the last digit
 ///         (<c>RatingTests.PricingEveryHourSumsToPricingTheMonthlyAggregate</c>), and every hour still
 ///         has its own figure. The consequence to know: the free tier is consumed by whoever used the
-///         meter first in the month.
+///         meter first in the month, so an hour's price reveals how much was used before it —
+///         <see cref="PriceMonth" />'s remarks say who that may be shown to.
 ///     </para>
 ///     <para>
 ///         <b>A correction nets into its hour before anything is priced.</b> The usage ledger's
@@ -100,18 +132,40 @@ public static class Rating {
         DateTimeOffset monthStart
     ) {
         ArgumentNullException.ThrowIfNull(sheet);
+
+        var netted = NetMonth(entries, monthStart);
+        return netted.TryGetError(out var error)
+            ? Result<ImmutableArray<RatedHour>>.Failure(error)
+            : PriceMonth(sheet, netted.GetValueOrThrow(), monthStart);
+    }
+
+    /// <summary>
+    ///     Nets one month of a ledger into hours — each original plus its corrections — without pricing
+    ///     anything.
+    /// </summary>
+    /// <param name="entries">
+    ///     The subscription's ledger — every entry, or any superset of the month's; entries outside the
+    ///     month are ignored.
+    /// </param>
+    /// <param name="monthStart">The first instant of the month, UTC.</param>
+    /// <returns>
+    ///     One hour per (resource, meter, hour) the month has entries for, zero and negative net
+    ///     quantities included, in no particular order. A failure only when
+    ///     <paramref name="monthStart" /> isn't a month's first instant.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>Apart from pricing so that a caller can choose whose hours climb the ladder.</b> The cost
+    ///     query decides what a caller may see on netted hours, and prices only those when the caller
+    ///     may not read the whole subscription — <see cref="PriceMonth" />'s remarks say why.
+    /// </remarks>
+    public static Result<ImmutableArray<UsageHour>> NetMonth(IEnumerable<UsageLedgerEntry> entries, DateTimeOffset monthStart) {
         ArgumentNullException.ThrowIfNull(entries);
 
         if (!IsMonthStart(monthStart)) {
-            return Result<ImmutableArray<RatedHour>>.Failure(
-                ErrorCode.InvalidRequestBody,
-                string.Create(CultureInfo.InvariantCulture, $"{monthStart:O} is not the first instant of a month in UTC.")
-            );
+            return Result<ImmutableArray<UsageHour>>.Failure(NotAMonth(monthStart));
         }
 
         var monthEnd = monthStart.AddMonths(1);
-
-        // ── 1. Net every hour: the original plus its corrections. ──────────────────────────────
         var hours = new Dictionary<(Guid, BillingMeter, DateTimeOffset, DateTimeOffset), (decimal Quantity, string Path)>();
 
         foreach (var entry in entries) {
@@ -124,9 +178,45 @@ public static class Rating {
             hours[key] = (hours.TryGetValue(key, out var held) ? held.Quantity + entry.Quantity : entry.Quantity, path);
         }
 
+        return Result<ImmutableArray<UsageHour>>.Success(
+            [.. hours.Select(static x => new UsageHour(x.Key.Item1, x.Value.Path, x.Key.Item2, x.Key.Item3, x.Key.Item4, x.Value.Quantity))]
+        );
+    }
+
+    /// <summary>Prices one month of netted hours, climbing each meter's ladder over exactly the hours given.</summary>
+    /// <param name="sheet">The prices.</param>
+    /// <param name="hours">Netted hours, from <see cref="NetMonth" />; any outside the month are ignored.</param>
+    /// <param name="monthStart">The first instant of the month, UTC.</param>
+    /// <returns>
+    ///     One rated hour per hour with a non-zero net quantity, in window order. A failure when the
+    ///     month has usage and no price sheet version, or when an hour's net quantity is below zero.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>The ladder is the hours passed in, and that decides whose usage a figure can reveal.</b>
+    ///     Given the whole subscription's month, an hour's price depends on everyone's usage before it:
+    ///     80 GiB of egress costs nothing when it's the month's first and 3.00 € when another group used
+    ///     80 GiB earlier, so the figure tells whoever reads it how much the rest of the subscription
+    ///     used. Given only the hours one caller may see, the figure depends on nothing else
+    ///     (<c>CostVisibilityTests.AGroupReadersFiguresDoNotMoveWithAnotherGroupsUsage</c>).
+    /// </remarks>
+    public static Result<ImmutableArray<RatedHour>> PriceMonth(
+        PriceSheet sheet,
+        IEnumerable<UsageHour> hours,
+        DateTimeOffset monthStart
+    ) {
+        ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(hours);
+
+        if (!IsMonthStart(monthStart)) {
+            return Result<ImmutableArray<RatedHour>>.Failure(NotAMonth(monthStart));
+        }
+
+        var monthEnd = monthStart.AddMonths(1);
+        var month = hours.Where(x => x.WindowStart >= monthStart && x.WindowStart < monthEnd).ToList();
+
         // A month with no usage is priced at nothing whether or not a price sheet covers it — which
         // is what lets a period that starts before the first version be queried at all.
-        if (hours.Count == 0) {
+        if (month.Count == 0) {
             return Result<ImmutableArray<RatedHour>>.Success([]);
         }
 
@@ -137,46 +227,59 @@ public static class Rating {
 
         var prices = version.GetValueOrThrow();
 
-        // ── 2. Walk each meter's ladder in time order. ─────────────────────────────────────────
-        var rated = ImmutableArray.CreateBuilder<RatedHour>(hours.Count);
+        // Each meter's ladder, climbed in time order.
+        var rated = ImmutableArray.CreateBuilder<RatedHour>(month.Count);
         var climbed = new Dictionary<BillingMeter, decimal>();
 
-        foreach (var ((resource, meter, start, end), (quantity, path)) in hours
-                     .OrderBy(static x => x.Key.Item3)
-                     .ThenBy(static x => x.Key.Item2)
-                     .ThenBy(static x => x.Key.Item1)) {
-            if (quantity < 0) {
+        foreach (var hour in month
+                     .OrderBy(static x => x.WindowStart)
+                     .ThenBy(static x => x.Meter)
+                     .ThenBy(static x => x.ResourceId)) {
+            if (hour.Quantity < 0) {
                 return Result<ImmutableArray<RatedHour>>.Failure(
                     ErrorCode.InternalError,
                     string.Create(
                         CultureInfo.InvariantCulture,
-                        $"The ledger's corrections take {meter} on resource {resource:D} for {start:O} to {quantity}, below zero."
+                        $"The ledger's corrections take {hour.Meter} on resource {hour.ResourceId:D} for {hour.WindowStart:O} to {hour.Quantity}, below zero."
                     )
                     + " A correction is a delta and cannot remove more than was recorded; the correction entry is "
                     + "wrong and has to be corrected in turn before the month can be rated."
                 );
             }
 
-            if (quantity == 0) {
+            if (hour.Quantity == 0) {
                 continue;
             }
 
-            if (!prices.Meters.TryGetValue(meter, out var price)) {
+            if (!prices.Meters.TryGetValue(hour.Meter, out var price)) {
                 return Result<ImmutableArray<RatedHour>>.Failure(
                     ErrorCode.InternalError,
-                    $"Price sheet version {prices.EffectiveFrom:O} has no price for {meter}. PriceSheet.Parse refuses such a sheet."
+                    $"Price sheet version {prices.EffectiveFrom:O} has no price for {hour.Meter}. PriceSheet.Parse refuses such a sheet."
                 );
             }
 
-            var before = climbed.GetValueOrDefault(meter);
+            var before = climbed.GetValueOrDefault(hour.Meter);
             rated.Add(
-                new(resource, path, meter, start, end, quantity, Climb(price.Tiers, before, quantity), price.Currency, prices.EffectiveFrom)
+                new(
+                    hour.ResourceId,
+                    hour.ResourcePath,
+                    hour.Meter,
+                    hour.WindowStart,
+                    hour.WindowEnd,
+                    hour.Quantity,
+                    Climb(price.Tiers, before, hour.Quantity),
+                    price.Currency,
+                    prices.EffectiveFrom
+                )
             );
-            climbed[meter] = before + quantity;
+            climbed[hour.Meter] = before + hour.Quantity;
         }
 
         return Result<ImmutableArray<RatedHour>>.Success(rated.ToImmutable());
     }
+
+    static Error NotAMonth(DateTimeOffset monthStart) =>
+        new(ErrorCode.InvalidRequestBody, string.Create(CultureInfo.InvariantCulture, $"{monthStart:O} is not the first instant of a month in UTC."));
 
     /// <summary>
     ///     The price of <paramref name="quantity" /> units taken from a tier ladder that has already

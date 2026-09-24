@@ -60,6 +60,13 @@ public abstract class PolicyCondition {
     public abstract IEnumerable<PolicyField> Fields { get; }
 
     /// <summary>
+    ///     Every leaf test, in document order, with where it sits in the rule — so
+    ///     <see cref="PolicyRule" /> can refuse a test that can't hold on any request its effect is
+    ///     evaluated for.
+    /// </summary>
+    internal abstract IEnumerable<PolicyTest> Tests { get; }
+
+    /// <summary>
     ///     Parses a condition.
     /// </summary>
     /// <param name="element">The <c>if</c> member.</param>
@@ -209,7 +216,7 @@ public abstract class PolicyCondition {
 
     static Result<PolicyCondition> Equal(PolicyField field, JsonElement operand, string target) =>
         IsScalar(operand)
-            ? Result<PolicyCondition>.Success(new EqualsCondition(field, JsonNode.Parse(operand.GetRawText())!))
+            ? Result<PolicyCondition>.Success(new EqualsCondition(field, JsonNode.Parse(operand.GetRawText())!, Leaf(target)))
             : Invalid("'equals' compares against a string, a number or a boolean.", target);
 
     static Result<PolicyCondition> In(PolicyField field, JsonElement operand, string target) {
@@ -240,17 +247,17 @@ public abstract class PolicyCondition {
             index++;
         }
 
-        return Result<PolicyCondition>.Success(new InCondition(field, values.MoveToImmutable()));
+        return Result<PolicyCondition>.Success(new InCondition(field, values.MoveToImmutable(), Leaf(target)));
     }
 
     static Result<PolicyCondition> Like(PolicyField field, JsonElement operand, string target) =>
         operand.ValueKind == JsonValueKind.String && operand.GetString()!.Length > 0
-            ? Result<PolicyCondition>.Success(new LikeCondition(field, operand.GetString()!))
+            ? Result<PolicyCondition>.Success(new LikeCondition(field, operand.GetString()!, Leaf(target)))
             : Invalid("'like' takes a non-empty string, where '*' matches any run of characters.", target);
 
     static Result<PolicyCondition> Exists(PolicyField field, JsonElement operand, string target) =>
         operand.ValueKind is JsonValueKind.True or JsonValueKind.False
-            ? Result<PolicyCondition>.Success(new ExistsCondition(field, operand.GetBoolean()))
+            ? Result<PolicyCondition>.Success(new ExistsCondition(field, operand.GetBoolean(), Leaf(target)))
             : Invalid("'exists' takes true or false.", target);
 
     /// <summary>Whether two JSON scalars are equal the way a condition compares them.</summary>
@@ -280,6 +287,9 @@ public abstract class PolicyCondition {
     static bool IsScalar(JsonElement element) =>
         element.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False;
 
+    /// <summary>The leaf's own pointer, from the pointer to its operator's operand.</summary>
+    static string Leaf(string operandTarget) => operandTarget[..operandTarget.LastIndexOf('/')];
+
     static string ClosedSet() =>
         "one of allOf, anyOf or not, or a 'field' with exactly one of " + string.Join(", ", Operators);
 
@@ -296,39 +306,48 @@ public abstract class PolicyCondition {
         public override bool Evaluate(PolicyFacts facts) => branches.All(x => x.Evaluate(facts));
 
         public override IEnumerable<PolicyField> Fields => branches.SelectMany(static x => x.Fields);
+
+        internal override IEnumerable<PolicyTest> Tests => branches.SelectMany(static x => x.Tests);
     }
 
     sealed class AnyOfCondition(ImmutableArray<PolicyCondition> branches) : PolicyCondition {
         public override bool Evaluate(PolicyFacts facts) => branches.Any(x => x.Evaluate(facts));
 
         public override IEnumerable<PolicyField> Fields => branches.SelectMany(static x => x.Fields);
+
+        internal override IEnumerable<PolicyTest> Tests => branches.SelectMany(static x => x.Tests);
     }
 
     sealed class NotCondition(PolicyCondition inner) : PolicyCondition {
         public override bool Evaluate(PolicyFacts facts) => !inner.Evaluate(facts);
 
         public override IEnumerable<PolicyField> Fields => inner.Fields;
+
+        internal override IEnumerable<PolicyTest> Tests => inner.Tests;
     }
 
-    sealed class EqualsCondition(PolicyField subject, JsonNode value) : PolicyCondition {
-        public override bool Evaluate(PolicyFacts facts) => ScalarEquals(facts.Resolve(subject), value);
+    /// <summary>A test of one field: the node a <c>field</c> and its operator make.</summary>
+    abstract class LeafCondition(PolicyField subject, string target) : PolicyCondition {
+        protected PolicyField Subject => subject;
 
         public override IEnumerable<PolicyField> Fields => [subject];
+
+        internal override IEnumerable<PolicyTest> Tests => [new(subject, target, this)];
     }
 
-    sealed class InCondition(PolicyField subject, ImmutableArray<JsonNode> values) : PolicyCondition {
+    sealed class EqualsCondition(PolicyField subject, JsonNode value, string target) : LeafCondition(subject, target) {
+        public override bool Evaluate(PolicyFacts facts) => ScalarEquals(facts.Resolve(Subject), value);
+    }
+
+    sealed class InCondition(PolicyField subject, ImmutableArray<JsonNode> values, string target) : LeafCondition(subject, target) {
         public override bool Evaluate(PolicyFacts facts) {
-            var actual = facts.Resolve(subject);
+            var actual = facts.Resolve(Subject);
             return actual is not null && values.Any(x => ScalarEquals(actual, x));
         }
-
-        public override IEnumerable<PolicyField> Fields => [subject];
     }
 
-    sealed class ExistsCondition(PolicyField subject, bool expected) : PolicyCondition {
-        public override bool Evaluate(PolicyFacts facts) => (facts.Resolve(subject) is not null) == expected;
-
-        public override IEnumerable<PolicyField> Fields => [subject];
+    sealed class ExistsCondition(PolicyField subject, bool expected, string target) : LeafCondition(subject, target) {
+        public override bool Evaluate(PolicyFacts facts) => (facts.Resolve(Subject) is not null) == expected;
     }
 
     /// <summary><c>like</c>: <c>*</c> matches any run of characters, including none; case is ignored.</summary>
@@ -338,15 +357,13 @@ public abstract class PolicyCondition {
     ///     comparison cost seconds. A glob has one metacharacter and a matcher that is linear in the
     ///     text times the number of stars.
     /// </remarks>
-    sealed class LikeCondition(PolicyField subject, string pattern) : PolicyCondition {
+    sealed class LikeCondition(PolicyField subject, string pattern, string target) : LeafCondition(subject, target) {
         readonly string[] parts = pattern.Split('*');
 
         public override bool Evaluate(PolicyFacts facts) =>
-            facts.Resolve(subject) is JsonValue value
+            facts.Resolve(Subject) is JsonValue value
             && value.GetValueKind() == JsonValueKind.String
             && Matches(value.GetValue<string>());
-
-        public override IEnumerable<PolicyField> Fields => [subject];
 
         bool Matches(string text) {
             if (parts.Length == 1) {
@@ -378,3 +395,9 @@ public abstract class PolicyCondition {
         }
     }
 }
+
+/// <summary>One leaf of a condition, with the pointer to it in the definition.</summary>
+/// <param name="Field">The field the test reads.</param>
+/// <param name="Target">The leaf's pointer, for a refusal's <c>target</c>: <c>/properties/policyRule/if/allOf/1</c>.</param>
+/// <param name="Condition">The leaf itself, which evaluates on its own.</param>
+internal readonly record struct PolicyTest(PolicyField Field, string Target, PolicyCondition Condition);

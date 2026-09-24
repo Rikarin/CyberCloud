@@ -162,6 +162,21 @@ public sealed class EnforcementSeamTests(ResourceManagerCluster cluster) {
 
         action.IsSuccess.ShouldBeTrue(action.Error?.Message);
         SwitchableAuthorizer.Asked.ShouldContain("listKeys");
+        SwitchableAuthorizer.AskedFullyConsistent.ShouldContain("listKeys");
+
+        // And an action that is neither secret nor declared FullyConsistent is not.
+        SwitchableAuthorizer.AskedFullyConsistent.Clear();
+        (await cluster.Manager.ActionAsync(
+                new() {
+                    Path = address.Path,
+                    ApiVersion = TestingProvider.V2026,
+                    Verb = WriteVerb.Post,
+                    Action = "restart",
+                    Caller = ResourceManagerCluster.Caller()
+                },
+                TestContext.Current.CancellationToken
+            )).IsSuccess.ShouldBeTrue();
+        SwitchableAuthorizer.AskedFullyConsistent.ShouldBeEmpty();
     }
 
     [Fact]

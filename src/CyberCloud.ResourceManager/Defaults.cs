@@ -22,8 +22,10 @@ namespace CyberCloud.ResourceManager;
 ///     <para>
 ///         ⚠ <b>No longer the default a host gets.</b> <c>AddCyberCloudResourceManager</c> registers
 ///         <see cref="CatalogPolicyEvaluator" /> since issue #46; this remains for the hand-built
-///         harnesses — the conformance suites, the isolation suite — whose subject is not policy and
-///         which build <see cref="ResourceManagerService" /> without a catalog grain to ask.
+///         harnesses whose subject isn't policy — the two conformance suites'
+///         <c>ProviderTestCluster</c> and <c>ClusterConformanceHarness</c>. The isolation suite's
+///         <c>IsolationCluster</c> passes the real evaluator, because who may write a policy and whose
+///         writes it reaches are isolation questions.
 ///     </para>
 /// </remarks>
 public sealed class NotSupportedPolicyEvaluator : IPolicyEvaluator {
@@ -508,6 +510,38 @@ public sealed class UnavailablePrincipalDirectory : IPrincipalDirectory {
                 + "gateway's is GrainPrincipalDirectory, over the identity grains. This refuses rather "
                 + "than granting on a guess: an assignment to a principal nobody checked is a tuple "
                 + "nothing can use and nothing can see (docs/plan/07 § Azure RBAC, expressed in it)."
+            )
+        );
+}
+
+/// <summary>
+///     The <see cref="IPrincipalStanding" /> a silo without identity keeps: it refuses, so a
+///     deployment writes no child.
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Refuses rather than answering "may act".</b> Its one caller is
+///     <see cref="IResourceManager.WriteChildAsync" />, which writes as a caller recorded minutes or
+///     hours earlier, and a default of "yes" would put back the gap this seam closes: a suspended
+///     user's deployment carrying on as them. The real one reads the identity grains, which this
+///     assembly can't name, so <c>AddCyberCloudIdentity</c> <c>Replace</c>s this descriptor.
+///     <c>HostCompositionTests.TheSiloWiresPrincipalStandingAndTheGatewayKeepsTheRefusal</c> asserts
+///     that the composed silo holds the real one.
+/// </remarks>
+public sealed class UnavailablePrincipalStanding : IPrincipalStanding {
+    /// <inheritdoc />
+    public Task<Result> EnsureMayActAsync(
+        Guid tenantId,
+        string principalType,
+        string principalId,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result.Failure(
+                ErrorCode.InternalError,
+                $"Nothing is wired to say whether '{principalType}:{principalId}' of tenant {tenantId:D} "
+                + "may still act, so nothing is written as them from a reminder. The silo that runs "
+                + "deployments composes identity with AddCyberCloudIdentity(), which replaces this "
+                + "IPrincipalStanding with one that reads the principal's own grain."
             )
         );
 }

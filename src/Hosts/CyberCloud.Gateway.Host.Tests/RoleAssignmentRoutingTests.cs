@@ -128,9 +128,11 @@ public sealed class RoleAssignmentRoutingTests {
     }
 
     [Fact]
-    public async Task AJustInTimeGrantRendersItsExpiryInUtcSoAGetCanBeSentBackAsAPut() {
-        // Issue #49. The instant is rendered in UTC whatever offset the manager's value carries, and
-        // round-trips: the string written here is one RoleAssignmentService accepts as expiresOn.
+    public async Task AJustInTimeGrantRendersItsExpiryInUtcAndAGetSentBackReachesTheManagerAsItWasRendered() {
+        // Issue #49. The instant is rendered in UTC whatever offset the manager's value carries. The
+        // manager here is a stand-in, so this holds the gateway's half of the round trip: the
+        // envelope goes out with the end in it and comes back in unchanged. Whether the manager
+        // reads that end is RoleAssignmentTests.AGetSentBackAsAPutKeepsTheEndItRendered's question.
         var gateway = new GatewayHarness();
         var expiresOn = new DateTimeOffset(2026, 9, 24, 11, 0, 0, TimeSpan.FromHours(2));
 
@@ -148,6 +150,15 @@ public sealed class RoleAssignmentRoutingTests {
         response.Body.ShouldContain(
             "\"" + RoleAssignmentBodyProperties.ExpiresOn + "\":\"2026-09-24T09:00:00+00:00\""
         );
+
+        await gateway.SendAsync(
+            "PUT",
+            OnGroup(GatewayHarness.TenantA),
+            gateway.Token(GatewayHarness.TenantA),
+            body: response.Body
+        );
+
+        gateway.Roles.Bodies.ShouldContain(response.Body);
     }
 
     [Fact]

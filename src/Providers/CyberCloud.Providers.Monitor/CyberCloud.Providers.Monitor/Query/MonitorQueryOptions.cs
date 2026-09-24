@@ -51,7 +51,28 @@ public sealed class MonitorQueryOptions {
     /// <summary>ClickHouse's HTTP interface — <c>http(s)://host:8123</c> — for the logs.</summary>
     public string LogsEndpoint { get; set; } = string.Empty;
 
-    /// <summary>The ClickHouse user a search runs as. ⚠ It should hold <c>SELECT</c> on the workspace databases and nothing else.</summary>
+    /// <summary>The ClickHouse user a search runs as.</summary>
+    /// <remarks>
+    ///     <para>
+    ///         It should hold <c>SELECT</c> on the workspace databases and nothing else:
+    ///         <c>CREATE USER … SETTINGS readonly = 2</c> and <c>GRANT SELECT ON ws_*.* TO …</c>, which
+    ///         ClickHouse 25.3 takes as a wildcard grant. <c>MonitorQueryFixture</c> runs every search in
+    ///         <c>MonitorQueryOverHttpTests</c> as that user, so the grant is known to be enough.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>readonly = 2</c>, not the conventional read-only profile's <c>readonly = 1</c>.</b>
+    ///         <see cref="ClickHouseLogStore" /> sets <c>readonly</c>, <c>max_execution_time</c> and
+    ///         <c>max_rows_to_read</c> on every statement, and a <c>readonly = 1</c> user may change no
+    ///         setting at all: ClickHouse answers code 164, <i>"Cannot modify 'readonly' setting in
+    ///         readonly mode"</i>, and every search fails with <see cref="ClickHouseLogStore.FailedSentence" />.
+    ///         <c>MonitorQueryOverHttpTests.AReadonlyOneUserCanRunNoSearchBecauseTheStoreSetsItsBudgetPerStatement</c>.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Nothing provisions that user yet. The AppHost hands the gateway the region's admin
+    ///         credential — <c>charts/managed/monitor-workspace/conformance.yaml § owed</c>,
+    ///         <c>log-search-runs-as-the-clickhouse-admin</c>.
+    ///     </para>
+    /// </remarks>
     public string LogsUser { get; set; } = "default";
 
     /// <summary>That user's password.</summary>

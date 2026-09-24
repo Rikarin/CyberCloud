@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -226,7 +227,8 @@ public static class CommunicationChannels {
     ///     <see cref="ErrorCode.InvalidRequestBody" /> for a kind the schema would have refused, or a
     ///     tenant account with a handle that does not parse. Both are reachable only past the schema,
     ///     and both are refused rather than defaulted because the default would be the platform's
-    ///     account.
+    ///     account. <see cref="ErrorCode.AuthorizationFailed" /> for a handle outside the tenant's own
+    ///     vault prefix; see <see cref="ParseSecretRef" />.
     /// </returns>
     public static Result<ChannelConfiguration> ToConfiguration(ResourceId id, JsonElement desired) {
         var kind = KindOf(desired);
@@ -245,7 +247,8 @@ public static class CommunicationChannels {
 
         var account = ParseSecretRef(
             Bodies.Text(Bodies.Property(desired, "accountRef"), string.Empty),
-            "/properties/accountRef"
+            "/properties/accountRef",
+            id.TenantId
         );
         if (account.TryGetError(out var badAccount)) {
             return Result<ChannelConfiguration>.Failure(badAccount);
@@ -253,7 +256,8 @@ public static class CommunicationChannels {
 
         var auth = ParseSecretRef(
             Bodies.Text(Bodies.Property(desired, "authRef"), string.Empty),
-            "/properties/authRef"
+            "/properties/authRef",
+            id.TenantId
         );
         if (auth.TryGetError(out var badAuth)) {
             return Result<ChannelConfiguration>.Failure(badAuth);
@@ -261,7 +265,8 @@ public static class CommunicationChannels {
 
         var signing = ParseSecretRef(
             Bodies.Text(Bodies.Property(desired, "signingRef"), string.Empty),
-            "/properties/signingRef"
+            "/properties/signingRef",
+            id.TenantId
         );
         if (signing.TryGetError(out var badSigning)) {
             return Result<ChannelConfiguration>.Failure(badSigning);
@@ -300,10 +305,23 @@ public static class CommunicationChannels {
         return ToConfiguration(id, desired).TryGetValue(out var wanted) && held == wanted;
     }
 
-    /// <summary>Parses <c>path#field[@version]</c>, or the empty handle for an empty string.</summary>
+    /// <summary>
+    ///     Parses <c>path#field[@version]</c>, refusing a path outside the tenant's own vault prefix,
+    ///     or returns the empty handle for an empty string.
+    /// </summary>
     /// <param name="spelled">The handle as a body spells it.</param>
     /// <param name="target">Which property, as the error's JSON Pointer target.</param>
-    public static Result<CarrierSecretRef> ParseSecretRef(string spelled, string target) {
+    /// <param name="tenantId">The tenant whose channel carries the handle, and the only one whose paths it may name.</param>
+    /// <remarks>
+    ///     ⚠ <b>Checked now, although no carrier resolves a handle yet.</b> The day one does, it
+    ///     resolves through the silo's <c>ISecretResolver</c>, which holds the platform's one broad
+    ///     OpenBao token. So a handle is held to <c>tenants/{tenantId}/</c>, canonical first, or a
+    ///     channel could name another tenant's credentials or a key vault's root under
+    ///     <c>platform/</c>. <c>VirtualMachines.ParseCloudInitRef</c> is the same check, spelled again
+    ///     because rule 2 keeps the two families apart, and <c>SecretRef.IsCanonicalPath</c> says why
+    ///     canonical comes first.
+    /// </remarks>
+    public static Result<CarrierSecretRef> ParseSecretRef(string spelled, string target, Guid tenantId) {
         if (string.IsNullOrWhiteSpace(spelled)) {
             return Result<CarrierSecretRef>.Success(new());
         }
@@ -318,12 +336,26 @@ public static class CommunicationChannels {
             );
         }
 
+        var path = spelled[..hash];
+        var prefix = string.Create(CultureInfo.InvariantCulture, $"tenants/{tenantId:D}/");
+
+        if (!CyberCloud.Core.Contracts.SecretRef.IsCanonicalPath(path)
+            || !path.StartsWith(prefix, StringComparison.Ordinal)
+            || path.Length == prefix.Length) {
+            return Result<CarrierSecretRef>.Failure(
+                ErrorCode.AuthorizationFailed,
+                $"'{path}' is not a path under your tenant's vault prefix '{prefix}', spelled with no "
+                + "empty, '.' or '..' segment. A channel can only name a value your own tenant holds.",
+                target
+            );
+        }
+
         var rest = spelled[(hash + 1)..];
         var at = rest.IndexOf('@', StringComparison.Ordinal);
 
         return Result<CarrierSecretRef>.Success(
             new() {
-                Path = spelled[..hash],
+                Path = path,
                 Field = at < 0 ? rest : rest[..at],
                 Version = at < 0 ? string.Empty : rest[(at + 1)..]
             }

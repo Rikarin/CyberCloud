@@ -144,6 +144,109 @@ public sealed class KeyVaultOverTheGatewayTests(KeyVaultGateway gateway) : IClas
     }
 
     [Fact]
+    public async Task ARevokedOfficerIsRefusedEveryActionOnTheNextCall() {
+        // ⚠ Its own vault, because everything below the revoke is aimed at items that exist, so a
+        // stale allow reaches the grain and answers 200 or 400 rather than the refusal's 404.
+        const string Revoking = "revocation";
+        var path = KeyVaultGateway.VaultPath(Revoking);
+        await gateway.CreateVaultAsync(Revoking);
+
+        // ⚠ Granted and revoked on the group, not the vault. A revoke's own assignRole check walks
+        // the check grain of the scope it's made on, and any walk after a tuple write drops every
+        // older entry that grain has cached. Revoked on the vault, the second revoke's check would
+        // flush the first's stale allows by coincidence, and this passed with every action checked
+        // MinimizeLatency. A revoke on the group leaves the vault's cache as it was.
+        foreach (var role in new[] { Relations.KeyVaultSecretsOfficer, Relations.KeyVaultCryptoOfficer }) {
+            await gateway.GrantAsync(KeyVaultGateway.GroupPath, role, SubjectTypes.User, gateway.Olga);
+        }
+
+        var olga = gateway.Token(gateway.Olga);
+
+        async Task<JsonElement> AsOlga(string action, object body) {
+            var (status, response) = await gateway.ActionAsync(Revoking, action, olga, body);
+            status.ShouldBe(200, $"{action} before the revoke answered {status}: {response}");
+            return response;
+        }
+
+        // Every data-plane permission both roles hold is checked once and allowed, so a check made
+        // MinimizeLatency now has an allow in CheckGrain's cache, which has no TTL.
+        await AsOlga(KeyVaults.SetSecretAction, new { secretName = "kept", value = "before" });
+        await AsOlga(KeyVaults.GetSecretAction, new { secretName = "kept" });
+        foreach (var name in new[] { "warm", "doomed" }) {
+            await AsOlga(KeyVaults.SetSecretAction, new { secretName = name, value = "x" });
+            await AsOlga(KeyVaults.DeleteSecretAction, new { secretName = name });
+        }
+        await AsOlga(KeyVaults.PurgeDeletedSecretAction, new { secretName = "warm" });
+
+        await AsOlga(KeyVaults.CreateKeyAction, new { keyName = "ec", kty = "EC" });
+        await AsOlga(KeyVaults.CreateKeyAction, new { keyName = "rsa", kty = "RSA", keySize = 2048 });
+        foreach (var name in new[] { "warm-key", "doomed-key" }) {
+            await AsOlga(KeyVaults.CreateKeyAction, new { keyName = name, kty = "EC" });
+            await AsOlga(KeyVaults.DeleteKeyAction, new { keyName = name });
+        }
+        await AsOlga(KeyVaults.PurgeDeletedKeyAction, new { keyName = "warm-key" });
+
+        var digest = VaultCrypto.Encode(SHA256.HashData("a release"u8));
+        var signature = (await AsOlga(KeyVaults.SignAction, new { keyName = "ec", alg = "ES256", digest })).GetProperty("value").GetString();
+        var sealedValue = (await AsOlga(KeyVaults.EncryptAction, new { keyName = "rsa", alg = "RSA-OAEP-256", value = "AAAA" })).GetProperty("value").GetString();
+        var wrapped = (await AsOlga(KeyVaults.WrapKeyAction, new { keyName = "rsa", alg = "RSA-OAEP-256", value = "AAAA" })).GetProperty("value").GetString();
+
+        foreach (var role in new[] { Relations.KeyVaultSecretsOfficer, Relations.KeyVaultCryptoOfficer }) {
+            await gateway.RevokeAsync(KeyVaultGateway.GroupPath, role, SubjectTypes.User, gateway.Olga);
+        }
+
+        // Each body would succeed for a holder of the roles, or fail in the grain with a 400.
+        var afterRevoke = new Dictionary<string, object>(StringComparer.Ordinal) {
+            // First, so a stale allow shows as the irreversible call it is.
+            [KeyVaults.PurgeDeletedSecretAction] = new { secretName = "doomed" },
+            [KeyVaults.SetSecretAction] = new { secretName = "kept", value = "after" },
+            [KeyVaults.GetSecretAction] = new { secretName = "kept" },
+            [KeyVaults.UpdateSecretAction] = new { secretName = "kept", enabled = false },
+            [KeyVaults.ListSecretsAction] = new { },
+            [KeyVaults.ListSecretVersionsAction] = new { secretName = "kept" },
+            [KeyVaults.DeleteSecretAction] = new { secretName = "kept" },
+            [KeyVaults.ListDeletedSecretsAction] = new { },
+            [KeyVaults.RecoverDeletedSecretAction] = new { secretName = "doomed" },
+            [KeyVaults.CreateKeyAction] = new { keyName = "after", kty = "EC" },
+            [KeyVaults.ImportKeyAction] = new { keyName = "after", pkcs8 = "AAAA" },
+            [KeyVaults.GetKeyAction] = new { keyName = "ec" },
+            [KeyVaults.UpdateKeyAction] = new { keyName = "ec", enabled = false },
+            [KeyVaults.ListKeysAction] = new { },
+            [KeyVaults.ListKeyVersionsAction] = new { keyName = "ec" },
+            [KeyVaults.DeleteKeyAction] = new { keyName = "ec" },
+            [KeyVaults.ListDeletedKeysAction] = new { },
+            [KeyVaults.RecoverDeletedKeyAction] = new { keyName = "doomed-key" },
+            [KeyVaults.PurgeDeletedKeyAction] = new { keyName = "doomed-key" },
+            [KeyVaults.EncryptAction] = new { keyName = "rsa", alg = "RSA-OAEP-256", value = "AAAA" },
+            [KeyVaults.DecryptAction] = new { keyName = "rsa", alg = "RSA-OAEP-256", value = sealedValue },
+            [KeyVaults.WrapKeyAction] = new { keyName = "rsa", alg = "RSA-OAEP-256", value = "AAAA" },
+            [KeyVaults.UnwrapKeyAction] = new { keyName = "rsa", alg = "RSA-OAEP-256", value = wrapped },
+            [KeyVaults.SignAction] = new { keyName = "ec", alg = "ES256", digest },
+            [KeyVaults.VerifyAction] = new { keyName = "ec", alg = "ES256", digest, signature }
+        };
+
+        afterRevoke.Keys.Order(StringComparer.Ordinal).ShouldBe(ValidBodies.Keys.Order(StringComparer.Ordinal));
+
+        foreach (var (action, body) in afterRevoke) {
+            var (status, response) = await gateway.ActionAsync(Revoking, action, olga, body);
+
+            // ⚠ 404, not 403: without the roles Olga can't read the vault at all.
+            status.ShouldBe(404, $"a revoked officer's {action} answered {status}: {response}");
+        }
+
+        // And nothing changed: Dana, granted now, finds what Olga left.
+        await gateway.GrantAsync(path, Relations.KeyVaultSecretsOfficer, SubjectTypes.User, gateway.Dana);
+        await gateway.GrantAsync(path, Relations.KeyVaultCryptoOfficer, SubjectTypes.User, gateway.Dana);
+
+        (await Ok(Revoking, KeyVaults.GetSecretAction, new { secretName = "kept" })).GetProperty("value").GetString().ShouldBe("before");
+        (await Ok(Revoking, KeyVaults.ListDeletedSecretsAction)).GetProperty("items").EnumerateArray()
+            .ShouldContain(x => x.GetString()!.StartsWith("doomed deleted ", StringComparison.Ordinal));
+        (await Ok(Revoking, KeyVaults.GetKeyAction, new { keyName = "ec" })).GetProperty("kty").GetString().ShouldBe("EC");
+        (await Ok(Revoking, KeyVaults.ListDeletedKeysAction)).GetProperty("items").EnumerateArray()
+            .ShouldContain(x => x.GetString()!.StartsWith("doomed-key deleted ", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task EverySetIsAVersionAndTheHistoryReadsBackOverTheGateway() {
         var first = await Ok(Vault, KeyVaults.SetSecretAction, new { secretName = "db-password", value = "first", contentType = "text/plain" });
         var second = await Ok(Vault, KeyVaults.SetSecretAction, new { secretName = "db-password", value = "second" });
@@ -235,6 +338,21 @@ public sealed class KeyVaultOverTheGatewayTests(KeyVaultGateway gateway) : IClas
                 KeyVaults.VerifyAction,
                 new { keyName = name, alg = algorithm, digest = VaultCrypto.Encode(SHA256.HashData(message)), signature = signed.GetProperty("value").GetString() }
             )).GetProperty("value").GetBoolean().ShouldBeTrue();
+
+        // And a signature one bit off, or over another digest, verifies false rather than erroring.
+        var tampered = (byte[])signature.Clone();
+        tampered[^1] ^= 1;
+
+        foreach (var (digest, candidate) in new[] {
+                     (SHA256.HashData(message), tampered),
+                     (SHA256.HashData("release 1.2.4"u8), signature)
+                 }) {
+            (await Ok(
+                    Vault,
+                    KeyVaults.VerifyAction,
+                    new { keyName = name, alg = algorithm, digest = VaultCrypto.Encode(digest), signature = VaultCrypto.Encode(candidate) }
+                )).GetProperty("value").GetBoolean().ShouldBeFalse($"{algorithm} verified a signature it didn't make");
+        }
     }
 
     [Fact]

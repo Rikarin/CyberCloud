@@ -103,16 +103,28 @@ public sealed record PolicyModification(PolicyModificationKind Kind, PolicyField
 /// <remarks>
 ///     <para>
 ///         ⚠ <b>Where each effect applies is part of the rule, and it is not the same for all three.</b>
-///         A rule that never mentions <see cref="PolicyField.Operation" /> is a rule about the
-///         resource's <i>shape</i>, and only a create or an update changes a shape — so it is not
-///         evaluated on a <c>DELETE</c> or an action. The alternative is the defect Azure's own
-///         <c>deny</c> would have if it ran on deletes: "deny any server whose sku is <c>premium</c>"
-///         would make every existing premium server undeletable, which is the one thing the tenant
-///         writing that rule is trying to get rid of. A <see cref="PolicyRuleEffect.Deny" /> rule
-///         that <i>does</i> name the operation — <c>{ "field": "operation", "equals": "delete" }</c>
-///         beside <c>/tags/env equals prod</c> — has said which request it is about, and it is
-///         evaluated on that request. Audit and modify are shape effects and never apply to a delete
-///         or an action: there is no body to rewrite and nothing new to be compliant with.
+///         A rule that reads neither <see cref="PolicyField.Operation" /> nor
+///         <see cref="PolicyField.Action" /> is a rule about the resource's <i>shape</i>, and only a
+///         create or an update changes a shape — so it is not evaluated on a <c>DELETE</c> or an
+///         action. The alternative is the defect Azure's own <c>deny</c> would have if it ran on
+///         deletes: "deny any server whose sku is <c>premium</c>" would make every existing premium
+///         server undeletable, which is the one thing the tenant writing that rule is trying to get
+///         rid of. A <see cref="PolicyRuleEffect.Deny" /> rule that reads either request fact —
+///         <c>{ "field": "operation", "equals": "delete" }</c> beside <c>/tags/env equals prod</c>, or
+///         <c>{ "field": "action", "equals": "rotateKeys" }</c> alone — has said which request it's
+///         about, and it's evaluated on every request. Audit and modify are shape effects and never
+///         apply to a delete or an action: there is no body to rewrite and nothing new to be
+///         compliant with.
+///     </para>
+///     <para>
+///         ⚠ <b>So a test that can't hold where its effect runs is refused, not stored.</b> An audit
+///         or a modify that names <c>delete</c> or <c>action</c>, or reads the <c>action</c> fact —
+///         empty on every create and update — would be accepted and never run, and a test of
+///         <c>operation</c> against a word outside the four holds on no request at all. Each is the
+///         rule that "denies nothing and says nothing" the closed operator set exists to prevent, so
+///         <see cref="Parse(JsonElement, string)" /> refuses it, targeting the leaf. Found by the
+///         third review of issue #46, which stored <c>{ "field": "action", "equals": "restart" }</c> as a
+///         deny that no action ever reached.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The order across rules is modify, then deny, then audit</b>, and it is Azure's. A
@@ -132,7 +144,7 @@ public sealed class PolicyRule {
         Condition = condition;
         Effect = effect;
         Operations = operations;
-        NamesOperation = condition.Fields.Any(static x => string.Equals(x.Value, PolicyField.Operation, StringComparison.Ordinal));
+        NamesRequest = condition.Fields.Any(static x => IsRequestFact(x.Value));
     }
 
     /// <summary>The <c>if</c>.</summary>
@@ -144,8 +156,12 @@ public sealed class PolicyRule {
     /// <summary>What a modify rule writes. Empty for the other two effects.</summary>
     public ImmutableArray<PolicyModification> Operations { get; }
 
-    /// <summary>Whether the condition reads <see cref="PolicyField.Operation" /> — see the remarks.</summary>
-    public bool NamesOperation { get; }
+    /// <summary>
+    ///     Whether the condition reads <see cref="PolicyField.Operation" /> or
+    ///     <see cref="PolicyField.Action" />, which is what takes a deny past creates and updates. See
+    ///     the remarks.
+    /// </summary>
+    public bool NamesRequest { get; }
 
     /// <summary>The effect as a rule spells it.</summary>
     public string EffectName => Spell(Effect);
@@ -156,7 +172,7 @@ public sealed class PolicyRule {
     /// </summary>
     /// <param name="operation">One of <see cref="PolicyOperations.All" />.</param>
     public bool AppliesTo(string operation) =>
-        PolicyOperations.WritesBody(operation) || (Effect == PolicyRuleEffect.Deny && NamesOperation);
+        PolicyOperations.WritesBody(operation) || (Effect == PolicyRuleEffect.Deny && NamesRequest);
 
     /// <summary>Whether the <c>if</c> holds.</summary>
     /// <param name="facts">The request and the body.</param>
@@ -255,6 +271,10 @@ public sealed class PolicyRule {
             );
         }
 
+        if (Unreachable(condition.GetValueOrThrow(), effect) is { } unreachable) {
+            return Result<PolicyRule>.Failure(unreachable);
+        }
+
         var hasOperations = then.TryGetProperty("operations", out var operationsElement);
 
         if (effect != PolicyRuleEffect.Modify) {
@@ -273,6 +293,75 @@ public sealed class PolicyRule {
             ? Result<PolicyRule>.Failure(operationsError)
             : Result<PolicyRule>.Success(new(condition.GetValueOrThrow(), effect, operations.GetValueOrThrow()));
     }
+
+    /// <summary>
+    ///     The refusal for the first test of a request fact that can't hold on any request this effect
+    ///     is evaluated for, or <see langword="null" />. The remarks carry the argument.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Decided by evaluating the leaf on each of the four operations</b>, not by reading its
+    ///     operand: <c>equals</c>, <c>in</c> and <c>like</c> compare ignoring case and a glob can
+    ///     match two of the four, so asking the leaf is the only reading that can't disagree with how
+    ///     it runs. A leaf that holds on all four — <c>exists: true</c>, <c>like: "*"</c> — doesn't
+    ///     tell the operations apart and is left alone.
+    /// </remarks>
+    static Error? Unreachable(PolicyCondition condition, PolicyRuleEffect effect) {
+        var shape = Spell(effect);
+
+        foreach (var test in condition.Tests) {
+            if (string.Equals(test.Field.Value, PolicyField.Action, StringComparison.Ordinal)) {
+                if (effect != PolicyRuleEffect.Deny) {
+                    return new(
+                        ErrorCode.InvalidRequestBody,
+                        $"'action' is empty on every create and update, and those are the only requests a {shape} "
+                        + "rule is evaluated for — so this test can't tell them apart and the rule would never "
+                        + "see an action. Only a deny rule reaches an action; docs/plan/08 § Policy.",
+                        test.Target + "/field"
+                    );
+                }
+
+                continue;
+            }
+
+            if (!string.Equals(test.Field.Value, PolicyField.Operation, StringComparison.Ordinal)) {
+                continue;
+            }
+
+            var holds = PolicyOperations.All.Where(x => test.Condition.Evaluate(Probe(x))).ToArray();
+
+            if (holds.Length == 0) {
+                return new(
+                    ErrorCode.InvalidRequestBody,
+                    "'operation' is one of "
+                    + string.Join(", ", PolicyOperations.All)
+                    + ", and this test holds for none of them — so it's false on every request, or under a "
+                    + "'not' true on every request.",
+                    test.Target
+                );
+            }
+
+            if (effect != PolicyRuleEffect.Deny
+                && holds.Length < PolicyOperations.All.Count
+                && holds.FirstOrDefault(static x => !PolicyOperations.WritesBody(x)) is { } unseen) {
+                return new(
+                    ErrorCode.InvalidRequestBody,
+                    $"This test names '{unseen}', and a {shape} rule is evaluated only for a create or an "
+                    + "update — there is no body to rewrite or judge on a delete or an action. Name create "
+                    + "or update, or make the rule a deny; docs/plan/08 § Policy.",
+                    test.Target
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The facts of a request that differs from the others only in its operation.</summary>
+    static PolicyFacts Probe(string operation) => new("", "", operation, "", new JsonObject());
+
+    static bool IsRequestFact(string field) =>
+        string.Equals(field, PolicyField.Operation, StringComparison.Ordinal)
+        || string.Equals(field, PolicyField.Action, StringComparison.Ordinal);
 
     static Result<ImmutableArray<PolicyModification>> ParseOperations(JsonElement element, string target) {
         if (element.ValueKind != JsonValueKind.Array || element.GetArrayLength() == 0) {

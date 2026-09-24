@@ -153,7 +153,8 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         ResourceSchema? response = null,
         bool longRunning = false,
         Type? handler = null,
-        string entryPoint = ""
+        string entryPoint = "",
+        bool fullyConsistent = false
     ) {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(permission);
@@ -250,7 +251,8 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
                 Response = response,
                 LongRunning = longRunning,
                 HandlerType = handler,
-                EntryPoint = entryPoint
+                EntryPoint = entryPoint,
+                FullyConsistent = fullyConsistent
             }
         );
 
