@@ -60,7 +60,8 @@ const SAMPLE_PARAMS: Readonly<Record<string, string>> = {
   name: 'example',
   parent: 'parent',
   childType: 'children',
-  operationId: '9c1d2b6f-8a7e-5d43-0f9a-1c2e4b7d4e3a'
+  operationId: '9c1d2b6f-8a7e-5d43-0f9a-1c2e4b7d4e3a',
+  number: 'CC-INV-00000042'
 };
 
 /** Every path in the route table that can be reached without a wildcard match. */

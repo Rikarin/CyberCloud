@@ -135,6 +135,19 @@ ask, because a grant to a principal since deprovisioned must remain removable. T
 `N`-form GUID a token carries as `sub` — any other spelling names a subject no token presents and is
 refused rather than folded. `RoleAssignmentTests` drives all of it through the real grains.
 
+**Four more grantable roles are data-plane roles, and no control-plane role implies them (2026-09-23,
+`SchemaVersion` 4).** `CyberCloud.KeyVault/vaults` ([18](18-security-vault-and-malware-scan.md))
+needed Azure's split between managing a vault and reading what is in it: `keyVaultSecretsOfficer`,
+`keyVaultSecretsUser`, `keyVaultCryptoOfficer` and `keyVaultCryptoUser` are roles on every scope type,
+inherited `From(parent, …)` like the three, each Officer implying its User, and none rewritten from
+`owner`, `contributor` or `reader`. The vault's actions check six permissions defined on `resource`
+in terms of them — `readSecrets`, `writeSecrets`, `purgeSecrets`, `useKeys`, `writeKeys`,
+`purgeKeys`, the two purges carrying the `!suspended` deny — so the tenant's owner is answered `403`
+on every data-plane action until a data-plane role is granted, which `assignRole` lets the owner do.
+`RoleAssignmentService.GrantableRoles` is seven, and `ReBacResourceRelationWriter.DirectRoles` drops
+all seven on a soft delete. Where this section says "the schema's three" below, it means the three
+control-plane roles.
+
 **A resource is a fifth principal type, and it is not a subject type (issue #90).** `SubjectTypes`
 stays closed at `user`, `servicePrincipal` and `managedIdentity` — what a token can carry, what can
 sign in. `principalType: "resource"` with the resource's own `N`-form GUID is what a tenant grants
@@ -194,6 +207,20 @@ that do not reference each other (`CyberCloud.ResourceManager.Contracts` does no
 **every purge test in the repository ran against a doubled authorizer** — which answers whatever its
 author believed about a permission name. `test/CyberCloud.Isolation` is what drove one through this
 schema and found it, which is the second defect that project has caught in the same way.
+
+⚠ **Owed, `action-permissions-are-undeclared`: the same defect stands for five more permissions.**
+`listKeys` (eleven types: the data services, the caches, the brokers, search, storage accounts and
+monitor workspaces), `listCredentials` (`ContainerRegistry/registries`,
+`ContainerService/managedClusters`), `listInstallCommand` (`ContainerService/connectedClusters`),
+`connect` (`Terminal/consoles`' `connect` and `terminate`) and `url` (`Dashboard/grafanas`) are each
+checked by an action, and `CyberCloudSchema` declares none of them. So on a real silo every one of
+those actions answers the canonical `404`, to every caller, the owner included. The first three
+were found by reading during #30, and the last two by the test below when it was written. None is
+fixed there. Declaring them is a `SchemaVersion` bump, and it needs a decision about which role holds
+each: Azure puts `listKeys` in Contributor, and [12](12-managed-data-services.md) wants it audited
+on every call. `HostCompositionTests.EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed`
+reads every permission the gateway's composed registry checks and pins the undeclared set to exactly
+these five, so a sixth fails the build and so does fixing one without updating the test.
 
 **Decided: `resource.purge` is `Rel("owner") & !Rel("suspended")`, and that is deliberately less
 separation than [08](08-resource-manager.md) § Soft delete describes.** That section wants *"a role
@@ -423,6 +450,22 @@ This exists because of one specific bug class: an admin revokes a user's access,
 the user's next request is served from a cache and succeeds. Without a token, the only fixes are "never
 cache" or "hope". With one, the revoke returns a token, the portal shows the new state as of that
 token, and the *enforcement* path for anything destructive is `FullyConsistent` regardless.
+
+⚠ **The same class runs the other way, and a deployment is where it was measured (#39).** A write's
+step 3 checks `MinimizeLatency`, and `CheckGrain` answers that mode from any cached entry with no TTL —
+so a *deny* is cached exactly as an allow is. A deployment child refused because its creator held
+nothing on its group, and retried after an owner granted the missing role, met the cached refusal again
+in `test/CyberCloud.Isolation`'s `DeploymentAuthorizationTests`; an ordinary `PUT` retried after a
+grant does the same. The portal's `AtLeastAsFresh` token is the fix on its own path; a write path that
+carried the caller's latest token, or a grant that dropped cached denies, is owed — recorded in
+[08 § Long-running operations](08-resource-manager.md) beside the deployment that found it.
+
+⚠ **And in the revoke direction, where it is the incident this section is about.** The same cache let
+a deployment keep writing children as a creator revoked after the first one: the deployment's own `PUT`
+had cached their allow at the group, and every later child at `MinimizeLatency` hit it. A deployment's
+child is written as a recorded caller, from a reminder, with no token to be fresh against, so its step 3
+is `FullyConsistent` — which also closes the grant direction above *for children*
+(`DeploymentAuthorizationTests.ARightRevokedBetweenTwoChildrenIsHonouredAtTheSecond`).
 
 ⚠ **A tuple that expires changes an answer with no write, so no token can describe it.** Every mode
 applies expiry at the instant a check is evaluated, and every cached entry — `MinimizeLatency`'s
@@ -803,7 +846,7 @@ holder's graph query ([08](08-resource-manager.md) § The resource-graph project
   delete that dies between steps 3 and 5 already leaves, and, per the item above, just as unscheduled.
 - **The process boundary.** Every new wire member carries an `[Id]` under an aliased type
   (`AuthorizationWireContractTests`), `ExpirySweepReport` is aliased, and no grain method the path
-  calls is generic, which is the shape #39's refused type had. `TenantOverHttpTests`' step 7 drives
+  calls is generic, which is the shape #39's refused type had. `TenantOverHttpTests`' step 9 drives
   it over the real hosts: the gateway in the test process, an Orleans client, grants an expiring
   role, reads it and lists it back, sends the `GET` back as a `PUT`, is refused a shortening inside
   the notice, shortens it with an hour's, and revokes it, against the AppHost's two silo processes.

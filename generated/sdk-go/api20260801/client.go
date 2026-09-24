@@ -28,7 +28,9 @@ type Client struct {
 	ManagementGroups  *ManagementGroupsClient
 	Subscriptions     *SubscriptionsClient
 	ResourceGroups    *ResourceGroupsClient
+	Policy            *PolicyClient
 	Analytics         *AnalyticsProvider
+	Billing           *BillingProvider
 	Cache             *CacheProvider
 	Communication     *CommunicationProvider
 	Compute           *ComputeProvider
@@ -38,11 +40,13 @@ type Client struct {
 	DBforPostgreSQL   *DBforPostgreSQLProvider
 	Dashboard         *DashboardProvider
 	DocumentDB        *DocumentDBProvider
+	KeyVault          *KeyVaultProvider
 	Mail              *MailProvider
 	Messaging         *MessagingProvider
 	Monitor           *MonitorProvider
 	Network           *NetworkProvider
 	RecoveryServices  *RecoveryServicesProvider
+	Resources         *ResourcesProvider
 	Sample            *SampleProvider
 	Search            *SearchProvider
 	Storage           *StorageProvider
@@ -57,7 +61,9 @@ func NewClient(transport Transport) *Client {
 		ManagementGroups:  &ManagementGroupsClient{transport: transport},
 		Subscriptions:     &SubscriptionsClient{transport: transport},
 		ResourceGroups:    &ResourceGroupsClient{transport: transport},
+		Policy:            &PolicyClient{transport: transport},
 		Analytics:         newAnalyticsProvider(transport),
+		Billing:           newBillingProvider(transport),
 		Cache:             newCacheProvider(transport),
 		Communication:     newCommunicationProvider(transport),
 		Compute:           newComputeProvider(transport),
@@ -67,11 +73,13 @@ func NewClient(transport Transport) *Client {
 		DBforPostgreSQL:   newDBforPostgreSQLProvider(transport),
 		Dashboard:         newDashboardProvider(transport),
 		DocumentDB:        newDocumentDBProvider(transport),
+		KeyVault:          newKeyVaultProvider(transport),
 		Mail:              newMailProvider(transport),
 		Messaging:         newMessagingProvider(transport),
 		Monitor:           newMonitorProvider(transport),
 		Network:           newNetworkProvider(transport),
 		RecoveryServices:  newRecoveryServicesProvider(transport),
+		Resources:         newResourcesProvider(transport),
 		Sample:            newSampleProvider(transport),
 		Search:            newSearchProvider(transport),
 		Storage:           newStorageProvider(transport),
@@ -205,6 +213,221 @@ func (c *ResourceGroupsClient) Create(ctx context.Context, tenantID, subscriptio
 	return &result, nil
 }
 
+// PolicyClient reads and writes the objects under CyberCloud.Policy, on every scope that takes them — docs/plan/08 § Policy.
+type PolicyClient struct {
+	transport Transport
+}
+
+// ListPolicyAssignmentsAtManagementGroup pages through the policy assignments on a management group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyAssignmentsAtManagementGroup(tenantID, managementGroupName string, options *ListOptions) *Pager[PolicyAssignment] {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyAssignments"
+	return newPager[PolicyAssignment](c.transport, path, options)
+}
+
+// GetPolicyAssignmentAtManagementGroup reads one policy assignment on a management group.
+func (c *PolicyClient) GetPolicyAssignmentAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyAssignmentName string) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyAssignmentAtManagementGroup creates or replaces one policy assignment on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyAssignmentAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyAssignmentName string, content PolicyAssignmentContent) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyAssignmentAtManagementGroup deletes one policy assignment on a management group. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyAssignmentAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyAssignmentName string) error {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyDefinitionsAtManagementGroup pages through the policy definitions on a management group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyDefinitionsAtManagementGroup(tenantID, managementGroupName string, options *ListOptions) *Pager[PolicyDefinition] {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyDefinitions"
+	return newPager[PolicyDefinition](c.transport, path, options)
+}
+
+// GetPolicyDefinitionAtManagementGroup reads one policy definition on a management group.
+func (c *PolicyClient) GetPolicyDefinitionAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyDefinitionName string) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyDefinitionAtManagementGroup creates or replaces one policy definition on a management group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyDefinitionAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyDefinitionName string, content PolicyDefinitionContent) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyDefinitionAtManagementGroup deletes one policy definition on a management group. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyDefinitionAtManagementGroup(ctx context.Context, tenantID, managementGroupName, policyDefinitionName string) error {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyStatesAtManagementGroup pages through the policy states on a management group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyStatesAtManagementGroup(tenantID, managementGroupName string, options *ListOptions) *Pager[PolicyState] {
+	path := "/tenants/" + segment(tenantID) + "/managementGroups/" + segment(managementGroupName) + "/providers/CyberCloud.Policy/policyStates"
+	return newPager[PolicyState](c.transport, path, options)
+}
+
+// ListPolicyDefinitionsAtTenant pages through the policy definitions on a tenant. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyDefinitionsAtTenant(tenantID string, options *ListOptions) *Pager[PolicyDefinition] {
+	path := "/tenants/" + segment(tenantID) + "/providers/CyberCloud.Policy/policyDefinitions"
+	return newPager[PolicyDefinition](c.transport, path, options)
+}
+
+// GetPolicyDefinitionAtTenant reads one policy definition on a tenant.
+func (c *PolicyClient) GetPolicyDefinitionAtTenant(ctx context.Context, tenantID, policyDefinitionName string) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyDefinitionAtTenant creates or replaces one policy definition on a tenant, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyDefinitionAtTenant(ctx context.Context, tenantID, policyDefinitionName string, content PolicyDefinitionContent) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyDefinitionAtTenant deletes one policy definition on a tenant. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyDefinitionAtTenant(ctx context.Context, tenantID, policyDefinitionName string) error {
+	path := "/tenants/" + segment(tenantID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyAssignmentsAtSubscription pages through the policy assignments on a subscription. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyAssignmentsAtSubscription(tenantID, subscriptionID string, options *ListOptions) *Pager[PolicyAssignment] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyAssignments"
+	return newPager[PolicyAssignment](c.transport, path, options)
+}
+
+// GetPolicyAssignmentAtSubscription reads one policy assignment on a subscription.
+func (c *PolicyClient) GetPolicyAssignmentAtSubscription(ctx context.Context, tenantID, subscriptionID, policyAssignmentName string) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyAssignmentAtSubscription creates or replaces one policy assignment on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyAssignmentAtSubscription(ctx context.Context, tenantID, subscriptionID, policyAssignmentName string, content PolicyAssignmentContent) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyAssignmentAtSubscription deletes one policy assignment on a subscription. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyAssignmentAtSubscription(ctx context.Context, tenantID, subscriptionID, policyAssignmentName string) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyDefinitionsAtSubscription pages through the policy definitions on a subscription. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyDefinitionsAtSubscription(tenantID, subscriptionID string, options *ListOptions) *Pager[PolicyDefinition] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyDefinitions"
+	return newPager[PolicyDefinition](c.transport, path, options)
+}
+
+// GetPolicyDefinitionAtSubscription reads one policy definition on a subscription.
+func (c *PolicyClient) GetPolicyDefinitionAtSubscription(ctx context.Context, tenantID, subscriptionID, policyDefinitionName string) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyDefinitionAtSubscription creates or replaces one policy definition on a subscription, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyDefinitionAtSubscription(ctx context.Context, tenantID, subscriptionID, policyDefinitionName string, content PolicyDefinitionContent) (*PolicyDefinition, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	var result PolicyDefinition
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyDefinitionAtSubscription deletes one policy definition on a subscription. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyDefinitionAtSubscription(ctx context.Context, tenantID, subscriptionID, policyDefinitionName string) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyDefinitions/" + segment(policyDefinitionName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyStatesAtSubscription pages through the policy states on a subscription. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyStatesAtSubscription(tenantID, subscriptionID string, options *ListOptions) *Pager[PolicyState] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/providers/CyberCloud.Policy/policyStates"
+	return newPager[PolicyState](c.transport, path, options)
+}
+
+// ListPolicyAssignmentsAtResourceGroup pages through the policy assignments on a resource group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyAssignmentsAtResourceGroup(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[PolicyAssignment] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyAssignments"
+	return newPager[PolicyAssignment](c.transport, path, options)
+}
+
+// GetPolicyAssignmentAtResourceGroup reads one policy assignment on a resource group.
+func (c *PolicyClient) GetPolicyAssignmentAtResourceGroup(ctx context.Context, tenantID, subscriptionID, resourceGroupName, policyAssignmentName string) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// CreateOrUpdatePolicyAssignmentAtResourceGroup creates or replaces one policy assignment on a resource group, written whole. ⚠ 201 the first time and 200 after, and no operation to poll.
+func (c *PolicyClient) CreateOrUpdatePolicyAssignmentAtResourceGroup(ctx context.Context, tenantID, subscriptionID, resourceGroupName, policyAssignmentName string, content PolicyAssignmentContent) (*PolicyAssignment, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	var result PolicyAssignment
+	if err := call(ctx, c.transport, "PUT", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeletePolicyAssignmentAtResourceGroup deletes one policy assignment on a resource group. An object already gone is a success.
+func (c *PolicyClient) DeletePolicyAssignmentAtResourceGroup(ctx context.Context, tenantID, subscriptionID, resourceGroupName, policyAssignmentName string) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyAssignments/" + segment(policyAssignmentName)
+	return call(ctx, c.transport, "DELETE", path, nil, nil)
+}
+
+// ListPolicyStatesAtResourceGroup pages through the policy states on a resource group. ⚠ A short page never means "that is all there is".
+func (c *PolicyClient) ListPolicyStatesAtResourceGroup(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[PolicyState] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Policy/policyStates"
+	return newPager[PolicyState](c.transport, path, options)
+}
+
 // AnalyticsProvider holds the resource types of CyberCloud.Analytics.
 type AnalyticsProvider struct {
 	ClickhouseClusters *ClickHouseClusterClient
@@ -260,6 +483,67 @@ func (c *ClickHouseClusterClient) List(tenantID, subscriptionID, resourceGroupNa
 func (c *ClickHouseClusterClient) ListKeys(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*ClickHouseClusterListKeysResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Analytics/clickhouseClusters/" + segment(resourceName) + "/listKeys"
 	var result ClickHouseClusterListKeysResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BillingProvider holds the resource types of CyberCloud.Billing.
+type BillingProvider struct {
+	Budgets *BudgetClient
+}
+
+// newBillingProvider builds the group's clients over one transport.
+func newBillingProvider(transport Transport) *BillingProvider {
+	return &BillingProvider{
+		Budgets: &BudgetClient{transport: transport},
+	}
+}
+
+// BudgetClient is budgets — CyberCloud.Billing/budgets. A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service.
+type BudgetClient struct {
+	transport Transport
+}
+
+// Get reads one Budget.
+func (c *BudgetClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*BudgetResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName)
+	var result BudgetResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Budget. ⚠ Long-running: Wait on the result.
+func (c *BudgetClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data BudgetData) (*Operation[BudgetResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName)
+	return begin[BudgetResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Budget. A merge patch: what is not set is not changed.
+func (c *BudgetClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data BudgetData) (*Operation[BudgetResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName)
+	return begin[BudgetResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Budget. ⚠ Permanent: this type declares no soft-delete window.
+func (c *BudgetClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Budgets in a resource group. ⚠ A short page never means "that is all there is".
+func (c *BudgetClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[BudgetResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets"
+	return newPager[BudgetResource](c.transport, path, options)
+}
+
+// ShowStatus runs showStatus — permission 'read'.
+func (c *BudgetClient) ShowStatus(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*BudgetShowStatusResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName) + "/showStatus"
+	var result BudgetShowStatusResult
 	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
 		return nil, err
 	}
@@ -1255,15 +1539,330 @@ func (c *DocumentDatabaseAccountClient) ListKeys(ctx context.Context, tenantID, 
 	return &result, nil
 }
 
+// KeyVaultProvider holds the resource types of CyberCloud.KeyVault.
+type KeyVaultProvider struct {
+	Vaults *KeyVaultClient
+}
+
+// newKeyVaultProvider builds the group's clients over one transport.
+func newKeyVaultProvider(transport Transport) *KeyVaultProvider {
+	return &KeyVaultProvider{
+		Vaults: &KeyVaultClient{transport: transport},
+	}
+}
+
+// KeyVaultClient is key vaults — CyberCloud.KeyVault/vaults. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.
+type KeyVaultClient struct {
+	transport Transport
+}
+
+// Get reads one Key vault.
+func (c *KeyVaultClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	var result KeyVaultResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Key vault. ⚠ Long-running: Wait on the result.
+func (c *KeyVaultClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data KeyVaultData) (*Operation[KeyVaultResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	return begin[KeyVaultResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Key vault. A merge patch: what is not set is not changed.
+func (c *KeyVaultClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data KeyVaultData) (*Operation[KeyVaultResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	return begin[KeyVaultResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Key vault. ⚠ Recoverable for 7 day(s).
+func (c *KeyVaultClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Key vaults in a resource group. ⚠ A short page never means "that is all there is".
+func (c *KeyVaultClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[KeyVaultResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults"
+	return newPager[KeyVaultResource](c.transport, path, options)
+}
+
+// CreateKey runs createKey — permission 'writeKeys'.
+func (c *KeyVaultClient) CreateKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultCreateKeyContent) (*KeyVaultCreateKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/createKey"
+	var result KeyVaultCreateKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Decrypt runs decrypt — permission 'useKeys'. ⚠ The response carries secret material.
+func (c *KeyVaultClient) Decrypt(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultDecryptContent) (*KeyVaultDecryptResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/decrypt"
+	var result KeyVaultDecryptResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteKey runs deleteKey — permission 'writeKeys'.
+func (c *KeyVaultClient) DeleteKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultDeleteKeyContent) (*KeyVaultDeleteKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/deleteKey"
+	var result KeyVaultDeleteKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteSecret runs deleteSecret — permission 'writeSecrets'.
+func (c *KeyVaultClient) DeleteSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultDeleteSecretContent) (*KeyVaultDeleteSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/deleteSecret"
+	var result KeyVaultDeleteSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Encrypt runs encrypt — permission 'useKeys'.
+func (c *KeyVaultClient) Encrypt(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultEncryptContent) (*KeyVaultEncryptResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/encrypt"
+	var result KeyVaultEncryptResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetKey runs getKey — permission 'useKeys'.
+func (c *KeyVaultClient) GetKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultGetKeyContent) (*KeyVaultGetKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/getKey"
+	var result KeyVaultGetKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetSecret runs getSecret — permission 'readSecrets'. ⚠ The response carries secret material.
+func (c *KeyVaultClient) GetSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultGetSecretContent) (*KeyVaultGetSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/getSecret"
+	var result KeyVaultGetSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ImportKey runs importKey — permission 'writeKeys'.
+func (c *KeyVaultClient) ImportKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultImportKeyContent) (*KeyVaultImportKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/importKey"
+	var result KeyVaultImportKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListDeletedKeys runs listDeletedKeys — permission 'useKeys'.
+func (c *KeyVaultClient) ListDeletedKeys(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultListDeletedKeysResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listDeletedKeys"
+	var result KeyVaultListDeletedKeysResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListDeletedSecrets runs listDeletedSecrets — permission 'readSecrets'.
+func (c *KeyVaultClient) ListDeletedSecrets(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultListDeletedSecretsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listDeletedSecrets"
+	var result KeyVaultListDeletedSecretsResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListKeyVersions runs listKeyVersions — permission 'useKeys'.
+func (c *KeyVaultClient) ListKeyVersions(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultListKeyVersionsContent) (*KeyVaultListKeyVersionsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listKeyVersions"
+	var result KeyVaultListKeyVersionsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListKeys runs listKeys — permission 'useKeys'.
+func (c *KeyVaultClient) ListKeys(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultListKeysResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listKeys"
+	var result KeyVaultListKeysResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListSecretVersions runs listSecretVersions — permission 'readSecrets'.
+func (c *KeyVaultClient) ListSecretVersions(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultListSecretVersionsContent) (*KeyVaultListSecretVersionsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listSecretVersions"
+	var result KeyVaultListSecretVersionsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListSecrets runs listSecrets — permission 'readSecrets'.
+func (c *KeyVaultClient) ListSecrets(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultListSecretsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listSecrets"
+	var result KeyVaultListSecretsResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginPurge runs purge — permission 'purge'. ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.
+func (c *KeyVaultClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/purge"
+	return begin[struct{}](ctx, c.transport, "POST", path, nil, "")
+}
+
+// PurgeDeletedKey runs purgeDeletedKey — permission 'purgeKeys'.
+func (c *KeyVaultClient) PurgeDeletedKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultPurgeDeletedKeyContent) (*KeyVaultPurgeDeletedKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/purgeDeletedKey"
+	var result KeyVaultPurgeDeletedKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// PurgeDeletedSecret runs purgeDeletedSecret — permission 'purgeSecrets'.
+func (c *KeyVaultClient) PurgeDeletedSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultPurgeDeletedSecretContent) (*KeyVaultPurgeDeletedSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/purgeDeletedSecret"
+	var result KeyVaultPurgeDeletedSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RecoverDeletedKey runs recoverDeletedKey — permission 'writeKeys'.
+func (c *KeyVaultClient) RecoverDeletedKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultRecoverDeletedKeyContent) (*KeyVaultRecoverDeletedKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/recoverDeletedKey"
+	var result KeyVaultRecoverDeletedKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RecoverDeletedSecret runs recoverDeletedSecret — permission 'writeSecrets'.
+func (c *KeyVaultClient) RecoverDeletedSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultRecoverDeletedSecretContent) (*KeyVaultRecoverDeletedSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/recoverDeletedSecret"
+	var result KeyVaultRecoverDeletedSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginRestore runs restore — permission 'write'. ⚠ Long-running: Wait resolves to the resource afterwards.
+func (c *KeyVaultClient) BeginRestore(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[KeyVaultResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	return begin[KeyVaultResource](ctx, c.transport, "POST", path+"/restore", nil, path)
+}
+
+// SetSecret runs setSecret — permission 'writeSecrets'.
+func (c *KeyVaultClient) SetSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultSetSecretContent) (*KeyVaultSetSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/setSecret"
+	var result KeyVaultSetSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Sign runs sign — permission 'useKeys'.
+func (c *KeyVaultClient) Sign(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultSignContent) (*KeyVaultSignResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/sign"
+	var result KeyVaultSignResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UnwrapKey runs unwrapKey — permission 'useKeys'. ⚠ The response carries secret material.
+func (c *KeyVaultClient) UnwrapKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultUnwrapKeyContent) (*KeyVaultUnwrapKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/unwrapKey"
+	var result KeyVaultUnwrapKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateKey runs updateKey — permission 'writeKeys'.
+func (c *KeyVaultClient) UpdateKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultUpdateKeyContent) (*KeyVaultUpdateKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/updateKey"
+	var result KeyVaultUpdateKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateSecret runs updateSecret — permission 'writeSecrets'.
+func (c *KeyVaultClient) UpdateSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultUpdateSecretContent) (*KeyVaultUpdateSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/updateSecret"
+	var result KeyVaultUpdateSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Verify runs verify — permission 'useKeys'.
+func (c *KeyVaultClient) Verify(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultVerifyContent) (*KeyVaultVerifyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/verify"
+	var result KeyVaultVerifyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// WrapKey runs wrapKey — permission 'useKeys'.
+func (c *KeyVaultClient) WrapKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultWrapKeyContent) (*KeyVaultWrapKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/wrapKey"
+	var result KeyVaultWrapKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // MailProvider holds the resource types of CyberCloud.Mail.
 type MailProvider struct {
-	Domains *MailDomainClient
+	Domains          *MailDomainClient
+	DomainsMailboxes *MailboxClient
 }
 
 // newMailProvider builds the group's clients over one transport.
 func newMailProvider(transport Transport) *MailProvider {
 	return &MailProvider{
-		Domains: &MailDomainClient{transport: transport},
+		Domains:          &MailDomainClient{transport: transport},
+		DomainsMailboxes: &MailboxClient{transport: transport},
 	}
 }
 
@@ -1304,6 +1903,65 @@ func (c *MailDomainClient) BeginDelete(ctx context.Context, tenantID, subscripti
 func (c *MailDomainClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[MailDomainResource] {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains"
 	return newPager[MailDomainResource](c.transport, path, options)
+}
+
+// DnsRecords runs dnsRecords — permission 'read'.
+func (c *MailDomainClient) DnsRecords(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*MailDomainDnsRecordsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(resourceName) + "/dnsRecords"
+	var result MailDomainDnsRecordsResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Verify runs verify — permission 'write'.
+func (c *MailDomainClient) Verify(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*MailDomainVerifyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(resourceName) + "/verify"
+	var result MailDomainVerifyResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// MailboxClient is mailboxes — CyberCloud.Mail/domains/mailboxes. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP.
+type MailboxClient struct {
+	transport Transport
+}
+
+// Get reads one Mailbox.
+func (c *MailboxClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, domainsName, resourceName string) (*MailboxResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes/" + segment(resourceName)
+	var result MailboxResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Mailbox. ⚠ Long-running: Wait on the result.
+func (c *MailboxClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, domainsName, resourceName string, data MailboxData) (*Operation[MailboxResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes/" + segment(resourceName)
+	return begin[MailboxResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Mailbox. A merge patch: what is not set is not changed.
+func (c *MailboxClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, domainsName, resourceName string, data MailboxData) (*Operation[MailboxResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes/" + segment(resourceName)
+	return begin[MailboxResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Mailbox. ⚠ Permanent: this type declares no soft-delete window.
+func (c *MailboxClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, domainsName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Mailboxes in a resource group. ⚠ A short page never means "that is all there is".
+func (c *MailboxClient) List(tenantID, subscriptionID, resourceGroupName, domainsName string, options *ListOptions) *Pager[MailboxResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Mail/domains/" + segment(domainsName) + "/mailboxes"
+	return newPager[MailboxResource](c.transport, path, options)
 }
 
 // MessagingProvider holds the resource types of CyberCloud.Messaging.
@@ -1474,6 +2132,7 @@ type MonitorProvider struct {
 	Workspaces           *MonitorWorkspaceClient
 	WorkspacesAlertRules *AlertRuleClient
 	WorkspacesCollectors *OpenTelemetryCollectorClient
+	WorkspacesComponents *ApplicationComponentClient
 }
 
 // newMonitorProvider builds the group's clients over one transport.
@@ -1482,6 +2141,7 @@ func newMonitorProvider(transport Transport) *MonitorProvider {
 		Workspaces:           &MonitorWorkspaceClient{transport: transport},
 		WorkspacesAlertRules: &AlertRuleClient{transport: transport},
 		WorkspacesCollectors: &OpenTelemetryCollectorClient{transport: transport},
+		WorkspacesComponents: &ApplicationComponentClient{transport: transport},
 	}
 }
 
@@ -1534,16 +2194,38 @@ func (c *MonitorWorkspaceClient) ListKeys(ctx context.Context, tenantID, subscri
 	return &result, nil
 }
 
+// ListMetricLabels runs listMetricLabels — permission 'read'.
+func (c *MonitorWorkspaceClient) ListMetricLabels(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content MonitorWorkspaceListMetricLabelsContent) (*MonitorWorkspaceListMetricLabelsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName) + "/listMetricLabels"
+	var result MonitorWorkspaceListMetricLabelsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // BeginPurge runs purge — permission 'purge'. ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.
 func (c *MonitorWorkspaceClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName) + "/purge"
 	return begin[struct{}](ctx, c.transport, "POST", path, nil, "")
 }
 
+// QueryMetrics runs queryMetrics — permission 'read'.
+func (c *MonitorWorkspaceClient) QueryMetrics(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content MonitorWorkspaceQueryMetricsContent) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName) + "/queryMetrics"
+	return call(ctx, c.transport, "POST", path, content, nil)
+}
+
 // BeginRestore runs restore — permission 'write'. ⚠ Long-running: Wait resolves to the resource afterwards.
 func (c *MonitorWorkspaceClient) BeginRestore(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[MonitorWorkspaceResource], error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName)
 	return begin[MonitorWorkspaceResource](ctx, c.transport, "POST", path+"/restore", nil, path)
+}
+
+// SearchLogs runs searchLogs — permission 'read'.
+func (c *MonitorWorkspaceClient) SearchLogs(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content MonitorWorkspaceSearchLogsContent) error {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(resourceName) + "/searchLogs"
+	return call(ctx, c.transport, "POST", path, content, nil)
 }
 
 // AlertRuleClient is alert rules — CyberCloud.Monitor/workspaces/alertRules. A condition over the workspace's metrics or logs, evaluated on a schedule; when it holds for long enough the action group is told through a Communication service, and again when it stops.
@@ -1639,6 +2321,105 @@ func (c *OpenTelemetryCollectorClient) ListEndpoints(ctx context.Context, tenant
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/collectors/" + segment(resourceName) + "/listEndpoints"
 	var result OpenTelemetryCollectorListEndpointsResult
 	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ApplicationComponentClient is application components — CyberCloud.Monitor/workspaces/components. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs.
+type ApplicationComponentClient struct {
+	transport Transport
+}
+
+// Get reads one Application component.
+func (c *ApplicationComponentClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*ApplicationComponentResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName)
+	var result ApplicationComponentResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Application component. ⚠ Long-running: Wait on the result.
+func (c *ApplicationComponentClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, data ApplicationComponentData) (*Operation[ApplicationComponentResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName)
+	return begin[ApplicationComponentResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Application component. A merge patch: what is not set is not changed.
+func (c *ApplicationComponentClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, data ApplicationComponentData) (*Operation[ApplicationComponentResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName)
+	return begin[ApplicationComponentResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Application component. ⚠ Permanent: this type declares no soft-delete window.
+func (c *ApplicationComponentClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Application components in a resource group. ⚠ A short page never means "that is all there is".
+func (c *ApplicationComponentClient) List(tenantID, subscriptionID, resourceGroupName, workspacesName string, options *ListOptions) *Pager[ApplicationComponentResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components"
+	return newPager[ApplicationComponentResource](c.transport, path, options)
+}
+
+// ApplicationMap runs applicationMap — permission 'read'.
+func (c *ApplicationComponentClient) ApplicationMap(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentApplicationMapContent) (*ApplicationComponentApplicationMapResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/applicationMap"
+	var result ApplicationComponentApplicationMapResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Dependencies runs dependencies — permission 'read'.
+func (c *ApplicationComponentClient) Dependencies(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentDependenciesContent) (*ApplicationComponentDependenciesResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/dependencies"
+	var result ApplicationComponentDependenciesResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Exceptions runs exceptions — permission 'read'.
+func (c *ApplicationComponentClient) Exceptions(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentExceptionsContent) (*ApplicationComponentExceptionsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/exceptions"
+	var result ApplicationComponentExceptionsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListConnectionString runs listConnectionString — permission 'read'.
+func (c *ApplicationComponentClient) ListConnectionString(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string) (*ApplicationComponentListConnectionStringResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/listConnectionString"
+	var result ApplicationComponentListConnectionStringResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Requests runs requests — permission 'read'.
+func (c *ApplicationComponentClient) Requests(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentRequestsContent) (*ApplicationComponentRequestsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/requests"
+	var result ApplicationComponentRequestsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Transaction runs transaction — permission 'read'.
+func (c *ApplicationComponentClient) Transaction(ctx context.Context, tenantID, subscriptionID, resourceGroupName, workspacesName, resourceName string, content ApplicationComponentTransactionContent) (*ApplicationComponentTransactionResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Monitor/workspaces/" + segment(workspacesName) + "/components/" + segment(resourceName) + "/transaction"
+	var result ApplicationComponentTransactionResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -2062,6 +2843,16 @@ func (c *BackupVaultClient) List(tenantID, subscriptionID, resourceGroupName str
 	return newPager[BackupVaultResource](c.transport, path, options)
 }
 
+// BackupNow runs backupNow — permission 'write'.
+func (c *BackupVaultClient) BackupNow(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content BackupVaultBackupNowContent) (*BackupVaultBackupNowResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName) + "/backupNow"
+	var result BackupVaultBackupNowResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListRecoveryPoints runs listRecoveryPoints — permission 'read'.
 func (c *BackupVaultClient) ListRecoveryPoints(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*BackupVaultListRecoveryPointsResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName) + "/listRecoveryPoints"
@@ -2076,6 +2867,67 @@ func (c *BackupVaultClient) ListRecoveryPoints(ctx context.Context, tenantID, su
 func (c *BackupVaultClient) Recover(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content BackupVaultRecoverContent) (*BackupVaultRecoverResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName) + "/recover"
 	var result BackupVaultRecoverResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ResourcesProvider holds the resource types of CyberCloud.Resources.
+type ResourcesProvider struct {
+	Deployments *DeploymentClient
+}
+
+// newResourcesProvider builds the group's clients over one transport.
+func newResourcesProvider(transport Transport) *ResourcesProvider {
+	return &ResourcesProvider{
+		Deployments: &DeploymentClient{transport: transport},
+	}
+}
+
+// DeploymentClient is deployments — CyberCloud.Resources/deployments. A template of resources deployed in dependency order, each through the write path as its creator.
+type DeploymentClient struct {
+	transport Transport
+}
+
+// Get reads one Deployment.
+func (c *DeploymentClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*DeploymentResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName)
+	var result DeploymentResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Deployment. ⚠ Long-running: Wait on the result.
+func (c *DeploymentClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data DeploymentData) (*Operation[DeploymentResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName)
+	return begin[DeploymentResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Deployment. A merge patch: what is not set is not changed.
+func (c *DeploymentClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data DeploymentData) (*Operation[DeploymentResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName)
+	return begin[DeploymentResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Deployment. ⚠ Permanent: this type declares no soft-delete window.
+func (c *DeploymentClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Deployments in a resource group. ⚠ A short page never means "that is all there is".
+func (c *DeploymentClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[DeploymentResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments"
+	return newPager[DeploymentResource](c.transport, path, options)
+}
+
+// WhatIf runs whatIf — permission 'write'.
+func (c *DeploymentClient) WhatIf(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content DeploymentWhatIfContent) (*DeploymentWhatIfResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Resources/deployments/" + segment(resourceName) + "/whatIf"
+	var result DeploymentWhatIfResult
 	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
 		return nil, err
 	}

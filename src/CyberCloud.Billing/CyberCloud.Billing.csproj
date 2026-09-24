@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § src — "CyberCloud.Billing/ # rating, ledger, invoices (22)". The billing domain:
+      the price sheet and the rating engine, the billing account and its invoices and credit notes,
+      the gap-free number sequence, the budget evaluator, the cost query, the EU VAT default of the tax
+      seam and the Stripe adapter of the payment seam. docs/plan/22 § Effort's M2 rows, issue #38.
+
+      ⚠ FIVE MODULE EDGES, AND EACH IS module-layering.txt § Billing's to justify:
+        * CyberCloud.Metering — the usage ledger is what is rated. Billing reads metering and nothing
+          reaches back: a rating bug must never be able to stop usage being recorded.
+        * CyberCloud.Tenancy — a subscription is attached only if the tenant holds it.
+        * CyberCloud.Authorization — the cost query and a subscription-scoped budget check ReBAC
+          themselves, behind the one seam, as docs/plan/10 § Request pipeline wants.
+        * CyberCloud.Communication — a budget alert is sent through IMessageSender, docs/plan/22 § Cost
+          visibility's "delivered via [17]". The .Contracts only; the sending module's own .csproj
+          names billing among its customers.
+        * CyberCloud.Core.
+
+      ⚠ WHY THIS DOES NOT REFERENCE CyberCloud.ResourceManager, for the reason CyberCloud.Metering
+      gives: the budget TYPE is a provider family's (src/Providers/CyberCloud.Providers.Billing), which
+      converges onto this module's grain through IBudgetControlPlane. The module never learns what a
+      reconciler is, and the resource manager never learns what an invoice is.
+
+      ⚠ NO STRIPE SDK. See StripePaymentServiceProvider for why an HttpClient and a form encoder are
+      the whole adapter.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!-- IRemindable — the budget evaluates hourly on a reminder, docs/plan/04 § Reminders. -->
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Core/CyberCloud.Core.csproj"/>
+        <ProjectReference Include="../CyberCloud.Core.Contracts/CyberCloud.Core.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Billing.Contracts/CyberCloud.Billing.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Metering.Contracts/CyberCloud.Metering.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Tenancy.Contracts/CyberCloud.Tenancy.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Authorization.Contracts/CyberCloud.Authorization.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Communication.Contracts/CyberCloud.Communication.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          The committed data: the price sheet (docs/plan/22 § Rating) and the EU VAT rate table. Embedded
+          rather than copied beside the assembly, so a silo cannot start with the code of one commit and
+          the prices of another.
+        -->
+        <EmbeddedResource Include="Pricing/price-sheet.json" LogicalName="CyberCloud.Billing.Pricing.price-sheet.json"/>
+        <EmbeddedResource Include="Tax/eu-vat-rates.json" LogicalName="CyberCloud.Billing.Tax.eu-vat-rates.json"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <!--
+          CC1003 ([Alias] on grain state), CC1005 (no secret in grain state — the Stripe key is not in
+          any) and CC1006 (the grain clients and UsagePricing hold an IGrainFactory outside a grain and
+          qualify every call) are live here.
+        -->
+        <ProjectReference Include="../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

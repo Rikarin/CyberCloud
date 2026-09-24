@@ -149,17 +149,22 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
             CancelReason = "the user changed their mind",
             Attempts = 3,
             Activations = 2,
-            Children = [Guid.NewGuid()]
+            Children = [Guid.NewGuid(), Guid.NewGuid()],
+            ParentOperationId = Guid.NewGuid()
         };
 
         var round = RoundTrip(value);
 
+        // ⚠ Both directions of #39's nesting. ParentOperationId is appended at [Id(14)] and Children
+        // was on the wire empty until a deployment filled it; a child whose status came back with an
+        // empty parent would be a child nothing can walk back from.
+        round.ParentOperationId.ShouldBe(value.ParentOperationId);
+        round.Children.ShouldBe(value.Children);
         round.State.ShouldBe(OperationState.Running);
         round.CancelRequested.ShouldBeTrue();
         round.CancelReason.ShouldBe(value.CancelReason);
         round.Attempts.ShouldBe(3);
         round.Activations.ShouldBe(2);
-        round.Children.Length.ShouldBe(1);
         round.Progress.Length.ShouldBe(2);
         round.Progress[0].Step.ShouldBe("applying");
         round.LastProgress!.Detail.ShouldBe("2 of 3 replicas ready");
@@ -292,6 +297,64 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
         round.Reached.ShouldBe(WriteTrace.Canonical);
         round.IsCanonicalPrefix().ShouldBeTrue();
         round.StoppedAt.ShouldBe(WriteStep.Accepted);
+    }
+
+    [Fact]
+    public void AWriteTraceCarriesStepFivesPolicyEntriesAcrossTheWire() {
+        // #46: what a modify wrote is part of the trace the caller reads, so it has to survive the hop
+        // from the process that ran the write path to whoever asked.
+        var value = new WriteTrace {
+            Reached = WriteTrace.Canonical,
+            Policy = [
+                new() {
+                    AssignmentPath = "/a",
+                    DefinitionPath = "/d",
+                    Effect = "modify",
+                    Matched = true,
+                    Applied = ["replace /properties/label = \"enforced\""]
+                }
+            ]
+        };
+
+        var round = RoundTrip(value);
+
+        var entry = round.Policy.ShouldHaveSingleItem();
+        entry.Effect.ShouldBe("modify");
+        entry.Matched.ShouldBeTrue();
+        entry.Applied.ShouldBe(["replace /properties/label = \"enforced\""]);
+    }
+
+    [Fact]
+    public void APolicyEvaluationRoundTripsWithItsDenialItsRewritesAndItsVerdicts() {
+        // ⚠ The catalog grain answers step 5 from a silo PROCESS to a gateway that is an Orleans client
+        // in another one; TenantOverHttpTests drives that hop for real. This is the cheap half: every
+        // member survives the codec.
+        var since = new DateTimeOffset(2026, 9, 23, 12, 0, 0, TimeSpan.Zero);
+        var value = new PolicyEvaluation {
+            Entries = [new() { AssignmentPath = "/a", DefinitionPath = "/d", Effect = "deny", Matched = true }],
+            Denial = new() { AssignmentPath = "/a", DefinitionPath = "/d", AssignmentName = "A", DefinitionName = "D", Target = "/properties/sku" },
+            Modifications = [new() { AssignmentPath = "/m", Operation = "add", Field = "/tags/x", Value = "\"y\"" }],
+            States = [
+                new() {
+                    ResourcePath = "/r",
+                    ResourceType = "CyberCloud.Testing/widgets",
+                    AssignmentPath = "/a",
+                    DefinitionPath = "/d",
+                    State = PolicyComplianceState.NonCompliant,
+                    Since = since
+                }
+            ],
+            HadStates = true
+        };
+
+        var round = RoundTrip(value);
+
+        round.Denial!.Target.ShouldBe("/properties/sku");
+        round.Modifications.ShouldHaveSingleItem().Value.ShouldBe("\"y\"");
+        round.States.ShouldHaveSingleItem().State.ShouldBe(PolicyComplianceState.NonCompliant);
+        round.States[0].Since.ShouldBe(since);
+        round.HadStates.ShouldBeTrue();
+        round.Entries.ShouldHaveSingleItem().Matched.ShouldBeTrue();
     }
 
     [Fact]

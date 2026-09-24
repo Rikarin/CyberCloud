@@ -206,6 +206,287 @@ class ResourceGroupCreateContent:
         return wire
 
 
+PolicyAssignmentType = Literal["CyberCloud.Policy/policyAssignments"]
+"""The values /type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class PolicyAssignment:
+    """Policy assignment, as the API renders it. A definition applied at a scope: step 5 of every write beneath it evaluates the rule. docs/plan/08 § Policy."""
+
+    @dataclass
+    class Properties:
+        """What the assignment applies, and where it doesn't."""
+
+        # What a person reads.
+        display_name: str
+        # Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.
+        not_scopes: List[str]
+        # The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.
+        policy_definition_id: str
+        # The scope the assignment sits on.
+        scope: str
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> PolicyAssignment.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                display_name=wire["displayName"],
+                not_scopes=wire["notScopes"],
+                policy_definition_id=wire["policyDefinitionId"],
+                scope=wire["scope"],
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["displayName"] = self.display_name
+            wire["notScopes"] = self.not_scopes
+            wire["policyDefinitionId"] = self.policy_definition_id
+            wire["scope"] = self.scope
+            return wire
+
+    # The assignment's own address.
+    id: str
+    # The last segment of the address.
+    name: str
+    # What the assignment applies, and where it doesn't.
+    properties: PolicyAssignment.Properties
+    # The Azure-shaped type string.
+    type: PolicyAssignmentType
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyAssignment:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            id=wire["id"],
+            name=wire["name"],
+            properties=PolicyAssignment.Properties.from_wire(wire["properties"]),
+            type=wire["type"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["id"] = self.id
+        wire["name"] = self.name
+        wire["properties"] = self.properties.to_wire()
+        wire["type"] = self.type
+        return wire
+
+
+@dataclass
+class PolicyAssignmentContent:
+    """The body of a PUT that writes a policy assignment."""
+
+    @dataclass
+    class Properties:
+        """What the assignment applies, and where it doesn't."""
+
+        # The definition to apply, by address. ⚠ It must sit on this scope or above it — a subscription owner can't assign another subscription's rules.
+        policy_definition_id: str
+        # What a person reads.
+        display_name: Optional[str] = None
+        # Scopes or resources beneath the assignment it does not apply to, by address. Beneath a management group the tree decides, not the path's spelling.
+        not_scopes: Optional[List[str]] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> PolicyAssignmentContent.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                policy_definition_id=wire["policyDefinitionId"],
+                display_name=wire.get("displayName"),
+                not_scopes=wire.get("notScopes"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["policyDefinitionId"] = self.policy_definition_id
+            if self.display_name is not None:
+                wire["displayName"] = self.display_name
+            if self.not_scopes is not None:
+                wire["notScopes"] = self.not_scopes
+            return wire
+
+    # What the assignment applies, and where it doesn't.
+    properties: PolicyAssignmentContent.Properties
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyAssignmentContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            properties=PolicyAssignmentContent.Properties.from_wire(wire["properties"]),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["properties"] = self.properties.to_wire()
+        return wire
+
+
+PolicyDefinitionType = Literal["CyberCloud.Policy/policyDefinitions"]
+"""The values /type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class PolicyDefinition:
+    """Policy definition, as the API renders it. A deny, audit or modify rule over resource bodies. It does nothing until an assignment applies it. docs/plan/08 § Policy."""
+
+    @dataclass
+    class Properties:
+        """The definition's rule and its names."""
+
+        # The longer explanation.
+        description: str
+        # What a person reads.
+        display_name: str
+        # The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.
+        policy_rule: Any
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> PolicyDefinition.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                description=wire["description"],
+                display_name=wire["displayName"],
+                policy_rule=wire["policyRule"],
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["description"] = self.description
+            wire["displayName"] = self.display_name
+            wire["policyRule"] = self.policy_rule
+            return wire
+
+    # The definition's own address. An assignment names its definition by this.
+    id: str
+    # The last segment of the address.
+    name: str
+    # The definition's rule and its names.
+    properties: PolicyDefinition.Properties
+    # The Azure-shaped type string.
+    type: PolicyDefinitionType
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyDefinition:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            id=wire["id"],
+            name=wire["name"],
+            properties=PolicyDefinition.Properties.from_wire(wire["properties"]),
+            type=wire["type"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["id"] = self.id
+        wire["name"] = self.name
+        wire["properties"] = self.properties.to_wire()
+        wire["type"] = self.type
+        return wire
+
+
+@dataclass
+class PolicyDefinitionContent:
+    """The body of a PUT that writes a policy definition."""
+
+    @dataclass
+    class Properties:
+        """The definition's rule and its names."""
+
+        # The rule — { "if": <condition>, "then": { "effect": "deny" | "audit" | "modify" } }. A word outside the closed sets is refused by name. docs/plan/08 § Policy.
+        policy_rule: Any
+        # The longer explanation.
+        description: Optional[str] = None
+        # What a person reads.
+        display_name: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> PolicyDefinitionContent.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                policy_rule=wire["policyRule"],
+                description=wire.get("description"),
+                display_name=wire.get("displayName"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["policyRule"] = self.policy_rule
+            if self.description is not None:
+                wire["description"] = self.description
+            if self.display_name is not None:
+                wire["displayName"] = self.display_name
+            return wire
+
+    # The definition's rule and its names.
+    properties: PolicyDefinitionContent.Properties
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyDefinitionContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            properties=PolicyDefinitionContent.Properties.from_wire(wire["properties"]),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["properties"] = self.properties.to_wire()
+        return wire
+
+
+PolicyStateComplianceState = Literal["Compliant", "NonCompliant"]
+"""The values /complianceState accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class PolicyState:
+    """Policy state, as the API renders it. The compliance an audit recorded, one row per resource and assignment beneath the scope. Read only. docs/plan/08 § Policy."""
+
+    # Whether the audit rule matched.
+    compliance_state: PolicyStateComplianceState
+    # The audit assignment.
+    policy_assignment_id: str
+    # Its definition.
+    policy_definition_id: str
+    # The resource's canonical path.
+    resource_id: str
+    # The resource's type.
+    resource_type: str
+    # When the verdict last changed.
+    timestamp: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> PolicyState:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            compliance_state=wire["complianceState"],
+            policy_assignment_id=wire["policyAssignmentId"],
+            policy_definition_id=wire["policyDefinitionId"],
+            resource_id=wire["resourceId"],
+            resource_type=wire["resourceType"],
+            timestamp=wire["timestamp"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["complianceState"] = self.compliance_state
+        wire["policyAssignmentId"] = self.policy_assignment_id
+        wire["policyDefinitionId"] = self.policy_definition_id
+        wire["resourceId"] = self.resource_id
+        wire["resourceType"] = self.resource_type
+        wire["timestamp"] = self.timestamp
+        return wire
+
+
 ProvisioningState = Literal["Canceled", "Creating", "Deleting", "Failed", "Succeeded", "Updating"]
 """The values /provisioningState carries. ⚠ Read-only: the server sets it, and a write that carries it is refused."""
 
@@ -441,6 +722,246 @@ class ClickHouseClusterListKeysResult:
         wire["nativeEndpoint"] = self.native_endpoint
         wire["password"] = self.password
         wire["username"] = self.username
+        return wire
+
+
+BudgetChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
+"""The values /properties/notification/channel accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+BudgetPeriod = Literal["monthly", "quarterly", "annually"]
+"""The values /properties/period accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+BudgetScope = Literal["resourceGroup", "subscription"]
+"""The values /properties/scope accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class BudgetData:
+    """Budget. A spending limit for a resource group or a subscription, per month, quarter or year, with thresholds on the actual cost and on the forecast that alert through a sending service. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The budget's own settings."""
+
+        @dataclass
+        class Notification:
+            """Who is told, and how."""
+
+            # Which of that service's channels carries it. The service must have the channel configured and enabled, or every alert is refused by name.
+            channel: BudgetChannel
+            # Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20.
+            recipients: List[str]
+            # The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group.
+            service: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> BudgetData.Properties.Notification:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    channel=wire["channel"],
+                    recipients=wire["recipients"],
+                    service=wire["service"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["channel"] = self.channel
+                wire["recipients"] = self.recipients
+                wire["service"] = self.service
+                return wire
+
+        @dataclass
+        class Thresholds:
+            """Percentages of the amount that alert, each at most once per period."""
+
+            # Percentages of the amount the period's cost so far is compared with — 50, 80 and 100 is the usual set. At least one threshold across both lists and at most 10; a body outside that is refused when the budget is reconciled.
+            actual: Optional[List[float]] = None
+            # Percentages of the amount the forecast is compared with. The forecast is linear on the trailing seven days, and an alert on it says it is an estimate.
+            forecast: Optional[List[float]] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> BudgetData.Properties.Thresholds:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    actual=wire.get("actual"),
+                    forecast=wire.get("forecast"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.actual is not None:
+                    wire["actual"] = self.actual
+                if self.forecast is not None:
+                    wire["forecast"] = self.forecast
+                return wire
+
+        # The amount for one period, in the billing account's currency.
+        amount: float
+        # Whether the budget is evaluated. Off keeps its history and stops the clock.
+        enabled: Optional[bool] = None
+        # Who is told, and how.
+        notification: Optional[BudgetData.Properties.Notification] = None
+        # How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year.
+        period: Optional[BudgetPeriod] = None
+        # What the figure covers: this resource group, or the whole subscription. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. Its figures are the subscription's spend, so showStatus shows them only to a caller who may read the subscription.
+        scope: Optional[BudgetScope] = None
+        # Percentages of the amount that alert, each at most once per period.
+        thresholds: Optional[BudgetData.Properties.Thresholds] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> BudgetData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                amount=wire["amount"],
+                enabled=wire.get("enabled"),
+                notification=_opt(wire, "notification", BudgetData.Properties.Notification.from_wire),
+                period=wire.get("period"),
+                scope=wire.get("scope"),
+                thresholds=_opt(wire, "thresholds", BudgetData.Properties.Thresholds.from_wire),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["amount"] = self.amount
+            if self.enabled is not None:
+                wire["enabled"] = self.enabled
+            if self.notification is not None:
+                wire["notification"] = self.notification.to_wire()
+            if self.period is not None:
+                wire["period"] = self.period
+            if self.scope is not None:
+                wire["scope"] = self.scope
+            if self.thresholds is not None:
+                wire["thresholds"] = self.thresholds.to_wire()
+            return wire
+
+    # The region the budget is evaluated in.
+    location: str
+    # The budget's own settings.
+    properties: Optional[BudgetData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BudgetData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", BudgetData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class BudgetResource:
+    """One Budget, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: BudgetData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BudgetResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=BudgetData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class BudgetShowStatusResult:
+    """What showStatus returns."""
+
+    # What the period has cost so far, rounded to the currency, as of the last evaluation.
+    actual: float
+    # Every alert the budget has fired, oldest first, one line each: '{firedAt} {actual|forecast} {percent}% at {figure}: {notification}'.
+    alerts: List[str]
+    # The amount for one period, from the budget's body.
+    amount: float
+    # The currency the figures are in. Empty until evaluated.
+    currency: str
+    # Whether the budget has been evaluated in its current period. False until the first hourly evaluation, and for a disabled budget.
+    evaluated: bool
+    # The thresholds on the actual cost that have fired this period, as percentages.
+    fired_actual: List[float]
+    # The thresholds on the forecast that have fired this period, as percentages.
+    fired_forecast: List[float]
+    # What the period will cost at the trailing seven days' rate, rounded. An estimate.
+    forecast: float
+    # Why the last evaluation could not run, or empty. A subscription budget not yet granted reader on its subscription says so here.
+    last_error: str
+    # When the figures were computed. Absent until evaluated.
+    last_evaluated_at: Optional[str] = None
+    # The first instant of the next period. Absent until evaluated.
+    period_end: Optional[str] = None
+    # The first instant of the period the figures are for. Absent until evaluated.
+    period_start: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BudgetShowStatusResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            actual=wire["actual"],
+            alerts=wire["alerts"],
+            amount=wire["amount"],
+            currency=wire["currency"],
+            evaluated=wire["evaluated"],
+            fired_actual=wire["firedActual"],
+            fired_forecast=wire["firedForecast"],
+            forecast=wire["forecast"],
+            last_error=wire["lastError"],
+            last_evaluated_at=wire.get("lastEvaluatedAt"),
+            period_end=wire.get("periodEnd"),
+            period_start=wire.get("periodStart"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["actual"] = self.actual
+        wire["alerts"] = self.alerts
+        wire["amount"] = self.amount
+        wire["currency"] = self.currency
+        wire["evaluated"] = self.evaluated
+        wire["firedActual"] = self.fired_actual
+        wire["firedForecast"] = self.fired_forecast
+        wire["forecast"] = self.forecast
+        wire["lastError"] = self.last_error
+        if self.last_evaluated_at is not None:
+            wire["lastEvaluatedAt"] = self.last_evaluated_at
+        if self.period_end is not None:
+            wire["periodEnd"] = self.period_end
+        if self.period_start is not None:
+            wire["periodStart"] = self.period_start
         return wire
 
 
@@ -3178,7 +3699,7 @@ class PostgreSQLServerData:
         class Backup:
             """Backup to the tenant's object store, using CloudNativePG's barman-cloud."""
 
-            # Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.
+            # Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.
             destination_path: Optional[str] = None
             # Whether continuous backup and WAL archiving run.
             enabled: Optional[bool] = None
@@ -3284,6 +3805,27 @@ class PostgreSQLServerData:
                 return wire
 
         @dataclass
+        class Restore:
+            """Where the server's data comes from when it is created from a recovery point rather than empty."""
+
+            # The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database.
+            recovery_point: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> PostgreSQLServerData.Properties.Restore:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    recovery_point=wire.get("recoveryPoint"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.recovery_point is not None:
+                    wire["recoveryPoint"] = self.recovery_point
+                return wire
+
+        @dataclass
         class Sizing:
             """CPU and memory, either by preset or explicitly."""
 
@@ -3360,6 +3902,8 @@ class PostgreSQLServerData:
         monitoring: Optional[PostgreSQLServerData.Properties.Monitoring] = None
         # PgBouncer in front of the cluster.
         pooling: Optional[PostgreSQLServerData.Properties.Pooling] = None
+        # Where the server's data comes from when it is created from a recovery point rather than empty.
+        restore: Optional[PostgreSQLServerData.Properties.Restore] = None
         # CPU and memory, either by preset or explicitly.
         sizing: Optional[PostgreSQLServerData.Properties.Sizing] = None
         # The data volume.
@@ -3379,6 +3923,7 @@ class PostgreSQLServerData:
                 extensions=wire.get("extensions"),
                 monitoring=_opt(wire, "monitoring", PostgreSQLServerData.Properties.Monitoring.from_wire),
                 pooling=_opt(wire, "pooling", PostgreSQLServerData.Properties.Pooling.from_wire),
+                restore=_opt(wire, "restore", PostgreSQLServerData.Properties.Restore.from_wire),
                 sizing=_opt(wire, "sizing", PostgreSQLServerData.Properties.Sizing.from_wire),
                 storage=_opt(wire, "storage", PostgreSQLServerData.Properties.Storage.from_wire),
                 synchronous_replication=wire.get("synchronousReplication"),
@@ -3400,6 +3945,8 @@ class PostgreSQLServerData:
                 wire["monitoring"] = self.monitoring.to_wire()
             if self.pooling is not None:
                 wire["pooling"] = self.pooling.to_wire()
+            if self.restore is not None:
+                wire["restore"] = self.restore.to_wire()
             if self.sizing is not None:
                 wire["sizing"] = self.sizing.to_wire()
             if self.storage is not None:
@@ -3959,6 +4506,1915 @@ class DocumentDatabaseAccountListKeysResult:
         return wire
 
 
+@dataclass
+class KeyVaultData:
+    """Key vault. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The vault's own settings."""
+
+        # What the vault is for, shown in the portal beside its name.
+        description: Optional[str] = None
+        # Whether a deleted vault, secret or key may be purged before its seven-day recovery window ends. Once true it stays true: a write that sets it false is refused, and so is every purge until the window is out.
+        enable_purge_protection: Optional[bool] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> KeyVaultData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                description=wire.get("description"),
+                enable_purge_protection=wire.get("enablePurgeProtection"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            if self.description is not None:
+                wire["description"] = self.description
+            if self.enable_purge_protection is not None:
+                wire["enablePurgeProtection"] = self.enable_purge_protection
+            return wire
+
+    # The region the vault is billed in and served from.
+    location: str
+    # The vault's own settings.
+    properties: Optional[KeyVaultData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", KeyVaultData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class KeyVaultResource:
+    """One Key vault, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: KeyVaultData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=KeyVaultData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+KeyVaultCreateKeyContentCurve = Literal["P-256", "P-384", "P-521"]
+"""The values /curve accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+KeyVaultCreateKeyContentKeyOps = Literal["encrypt", "decrypt", "sign", "verify", "wrapKey", "unwrapKey"]
+"""The values /keyOps accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+KeyVaultCreateKeyContentKty = Literal["RSA", "EC"]
+"""The values /kty accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class KeyVaultCreateKeyContent:
+    """The parameters of createKey."""
+
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # RSA or EC.
+    kty: KeyVaultCreateKeyContentKty
+    # An EC key's curve. P-256 when omitted; refused on an RSA key.
+    curve: Optional[KeyVaultCreateKeyContentCurve] = None
+    # Whether the version may be used. A disabled version is refused, not hidden.
+    enabled: Optional[bool] = None
+    # The version is refused from this time on.
+    expires_on: Optional[str] = None
+    # The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.
+    key_ops: Optional[List[KeyVaultCreateKeyContentKeyOps]] = None
+    # An RSA key's modulus in bits: 2048, 3072 or 4096. 2048 when omitted; refused on an EC key.
+    key_size: Optional[int] = None
+    # The version is refused before this time.
+    not_before: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultCreateKeyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            key_name=wire["keyName"],
+            kty=wire["kty"],
+            curve=wire.get("curve"),
+            enabled=wire.get("enabled"),
+            expires_on=wire.get("expiresOn"),
+            key_ops=wire.get("keyOps"),
+            key_size=wire.get("keySize"),
+            not_before=wire.get("notBefore"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["keyName"] = self.key_name
+        wire["kty"] = self.kty
+        if self.curve is not None:
+            wire["curve"] = self.curve
+        if self.enabled is not None:
+            wire["enabled"] = self.enabled
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.key_ops is not None:
+            wire["keyOps"] = self.key_ops
+        if self.key_size is not None:
+            wire["keySize"] = self.key_size
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        return wire
+
+
+@dataclass
+class KeyVaultCreateKeyResult:
+    """What createKey returns."""
+
+    # When the version was created.
+    created: str
+    # Whether the version may be used.
+    enabled: bool
+    # Whether the key was imported rather than generated here.
+    imported: bool
+    # The operations the key permits.
+    key_ops: List[str]
+    # RSA or EC.
+    kty: str
+    # The secret's or key's name.
+    name: str
+    # When the version's attributes last changed.
+    updated: str
+    # The version this response is about.
+    version: str
+    # An EC key's curve.
+    crv: Optional[str] = None
+    # An RSA key's public exponent, base64url.
+    e: Optional[str] = None
+    # Refused from this time on. Absent when unset.
+    expires_on: Optional[str] = None
+    # An RSA key's modulus in bits.
+    key_size: Optional[int] = None
+    # An RSA key's modulus, base64url.
+    n: Optional[str] = None
+    # Refused before this time. Absent when unset.
+    not_before: Optional[str] = None
+    # An EC key's x coordinate, base64url.
+    x: Optional[str] = None
+    # An EC key's y coordinate, base64url.
+    y: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultCreateKeyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            created=wire["created"],
+            enabled=wire["enabled"],
+            imported=wire["imported"],
+            key_ops=wire["keyOps"],
+            kty=wire["kty"],
+            name=wire["name"],
+            updated=wire["updated"],
+            version=wire["version"],
+            crv=wire.get("crv"),
+            e=wire.get("e"),
+            expires_on=wire.get("expiresOn"),
+            key_size=wire.get("keySize"),
+            n=wire.get("n"),
+            not_before=wire.get("notBefore"),
+            x=wire.get("x"),
+            y=wire.get("y"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["created"] = self.created
+        wire["enabled"] = self.enabled
+        wire["imported"] = self.imported
+        wire["keyOps"] = self.key_ops
+        wire["kty"] = self.kty
+        wire["name"] = self.name
+        wire["updated"] = self.updated
+        wire["version"] = self.version
+        if self.crv is not None:
+            wire["crv"] = self.crv
+        if self.e is not None:
+            wire["e"] = self.e
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.key_size is not None:
+            wire["keySize"] = self.key_size
+        if self.n is not None:
+            wire["n"] = self.n
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        if self.x is not None:
+            wire["x"] = self.x
+        if self.y is not None:
+            wire["y"] = self.y
+        return wire
+
+
+KeyVaultDecryptContentAlg = Literal["RSA-OAEP", "RSA-OAEP-256"]
+"""The values /alg accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class KeyVaultDecryptContent:
+    """The parameters of decrypt."""
+
+    # RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+    alg: KeyVaultDecryptContentAlg
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # The ciphertext or wrapped key, base64url without padding.
+    value: str
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultDecryptContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            key_name=wire["keyName"],
+            value=wire["value"],
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["keyName"] = self.key_name
+        wire["value"] = self.value
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultDecryptResult:
+    """What decrypt returns. ⚠ Secret material — never log or persist this."""
+
+    # The algorithm used.
+    alg: str
+    # The key that did the work.
+    name: str
+    # The plaintext, base64url.
+    value: str
+    # The key version that did the work.
+    version: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultDecryptResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            name=wire["name"],
+            value=wire["value"],
+            version=wire["version"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["name"] = self.name
+        wire["value"] = self.value
+        wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultDeleteKeyContent:
+    """The parameters of deleteKey."""
+
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultDeleteKeyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            key_name=wire["keyName"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["keyName"] = self.key_name
+        return wire
+
+
+@dataclass
+class KeyVaultDeleteKeyResult:
+    """What deleteKey returns."""
+
+    # When the item was deleted.
+    deleted_on: str
+    # The secret's or key's name.
+    name: str
+    # When the item is purged unless it is recovered first.
+    scheduled_purge_date: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultDeleteKeyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            deleted_on=wire["deletedOn"],
+            name=wire["name"],
+            scheduled_purge_date=wire["scheduledPurgeDate"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["deletedOn"] = self.deleted_on
+        wire["name"] = self.name
+        wire["scheduledPurgeDate"] = self.scheduled_purge_date
+        return wire
+
+
+@dataclass
+class KeyVaultDeleteSecretContent:
+    """The parameters of deleteSecret."""
+
+    # The secret's name: 1–127 letters, digits and dashes.
+    secret_name: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultDeleteSecretContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            secret_name=wire["secretName"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["secretName"] = self.secret_name
+        return wire
+
+
+@dataclass
+class KeyVaultDeleteSecretResult:
+    """What deleteSecret returns."""
+
+    # When the item was deleted.
+    deleted_on: str
+    # The secret's or key's name.
+    name: str
+    # When the item is purged unless it is recovered first.
+    scheduled_purge_date: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultDeleteSecretResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            deleted_on=wire["deletedOn"],
+            name=wire["name"],
+            scheduled_purge_date=wire["scheduledPurgeDate"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["deletedOn"] = self.deleted_on
+        wire["name"] = self.name
+        wire["scheduledPurgeDate"] = self.scheduled_purge_date
+        return wire
+
+
+KeyVaultEncryptContentAlg = Literal["RSA-OAEP", "RSA-OAEP-256"]
+"""The values /alg accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class KeyVaultEncryptContent:
+    """The parameters of encrypt."""
+
+    # RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+    alg: KeyVaultEncryptContentAlg
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # The plaintext to encrypt or the key to wrap, base64url without padding.
+    value: str
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultEncryptContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            key_name=wire["keyName"],
+            value=wire["value"],
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["keyName"] = self.key_name
+        wire["value"] = self.value
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultEncryptResult:
+    """What encrypt returns."""
+
+    # The algorithm used.
+    alg: str
+    # The key that did the work.
+    name: str
+    # The result, base64url.
+    value: str
+    # The key version that did the work.
+    version: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultEncryptResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            name=wire["name"],
+            value=wire["value"],
+            version=wire["version"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["name"] = self.name
+        wire["value"] = self.value
+        wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultGetKeyContent:
+    """The parameters of getKey."""
+
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultGetKeyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            key_name=wire["keyName"],
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["keyName"] = self.key_name
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultGetKeyResult:
+    """What getKey returns."""
+
+    # When the version was created.
+    created: str
+    # Whether the version may be used.
+    enabled: bool
+    # Whether the key was imported rather than generated here.
+    imported: bool
+    # The operations the key permits.
+    key_ops: List[str]
+    # RSA or EC.
+    kty: str
+    # The secret's or key's name.
+    name: str
+    # When the version's attributes last changed.
+    updated: str
+    # The version this response is about.
+    version: str
+    # An EC key's curve.
+    crv: Optional[str] = None
+    # An RSA key's public exponent, base64url.
+    e: Optional[str] = None
+    # Refused from this time on. Absent when unset.
+    expires_on: Optional[str] = None
+    # An RSA key's modulus in bits.
+    key_size: Optional[int] = None
+    # An RSA key's modulus, base64url.
+    n: Optional[str] = None
+    # Refused before this time. Absent when unset.
+    not_before: Optional[str] = None
+    # An EC key's x coordinate, base64url.
+    x: Optional[str] = None
+    # An EC key's y coordinate, base64url.
+    y: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultGetKeyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            created=wire["created"],
+            enabled=wire["enabled"],
+            imported=wire["imported"],
+            key_ops=wire["keyOps"],
+            kty=wire["kty"],
+            name=wire["name"],
+            updated=wire["updated"],
+            version=wire["version"],
+            crv=wire.get("crv"),
+            e=wire.get("e"),
+            expires_on=wire.get("expiresOn"),
+            key_size=wire.get("keySize"),
+            n=wire.get("n"),
+            not_before=wire.get("notBefore"),
+            x=wire.get("x"),
+            y=wire.get("y"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["created"] = self.created
+        wire["enabled"] = self.enabled
+        wire["imported"] = self.imported
+        wire["keyOps"] = self.key_ops
+        wire["kty"] = self.kty
+        wire["name"] = self.name
+        wire["updated"] = self.updated
+        wire["version"] = self.version
+        if self.crv is not None:
+            wire["crv"] = self.crv
+        if self.e is not None:
+            wire["e"] = self.e
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.key_size is not None:
+            wire["keySize"] = self.key_size
+        if self.n is not None:
+            wire["n"] = self.n
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        if self.x is not None:
+            wire["x"] = self.x
+        if self.y is not None:
+            wire["y"] = self.y
+        return wire
+
+
+@dataclass
+class KeyVaultGetSecretContent:
+    """The parameters of getSecret."""
+
+    # The secret's name: 1–127 letters, digits and dashes.
+    secret_name: str
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultGetSecretContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            secret_name=wire["secretName"],
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["secretName"] = self.secret_name
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultGetSecretResult:
+    """What getSecret returns. ⚠ Secret material — never log or persist this."""
+
+    # When the version was created.
+    created: str
+    # Whether the version may be used.
+    enabled: bool
+    # The secret's or key's name.
+    name: str
+    # When the version's attributes last changed.
+    updated: str
+    # The secret's value.
+    value: str
+    # The version this response is about.
+    version: str
+    # What the value is. Absent when unset.
+    content_type: Optional[str] = None
+    # Refused from this time on. Absent when unset.
+    expires_on: Optional[str] = None
+    # Refused before this time. Absent when unset.
+    not_before: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultGetSecretResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            created=wire["created"],
+            enabled=wire["enabled"],
+            name=wire["name"],
+            updated=wire["updated"],
+            value=wire["value"],
+            version=wire["version"],
+            content_type=wire.get("contentType"),
+            expires_on=wire.get("expiresOn"),
+            not_before=wire.get("notBefore"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["created"] = self.created
+        wire["enabled"] = self.enabled
+        wire["name"] = self.name
+        wire["updated"] = self.updated
+        wire["value"] = self.value
+        wire["version"] = self.version
+        if self.content_type is not None:
+            wire["contentType"] = self.content_type
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        return wire
+
+
+KeyVaultImportKeyContentKeyOps = Literal["encrypt", "decrypt", "sign", "verify", "wrapKey", "unwrapKey"]
+"""The values /keyOps accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class KeyVaultImportKeyContent:
+    """The parameters of importKey."""
+
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # The private key as unencrypted PKCS#8 DER, in standard base64. RSA of 2048, 3072 or 4096 bits, or EC on P-256, P-384 or P-521. Sealed on arrival and never returned.
+    pkcs8: str
+    # Whether the version may be used. A disabled version is refused, not hidden.
+    enabled: Optional[bool] = None
+    # The version is refused from this time on.
+    expires_on: Optional[str] = None
+    # The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.
+    key_ops: Optional[List[KeyVaultImportKeyContentKeyOps]] = None
+    # The version is refused before this time.
+    not_before: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultImportKeyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            key_name=wire["keyName"],
+            pkcs8=wire["pkcs8"],
+            enabled=wire.get("enabled"),
+            expires_on=wire.get("expiresOn"),
+            key_ops=wire.get("keyOps"),
+            not_before=wire.get("notBefore"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["keyName"] = self.key_name
+        wire["pkcs8"] = self.pkcs8
+        if self.enabled is not None:
+            wire["enabled"] = self.enabled
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.key_ops is not None:
+            wire["keyOps"] = self.key_ops
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        return wire
+
+
+@dataclass
+class KeyVaultImportKeyResult:
+    """What importKey returns."""
+
+    # When the version was created.
+    created: str
+    # Whether the version may be used.
+    enabled: bool
+    # Whether the key was imported rather than generated here.
+    imported: bool
+    # The operations the key permits.
+    key_ops: List[str]
+    # RSA or EC.
+    kty: str
+    # The secret's or key's name.
+    name: str
+    # When the version's attributes last changed.
+    updated: str
+    # The version this response is about.
+    version: str
+    # An EC key's curve.
+    crv: Optional[str] = None
+    # An RSA key's public exponent, base64url.
+    e: Optional[str] = None
+    # Refused from this time on. Absent when unset.
+    expires_on: Optional[str] = None
+    # An RSA key's modulus in bits.
+    key_size: Optional[int] = None
+    # An RSA key's modulus, base64url.
+    n: Optional[str] = None
+    # Refused before this time. Absent when unset.
+    not_before: Optional[str] = None
+    # An EC key's x coordinate, base64url.
+    x: Optional[str] = None
+    # An EC key's y coordinate, base64url.
+    y: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultImportKeyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            created=wire["created"],
+            enabled=wire["enabled"],
+            imported=wire["imported"],
+            key_ops=wire["keyOps"],
+            kty=wire["kty"],
+            name=wire["name"],
+            updated=wire["updated"],
+            version=wire["version"],
+            crv=wire.get("crv"),
+            e=wire.get("e"),
+            expires_on=wire.get("expiresOn"),
+            key_size=wire.get("keySize"),
+            n=wire.get("n"),
+            not_before=wire.get("notBefore"),
+            x=wire.get("x"),
+            y=wire.get("y"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["created"] = self.created
+        wire["enabled"] = self.enabled
+        wire["imported"] = self.imported
+        wire["keyOps"] = self.key_ops
+        wire["kty"] = self.kty
+        wire["name"] = self.name
+        wire["updated"] = self.updated
+        wire["version"] = self.version
+        if self.crv is not None:
+            wire["crv"] = self.crv
+        if self.e is not None:
+            wire["e"] = self.e
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.key_size is not None:
+            wire["keySize"] = self.key_size
+        if self.n is not None:
+            wire["n"] = self.n
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        if self.x is not None:
+            wire["x"] = self.x
+        if self.y is not None:
+            wire["y"] = self.y
+        return wire
+
+
+@dataclass
+class KeyVaultListDeletedKeysResult:
+    """What listDeletedKeys returns."""
+
+    # How many lines follow.
+    count: int
+    # One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+    items: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultListDeletedKeysResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            count=wire["count"],
+            items=wire["items"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["count"] = self.count
+        wire["items"] = self.items
+        return wire
+
+
+@dataclass
+class KeyVaultListDeletedSecretsResult:
+    """What listDeletedSecrets returns."""
+
+    # How many lines follow.
+    count: int
+    # One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+    items: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultListDeletedSecretsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            count=wire["count"],
+            items=wire["items"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["count"] = self.count
+        wire["items"] = self.items
+        return wire
+
+
+@dataclass
+class KeyVaultListKeyVersionsContent:
+    """The parameters of listKeyVersions."""
+
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultListKeyVersionsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            key_name=wire["keyName"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["keyName"] = self.key_name
+        return wire
+
+
+@dataclass
+class KeyVaultListKeyVersionsResult:
+    """What listKeyVersions returns."""
+
+    # How many lines follow.
+    count: int
+    # One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+    items: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultListKeyVersionsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            count=wire["count"],
+            items=wire["items"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["count"] = self.count
+        wire["items"] = self.items
+        return wire
+
+
+@dataclass
+class KeyVaultListKeysResult:
+    """What listKeys returns."""
+
+    # How many lines follow.
+    count: int
+    # One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+    items: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultListKeysResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            count=wire["count"],
+            items=wire["items"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["count"] = self.count
+        wire["items"] = self.items
+        return wire
+
+
+@dataclass
+class KeyVaultListSecretVersionsContent:
+    """The parameters of listSecretVersions."""
+
+    # The secret's name: 1–127 letters, digits and dashes.
+    secret_name: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultListSecretVersionsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            secret_name=wire["secretName"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["secretName"] = self.secret_name
+        return wire
+
+
+@dataclass
+class KeyVaultListSecretVersionsResult:
+    """What listSecretVersions returns."""
+
+    # How many lines follow.
+    count: int
+    # One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+    items: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultListSecretVersionsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            count=wire["count"],
+            items=wire["items"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["count"] = self.count
+        wire["items"] = self.items
+        return wire
+
+
+@dataclass
+class KeyVaultListSecretsResult:
+    """What listSecrets returns."""
+
+    # How many lines follow.
+    count: int
+    # One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+    items: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultListSecretsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            count=wire["count"],
+            items=wire["items"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["count"] = self.count
+        wire["items"] = self.items
+        return wire
+
+
+@dataclass
+class KeyVaultPurgeDeletedKeyContent:
+    """The parameters of purgeDeletedKey."""
+
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultPurgeDeletedKeyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            key_name=wire["keyName"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["keyName"] = self.key_name
+        return wire
+
+
+@dataclass
+class KeyVaultPurgeDeletedKeyResult:
+    """What purgeDeletedKey returns."""
+
+    # The secret's or key's name.
+    name: str
+    # True: the item and every version of it are gone.
+    purged: bool
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultPurgeDeletedKeyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            name=wire["name"],
+            purged=wire["purged"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["name"] = self.name
+        wire["purged"] = self.purged
+        return wire
+
+
+@dataclass
+class KeyVaultPurgeDeletedSecretContent:
+    """The parameters of purgeDeletedSecret."""
+
+    # The secret's name: 1–127 letters, digits and dashes.
+    secret_name: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultPurgeDeletedSecretContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            secret_name=wire["secretName"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["secretName"] = self.secret_name
+        return wire
+
+
+@dataclass
+class KeyVaultPurgeDeletedSecretResult:
+    """What purgeDeletedSecret returns."""
+
+    # The secret's or key's name.
+    name: str
+    # True: the item and every version of it are gone.
+    purged: bool
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultPurgeDeletedSecretResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            name=wire["name"],
+            purged=wire["purged"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["name"] = self.name
+        wire["purged"] = self.purged
+        return wire
+
+
+@dataclass
+class KeyVaultRecoverDeletedKeyContent:
+    """The parameters of recoverDeletedKey."""
+
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultRecoverDeletedKeyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            key_name=wire["keyName"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["keyName"] = self.key_name
+        return wire
+
+
+@dataclass
+class KeyVaultRecoverDeletedKeyResult:
+    """What recoverDeletedKey returns."""
+
+    # When the version was created.
+    created: str
+    # Whether the version may be used.
+    enabled: bool
+    # Whether the key was imported rather than generated here.
+    imported: bool
+    # The operations the key permits.
+    key_ops: List[str]
+    # RSA or EC.
+    kty: str
+    # The secret's or key's name.
+    name: str
+    # When the version's attributes last changed.
+    updated: str
+    # The version this response is about.
+    version: str
+    # An EC key's curve.
+    crv: Optional[str] = None
+    # An RSA key's public exponent, base64url.
+    e: Optional[str] = None
+    # Refused from this time on. Absent when unset.
+    expires_on: Optional[str] = None
+    # An RSA key's modulus in bits.
+    key_size: Optional[int] = None
+    # An RSA key's modulus, base64url.
+    n: Optional[str] = None
+    # Refused before this time. Absent when unset.
+    not_before: Optional[str] = None
+    # An EC key's x coordinate, base64url.
+    x: Optional[str] = None
+    # An EC key's y coordinate, base64url.
+    y: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultRecoverDeletedKeyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            created=wire["created"],
+            enabled=wire["enabled"],
+            imported=wire["imported"],
+            key_ops=wire["keyOps"],
+            kty=wire["kty"],
+            name=wire["name"],
+            updated=wire["updated"],
+            version=wire["version"],
+            crv=wire.get("crv"),
+            e=wire.get("e"),
+            expires_on=wire.get("expiresOn"),
+            key_size=wire.get("keySize"),
+            n=wire.get("n"),
+            not_before=wire.get("notBefore"),
+            x=wire.get("x"),
+            y=wire.get("y"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["created"] = self.created
+        wire["enabled"] = self.enabled
+        wire["imported"] = self.imported
+        wire["keyOps"] = self.key_ops
+        wire["kty"] = self.kty
+        wire["name"] = self.name
+        wire["updated"] = self.updated
+        wire["version"] = self.version
+        if self.crv is not None:
+            wire["crv"] = self.crv
+        if self.e is not None:
+            wire["e"] = self.e
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.key_size is not None:
+            wire["keySize"] = self.key_size
+        if self.n is not None:
+            wire["n"] = self.n
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        if self.x is not None:
+            wire["x"] = self.x
+        if self.y is not None:
+            wire["y"] = self.y
+        return wire
+
+
+@dataclass
+class KeyVaultRecoverDeletedSecretContent:
+    """The parameters of recoverDeletedSecret."""
+
+    # The secret's name: 1–127 letters, digits and dashes.
+    secret_name: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultRecoverDeletedSecretContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            secret_name=wire["secretName"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["secretName"] = self.secret_name
+        return wire
+
+
+@dataclass
+class KeyVaultRecoverDeletedSecretResult:
+    """What recoverDeletedSecret returns."""
+
+    # When the version was created.
+    created: str
+    # Whether the version may be used.
+    enabled: bool
+    # The secret's or key's name.
+    name: str
+    # When the version's attributes last changed.
+    updated: str
+    # The version this response is about.
+    version: str
+    # What the value is. Absent when unset.
+    content_type: Optional[str] = None
+    # Refused from this time on. Absent when unset.
+    expires_on: Optional[str] = None
+    # Refused before this time. Absent when unset.
+    not_before: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultRecoverDeletedSecretResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            created=wire["created"],
+            enabled=wire["enabled"],
+            name=wire["name"],
+            updated=wire["updated"],
+            version=wire["version"],
+            content_type=wire.get("contentType"),
+            expires_on=wire.get("expiresOn"),
+            not_before=wire.get("notBefore"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["created"] = self.created
+        wire["enabled"] = self.enabled
+        wire["name"] = self.name
+        wire["updated"] = self.updated
+        wire["version"] = self.version
+        if self.content_type is not None:
+            wire["contentType"] = self.content_type
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        return wire
+
+
+@dataclass
+class KeyVaultSetSecretContent:
+    """The parameters of setSecret."""
+
+    # The secret's name: 1–127 letters, digits and dashes.
+    secret_name: str
+    # The secret's value. Sealed under the vault's root before it is stored.
+    value: str
+    # What the value is, for the consumer — for example text/plain. Not interpreted.
+    content_type: Optional[str] = None
+    # Whether the version may be used. A disabled version is refused, not hidden.
+    enabled: Optional[bool] = None
+    # The version is refused from this time on.
+    expires_on: Optional[str] = None
+    # The version is refused before this time.
+    not_before: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultSetSecretContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            secret_name=wire["secretName"],
+            value=wire["value"],
+            content_type=wire.get("contentType"),
+            enabled=wire.get("enabled"),
+            expires_on=wire.get("expiresOn"),
+            not_before=wire.get("notBefore"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["secretName"] = self.secret_name
+        wire["value"] = self.value
+        if self.content_type is not None:
+            wire["contentType"] = self.content_type
+        if self.enabled is not None:
+            wire["enabled"] = self.enabled
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        return wire
+
+
+@dataclass
+class KeyVaultSetSecretResult:
+    """What setSecret returns."""
+
+    # When the version was created.
+    created: str
+    # Whether the version may be used.
+    enabled: bool
+    # The secret's or key's name.
+    name: str
+    # When the version's attributes last changed.
+    updated: str
+    # The version this response is about.
+    version: str
+    # What the value is. Absent when unset.
+    content_type: Optional[str] = None
+    # Refused from this time on. Absent when unset.
+    expires_on: Optional[str] = None
+    # Refused before this time. Absent when unset.
+    not_before: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultSetSecretResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            created=wire["created"],
+            enabled=wire["enabled"],
+            name=wire["name"],
+            updated=wire["updated"],
+            version=wire["version"],
+            content_type=wire.get("contentType"),
+            expires_on=wire.get("expiresOn"),
+            not_before=wire.get("notBefore"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["created"] = self.created
+        wire["enabled"] = self.enabled
+        wire["name"] = self.name
+        wire["updated"] = self.updated
+        wire["version"] = self.version
+        if self.content_type is not None:
+            wire["contentType"] = self.content_type
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        return wire
+
+
+KeyVaultSignContentAlg = Literal["RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512"]
+"""The values /alg accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class KeyVaultSignContent:
+    """The parameters of sign."""
+
+    # A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.
+    alg: KeyVaultSignContentAlg
+    # The digest to sign, base64url. Its length must be the algorithm's hash length.
+    digest: str
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultSignContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            digest=wire["digest"],
+            key_name=wire["keyName"],
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["digest"] = self.digest
+        wire["keyName"] = self.key_name
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultSignResult:
+    """What sign returns."""
+
+    # The algorithm used.
+    alg: str
+    # The key that did the work.
+    name: str
+    # The result, base64url.
+    value: str
+    # The key version that did the work.
+    version: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultSignResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            name=wire["name"],
+            value=wire["value"],
+            version=wire["version"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["name"] = self.name
+        wire["value"] = self.value
+        wire["version"] = self.version
+        return wire
+
+
+KeyVaultUnwrapKeyContentAlg = Literal["RSA-OAEP", "RSA-OAEP-256"]
+"""The values /alg accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class KeyVaultUnwrapKeyContent:
+    """The parameters of unwrapKey."""
+
+    # RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+    alg: KeyVaultUnwrapKeyContentAlg
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # The ciphertext or wrapped key, base64url without padding.
+    value: str
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultUnwrapKeyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            key_name=wire["keyName"],
+            value=wire["value"],
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["keyName"] = self.key_name
+        wire["value"] = self.value
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultUnwrapKeyResult:
+    """What unwrapKey returns. ⚠ Secret material — never log or persist this."""
+
+    # The algorithm used.
+    alg: str
+    # The key that did the work.
+    name: str
+    # The plaintext, base64url.
+    value: str
+    # The key version that did the work.
+    version: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultUnwrapKeyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            name=wire["name"],
+            value=wire["value"],
+            version=wire["version"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["name"] = self.name
+        wire["value"] = self.value
+        wire["version"] = self.version
+        return wire
+
+
+KeyVaultUpdateKeyContentKeyOps = Literal["encrypt", "decrypt", "sign", "verify", "wrapKey", "unwrapKey"]
+"""The values /keyOps accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class KeyVaultUpdateKeyContent:
+    """The parameters of updateKey."""
+
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # Whether the version may be used. A disabled version is refused, not hidden.
+    enabled: Optional[bool] = None
+    # The version is refused from this time on.
+    expires_on: Optional[str] = None
+    # The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.
+    key_ops: Optional[List[KeyVaultUpdateKeyContentKeyOps]] = None
+    # The version is refused before this time.
+    not_before: Optional[str] = None
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultUpdateKeyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            key_name=wire["keyName"],
+            enabled=wire.get("enabled"),
+            expires_on=wire.get("expiresOn"),
+            key_ops=wire.get("keyOps"),
+            not_before=wire.get("notBefore"),
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["keyName"] = self.key_name
+        if self.enabled is not None:
+            wire["enabled"] = self.enabled
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.key_ops is not None:
+            wire["keyOps"] = self.key_ops
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultUpdateKeyResult:
+    """What updateKey returns."""
+
+    # When the version was created.
+    created: str
+    # Whether the version may be used.
+    enabled: bool
+    # Whether the key was imported rather than generated here.
+    imported: bool
+    # The operations the key permits.
+    key_ops: List[str]
+    # RSA or EC.
+    kty: str
+    # The secret's or key's name.
+    name: str
+    # When the version's attributes last changed.
+    updated: str
+    # The version this response is about.
+    version: str
+    # An EC key's curve.
+    crv: Optional[str] = None
+    # An RSA key's public exponent, base64url.
+    e: Optional[str] = None
+    # Refused from this time on. Absent when unset.
+    expires_on: Optional[str] = None
+    # An RSA key's modulus in bits.
+    key_size: Optional[int] = None
+    # An RSA key's modulus, base64url.
+    n: Optional[str] = None
+    # Refused before this time. Absent when unset.
+    not_before: Optional[str] = None
+    # An EC key's x coordinate, base64url.
+    x: Optional[str] = None
+    # An EC key's y coordinate, base64url.
+    y: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultUpdateKeyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            created=wire["created"],
+            enabled=wire["enabled"],
+            imported=wire["imported"],
+            key_ops=wire["keyOps"],
+            kty=wire["kty"],
+            name=wire["name"],
+            updated=wire["updated"],
+            version=wire["version"],
+            crv=wire.get("crv"),
+            e=wire.get("e"),
+            expires_on=wire.get("expiresOn"),
+            key_size=wire.get("keySize"),
+            n=wire.get("n"),
+            not_before=wire.get("notBefore"),
+            x=wire.get("x"),
+            y=wire.get("y"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["created"] = self.created
+        wire["enabled"] = self.enabled
+        wire["imported"] = self.imported
+        wire["keyOps"] = self.key_ops
+        wire["kty"] = self.kty
+        wire["name"] = self.name
+        wire["updated"] = self.updated
+        wire["version"] = self.version
+        if self.crv is not None:
+            wire["crv"] = self.crv
+        if self.e is not None:
+            wire["e"] = self.e
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.key_size is not None:
+            wire["keySize"] = self.key_size
+        if self.n is not None:
+            wire["n"] = self.n
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        if self.x is not None:
+            wire["x"] = self.x
+        if self.y is not None:
+            wire["y"] = self.y
+        return wire
+
+
+@dataclass
+class KeyVaultUpdateSecretContent:
+    """The parameters of updateSecret."""
+
+    # The secret's name: 1–127 letters, digits and dashes.
+    secret_name: str
+    # What the value is, for the consumer — for example text/plain. Not interpreted.
+    content_type: Optional[str] = None
+    # Whether the version may be used. A disabled version is refused, not hidden.
+    enabled: Optional[bool] = None
+    # The version is refused from this time on.
+    expires_on: Optional[str] = None
+    # The version is refused before this time.
+    not_before: Optional[str] = None
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultUpdateSecretContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            secret_name=wire["secretName"],
+            content_type=wire.get("contentType"),
+            enabled=wire.get("enabled"),
+            expires_on=wire.get("expiresOn"),
+            not_before=wire.get("notBefore"),
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["secretName"] = self.secret_name
+        if self.content_type is not None:
+            wire["contentType"] = self.content_type
+        if self.enabled is not None:
+            wire["enabled"] = self.enabled
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultUpdateSecretResult:
+    """What updateSecret returns."""
+
+    # When the version was created.
+    created: str
+    # Whether the version may be used.
+    enabled: bool
+    # The secret's or key's name.
+    name: str
+    # When the version's attributes last changed.
+    updated: str
+    # The version this response is about.
+    version: str
+    # What the value is. Absent when unset.
+    content_type: Optional[str] = None
+    # Refused from this time on. Absent when unset.
+    expires_on: Optional[str] = None
+    # Refused before this time. Absent when unset.
+    not_before: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultUpdateSecretResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            created=wire["created"],
+            enabled=wire["enabled"],
+            name=wire["name"],
+            updated=wire["updated"],
+            version=wire["version"],
+            content_type=wire.get("contentType"),
+            expires_on=wire.get("expiresOn"),
+            not_before=wire.get("notBefore"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["created"] = self.created
+        wire["enabled"] = self.enabled
+        wire["name"] = self.name
+        wire["updated"] = self.updated
+        wire["version"] = self.version
+        if self.content_type is not None:
+            wire["contentType"] = self.content_type
+        if self.expires_on is not None:
+            wire["expiresOn"] = self.expires_on
+        if self.not_before is not None:
+            wire["notBefore"] = self.not_before
+        return wire
+
+
+KeyVaultVerifyContentAlg = Literal["RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512"]
+"""The values /alg accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class KeyVaultVerifyContent:
+    """The parameters of verify."""
+
+    # A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.
+    alg: KeyVaultVerifyContentAlg
+    # The digest to sign, base64url. Its length must be the algorithm's hash length.
+    digest: str
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # The signature, base64url. An EC signature is r‖s, as JWS spells it.
+    signature: str
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultVerifyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            digest=wire["digest"],
+            key_name=wire["keyName"],
+            signature=wire["signature"],
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["digest"] = self.digest
+        wire["keyName"] = self.key_name
+        wire["signature"] = self.signature
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultVerifyResult:
+    """What verify returns."""
+
+    # The algorithm used.
+    alg: str
+    # The key that did the work.
+    name: str
+    # Whether the signature is valid.
+    value: bool
+    # The key version that did the work.
+    version: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultVerifyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            name=wire["name"],
+            value=wire["value"],
+            version=wire["version"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["name"] = self.name
+        wire["value"] = self.value
+        wire["version"] = self.version
+        return wire
+
+
+KeyVaultWrapKeyContentAlg = Literal["RSA-OAEP", "RSA-OAEP-256"]
+"""The values /alg accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class KeyVaultWrapKeyContent:
+    """The parameters of wrapKey."""
+
+    # RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+    alg: KeyVaultWrapKeyContentAlg
+    # The key's name: 1–127 letters, digits and dashes.
+    key_name: str
+    # The plaintext to encrypt or the key to wrap, base64url without padding.
+    value: str
+    # A version, as 32 hex digits. Omit it for the newest.
+    version: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultWrapKeyContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            key_name=wire["keyName"],
+            value=wire["value"],
+            version=wire.get("version"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["keyName"] = self.key_name
+        wire["value"] = self.value
+        if self.version is not None:
+            wire["version"] = self.version
+        return wire
+
+
+@dataclass
+class KeyVaultWrapKeyResult:
+    """What wrapKey returns."""
+
+    # The algorithm used.
+    alg: str
+    # The key that did the work.
+    name: str
+    # The result, base64url.
+    value: str
+    # The key version that did the work.
+    version: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> KeyVaultWrapKeyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            alg=wire["alg"],
+            name=wire["name"],
+            value=wire["value"],
+            version=wire["version"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["alg"] = self.alg
+        wire["name"] = self.name
+        wire["value"] = self.value
+        wire["version"] = self.version
+        return wire
+
+
 MailDomainPreset = Literal["c1.large", "c1.medium", "c1.micro", "c1.nano", "c1.small", "c1.xlarge"]
 """The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -4165,6 +6621,898 @@ class MailDomainResource:
         """Reads one off the wire. Unknown members are ignored."""
         return cls(
             data=MailDomainData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+MailDomainDnsRecordsResultRecordsDkimType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsDmarcType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsMtaStsType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsMtaStsHostType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsMxType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsSpfType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainDnsRecordsResultRecordsTlsRptType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class MailDomainDnsRecordsResult:
+    """What dnsRecords returns."""
+
+    @dataclass
+    class Records:
+        """One member per record the domain must publish."""
+
+        @dataclass
+        class Dkim:
+            """The DKIM public key. Gates sending."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsDkimType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.Dkim:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Dmarc:
+            """The DMARC policy. Gates sending."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsDmarcType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.Dmarc:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class MtaSts:
+            """The MTA-STS policy announcement."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsMtaStsType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.MtaSts:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class MtaStsHost:
+            """The MTA-STS policy host."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsMtaStsHostType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.MtaStsHost:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Mx:
+            """The MX record — where mail for the domain is delivered."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsMxType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.Mx:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Spf:
+            """The SPF record. Gates sending."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsSpfType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.Spf:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class TlsRpt:
+            """The TLS-RPT reporting address."""
+
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # MX, TXT or CNAME.
+            type: MailDomainDnsRecordsResultRecordsTlsRptType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records.TlsRpt:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        # The DKIM public key. Gates sending.
+        dkim: MailDomainDnsRecordsResult.Records.Dkim
+        # The DMARC policy. Gates sending.
+        dmarc: MailDomainDnsRecordsResult.Records.Dmarc
+        # The MTA-STS policy announcement.
+        mta_sts: MailDomainDnsRecordsResult.Records.MtaSts
+        # The MTA-STS policy host.
+        mta_sts_host: MailDomainDnsRecordsResult.Records.MtaStsHost
+        # The MX record — where mail for the domain is delivered.
+        mx: MailDomainDnsRecordsResult.Records.Mx
+        # The SPF record. Gates sending.
+        spf: MailDomainDnsRecordsResult.Records.Spf
+        # The TLS-RPT reporting address.
+        tls_rpt: MailDomainDnsRecordsResult.Records.TlsRpt
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult.Records:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                dkim=MailDomainDnsRecordsResult.Records.Dkim.from_wire(wire["dkim"]),
+                dmarc=MailDomainDnsRecordsResult.Records.Dmarc.from_wire(wire["dmarc"]),
+                mta_sts=MailDomainDnsRecordsResult.Records.MtaSts.from_wire(wire["mtaSts"]),
+                mta_sts_host=MailDomainDnsRecordsResult.Records.MtaStsHost.from_wire(wire["mtaStsHost"]),
+                mx=MailDomainDnsRecordsResult.Records.Mx.from_wire(wire["mx"]),
+                spf=MailDomainDnsRecordsResult.Records.Spf.from_wire(wire["spf"]),
+                tls_rpt=MailDomainDnsRecordsResult.Records.TlsRpt.from_wire(wire["tlsRpt"]),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["dkim"] = self.dkim.to_wire()
+            wire["dmarc"] = self.dmarc.to_wire()
+            wire["mtaSts"] = self.mta_sts.to_wire()
+            wire["mtaStsHost"] = self.mta_sts_host.to_wire()
+            wire["mx"] = self.mx.to_wire()
+            wire["spf"] = self.spf.to_wire()
+            wire["tlsRpt"] = self.tls_rpt.to_wire()
+            return wire
+
+    # The mail domain the records are for.
+    domain: str
+    # The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.
+    mta_sts_policy: str
+    # One member per record the domain must publish.
+    records: MailDomainDnsRecordsResult.Records
+    # Every record as a zone-file line, ready to paste into a zone.
+    zone_file: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MailDomainDnsRecordsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            domain=wire["domain"],
+            mta_sts_policy=wire["mtaStsPolicy"],
+            records=MailDomainDnsRecordsResult.Records.from_wire(wire["records"]),
+            zone_file=wire["zoneFile"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["domain"] = self.domain
+        wire["mtaStsPolicy"] = self.mta_sts_policy
+        wire["records"] = self.records.to_wire()
+        wire["zoneFile"] = self.zone_file
+        return wire
+
+
+MailDomainVerifyResultRecordsDkimStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/dkim/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsDkimType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/dkim/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsDmarcStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/dmarc/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsDmarcType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/dmarc/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMtaStsStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/mtaSts/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMtaStsType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mtaSts/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMtaStsHostStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/mtaStsHost/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMtaStsHostType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mtaStsHost/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMxStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/mx/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsMxType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/mx/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsSpfStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/spf/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsSpfType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/spf/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsTlsRptStatus = Literal["verified", "missing", "mismatch", "unresolvable"]
+"""The values /records/tlsRpt/status accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultRecordsTlsRptType = Literal["MX", "TXT", "CNAME"]
+"""The values /records/tlsRpt/type accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+MailDomainVerifyResultSending = Literal["held", "open", "suspended"]
+"""The values /sending accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class MailDomainVerifyResult:
+    """What verify returns."""
+
+    @dataclass
+    class Records:
+        """One member per record the domain must publish."""
+
+        @dataclass
+        class Dkim:
+            """The DKIM public key. Gates sending."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsDkimStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsDkimType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.Dkim:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Dmarc:
+            """The DMARC policy. Gates sending."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsDmarcStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsDmarcType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.Dmarc:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class MtaSts:
+            """The MTA-STS policy announcement."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsMtaStsStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsMtaStsType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.MtaSts:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class MtaStsHost:
+            """The MTA-STS policy host."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsMtaStsHostStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsMtaStsHostType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.MtaStsHost:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Mx:
+            """The MX record — where mail for the domain is delivered."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsMxStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsMxType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.Mx:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class Spf:
+            """The SPF record. Gates sending."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsSpfStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsSpfType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.Spf:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        @dataclass
+        class TlsRpt:
+            """The TLS-RPT reporting address."""
+
+            # Why, in a sentence.
+            detail: str
+            # What the DNS answered for the name.
+            found: List[str]
+            # Whether sending is held until this record verifies.
+            gates_sending: bool
+            # The owner name, fully qualified.
+            name: str
+            # What resolving it found.
+            status: MailDomainVerifyResultRecordsTlsRptStatus
+            # MX, TXT or CNAME.
+            type: MailDomainVerifyResultRecordsTlsRptType
+            # The value to publish, exactly.
+            value: str
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records.TlsRpt:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    detail=wire["detail"],
+                    found=wire["found"],
+                    gates_sending=wire["gatesSending"],
+                    name=wire["name"],
+                    status=wire["status"],
+                    type=wire["type"],
+                    value=wire["value"],
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                wire["detail"] = self.detail
+                wire["found"] = self.found
+                wire["gatesSending"] = self.gates_sending
+                wire["name"] = self.name
+                wire["status"] = self.status
+                wire["type"] = self.type
+                wire["value"] = self.value
+                return wire
+
+        # The DKIM public key. Gates sending.
+        dkim: MailDomainVerifyResult.Records.Dkim
+        # The DMARC policy. Gates sending.
+        dmarc: MailDomainVerifyResult.Records.Dmarc
+        # The MTA-STS policy announcement.
+        mta_sts: MailDomainVerifyResult.Records.MtaSts
+        # The MTA-STS policy host.
+        mta_sts_host: MailDomainVerifyResult.Records.MtaStsHost
+        # The MX record — where mail for the domain is delivered.
+        mx: MailDomainVerifyResult.Records.Mx
+        # The SPF record. Gates sending.
+        spf: MailDomainVerifyResult.Records.Spf
+        # The TLS-RPT reporting address.
+        tls_rpt: MailDomainVerifyResult.Records.TlsRpt
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> MailDomainVerifyResult.Records:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                dkim=MailDomainVerifyResult.Records.Dkim.from_wire(wire["dkim"]),
+                dmarc=MailDomainVerifyResult.Records.Dmarc.from_wire(wire["dmarc"]),
+                mta_sts=MailDomainVerifyResult.Records.MtaSts.from_wire(wire["mtaSts"]),
+                mta_sts_host=MailDomainVerifyResult.Records.MtaStsHost.from_wire(wire["mtaStsHost"]),
+                mx=MailDomainVerifyResult.Records.Mx.from_wire(wire["mx"]),
+                spf=MailDomainVerifyResult.Records.Spf.from_wire(wire["spf"]),
+                tls_rpt=MailDomainVerifyResult.Records.TlsRpt.from_wire(wire["tlsRpt"]),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["dkim"] = self.dkim.to_wire()
+            wire["dmarc"] = self.dmarc.to_wire()
+            wire["mtaSts"] = self.mta_sts.to_wire()
+            wire["mtaStsHost"] = self.mta_sts_host.to_wire()
+            wire["mx"] = self.mx.to_wire()
+            wire["spf"] = self.spf.to_wire()
+            wire["tlsRpt"] = self.tls_rpt.to_wire()
+            return wire
+
+    # The mail domain the records are for.
+    domain: str
+    # The policy https://mta-sts.{domain}/.well-known/mta-sts.txt must serve.
+    mta_sts_policy: str
+    # One member per record the domain must publish.
+    records: MailDomainVerifyResult.Records
+    # held, open or suspended — why sendingEnabled is what it is.
+    sending: MailDomainVerifyResultSending
+    # Whether mail may leave the domain: SPF, DKIM and DMARC verify and the platform has not suspended it. Held mail is refused at RCPT TO, not queued.
+    sending_enabled: bool
+    # Every record as a zone-file line, ready to paste into a zone.
+    zone_file: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MailDomainVerifyResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            domain=wire["domain"],
+            mta_sts_policy=wire["mtaStsPolicy"],
+            records=MailDomainVerifyResult.Records.from_wire(wire["records"]),
+            sending=wire["sending"],
+            sending_enabled=wire["sendingEnabled"],
+            zone_file=wire["zoneFile"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["domain"] = self.domain
+        wire["mtaStsPolicy"] = self.mta_sts_policy
+        wire["records"] = self.records.to_wire()
+        wire["sending"] = self.sending
+        wire["sendingEnabled"] = self.sending_enabled
+        wire["zoneFile"] = self.zone_file
+        return wire
+
+
+@dataclass
+class MailboxData:
+    """Mailbox. One address of a mail domain: a password from your vault, a quota, aliases and forwarding. Delivered to over LMTP and read over IMAP. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The mailbox's own settings."""
+
+        # The cluster the domain's back end runs in. Must be the domain's.
+        cluster_id: str
+        # The part of the address before the @, for example alice. The domain supplies the rest. Lower case letters, digits, dots, hyphens and underscores.
+        local_part: str
+        # Other local parts of the same domain that deliver here. An alias another mailbox already answers for is refused by name.
+        aliases: Optional[List[str]] = None
+        # Addresses every message is also sent on to. Forwarding leaves the domain, so it is held with the rest of the domain's outbound mail until its DNS records verify.
+        forward_to: Optional[List[str]] = None
+        # With forwardTo set, whether this mailbox keeps a copy as well. Without forwardTo it has no effect.
+        keep_copy: Optional[bool] = None
+        # A vault handle — path#field, optionally @version — whose value is the password this mailbox signs in to IMAP and submission with. Resolved and hashed when the mailbox is applied; the value never enters this body. The path must be under your tenant's vault prefix, tenants/<tenantId>/. Empty means the mailbox receives mail and nobody can sign in to it.
+        password_ref: Optional[str] = None
+        # The most this mailbox may store, in Kubernetes quantity form, for example 5Gi. Empty means the domain's storage.mailboxQuota.
+        quota: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> MailboxData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                local_part=wire["localPart"],
+                aliases=wire.get("aliases"),
+                forward_to=wire.get("forwardTo"),
+                keep_copy=wire.get("keepCopy"),
+                password_ref=wire.get("passwordRef"),
+                quota=wire.get("quota"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["localPart"] = self.local_part
+            if self.aliases is not None:
+                wire["aliases"] = self.aliases
+            if self.forward_to is not None:
+                wire["forwardTo"] = self.forward_to
+            if self.keep_copy is not None:
+                wire["keepCopy"] = self.keep_copy
+            if self.password_ref is not None:
+                wire["passwordRef"] = self.password_ref
+            if self.quota is not None:
+                wire["quota"] = self.quota
+            return wire
+
+    # The region the mailbox is billed in. The domain's.
+    location: str
+    # The mailbox's own settings.
+    properties: Optional[MailboxData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MailboxData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", MailboxData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class MailboxResource:
+    """One Mailbox, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: MailboxData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MailboxResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=MailboxData.from_wire(wire),
             etag=wire["etag"],
             id=wire["id"],
             name=wire["name"],
@@ -5392,6 +8740,178 @@ class MonitorWorkspaceListKeysResult:
         return wire
 
 
+@dataclass
+class MonitorWorkspaceListMetricLabelsContent:
+    """The parameters of listMetricLabels."""
+
+    # The window's end. Defaults to now.
+    end: Optional[str] = None
+    # The label whose values to list — __name__ for the metric names. Leave it out to list the label names instead.
+    label: Optional[str] = None
+    # A series selector the answer is narrowed to, for example http_requests_total.
+    match_: Optional[str] = None
+    # The window's start. Defaults to a day before end.
+    start: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MonitorWorkspaceListMetricLabelsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            end=wire.get("end"),
+            label=wire.get("label"),
+            match_=wire.get("match"),
+            start=wire.get("start"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.end is not None:
+            wire["end"] = self.end
+        if self.label is not None:
+            wire["label"] = self.label
+        if self.match_ is not None:
+            wire["match"] = self.match_
+        if self.start is not None:
+            wire["start"] = self.start
+        return wire
+
+
+@dataclass
+class MonitorWorkspaceListMetricLabelsResult:
+    """What listMetricLabels returns."""
+
+    # Whether more than 10000 matched and the rest were left out.
+    truncated: bool
+    # The label values, or the label names when no label was named, sorted.
+    values: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MonitorWorkspaceListMetricLabelsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            truncated=wire["truncated"],
+            values=wire["values"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["truncated"] = self.truncated
+        wire["values"] = self.values
+        return wire
+
+
+@dataclass
+class MonitorWorkspaceQueryMetricsContent:
+    """The parameters of queryMetrics."""
+
+    # A PromQL or MetricsQL expression, run under this workspace's metrics tenancy.
+    query: str
+    # Where a range query ends. Give it with start.
+    end: Optional[str] = None
+    # Where a range query starts. Give it with end, or neither for an instant query.
+    start: Optional[str] = None
+    # A range query's resolution. Defaults to the window cut into 240 points; the window divided by it may not exceed 11000.
+    step_seconds: Optional[int] = None
+    # The instant an instant query is evaluated at. Defaults to now.
+    time: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MonitorWorkspaceQueryMetricsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            query=wire["query"],
+            end=wire.get("end"),
+            start=wire.get("start"),
+            step_seconds=wire.get("stepSeconds"),
+            time=wire.get("time"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["query"] = self.query
+        if self.end is not None:
+            wire["end"] = self.end
+        if self.start is not None:
+            wire["start"] = self.start
+        if self.step_seconds is not None:
+            wire["stepSeconds"] = self.step_seconds
+        if self.time is not None:
+            wire["time"] = self.time
+        return wire
+
+
+MonitorWorkspaceSearchLogsContentSeverities = Literal["trace", "debug", "info", "warn", "error", "fatal"]
+"""The values /severities accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class MonitorWorkspaceSearchLogsContent:
+    """The parameters of searchLogs."""
+
+    # The window's start, inclusive.
+    from_: str
+    # The window's end, exclusive. At most 90 days after from.
+    to: str
+    # Up to 10 key=value filters, each matched against the record's own attributes and its resource's.
+    attributes: Optional[List[str]] = None
+    # The histogram's bucket width. Defaults to the window cut into 60.
+    bucket_seconds: Optional[int] = None
+    # Answer how many rows the search would read, and run nothing else.
+    estimate: Optional[bool] = None
+    # The service.name the record must come from.
+    service: Optional[str] = None
+    # The severity classes to keep. Leave it out for every record, including those with no severity.
+    severities: Optional[List[MonitorWorkspaceSearchLogsContentSeverities]] = None
+    # Text the log body must contain, compared without regard to case.
+    text: Optional[str] = None
+    # How many records to return, newest first. Defaults to 100.
+    top: Optional[int] = None
+    # The trace the record must belong to, 32 hex digits.
+    trace_id: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> MonitorWorkspaceSearchLogsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            from_=wire["from"],
+            to=wire["to"],
+            attributes=wire.get("attributes"),
+            bucket_seconds=wire.get("bucketSeconds"),
+            estimate=wire.get("estimate"),
+            service=wire.get("service"),
+            severities=wire.get("severities"),
+            text=wire.get("text"),
+            top=wire.get("top"),
+            trace_id=wire.get("traceId"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["from"] = self.from_
+        wire["to"] = self.to
+        if self.attributes is not None:
+            wire["attributes"] = self.attributes
+        if self.bucket_seconds is not None:
+            wire["bucketSeconds"] = self.bucket_seconds
+        if self.estimate is not None:
+            wire["estimate"] = self.estimate
+        if self.service is not None:
+            wire["service"] = self.service
+        if self.severities is not None:
+            wire["severities"] = self.severities
+        if self.text is not None:
+            wire["text"] = self.text
+        if self.top is not None:
+            wire["top"] = self.top
+        if self.trace_id is not None:
+            wire["traceId"] = self.trace_id
+        return wire
+
+
 AlertRuleChannel = Literal["sms", "whatsapp", "email", "push", "voice"]
 """The values /properties/actionGroup/channel accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -5815,6 +9335,592 @@ class OpenTelemetryCollectorListEndpointsResult:
         wire["otlpHttpEndpoint"] = self.otlp_http_endpoint
         wire["service"] = self.service
         wire["workspace"] = self.workspace
+        return wire
+
+
+ApplicationComponentProtocol = Literal["grpc", "http/protobuf"]
+"""The values /properties/protocol accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ApplicationComponentData:
+    """Application component. An application inside the workspace: the connection string its SDKs send through a collector, and its requests, dependencies, exceptions, map and transactions read back from the workspace's traces and logs. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The component's own settings."""
+
+        # The cluster the connection string is published in — the one its collector runs in, because the endpoint is that collector's in-cluster address.
+        cluster_id: str
+        # The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.
+        collector: str
+        # Which OTLP protocol the connection string names. The collector must have that receiver on.
+        protocol: Optional[ApplicationComponentProtocol] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> ApplicationComponentData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                cluster_id=wire["clusterId"],
+                collector=wire["collector"],
+                protocol=wire.get("protocol"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["clusterId"] = self.cluster_id
+            wire["collector"] = self.collector
+            if self.protocol is not None:
+                wire["protocol"] = self.protocol
+            return wire
+
+    # The region the component is billed in — its workspace's.
+    location: str
+    # The component's own settings.
+    properties: Optional[ApplicationComponentData.Properties] = None
+    # Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+    tags: Optional[Dict[str, str]] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            location=wire["location"],
+            properties=_opt(wire, "properties", ApplicationComponentData.Properties.from_wire),
+            tags=wire.get("tags"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["location"] = self.location
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        if self.tags is not None:
+            wire["tags"] = self.tags
+        return wire
+
+
+@dataclass
+class ApplicationComponentResource:
+    """One Application component, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: ApplicationComponentData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=ApplicationComponentData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class ApplicationComponentApplicationMapContent:
+    """The parameters of applicationMap."""
+
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+    # The most rows to return, busiest first.
+    top: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentApplicationMapContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            timespan_minutes=wire.get("timespanMinutes"),
+            top=wire.get("top"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        if self.top is not None:
+            wire["top"] = self.top
+        return wire
+
+
+@dataclass
+class ApplicationComponentApplicationMapResult:
+    """What applicationMap returns."""
+
+    # Per edge: spans in the target whose parent span is in the source, in the window.
+    edge_calls: List[int]
+    # Per edge: those whose status is Error.
+    edge_failures: List[int]
+    # Per edge: the target span's 95th percentile duration, in milliseconds.
+    edge_p95_ms: List[float]
+    # Per edge: the calling service.
+    edge_sources: List[str]
+    # Per edge: the called service.
+    edge_targets: List[str]
+    # Per node: requests it failed.
+    node_failures: List[int]
+    # Per node: requests it served in the window.
+    node_requests: List[int]
+    # Per node: a service in the component.
+    nodes: List[str]
+    # The window the view read, in minutes, ending when it was asked.
+    timespan_minutes: int
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentApplicationMapResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            edge_calls=wire["edgeCalls"],
+            edge_failures=wire["edgeFailures"],
+            edge_p95_ms=wire["edgeP95Ms"],
+            edge_sources=wire["edgeSources"],
+            edge_targets=wire["edgeTargets"],
+            node_failures=wire["nodeFailures"],
+            node_requests=wire["nodeRequests"],
+            nodes=wire["nodes"],
+            timespan_minutes=wire["timespanMinutes"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["edgeCalls"] = self.edge_calls
+        wire["edgeFailures"] = self.edge_failures
+        wire["edgeP95Ms"] = self.edge_p95_ms
+        wire["edgeSources"] = self.edge_sources
+        wire["edgeTargets"] = self.edge_targets
+        wire["nodeFailures"] = self.node_failures
+        wire["nodeRequests"] = self.node_requests
+        wire["nodes"] = self.nodes
+        wire["timespanMinutes"] = self.timespan_minutes
+        return wire
+
+
+@dataclass
+class ApplicationComponentDependenciesContent:
+    """The parameters of dependencies."""
+
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+    # The most rows to return, busiest first.
+    top: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentDependenciesContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            timespan_minutes=wire.get("timespanMinutes"),
+            top=wire.get("top"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        if self.top is not None:
+            wire["top"] = self.top
+        return wire
+
+
+@dataclass
+class ApplicationComponentDependenciesResult:
+    """What dependencies returns."""
+
+    # Per row: calls in the window.
+    counts: List[int]
+    # How many of them failed.
+    failed: int
+    # Per row: failures over calls, 0 to 1.
+    failure_rate: List[float]
+    # Per row: failed calls.
+    failures: List[int]
+    # Per row: the client span's name.
+    names: List[str]
+    # Per row: the median duration, in milliseconds.
+    p50_ms: List[float]
+    # Per row: the 95th percentile duration, in milliseconds.
+    p95_ms: List[float]
+    # Per row: the 99th percentile duration, in milliseconds.
+    p99_ms: List[float]
+    # Per row: the service that made the call.
+    services: List[str]
+    # Per row: what was called — peer.service, else server.address, else the database or messaging system; empty when the span names none.
+    targets: List[str]
+    # The window the view read, in minutes, ending when it was asked.
+    timespan_minutes: int
+    # Every outgoing call in the window, not only the rows below.
+    total: int
+    # Per row: db, http, messaging, rpc or other, from the span's attributes.
+    types: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentDependenciesResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            counts=wire["counts"],
+            failed=wire["failed"],
+            failure_rate=wire["failureRate"],
+            failures=wire["failures"],
+            names=wire["names"],
+            p50_ms=wire["p50Ms"],
+            p95_ms=wire["p95Ms"],
+            p99_ms=wire["p99Ms"],
+            services=wire["services"],
+            targets=wire["targets"],
+            timespan_minutes=wire["timespanMinutes"],
+            total=wire["total"],
+            types=wire["types"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["counts"] = self.counts
+        wire["failed"] = self.failed
+        wire["failureRate"] = self.failure_rate
+        wire["failures"] = self.failures
+        wire["names"] = self.names
+        wire["p50Ms"] = self.p50_ms
+        wire["p95Ms"] = self.p95_ms
+        wire["p99Ms"] = self.p99_ms
+        wire["services"] = self.services
+        wire["targets"] = self.targets
+        wire["timespanMinutes"] = self.timespan_minutes
+        wire["total"] = self.total
+        wire["types"] = self.types
+        return wire
+
+
+@dataclass
+class ApplicationComponentExceptionsContent:
+    """The parameters of exceptions."""
+
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+    # The most rows to return, busiest first.
+    top: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentExceptionsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            timespan_minutes=wire.get("timespanMinutes"),
+            top=wire.get("top"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        if self.top is not None:
+            wire["top"] = self.top
+        return wire
+
+
+@dataclass
+class ApplicationComponentExceptionsResult:
+    """What exceptions returns."""
+
+    # Per row: occurrences in the window.
+    counts: List[int]
+    # Per row: how many were an `exception` event on a span; the rest were log records carrying exception.type.
+    from_spans: List[int]
+    # Per row: the latest occurrence.
+    last_seen: List[str]
+    # Per row: the most recent exception.message of that type.
+    messages: List[str]
+    # Per row: the service that raised it.
+    services: List[str]
+    # The window the view read, in minutes, ending when it was asked.
+    timespan_minutes: int
+    # Every exception in the window, from spans and from logs, not only the rows below.
+    total: int
+    # Per row: exception.type.
+    types: List[str]
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentExceptionsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            counts=wire["counts"],
+            from_spans=wire["fromSpans"],
+            last_seen=wire["lastSeen"],
+            messages=wire["messages"],
+            services=wire["services"],
+            timespan_minutes=wire["timespanMinutes"],
+            total=wire["total"],
+            types=wire["types"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["counts"] = self.counts
+        wire["fromSpans"] = self.from_spans
+        wire["lastSeen"] = self.last_seen
+        wire["messages"] = self.messages
+        wire["services"] = self.services
+        wire["timespanMinutes"] = self.timespan_minutes
+        wire["total"] = self.total
+        wire["types"] = self.types
+        return wire
+
+
+ApplicationComponentListConnectionStringResultOtlpProtocol = Literal["grpc", "http/protobuf"]
+"""The values /otlpProtocol accepts. ⚠ Closed: the write path refuses anything else."""
+
+
+@dataclass
+class ApplicationComponentListConnectionStringResult:
+    """What listConnectionString returns."""
+
+    # The ConfigMap in the component's namespace carrying the three variables, for a pod's envFrom.
+    config_map: str
+    # The three variables as one Key=Value;… line, for a configuration that takes a single string.
+    connection_string: str
+    # OTEL_EXPORTER_OTLP_ENDPOINT: the collector's in-cluster URL.
+    otlp_endpoint: str
+    # OTEL_EXPORTER_OTLP_PROTOCOL.
+    otlp_protocol: ApplicationComponentListConnectionStringResultOtlpProtocol
+    # OTEL_RESOURCE_ATTRIBUTES: the service.namespace the views filter on.
+    resource_attributes: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentListConnectionStringResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            config_map=wire["configMap"],
+            connection_string=wire["connectionString"],
+            otlp_endpoint=wire["otlpEndpoint"],
+            otlp_protocol=wire["otlpProtocol"],
+            resource_attributes=wire["resourceAttributes"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["configMap"] = self.config_map
+        wire["connectionString"] = self.connection_string
+        wire["otlpEndpoint"] = self.otlp_endpoint
+        wire["otlpProtocol"] = self.otlp_protocol
+        wire["resourceAttributes"] = self.resource_attributes
+        return wire
+
+
+@dataclass
+class ApplicationComponentRequestsContent:
+    """The parameters of requests."""
+
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+    # The most rows to return, busiest first.
+    top: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentRequestsContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            timespan_minutes=wire.get("timespanMinutes"),
+            top=wire.get("top"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        if self.top is not None:
+            wire["top"] = self.top
+        return wire
+
+
+@dataclass
+class ApplicationComponentRequestsResult:
+    """What requests returns."""
+
+    # Per row: requests in the window.
+    counts: List[int]
+    # How many of them failed — a span whose status is Error.
+    failed: int
+    # Per row: failures over requests, 0 to 1.
+    failure_rate: List[float]
+    # Per row: failed requests.
+    failures: List[int]
+    # Per row: the operation — the server span's name.
+    operations: List[str]
+    # Per row: the median duration, in milliseconds.
+    p50_ms: List[float]
+    # Per row: the 95th percentile duration, in milliseconds.
+    p95_ms: List[float]
+    # Per row: the 99th percentile duration, in milliseconds.
+    p99_ms: List[float]
+    # Per row: requests per minute over the window.
+    rate_per_minute: List[float]
+    # Per row: the service that served the operation.
+    services: List[str]
+    # The window the view read, in minutes, ending when it was asked.
+    timespan_minutes: int
+    # Every request in the window, across every operation, not only the rows below.
+    total: int
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentRequestsResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            counts=wire["counts"],
+            failed=wire["failed"],
+            failure_rate=wire["failureRate"],
+            failures=wire["failures"],
+            operations=wire["operations"],
+            p50_ms=wire["p50Ms"],
+            p95_ms=wire["p95Ms"],
+            p99_ms=wire["p99Ms"],
+            rate_per_minute=wire["ratePerMinute"],
+            services=wire["services"],
+            timespan_minutes=wire["timespanMinutes"],
+            total=wire["total"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["counts"] = self.counts
+        wire["failed"] = self.failed
+        wire["failureRate"] = self.failure_rate
+        wire["failures"] = self.failures
+        wire["operations"] = self.operations
+        wire["p50Ms"] = self.p50_ms
+        wire["p95Ms"] = self.p95_ms
+        wire["p99Ms"] = self.p99_ms
+        wire["ratePerMinute"] = self.rate_per_minute
+        wire["services"] = self.services
+        wire["timespanMinutes"] = self.timespan_minutes
+        wire["total"] = self.total
+        return wire
+
+
+@dataclass
+class ApplicationComponentTransactionContent:
+    """The parameters of transaction."""
+
+    # The W3C trace id: 32 lower-case hex digits, as the SDKs and every log line of the trace carry it.
+    trace_id: str
+    # How far back to read, in minutes, ending now.
+    timespan_minutes: Optional[int] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentTransactionContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            trace_id=wire["traceId"],
+            timespan_minutes=wire.get("timespanMinutes"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["traceId"] = self.trace_id
+        if self.timespan_minutes is not None:
+            wire["timespanMinutes"] = self.timespan_minutes
+        return wire
+
+
+@dataclass
+class ApplicationComponentTransactionResult:
+    """What transaction returns."""
+
+    # Per span: how long it took, in milliseconds.
+    durations_ms: List[float]
+    # Per span: Server, Client, Internal, Producer or Consumer.
+    kinds: List[str]
+    # Per log record: its body, cut at 2048 characters.
+    log_bodies: List[str]
+    # How many log records of the trace are returned.
+    log_count: int
+    # Per log record: its severity text.
+    log_severities: List[str]
+    # Per log record: the span it was written under.
+    log_span_ids: List[str]
+    # Per log record: when, oldest first.
+    log_times: List[str]
+    # Per span: its name.
+    names: List[str]
+    # Per span: its parent's id, empty for the root.
+    parent_span_ids: List[str]
+    # Per span: the service that recorded it.
+    services: List[str]
+    # How many spans are returned.
+    span_count: int
+    # Per span: its id.
+    span_ids: List[str]
+    # Per span: when it started, oldest first.
+    starts: List[str]
+    # Per span: Unset, Ok or Error.
+    statuses: List[str]
+    # The trace that was read.
+    trace_id: str
+    # Whether the trace has more spans or log records than a transaction returns.
+    truncated: bool
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> ApplicationComponentTransactionResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            durations_ms=wire["durationsMs"],
+            kinds=wire["kinds"],
+            log_bodies=wire["logBodies"],
+            log_count=wire["logCount"],
+            log_severities=wire["logSeverities"],
+            log_span_ids=wire["logSpanIds"],
+            log_times=wire["logTimes"],
+            names=wire["names"],
+            parent_span_ids=wire["parentSpanIds"],
+            services=wire["services"],
+            span_count=wire["spanCount"],
+            span_ids=wire["spanIds"],
+            starts=wire["starts"],
+            statuses=wire["statuses"],
+            trace_id=wire["traceId"],
+            truncated=wire["truncated"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["durationsMs"] = self.durations_ms
+        wire["kinds"] = self.kinds
+        wire["logBodies"] = self.log_bodies
+        wire["logCount"] = self.log_count
+        wire["logSeverities"] = self.log_severities
+        wire["logSpanIds"] = self.log_span_ids
+        wire["logTimes"] = self.log_times
+        wire["names"] = self.names
+        wire["parentSpanIds"] = self.parent_span_ids
+        wire["services"] = self.services
+        wire["spanCount"] = self.span_count
+        wire["spanIds"] = self.span_ids
+        wire["starts"] = self.starts
+        wire["statuses"] = self.statuses
+        wire["traceId"] = self.trace_id
+        wire["truncated"] = self.truncated
         return wire
 
 
@@ -7296,6 +11402,52 @@ class BackupVaultResource:
 
 
 @dataclass
+class BackupVaultBackupNowContent:
+    """The parameters of backupNow."""
+
+    # The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items.
+    item: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BackupVaultBackupNowContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            item=wire["item"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["item"] = self.item
+        return wire
+
+
+@dataclass
+class BackupVaultBackupNowResult:
+    """What backupNow returns."""
+
+    # The protected server the recovery point is being taken of.
+    item: str
+    # The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`.
+    recovery_point: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BackupVaultBackupNowResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            item=wire["item"],
+            recovery_point=wire["recoveryPoint"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["item"] = self.item
+        wire["recoveryPoint"] = self.recovery_point
+        return wire
+
+
+@dataclass
 class BackupVaultListRecoveryPointsResult:
     """What listRecoveryPoints returns."""
 
@@ -7330,7 +11482,7 @@ class BackupVaultRecoverContent:
 
     # The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`.
     recovery_point: str
-    # The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.
+    # The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites.
     target_name: str
 
     @classmethod
@@ -7353,9 +11505,9 @@ class BackupVaultRecoverContent:
 class BackupVaultRecoverResult:
     """What recover returns."""
 
-    # What was created. Always `Cluster` — a CloudNativePG cluster object.
+    # What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers.
     kind: str
-    # The restored cluster's name, as asked for.
+    # The restored server's name, as asked for.
     name: str
     # The namespace it was created in — the vault's resource group's.
     namespace: str
@@ -7363,6 +11515,10 @@ class BackupVaultRecoverResult:
     recovery_point: str
     # The protected item the recovery point was taken of, as its resource id path.
     source: str
+    # The create's operation, to poll for the restore's progress.
+    operation_id: Optional[str] = None
+    # The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged.
+    resource_id: Optional[str] = None
 
     @classmethod
     def from_wire(cls, wire: Wire) -> BackupVaultRecoverResult:
@@ -7373,6 +11529,8 @@ class BackupVaultRecoverResult:
             namespace=wire["namespace"],
             recovery_point=wire["recoveryPoint"],
             source=wire["source"],
+            operation_id=wire.get("operationId"),
+            resource_id=wire.get("resourceId"),
         )
 
     def to_wire(self) -> Wire:
@@ -7383,6 +11541,178 @@ class BackupVaultRecoverResult:
         wire["namespace"] = self.namespace
         wire["recoveryPoint"] = self.recovery_point
         wire["source"] = self.source
+        if self.operation_id is not None:
+            wire["operationId"] = self.operation_id
+        if self.resource_id is not None:
+            wire["resourceId"] = self.resource_id
+        return wire
+
+
+@dataclass
+class DeploymentData:
+    """Deployment. A template of resources deployed in dependency order, each through the write path as its creator. The body a caller writes."""
+
+    @dataclass
+    class Properties:
+        """The template, its parameters, and the record of the last run."""
+
+        # The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.
+        template: str
+        # Why the last run failed, naming the resource that stopped it. Empty when it did not.
+        error: Optional[str] = None
+        # Every resource the last run created or updated, in the order it did.
+        output_resources: Optional[List[str]] = None
+        # The parameter values, as JSON text: { "name": { "value": … } }.
+        parameters: Optional[str] = None
+        # What a rollback would remove. Rollback is recorded and never performed.
+        rollback: Optional[str] = None
+        # One line per template resource, in dependency order: its state, its id and the operation that drove it.
+        steps: Optional[List[str]] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> DeploymentData.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                template=wire["template"],
+                error=wire.get("error"),
+                output_resources=wire.get("outputResources"),
+                parameters=wire.get("parameters"),
+                rollback=wire.get("rollback"),
+                steps=wire.get("steps"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["template"] = self.template
+            if self.parameters is not None:
+                wire["parameters"] = self.parameters
+            return wire
+
+    # The template, its parameters, and the record of the last run.
+    properties: Optional[DeploymentData.Properties] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> DeploymentData:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            properties=_opt(wire, "properties", DeploymentData.Properties.from_wire),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        if self.properties is not None:
+            wire["properties"] = self.properties.to_wire()
+        return wire
+
+
+@dataclass
+class DeploymentResource:
+    """One Deployment, as the API returns it: the Resource envelope, then the body, then tags."""
+
+    # The body, as the caller wrote it and the manager holds it.
+    data: DeploymentData
+    # The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.
+    etag: str
+    # The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.
+    id: str
+    # The last segment of the path: the name the caller chose on the PUT.
+    name: str
+    # Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.
+    provisioning_state: ProvisioningState
+    # The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.
+    type: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> DeploymentResource:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            data=DeploymentData.from_wire(wire),
+            etag=wire["etag"],
+            id=wire["id"],
+            name=wire["name"],
+            provisioning_state=wire["provisioningState"],
+            type=wire["type"],
+        )
+
+
+@dataclass
+class DeploymentWhatIfContent:
+    """The parameters of whatIf."""
+
+    @dataclass
+    class Properties:
+        """The template to evaluate and its parameters."""
+
+        # The template, as JSON text — the same shape a PUT takes.
+        template: str
+        # The parameter values, as JSON text.
+        parameters: Optional[str] = None
+
+        @classmethod
+        def from_wire(cls, wire: Wire) -> DeploymentWhatIfContent.Properties:
+            """Reads one off the wire. Unknown members are ignored."""
+            return cls(
+                template=wire["template"],
+                parameters=wire.get("parameters"),
+            )
+
+        def to_wire(self) -> Wire:
+            """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+            wire: Wire = {}
+            wire["template"] = self.template
+            if self.parameters is not None:
+                wire["parameters"] = self.parameters
+            return wire
+
+    # The template to evaluate and its parameters.
+    properties: DeploymentWhatIfContent.Properties
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> DeploymentWhatIfContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            properties=DeploymentWhatIfContent.Properties.from_wire(wire["properties"]),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["properties"] = self.properties.to_wire()
+        return wire
+
+
+@dataclass
+class DeploymentWhatIfResult:
+    """What whatIf returns."""
+
+    # The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.
+    creates: List[str]
+    # The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.
+    modifies: List[str]
+    # The resources a deployment would leave as they are, in deployment order.
+    no_changes: List[str]
+    # Succeeded: the template evaluated and every resource was compared.
+    status: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> DeploymentWhatIfResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            creates=wire["creates"],
+            modifies=wire["modifies"],
+            no_changes=wire["noChanges"],
+            status=wire["status"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["creates"] = self.creates
+        wire["modifies"] = self.modifies
+        wire["noChanges"] = self.no_changes
+        wire["status"] = self.status
         return wire
 
 
@@ -8673,12 +13003,26 @@ __all__ = [
     "ManagementGroupCreateContent",
     "SubscriptionCreateContent",
     "ResourceGroupCreateContent",
+    "PolicyAssignmentType",
+    "PolicyAssignment",
+    "PolicyAssignmentContent",
+    "PolicyDefinitionType",
+    "PolicyDefinition",
+    "PolicyDefinitionContent",
+    "PolicyStateComplianceState",
+    "PolicyState",
     "ProvisioningState",
     "ClickHouseClusterPreset",
     "ClickHouseClusterVersion",
     "ClickHouseClusterData",
     "ClickHouseClusterResource",
     "ClickHouseClusterListKeysResult",
+    "BudgetChannel",
+    "BudgetPeriod",
+    "BudgetScope",
+    "BudgetData",
+    "BudgetResource",
+    "BudgetShowStatusResult",
     "ValkeyCacheMaxmemoryPolicy",
     "ValkeyCacheMode",
     "ValkeyCacheFsync",
@@ -8778,10 +13122,95 @@ __all__ = [
     "DocumentDatabaseAccountData",
     "DocumentDatabaseAccountResource",
     "DocumentDatabaseAccountListKeysResult",
+    "KeyVaultData",
+    "KeyVaultResource",
+    "KeyVaultCreateKeyContentCurve",
+    "KeyVaultCreateKeyContentKeyOps",
+    "KeyVaultCreateKeyContentKty",
+    "KeyVaultCreateKeyContent",
+    "KeyVaultCreateKeyResult",
+    "KeyVaultDecryptContentAlg",
+    "KeyVaultDecryptContent",
+    "KeyVaultDecryptResult",
+    "KeyVaultDeleteKeyContent",
+    "KeyVaultDeleteKeyResult",
+    "KeyVaultDeleteSecretContent",
+    "KeyVaultDeleteSecretResult",
+    "KeyVaultEncryptContentAlg",
+    "KeyVaultEncryptContent",
+    "KeyVaultEncryptResult",
+    "KeyVaultGetKeyContent",
+    "KeyVaultGetKeyResult",
+    "KeyVaultGetSecretContent",
+    "KeyVaultGetSecretResult",
+    "KeyVaultImportKeyContentKeyOps",
+    "KeyVaultImportKeyContent",
+    "KeyVaultImportKeyResult",
+    "KeyVaultListDeletedKeysResult",
+    "KeyVaultListDeletedSecretsResult",
+    "KeyVaultListKeyVersionsContent",
+    "KeyVaultListKeyVersionsResult",
+    "KeyVaultListKeysResult",
+    "KeyVaultListSecretVersionsContent",
+    "KeyVaultListSecretVersionsResult",
+    "KeyVaultListSecretsResult",
+    "KeyVaultPurgeDeletedKeyContent",
+    "KeyVaultPurgeDeletedKeyResult",
+    "KeyVaultPurgeDeletedSecretContent",
+    "KeyVaultPurgeDeletedSecretResult",
+    "KeyVaultRecoverDeletedKeyContent",
+    "KeyVaultRecoverDeletedKeyResult",
+    "KeyVaultRecoverDeletedSecretContent",
+    "KeyVaultRecoverDeletedSecretResult",
+    "KeyVaultSetSecretContent",
+    "KeyVaultSetSecretResult",
+    "KeyVaultSignContentAlg",
+    "KeyVaultSignContent",
+    "KeyVaultSignResult",
+    "KeyVaultUnwrapKeyContentAlg",
+    "KeyVaultUnwrapKeyContent",
+    "KeyVaultUnwrapKeyResult",
+    "KeyVaultUpdateKeyContentKeyOps",
+    "KeyVaultUpdateKeyContent",
+    "KeyVaultUpdateKeyResult",
+    "KeyVaultUpdateSecretContent",
+    "KeyVaultUpdateSecretResult",
+    "KeyVaultVerifyContentAlg",
+    "KeyVaultVerifyContent",
+    "KeyVaultVerifyResult",
+    "KeyVaultWrapKeyContentAlg",
+    "KeyVaultWrapKeyContent",
+    "KeyVaultWrapKeyResult",
     "MailDomainPreset",
     "MailDomainVersion",
     "MailDomainData",
     "MailDomainResource",
+    "MailDomainDnsRecordsResultRecordsDkimType",
+    "MailDomainDnsRecordsResultRecordsDmarcType",
+    "MailDomainDnsRecordsResultRecordsMtaStsType",
+    "MailDomainDnsRecordsResultRecordsMtaStsHostType",
+    "MailDomainDnsRecordsResultRecordsMxType",
+    "MailDomainDnsRecordsResultRecordsSpfType",
+    "MailDomainDnsRecordsResultRecordsTlsRptType",
+    "MailDomainDnsRecordsResult",
+    "MailDomainVerifyResultRecordsDkimStatus",
+    "MailDomainVerifyResultRecordsDkimType",
+    "MailDomainVerifyResultRecordsDmarcStatus",
+    "MailDomainVerifyResultRecordsDmarcType",
+    "MailDomainVerifyResultRecordsMtaStsStatus",
+    "MailDomainVerifyResultRecordsMtaStsType",
+    "MailDomainVerifyResultRecordsMtaStsHostStatus",
+    "MailDomainVerifyResultRecordsMtaStsHostType",
+    "MailDomainVerifyResultRecordsMxStatus",
+    "MailDomainVerifyResultRecordsMxType",
+    "MailDomainVerifyResultRecordsSpfStatus",
+    "MailDomainVerifyResultRecordsSpfType",
+    "MailDomainVerifyResultRecordsTlsRptStatus",
+    "MailDomainVerifyResultRecordsTlsRptType",
+    "MailDomainVerifyResultSending",
+    "MailDomainVerifyResult",
+    "MailboxData",
+    "MailboxResource",
     "KafkaClusterPreset",
     "KafkaClusterVersion",
     "KafkaClusterData",
@@ -8806,6 +13235,11 @@ __all__ = [
     "MonitorWorkspaceData",
     "MonitorWorkspaceResource",
     "MonitorWorkspaceListKeysResult",
+    "MonitorWorkspaceListMetricLabelsContent",
+    "MonitorWorkspaceListMetricLabelsResult",
+    "MonitorWorkspaceQueryMetricsContent",
+    "MonitorWorkspaceSearchLogsContentSeverities",
+    "MonitorWorkspaceSearchLogsContent",
     "AlertRuleChannel",
     "AlertRuleOperator",
     "AlertRuleSignal",
@@ -8817,6 +13251,21 @@ __all__ = [
     "OpenTelemetryCollectorData",
     "OpenTelemetryCollectorResource",
     "OpenTelemetryCollectorListEndpointsResult",
+    "ApplicationComponentProtocol",
+    "ApplicationComponentData",
+    "ApplicationComponentResource",
+    "ApplicationComponentApplicationMapContent",
+    "ApplicationComponentApplicationMapResult",
+    "ApplicationComponentDependenciesContent",
+    "ApplicationComponentDependenciesResult",
+    "ApplicationComponentExceptionsContent",
+    "ApplicationComponentExceptionsResult",
+    "ApplicationComponentListConnectionStringResultOtlpProtocol",
+    "ApplicationComponentListConnectionStringResult",
+    "ApplicationComponentRequestsContent",
+    "ApplicationComponentRequestsResult",
+    "ApplicationComponentTransactionContent",
+    "ApplicationComponentTransactionResult",
     "PublicIPAddressData",
     "PublicIPAddressResource",
     "PublicIPAddressShowAllocationResult",
@@ -8842,9 +13291,15 @@ __all__ = [
     "SubnetListAddressUsageResult",
     "BackupVaultData",
     "BackupVaultResource",
+    "BackupVaultBackupNowContent",
+    "BackupVaultBackupNowResult",
     "BackupVaultListRecoveryPointsResult",
     "BackupVaultRecoverContent",
     "BackupVaultRecoverResult",
+    "DeploymentData",
+    "DeploymentResource",
+    "DeploymentWhatIfContent",
+    "DeploymentWhatIfResult",
     "WidgetTier",
     "WidgetData",
     "WidgetResource",

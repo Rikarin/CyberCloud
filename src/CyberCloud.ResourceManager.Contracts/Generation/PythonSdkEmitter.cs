@@ -78,7 +78,7 @@ public static class PythonSdkEmitter {
     ///     an attribute of that name.
     /// </summary>
     static readonly ImmutableHashSet<string> ReservedGroups =
-        ["operations", "tenants", "subscriptions", "resource_groups"];
+        ["operations", "tenants", "subscriptions", "resource_groups", "management_groups", "policy"];
 
     /// <summary>The subpackage one api-version's client lives in — <c>v2026_08_01</c>.</summary>
     /// <param name="apiVersion">The api-version, as the document spells it.</param>
@@ -161,16 +161,17 @@ public static class PythonSdkEmitter {
         var version = DocumentReader.VersionOf(document);
         var types = DocumentReader.TypesOf(document);
         var scopes = DocumentReader.ScopesOf(document);
+        var objects = DocumentReader.ScopeObjectsOf(document);
         var names = SdkEmitter.ModelNames(types);
         var module = PackageName + "/" + ModuleOf(version) + "/";
-        var models = Models(version, document, types, scopes, names);
+        var models = Models(version, document, types, scopes, objects, names);
 
         return ImmutableSortedDictionary.CreateRange(
             StringComparer.Ordinal,
             new Dictionary<string, string>(StringComparer.Ordinal) {
                 [module + "__init__.py"] = Index(version, Declared(models)),
                 [module + "models.py"] = models,
-                [module + "client.py"] = Client(version, document, types, scopes, names),
+                [module + "client.py"] = Client(version, document, types, scopes, objects, names),
                 [module + "_runtime.py"] = Runtime(version)
             }
         );
@@ -246,6 +247,7 @@ public static class PythonSdkEmitter {
         JsonObject document,
         ImmutableArray<DocumentType> types,
         ImmutableArray<DocumentScope> scopes,
+        ImmutableArray<DocumentScopeObject> objects,
         ImmutableDictionary<string, string> names
     ) {
         var built = new StringBuilder(Head(version));
@@ -267,6 +269,7 @@ public static class PythonSdkEmitter {
         AppendErrorModels(built, document);
         AppendOperationModels(built, document);
         AppendScopeModels(built, document, scopes);
+        AppendScopeObjectModels(built, objects);
         AppendProvisioningState(built, document);
 
         foreach (var type in types) {
@@ -464,6 +467,42 @@ public static class PythonSdkEmitter {
                 true
             );
         }
+    }
+
+    /// <summary>
+    ///     The objects addressed on a scope — issue #46's policy — one read model and one write body
+    ///     per object, whatever the number of scopes it sits on.
+    /// </summary>
+    static void AppendScopeObjectModels(StringBuilder built, ImmutableArray<DocumentScopeObject> objects) {
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var scoped in objects) {
+            if (declared.Add(scoped.ModelName)) {
+                AppendScopeObjectModel(
+                    built,
+                    scoped.ModelName,
+                    scoped.Resource,
+                    scoped.DisplayName + ", as the API renders it. " + scoped.Summary
+                );
+            }
+
+            if (scoped.ContentName.Length > 0 && declared.Add(scoped.ContentName)) {
+                AppendScopeObjectModel(
+                    built,
+                    scoped.ContentName,
+                    scoped.Content,
+                    "The body of a PUT that writes a " + scoped.DisplayName.ToLowerInvariant() + "."
+                );
+            }
+        }
+    }
+
+    static void AppendScopeObjectModel(StringBuilder built, string name, JsonObject schema, string doc) {
+        var leaves = DocumentReader.LeavesOf(schema);
+        var naming = EnumNaming.For(name, leaves);
+
+        AppendLiterals(built, name, leaves);
+        AppendObjectClass(built, string.Empty, name, name, doc, schema, string.Empty, naming);
     }
 
     /// <summary>
@@ -950,6 +989,8 @@ public static class PythonSdkEmitter {
             ? naming.NameOf(leaf)
             : DocumentReader.TypeOf(schema) switch {
                 "array" => "List[" + Scalar(schema["items"] as JsonObject ?? [], naming, leaf) + "]",
+                // ⚠ Any JSON value — a policy rule — before the object branch reads it as the tag bag.
+                "object" when DocumentReader.IsJsonValue(schema) => "Any",
                 "object" => "Dict[str, str]",
                 var scalar => Scalar(schema, naming, leaf, scalar)
             };
@@ -1013,6 +1054,7 @@ public static class PythonSdkEmitter {
         JsonObject document,
         ImmutableArray<DocumentType> types,
         ImmutableArray<DocumentScope> scopes,
+        ImmutableArray<DocumentScopeObject> objects,
         ImmutableDictionary<string, string> names
     ) {
         var built = new StringBuilder(Head(version));
@@ -1039,6 +1081,14 @@ public static class PythonSdkEmitter {
 
         foreach (var scope in scopes.Where(static x => x.Creatable)) {
             imported.Add(ScopeContent(scope));
+        }
+
+        foreach (var scoped in objects) {
+            imported.Add(scoped.ModelName);
+
+            if (scoped.ContentName.Length > 0) {
+                imported.Add(scoped.ContentName);
+            }
         }
 
         foreach (var type in types) {
@@ -1085,6 +1135,14 @@ public static class PythonSdkEmitter {
             AppendScopeClient(built, scope);
         }
 
+        var families = objects.GroupBy(static x => x.Group, StringComparer.Ordinal)
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
+            .ToList();
+
+        foreach (var family in families) {
+            AppendScopeObjectClient(built, family.Key, family.ToList());
+        }
+
         var groups = types.GroupBy(static x => x.ProviderNamespace, StringComparer.Ordinal)
             .OrderBy(static x => x.Key, StringComparer.Ordinal)
             .ToList();
@@ -1097,7 +1155,7 @@ public static class PythonSdkEmitter {
             AppendProviderGroup(built, group.Key, group.ToList(), names);
         }
 
-        AppendRootClient(built, version, polls, scopes, groups);
+        AppendRootClient(built, version, polls, scopes, families.Select(static x => x.Key).ToList(), groups);
 
         return built.ToString();
     }
@@ -1193,6 +1251,113 @@ public static class PythonSdkEmitter {
             .Append(", body=content.to_wire()))\n")
             .Append("        raise_for_status(response)\n")
             .Append("        return ScopeResource.from_wire(wire_of(response))\n");
+    }
+
+    /// <summary>
+    ///     One client per namespace of scope objects — <c>PolicyClient</c> — with a method per object,
+    ///     scope and verb.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ No <c>begin_</c> and no <c>Operation</c>: a write converges before the call returns, so
+    ///     <c>create_or_update</c> answers the object and <c>delete</c> answers nothing — the scope
+    ///     client's rule, for the scope client's reason.
+    /// </remarks>
+    static void AppendScopeObjectClient(StringBuilder built, string group, List<DocumentScopeObject> objects) {
+        built.Append("\n\nclass ")
+            .Append(SdkEmitter.Pascal(group))
+            .Append("Client:\n")
+            .Append("    \"\"\"")
+            .Append(Docstring("The objects under " + objects[0].ProviderNamespace + ", on every scope that takes them — docs/plan/08 § Policy."))
+            .Append("\"\"\"\n\n")
+            .Append("    def __init__(self, transport: Transport) -> None:\n")
+            .Append("        self._transport = transport\n");
+
+        foreach (var scoped in objects) {
+            var on = scoped.DisplayName.ToLowerInvariant() + " on a " + CliEmitter.Kebab(scoped.Scope).Replace('-', ' ');
+            var collectionPlaceholders = DocumentReader.PlaceholdersOf(scoped.CollectionPath);
+            var collectionParameters = string.Join(", ", collectionPlaceholders.Select(static x => Snake(x) + ": str"));
+
+            built.Append("\n    def list_")
+                .Append(Snake(scoped.PluralStem))
+                .Append("(self, ")
+                .Append(collectionParameters)
+                .Append(collectionPlaceholders.IsEmpty ? string.Empty : ", ")
+                .Append("*, top: Optional[int] = None) -> Pager[")
+                .Append(scoped.ModelName)
+                .Append("]:\n")
+                .Append("        \"\"\"Lists the ")
+                .Append(Docstring(scoped.DisplayPlural.ToLowerInvariant()))
+                .Append(" on a ")
+                .Append(Docstring(CliEmitter.Kebab(scoped.Scope).Replace('-', ' ')))
+                .Append(", page by page. ⚠ A short page never means \"that is all there is\".\"\"\"\n")
+                .Append("        return Pager(self._transport, ")
+                .Append(PathExpression(scoped.CollectionPath))
+                .Append(", top, ")
+                .Append(scoped.ModelName)
+                .Append(".from_wire)\n");
+
+            if (scoped.Path.Length == 0) {
+                continue;
+            }
+
+            var parameters = string.Join(", ", DocumentReader.PlaceholdersOf(scoped.Path).Select(static x => Snake(x) + ": str"));
+            var path = PathExpression(scoped.Path);
+            var stem = Snake(scoped.SingularStem);
+
+            built.Append("\n    def get_")
+                .Append(stem)
+                .Append("(self, ")
+                .Append(parameters)
+                .Append(") -> ")
+                .Append(scoped.ModelName)
+                .Append(":\n")
+                .Append("        \"\"\"Reads one ")
+                .Append(Docstring(on))
+                .Append(".\"\"\"\n")
+                .Append("        response = self._transport.send(Request(\"GET\", ")
+                .Append(path)
+                .Append("))\n")
+                .Append("        raise_for_status(response)\n")
+                .Append("        return ")
+                .Append(scoped.ModelName)
+                .Append(".from_wire(wire_of(response))\n");
+
+            if (!scoped.Writable) {
+                continue;
+            }
+
+            built.Append("\n    def create_or_update_")
+                .Append(stem)
+                .Append("(self, ")
+                .Append(parameters)
+                .Append(", content: ")
+                .Append(scoped.ContentName)
+                .Append(") -> ")
+                .Append(scoped.ModelName)
+                .Append(":\n")
+                .Append("        \"\"\"Creates or replaces one ")
+                .Append(Docstring(on))
+                .Append(", written whole. ⚠ 201 the first time and 200 after, and no operation to poll.\"\"\"\n")
+                .Append("        response = self._transport.send(Request(\"PUT\", ")
+                .Append(path)
+                .Append(", body=content.to_wire()))\n")
+                .Append("        raise_for_status(response)\n")
+                .Append("        return ")
+                .Append(scoped.ModelName)
+                .Append(".from_wire(wire_of(response))\n")
+                .Append("\n    def delete_")
+                .Append(stem)
+                .Append("(self, ")
+                .Append(parameters)
+                .Append(") -> None:\n")
+                .Append("        \"\"\"Deletes one ")
+                .Append(Docstring(on))
+                .Append(". An object already gone is a success.\"\"\"\n")
+                .Append("        response = self._transport.send(Request(\"DELETE\", ")
+                .Append(path)
+                .Append("))\n")
+                .Append("        raise_for_status(response)\n");
+        }
     }
 
     static void AppendTypeClient(StringBuilder built, DocumentType type, string model) {
@@ -1446,6 +1611,7 @@ public static class PythonSdkEmitter {
         string version,
         bool polls,
         ImmutableArray<DocumentScope> scopes,
+        List<string> families,
         List<IGrouping<string, DocumentType>> groups
     ) {
         built.Append("\n\nclass CyberCloudClient:\n")
@@ -1470,6 +1636,14 @@ public static class PythonSdkEmitter {
                 : SdkEmitter.Pascal(scope.Kind) + "sClient";
 
             built.Append("        self.").Append(attribute).Append(" = ").Append(client).Append("(transport)\n");
+        }
+
+        foreach (var family in families) {
+            built.Append("        self.")
+                .Append(family.ToLowerInvariant())
+                .Append(" = ")
+                .Append(SdkEmitter.Pascal(family))
+                .Append("Client(transport)\n");
         }
 
         foreach (var group in groups) {

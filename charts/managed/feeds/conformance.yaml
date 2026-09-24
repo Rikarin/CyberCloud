@@ -204,3 +204,20 @@ owed:
       converges over bytes it never saw — the one failure the refusing default exists to prevent,
       reintroduced by configuration. HostCompositionTests asserts the two hosts agree about the
       feeds TYPE; agreeing about the bucket is deploy/'s to assert when deploy/platform exists.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.ContainerRegistry/feeds. OWED, AND ADDED BY THE #30 REVIEW. THE ENGINE STEP: a
+      feed's packages are objects under its prefix in the platform's object store, written by the
+      feeds host through CyberCloud.ObjectStorage. A customer key could sit in two places, neither
+      built. One is the store itself, which is charts/managed/seaweedfs' `customer-managed-keys` row
+      and is blocked on SeaweedFS rendering encryption at all. The other is the client: S3 SSE-C
+      headers carrying a per-feed data key the platform unwraps. Whether the platform's SeaweedFS
+      honours SSE-C is unread, and it would put the unwrap in the feeds host rather than in a
+      reconciler, which the key-use seam below does not cover.
+      What every family still needs is docs/plan/18 § What customer-managed keys still need: (1) a
+      key-use seam — the grant is expressible today, `keyVaultCryptoUser` with principalType
+      `resource` on a CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and
+      wrapKey/unwrapKey are actions, so no reconciler can call them; (2) an `encryption.keyUri`
+      property on a NEW api-version of this type; (3) revocation — a disabled key taking the data
+      offline, which needs a re-unwrap on a schedule nothing runs. The key's home is no longer the
+      blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.

@@ -172,9 +172,9 @@ public static class RecoveryVaults {
     ///             "Restore always creates a new resource.
     ///             Restore-in-place is how people lose the good copy while trying to recover it."
     ///         </i>
-    ///         The handler renders a CloudNativePG <c>Cluster</c> named by the caller, bootstrapped
-    ///         from the recovery point (<c>bootstrap.recovery.backup.name</c>), beside the protected
-    ///         server and never into it.
+    ///         The handler creates a <c>CyberCloud.DBforPostgreSQL/servers</c> resource named by the
+    ///         caller, whose <c>/properties/restore/recoveryPoint</c> bootstraps it from the point
+    ///         (<c>bootstrap.recovery.backup.name</c>), beside the protected server and never into it.
     ///     </para>
     ///     <para>
     ///         ⚠ <b>Spelled <c>recover</c>, because <c>restore</c> is the platform's.</b> docs/plan/08
@@ -188,32 +188,121 @@ public static class RecoveryVaults {
     ///     <para>
     ///         ⚠
     ///         <b>
-    ///             <c>write</c>, and what comes back is a cluster object rather than a platform
-    ///             resource.
-    ///         </b> The vault cannot <c>PUT</c> a <c>CyberCloud.DBforPostgreSQL/servers</c>
-    ///         — the seam has no member that writes, by design — and that type has no property that
-    ///         says "bootstrap me from this recovery point". So the restored cluster is a scratch
-    ///         object in the resource group's namespace: reachable from the tenant's pods, carrying
-    ///         the vault's labels and <see cref="RestoreRoleLabel" />, metered by nothing and known to
-    ///         no <c>listKeys</c>. Adopting it as a server is <c>conformance.yaml § owed</c>,
-    ///         <c>a-restore-is-not-yet-a-resource</c>, and the property it needs is that type's.
+    ///             A restore is a resource now (#30), and the write that makes it is the caller's.
+    ///         </b> The first cut applied a bare CloudNativePG <c>Cluster</c> under the vault's labels:
+    ///         metered by nothing, known to no <c>listKeys</c>, and attributed by the drift scan to a
+    ///         vault that did not own it. The handler now asks <see cref="ActionContext.Creator" /> to
+    ///         <c>PUT</c> a server — <see cref="RestoredServerBody" /> — and the manager runs that
+    ///         through the whole write path <i>as the caller of <c>recover</c></i>: authorised for the
+    ///         server type's <c>write</c> in this group, locked, reserved against quota, indexed. The
+    ///         server's own reconciler renders the <c>Cluster</c>, its own bucket and its own key.
     ///     </para>
     /// </remarks>
     public const string RecoverAction = "recover";
 
-    /// <summary>The permission <see cref="RecoverAction" /> checks — on the vault, and on nothing else.</summary>
+    /// <summary>The permission <see cref="RecoverAction" /> checks on the vault.</summary>
     /// <remarks>
-    ///     ⚠ <b>The vault's <c>write</c> is the whole gate, and the bytes are the server's.</b> The
-    ///     manager asks the authorizer for this permission on the vault's own id and nothing asks for
-    ///     any permission on the protected server, which the vault itself only needs <c>read</c> on.
-    ///     A contributor on the vault can therefore bring up a copy of any server it protects, with a
-    ///     fresh superuser secret, without holding anything on that server. The handler cannot check:
-    ///     <c>ActionContext</c> carries no caller and no authorizer. Recorded as
-    ///     <c>conformance.yaml § owed</c>, <c>recover-is-gated-by-the-vault-alone</c>, whose closing
-    ///     move is the server's <c>restoreFrom</c> — the same one <c>a-restore-is-not-yet-a-resource</c>
-    ///     waits on — or a related-resource clause on the action's declaration for the manager to gate.
+    ///     ⚠ <b>The vault's <c>write</c> is the first gate and no longer the only one.</b> The manager
+    ///     asks for this permission on the vault; the server the restore creates is then the caller's
+    ///     own <c>PUT</c>, checked for <c>CyberCloud.DBforPostgreSQL/servers</c>' <c>write</c> in the
+    ///     group, so a caller who may use the vault and may not create a server gets that write's
+    ///     refusal. What is still not asked is whether the caller may <i>read</i> the protected server
+    ///     whose bytes come back — <c>conformance.yaml § owed</c>, <c>recover-is-gated-by-the-vault-alone</c>,
+    ///     narrowed to that.
     /// </remarks>
     public const string RecoverPermission = "write";
+
+    /// <summary>The action that takes a recovery point of one protected item now, off the schedule.</summary>
+    /// <remarks>
+    ///     <para>
+    ///         CloudNativePG's <c>Backup</c>
+    ///         object is exactly the on-demand backup, and the handler applies one naming the item's
+    ///         cluster — owned by the item's schedule and labelled the way the schedule's controller
+    ///         labels, so <see cref="ListRecoveryPointsAction" /> lists it, <see cref="RecoverAction" />
+    ///         accepts it as this vault's, retention prunes it, and deleting the vault takes it with
+    ///         the schedule.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Answers with the point's name at once, not when the backup finishes.</b> A base
+    ///         backup takes as long as the database is big; the caller polls
+    ///         <see cref="ListRecoveryPointsAction" /> for the phase, which is the same place a
+    ///         scheduled point's progress is read.
+    ///     </para>
+    /// </remarks>
+    public const string BackupNowAction = "backupNow";
+
+    /// <summary>
+    ///     How often a converged vault is reconciled with nobody writing to it — the pass that enforces
+    ///     <c>policy.retentionDays</c>.
+    /// </summary>
+    /// <remarks>
+    ///     An hour, against a retention counted in days: a point outlives its window by at most this
+    ///     much, and a thousand vaults cost a thousand reminder ticks an hour, spread by
+    ///     <c>PeriodicPass.FirstDue</c>.
+    /// </remarks>
+    public static TimeSpan PassPeriod { get; } = TimeSpan.FromHours(1);
+
+    /// <summary>The permission <see cref="BackupNowAction" /> checks — the vault's <c>write</c>.</summary>
+    public const string BackupNowPermission = "write";
+
+    /// <summary>What a <c>POST …/backupNow</c> takes.</summary>
+    public static ResourceSchema BackupNowRequest { get; } =
+        ResourceSchema.Of(
+            [
+                new(
+                    "/item",
+                    SchemaKind.Text,
+                    true,
+                    Description: "The protected server to back up, by the resource name listRecoveryPoints "
+                    + "prints first on each line. It must be one of this vault's protected items."
+                ) { Pattern = "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", MaxLength = ResourceNaming.MaxLength }
+            ]
+        );
+
+    /// <summary>What a <c>POST …/backupNow</c> returns.</summary>
+    public static ResourceSchema BackupNowResponse { get; } =
+        ResourceSchema.Of(
+            [
+                new(
+                    "/item",
+                    SchemaKind.Text,
+                    true,
+                    Description: "The protected server the recovery point is being taken of."
+                ),
+                new(
+                    "/recoveryPoint",
+                    SchemaKind.Text,
+                    true,
+                    Description: "The new recovery point's name. listRecoveryPoints reports its phase; "
+                    + "recover takes it once the phase is `completed`."
+                )
+            ]
+        );
+
+    /// <summary>
+    ///     The name an on-demand point gets: the schedule's, <c>-now-</c>, and the UTC second it was
+    ///     asked for.
+    /// </summary>
+    /// <param name="scheduledBackup">The item's schedule.</param>
+    /// <param name="at">When it was asked for.</param>
+    /// <remarks>
+    ///     ⚠ The second, so two requests in one second are one point: the apply is idempotent on the
+    ///     name, and a double-click takes one backup rather than two.
+    /// </remarks>
+    public static string OnDemandBackupNameOf(string scheduledBackup, DateTimeOffset at) =>
+        scheduledBackup + "-now-" + at.UtcDateTime.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+
+    /// <summary>The <c>Backup</c> document an on-demand point is.</summary>
+    /// <param name="name">Its name — <see cref="OnDemandBackupNameOf" />.</param>
+    /// <param name="cluster">The CloudNativePG cluster to back up.</param>
+    public static string OnDemandBackupJson(string name, string cluster) =>
+        new JsonObject {
+            ["metadata"] = new JsonObject { ["name"] = name },
+            ["spec"] = new JsonObject {
+                ["cluster"] = new JsonObject { ["name"] = cluster },
+                ["method"] = BackupMethod
+            }
+        }.ToJsonString();
 
     /// <summary>The type, namespace and path together.</summary>
     public static ResourceTypeName Type { get; } = new(ProviderNamespace, TypePath);
@@ -229,6 +318,16 @@ public static class RecoveryVaults {
     ///     catalogue.
     /// </remarks>
     public static ResourceTypeName PostgresServerType { get; } = new("CyberCloud.DBforPostgreSQL", "servers");
+
+    /// <summary>
+    ///     The api-version a restore writes the new server at — the first to publish
+    ///     <c>/properties/restore/recoveryPoint</c>.
+    /// </summary>
+    public const string PostgresServerApiVersion = "2026-08-01";
+
+    /// <summary>CloudNativePG's <c>Pooler</c>, read to learn whether the source ran one.</summary>
+    public static GroupVersionKind PoolerKind { get; } =
+        new() { Group = "postgresql.cnpg.io", Version = "v1", Kind = "Pooler", Plural = "poolers" };
 
     /// <summary>
     ///     The most items one vault may protect, and the reason is the view's price.
@@ -305,14 +404,13 @@ public static class RecoveryVaults {
     ///     teardown leaves it standing.
     /// </summary>
     /// <remarks>
-    ///     ⚠ A restored cluster carries the vault's resource-id label, because every object this
-    ///     platform writes carries ADR-013's seven. Without this second label the vault's
-    ///     <c>DeleteAsync</c> could not tell a restored database from a ScheduledBackup by anything
-    ///     but kind, and "deleting the vault deletes the database you just recovered" is the failure
-    ///     docs/plan/15's restore rule exists to prevent. The teardown deletes
-    ///     <see cref="ScheduledBackupKind" /> and nothing else; what a restored cluster then is —
-    ///     an object whose resource-id names a vault that may be gone — is
-    ///     <c>conformance.yaml § owed</c>, <c>a-restore-is-not-yet-a-resource</c>.
+    ///     ⚠ <b>Written by nothing since #30, and kept for what the first cut left behind.</b> The first
+    ///     <c>recover</c> applied a bare <c>Cluster</c> under the vault's labels and this one, so the
+    ///     vault's <c>DeleteAsync</c> could tell a restored database from a ScheduledBackup; a restore
+    ///     is a server resource now, whose <c>Cluster</c> carries the server's own id. The teardown
+    ///     still deletes <see cref="ScheduledBackupKind" /> and nothing else, so a cluster restored by
+    ///     the first cut stays standing — <c>conformance.yaml § owed</c>,
+    ///     <c>a-restore-is-not-yet-a-resource</c>, item (3).
     /// </remarks>
     public const string RestoreRoleLabel = "recoveryservices.cybercloud.io/role";
 
@@ -584,9 +682,9 @@ public static class RecoveryVaults {
                     "/targetName",
                     SchemaKind.Text,
                     true,
-                    Description: "The name of the NEW cluster the recovery point is restored into, in the "
-                    + "vault's resource group. Refused when a cluster of that name already exists — a "
-                    + "restore never overwrites."
+                    Description: "The name of the NEW PostgreSQL server the recovery point is restored "
+                    + "into, in the vault's resource group. Refused when a server or a cluster of that "
+                    + "name already exists — a restore never overwrites."
                 ) { Pattern = "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", MaxLength = ResourceNaming.MaxLength }
             ]
         );
@@ -599,13 +697,14 @@ public static class RecoveryVaults {
                     "/kind",
                     SchemaKind.Text,
                     true,
-                    Description: "What was created. Always `Cluster` — a CloudNativePG cluster object."
+                    Description: "What was created: the resource type of the new server, "
+                    + "CyberCloud.DBforPostgreSQL/servers."
                 ),
                 new(
                     "/name",
                     SchemaKind.Text,
                     true,
-                    Description: "The restored cluster's name, as asked for."
+                    Description: "The restored server's name, as asked for."
                 ),
                 new(
                     "/namespace",
@@ -624,7 +723,23 @@ public static class RecoveryVaults {
                     SchemaKind.Text,
                     true,
                     Description: "The protected item the recovery point was taken of, as its resource id path."
-                )
+                ),
+                new(
+                    "/resourceId",
+                    SchemaKind.Text,
+                    // ⚠ Not required, though always sent: 2026-08-01 is published, and the
+                    // compatibility gate reads a newly required member of a published shape as a break.
+                    false,
+                    Description: "The new server's resource id path. It is created through the ordinary "
+                    + "write path, as the caller of this action, and reports Creating until the restore "
+                    + "has converged."
+                ),
+                new(
+                    "/operationId",
+                    SchemaKind.Text,
+                    false,
+                    Description: "The create's operation, to poll for the restore's progress."
+                ) { Format = SchemaFormat.Uuid }
             ]
         );
 
@@ -828,55 +943,121 @@ public static class RecoveryVaults {
     public static string SixFieldSchedule(string fiveFields) => "0 " + fiveFields;
 
     /// <summary>
-    ///     The <c>Cluster</c> document a restore creates: bootstrapped from a recovery point, sized
-    ///     like the source, and carrying no backup section of its own.
+    ///     The <c>CyberCloud.DBforPostgreSQL/servers</c> body a restore <c>PUT</c>s: a new server,
+    ///     bootstrapped from a recovery point, sized like the source when the source is still there.
     /// </summary>
-    /// <param name="targetName">The new cluster's name.</param>
     /// <param name="recoveryPoint">The Backup's name.</param>
-    /// <param name="sourceClusterJson">The protected server's <c>Cluster</c>, as the API server returned it.</param>
+    /// <param name="vaultDesired">The vault's own body, for the location and the cluster.</param>
+    /// <param name="sourceClusterJson">
+    ///     The protected server's <c>Cluster</c>, as the API server returned it, or <c>{}</c> when it
+    ///     is gone — the disaster a restore exists for.
+    /// </param>
+    /// <param name="sourceHasPooler">Whether the source ran a pooler, so the copy connects the same way.</param>
+    /// <param name="backupJson">
+    ///     The recovery point's <c>Backup</c>, for the PostgreSQL major it was taken from when the source
+    ///     is gone — <see cref="RestoredMajorVersion" />.
+    /// </param>
     /// <remarks>
     ///     <para>
-    ///         <c>bootstrap.recovery.backup.name</c> is CloudNativePG's "recover from a Backup object
-    ///         in this namespace" — the operator reads the Backup's <c>status.barmanObjectStore</c>
-    ///         for the store and the server name, so nothing about the store is repeated here.
+    ///         ⚠ <b>The server's published contract, spelled here and not referenced.</b>
+    ///         <c>docs/plan/03</c> rule 2 keeps this assembly off the PostgreSQL family's, so the body
+    ///         is built from the pointers <see cref="PostgresServerApiVersion" /> publishes in
+    ///         <c>openapi/2026-08-01.json</c> — <c>/properties/restore/recoveryPoint</c> among them —
+    ///         and the write path validates it against that schema like any caller's.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>One instance and NO <c>backup</c> block, on purpose.</b> A restored cluster that
-    ///         inherited the source's <c>barmanObjectStore</c> would archive into the <i>same</i>
-    ///         destination under the same server name and overwrite the source's WAL — the
-    ///         restore-in-place docs/plan/15 forbids, reached by a side door. The storage size and
-    ///         class and the image are copied from the source because a recovery needs a volume at
-    ///         least as large as the one it came from and a PostgreSQL major at least as new.
+    ///         ⚠ <b>Backups on, destination empty: the copy archives to a bucket of its own.</b> The
+    ///         cluster object the first cut of <c>recover</c> made carried no backup section, because
+    ///         inheriting the source's <c>barmanObjectStore</c> would have archived into the source's
+    ///         destination and overwritten its WAL. A server gets its own bucket from its own GUID, so
+    ///         the copy is protected from its first minute and the source's archive is untouched.
+    ///     </para>
+    ///     <para>
+    ///         The version, size, class, replica count and database are copied from the source because
+    ///         a recovery needs a volume at least as large and the same PostgreSQL major. With no
+    ///         source, the major comes from the point itself (<see cref="RestoredMajorVersion" />) and
+    ///         the rest are the server schema's defaults.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The size is still a default when the source is gone</b>, because a <c>Backup</c>
+    ///         records no data size: a database larger than <c>20Gi</c> restores into a volume it does
+    ///         not fit. charts/managed/recovery-vault/conformance.yaml § owed,
+    ///         <c>a-restore-without-its-source-guesses-the-size</c>.
     ///     </para>
     /// </remarks>
-    public static string RestoredClusterJson(string targetName, string recoveryPoint, string sourceClusterJson) {
-        ArgumentException.ThrowIfNullOrEmpty(targetName);
+    public static string RestoredServerBody(
+        string recoveryPoint,
+        JsonElement vaultDesired,
+        string sourceClusterJson,
+        bool sourceHasPooler,
+        string backupJson = "{}"
+    ) {
         ArgumentException.ThrowIfNullOrEmpty(recoveryPoint);
 
         var source = (JsonNode.Parse(sourceClusterJson) as JsonObject)?["spec"] as JsonObject;
+        var sourceStorage = source?["storage"] as JsonObject;
+        var sourceBootstrap = source?["bootstrap"] as JsonObject;
+        var bootstrapSection = sourceBootstrap?["initdb"] as JsonObject ?? sourceBootstrap?["recovery"] as JsonObject;
 
-        var storage = new JsonObject {
-            ["size"] = (source?["storage"] as JsonObject)?["size"]?.GetValue<string>() ?? "20Gi"
-        };
-        if ((source?["storage"] as JsonObject)?["storageClass"]?.GetValue<string>() is { Length: > 0 } storageClass) {
-            storage["storageClass"] = storageClass;
+        var storage = new JsonObject { ["size"] = sourceStorage?["size"]?.GetValue<string>() ?? "20Gi" };
+        if (sourceStorage?["storageClass"]?.GetValue<string>() is { Length: > 0 } storageClass) {
+            storage["class"] = storageClass;
         }
 
-        var spec = new JsonObject {
-            ["instances"] = 1,
+        var major = RestoredMajorVersion(sourceClusterJson, backupJson);
+
+        var properties = new JsonObject {
+            ["clusterId"] = Property(vaultDesired, "clusterId") is { ValueKind: JsonValueKind.String } clusterId
+                ? clusterId.GetString()
+                : string.Empty,
+            ["version"] = major.Length > 0 ? major : "17",
+            ["replicas"] = source?["instances"]?.GetValue<int>() is int instances and >= 1 and <= 5 ? instances : 1,
             ["storage"] = storage,
+            ["pooling"] = new JsonObject { ["enabled"] = sourceHasPooler },
             ["bootstrap"] = new JsonObject {
-                ["recovery"] = new JsonObject { ["backup"] = new JsonObject { ["name"] = recoveryPoint } }
-            }
+                ["database"] = bootstrapSection?["database"]?.GetValue<string>() ?? "app",
+                ["owner"] = bootstrapSection?["owner"]?.GetValue<string>() ?? "app"
+            },
+            ["restore"] = new JsonObject { ["recoveryPoint"] = recoveryPoint }
         };
 
-        if (source?["imageName"]?.GetValue<string>() is { Length: > 0 } image) {
-            spec["imageName"] = image;
+        var location = vaultDesired.ValueKind is JsonValueKind.Object
+            && vaultDesired.TryGetProperty("location", out var found)
+            && found.ValueKind is JsonValueKind.String
+                ? found.GetString() ?? string.Empty
+                : string.Empty;
+
+        return new JsonObject { ["location"] = location, ["properties"] = properties }.ToJsonString();
+    }
+
+    /// <summary>
+    ///     The PostgreSQL major a restore must run: the source <c>Cluster</c>'s image tag while the
+    ///     source is there, otherwise the <c>Backup</c>'s own <c>status.majorVersion</c>. Empty when
+    ///     neither says, or says a major the server schema does not offer.
+    /// </summary>
+    /// <param name="sourceClusterJson">The protected server's <c>Cluster</c>, or <c>{}</c>.</param>
+    /// <param name="backupJson">The recovery point's <c>Backup</c>.</param>
+    /// <remarks>
+    ///     ⚠ <b>Found by #30's review: the source-gone restore guessed 17.</b> A point taken on 16 then
+    ///     restored into a 17 <c>Cluster</c>, which CloudNativePG cannot start from a 16 data directory.
+    ///     CloudNativePG 1.30 records the major on the <c>Backup</c> (<c>api/v1/backup_types.go</c>,
+    ///     <c>MajorVersion int json:"majorVersion"</c>), so the point carries the answer the source did.
+    /// </remarks>
+    public static string RestoredMajorVersion(string sourceClusterJson, string backupJson) {
+        var image = ((JsonNode.Parse(sourceClusterJson) as JsonObject)?["spec"] as JsonObject)?["imageName"]?.GetValue<string>()
+            ?? string.Empty;
+        var tag = image.LastIndexOf(':') is var colon and >= 0 ? image[(colon + 1)..] : string.Empty;
+
+        if (tag is "16" or "17" or "18") {
+            return tag;
         }
 
-        return new JsonObject {
-            ["metadata"] = new JsonObject { ["name"] = targetName }, ["spec"] = spec
-        }.ToJsonString();
+        var recorded = ((JsonNode.Parse(backupJson) as JsonObject)?["status"] as JsonObject)?["majorVersion"] as JsonValue;
+        var major = recorded is not null && recorded.TryGetValue<int>(out var number)
+            ? number.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+
+        return major is "16" or "17" or "18" ? major : string.Empty;
     }
 
     /// <summary>
@@ -1064,6 +1245,10 @@ public static class RecoveryVaults {
     ///     reconciler applied; <see langword="null" /> for no owner reference at all.
     /// </param>
     /// <param name="error">The operator's error text, or empty.</param>
+    /// <param name="majorVersion">
+    ///     The PostgreSQL major CloudNativePG 1.30 records in <c>status.majorVersion</c>, or zero to
+    ///     record none.
+    /// </param>
     /// <remarks>
     ///     ⚠ Labelled the way the operator labels — <see cref="ParentScheduledBackupLabel" /> and
     ///     <see cref="ClusterLabel" /> — and carrying <b>none</b> of the platform's seven, which is the
@@ -1078,7 +1263,8 @@ public static class RecoveryVaults {
         DateTimeOffset startedAt,
         DateTimeOffset? stoppedAt,
         string? ownerUid = null,
-        string error = ""
+        string error = "",
+        int majorVersion = 17
     ) {
         var metadata = new JsonObject {
             ["name"] = name,
@@ -1112,6 +1298,10 @@ public static class RecoveryVaults {
 
         if (error.Length > 0) {
             status["error"] = error;
+        }
+
+        if (majorVersion > 0) {
+            status["majorVersion"] = majorVersion;
         }
 
         return new JsonObject {

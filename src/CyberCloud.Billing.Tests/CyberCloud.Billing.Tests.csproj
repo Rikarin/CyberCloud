@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Billing's tests, in three layers. The pure one — rounding at its boundaries, the committed price
+      sheet and VAT table held to their rules, the tier ladder, the tax decision — needs nothing. The
+      grain-backed one runs the real billing grains against the REAL usage ledger from
+      CyberCloud.Metering, the REAL ReBAC engine from CyberCloud.Authorization, the REAL subscription
+      grain from CyberCloud.Tenancy and the REAL sending module from CyberCloud.Communication, with the
+      one carrier that exists in-process — so a budget alert is asserted as a message a carrier was
+      handed, and a cost row as something a tuple allowed. The third starts stripe/stripe-mock in a
+      Testcontainer and drives the Stripe adapter against it.
+
+      ⚠ IN-MEMORY GRAIN STORAGE AND IN-MEMORY REMINDERS, THE DEVIATION FROM ADR-018 THAT
+      CyberCloud.Metering.Tests RECORDS AND OWES ON THE SAME TERMS. Nothing here proves an invoice
+      round-trips a real storage provider; BillingSerializationTests round-trips every state type
+      through the silo's own serializer, which is the half of that argument a codec can make.
+
+      ⚠ THE STRIPE SUITE NEEDS A DOCKER DAEMON and fails without one, as
+      CyberCloud.Gateway.Host.Tests' ClickHouse suite does. Its secrets are generated per run: the API
+      key stripe-mock accepts is any `sk_test_…`, and the webhook secret signs only this process's own
+      payloads.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="Orleans.Multitenant"/>
+        <PackageReference Include="Testcontainers"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Billing/CyberCloud.Billing.csproj"/>
+        <!-- The real usage ledger the invoices are rated from. -->
+        <ProjectReference Include="../CyberCloud.Metering/CyberCloud.Metering.csproj"/>
+        <!-- The real subscription grain an attach is checked against. -->
+        <ProjectReference Include="../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
+        <!-- The real ReBAC engine the cost query and the budget check. -->
+        <ProjectReference Include="../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <!-- The real sending module a budget alert goes through. -->
+        <ProjectReference Include="../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <!--
+          ⚠ ReBacResourceAuthorizer's spelling of a group's object id, which CostQueryGrain spells a second
+          time because it may not reference this assembly. A test project may; CostVisibilityTests holds
+          the two spellings together.
+        -->
+        <ProjectReference Include="../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+</Project>

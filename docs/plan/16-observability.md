@@ -203,10 +203,9 @@ rule is one instance however many series offend, the schema having no array of o
 per-series shape is the api-version that grows the tree. ⚠ **This paragraph used to end by naming
 three nouns of #32's four this did not take; two of them landed on 2026-09-17** — `collectors` above
 and managed Grafana below, each a resource type with a chart of its own. The App Insights-shaped views
-are the one noun left, undesigned and unpriced by this document, and recorded as
-`charts/managed/monitor-workspace/conformance.yaml § owed`,
-`observability-app-insights-views-not-landed`, so the row's ◐ still has an entry behind it and not
-only a sentence.
+were the one noun left, undesigned and unpriced by this document; they landed on 2026-09-23 as
+[§ Application views](#application-views--cybercloudmonitorworkspacescomponents--m2) and the owed row
+that stood for them is gone.
 
 ## Managed Grafana — `CyberCloud.Dashboard/grafanas` · M2 · 0.8 EM
 
@@ -217,6 +216,9 @@ restorable like any resource.
 The portal does not embed Grafana's UI. It renders its own charts (`@xui/echarts`) for the common
 views — resource health, the four golden signals, cost — and links out to Grafana for exploration.
 Embedding someone else's SPA inside ours produces two auth models, two themes and two bug trackers.
+⚠ Since #41 the first-line exploration is the portal's own as well — a metrics explorer and a log
+search over the workspace, § Querying a workspace — and Grafana is where a tenant goes for
+dashboards, which the portal has none of.
 
 ### Resource model — landed 2026-09-17 (#32)
 
@@ -275,6 +277,171 @@ server's proxy — asserting each answered with a request at the workspace's own
 and neither with `plugin.notRegistered`. `charts/managed/grafana/SOURCE § What was run` carries the
 transcript, including the finding that a cluster with no egress gets a pod that exits `1` before it
 listens rather than a Grafana with one datasource of two.
+
+## Querying a workspace — landed 2026-09-23 (#41)
+
+The portal's metrics explorer and log search read a workspace's stores through three read actions on
+`CyberCloud.Monitor/workspaces`, all three checking `read` — the permission the Reader role grants:
+
+```
+POST …/workspaces/{name}/queryMetrics      { query, start?, end?, time?, stepSeconds? }
+POST …/workspaces/{name}/listMetricLabels  { label?, match?, start?, end? }        → { values[], truncated }
+POST …/workspaces/{name}/searchLogs        { from, to, text?, severities[]?, service?,
+                                             attributes[]? (key=value), traceId?, top?,
+                                             bucketSeconds?, estimate? }
+```
+
+⚠ **Actions, not a fifth component behind the gateway, and the address decided it.** #54's resource
+graph has its own route because a graph query has no resource to hang off; a metrics query has
+exactly one. The action path already resolves the address with the *token's* tenant, answers `404`
+for an address that is not there or not readable, checks the permission through the one enforcement
+seam ([07](07-rebac-authorization.md)), and hands the handler the workspace's GUID — which is where
+the `accountID` (`MonitorWorkspaces.AccountId`) and the database (`MonitorWorkspaces.Database`) come
+from. So the tenancy coordinate the store is asked under is derived from what the platform resolved,
+never from the request: the body has no member that names an account, a database or a URL, the
+schema refuses members it does not declare (`extra_label`, VictoriaMetrics' own tenancy-narrowing
+knob, is a `400`), and the stores' endpoints are `CyberCloud:Monitor:Query` configuration. Synchronous
+actions run inside `ResourceManagerService` in the gateway's process, so the gateway's configuration
+is the one that names vmselect and ClickHouse; a half left unconfigured refuses by name.
+
+**Metrics** go to vmselect at `/select/{accountID}/prometheus/api/v1/query[_range]` and the label
+APIs, one `VMCluster` per retention tier (`MetricsEndpoint` carries a `{tier}` placeholder, and may
+carry a path when vmselect sits behind a proxy — the store appends to it rather than replacing it). A range
+query may cover 400 days — the longest retention — at no more than 11 000 points per series,
+Prometheus' own ceiling, and gets 240 points when it names no step; vmselect is told the 10-second
+timeout and the handler cancels a second later; the response body is read to at most 64 MiB, and
+series past 500 are counted and dropped with `truncated` set, because vmselect has no per-request
+series cap on a range query. A malformed expression is a `400` carrying vmselect's own sentence;
+anything else is a `500` whose detail is in the gateway's log. ⚠ MetricsQL cannot name an account:
+`vm_account_id` is a filter only on `/select/multitenant/`, which nothing builds —
+`MonitorQueryOverHttpTests.TheOtherTenantsWorkspaceOfTheSameNameReadsOnlyItsOwnAccount` sends one.
+
+⚠ **The accountID is the GUID folded to 32 bits, so two workspaces can fold alike, and a ledger
+refuses the second.** `MonitorWorkspaces.AccountId` derives the account rather than allocating it, and
+the birthday bound puts a collision at even odds around 77 000 workspaces — inside target scale. Once
+the explorer read under the account, a collision was a cross-tenant read a tenant could drive: create
+workspaces until one folds onto a victim's account, then list `__name__`. #41's review closed the path:
+`IMonitorAccountGrain` — null tenant, `metrics-account/{accountId}`, [06 § Grain keys](06-tenancy-and-resource-model.md) —
+records the first workspace GUID to claim each account. The workspace reconciler claims before it
+mints a key or applies anything and fails a collision with a `409` that says to recreate the
+workspace, so the loser has no `VMUser`, no row and no Grafana datasource; `queryMetrics` and
+`listMetricLabels` answer `409` without asking vmselect unless the workspace they were handed holds its
+account. A claim is never released, because the series outlive the workspace that wrote them.
+`MonitorQueryOverHttpTests.AWorkspaceThatFoldsOntoAnotherTenantsAccountFailsToCreateAndReadsNoneOfIt`
+stages a collision over the real write path with the holder's series in the account. What is left —
+the space only fills, a lost fold is a create the tenant repeats, and the alert evaluator must ask the
+same ledger when its seam stops refusing — is `conformance.yaml § owed`,
+`accountid-is-folded-not-allocated`.
+
+**Logs** are searched in `{database}.otel_logs`, the collector's ClickHouse exporter's table
+(`MonitorLogsTable`), and ⚠ **the search is a structured filter and not #54's KQL.** The translator
+was the obvious reuse and was declined for three reasons: its subset refuses `ago`, `now` and `bin`,
+and a log search is a window and a histogram; the window has to be a bound the API *requires*
+(90 days at most, the longest log retention) rather than a `where` a translator would have to find
+and prove present; and every statement it emits ANDs in the resource graph's per-row access filter,
+which a log row does not have — a log row is visible to whoever may read the workspace, decided once
+by the action. Every value is a ClickHouse `{name:Type}` parameter — ⚠ sent in ClickHouse's
+*escaped* format, because the server reads a `param_` value that way: sent raw, the `\t` in
+`C:\temp` was a tab and a lone backslash failed the search with a `500`; the database is the one identifier
+spelled into the SQL and must match `ws_` plus 32 hex digits; each statement carries `readonly=2`,
+`max_execution_time`, `max_rows_to_read` and `timeout_overflow_mode=throw`, and a breach is a `400`
+naming the budget. ⚠ The budget is the search's, not each statement's: the rows and the histogram
+are two scans, and the histogram gets the time and the rows the first one left, so one search reads at
+most `LogsMaxRowsToRead` rows (50 million by default) and holds the gateway for at most the timeout
+plus two seconds. Time is compared as Unix integers, never as zoned values, because a `DateTime64`
+with no zone renders in the *server's* zone. Severity filters on OpenTelemetry's `SeverityNumber`
+bands, not on the source's spelling of `SeverityText`. The answer is the newest `top` rows (at most
+1 000) plus a histogram bucketed from `from` by severity, with what the store read; `estimate: true`
+answers ClickHouse's `EXPLAIN ESTIMATE` instead and runs nothing — the query cost preview
+[20](20-portal.md) said log search needs. A workspace with no table yet answers empty with a note.
+
+⚠ **Two of the three responses are undeclared.** A series list and a row list are arrays of objects,
+which the registry's schema refuses, so `queryMetrics` and `searchLogs` publish a request and no
+response and the generated clients type the body `unknown`; the portal checks the shape at run time.
+
+`MonitorQueryOverHttpTests` drives all three through the gateway's pipeline behind Kestrel, the real
+write path over an Orleans test cluster, and a VictoriaMetrics *cluster* (three containers — the
+single-node image has no `accountID`) and a ClickHouse in Testcontainers, seeded for two workspaces
+of the same name in two tenants: each reads its own series and rows, another tenant's path is `404`,
+a caller without `read` is `404` and one with only `read` is `200`, a workspace that folds onto an
+account another workspace holds fails its create and reads `409`, the limits refuse before the
+store is asked, and a `')) OR 1=1 --`, a Windows path, a lone backslash and a tab in the search each
+match the one row that contains them.
+
+What this does not do, each `charts/managed/monitor-workspace/conformance.yaml § owed`: declare the
+two responses (`query-responses-are-undeclared`); offer a query language over logs
+(`logs-have-no-query-language`); verify the logs DDL against the exporter's source
+(`log-search-reads-the-exporters-table-by-hand`); read a tier the workspace used to have, or go
+through vmauth (`metrics-query-reads-one-tier`); count as reads at the rate limiter
+(`query-actions-count-as-writes`); page a log window, save or pin a query, or explore traces
+(`explorers-are-a-first-cut`); give two workspaces accounts that cannot collide, rather than refusing
+the second (`accountid-is-folded-not-allocated`, above); or answer anywhere but a laptop's log search — the
+AppHost's gateway reads the region's ClickHouse and has no VictoriaMetrics, no chart deploys a
+gateway, and a region's vmselect has no TLS to satisfy an `https` endpoint
+(`explorers-are-wired-on-a-laptop-only`). The alert evaluator's query seam is still the refusing default
+(`alert-rules-query-seam-is-refusing`), though the stores it would use now exist.
+
+## Application views — `CyberCloud.Monitor/workspaces/components` · M2
+
+[01](01-azure-parity-catalogue.md)'s row is *"Application Insights | ⊂ workspaces | M2 | OTLP ingest,
+a per-tenant ClickHouse database, and the trace/exception views"*, with no estimate; this section is
+the design that row never had, written as it landed (2026-09-23, #32's fourth noun).
+
+```
+CyberCloud.Monitor/workspaces/{workspace}/components/{name}
+  ├─ clusterId — the cluster the connection string is published in (its collector's)
+  ├─ collector — a sibling collector's NAME; protocol (http/protobuf | grpc)
+  ├─ action: listConnectionString → OTEL_EXPORTER_OTLP_ENDPOINT, _PROTOCOL, OTEL_RESOURCE_ATTRIBUTES
+  └─ actions, each POST {timespanMinutes ≤ 1440, top ≤ 100}:
+       requests       — server/consumer spans by service and operation: count, failures, rate/min,
+                        failure rate, exact p50/p95/p99
+       dependencies   — client/producer spans by caller, type (db|http|messaging|rpc|other), target, name
+       exceptions     — `exception` span events and log records carrying exception.type, by type
+       applicationMap — nodes, and edges where a span's parent is in another service
+       transaction    — POST {traceId, timespanMinutes ≤ 10080}: one trace's spans and logs, in order
+```
+
+**A component is a lens, not a store.** The workspace is the tenancy — one ClickHouse database; a
+component names the slice one application writes, every span and log record whose resource carries
+`service.namespace` equal to the component's name, and its connection string sets exactly that. One
+object is rendered: a `ConfigMap` holding the three `OTEL_*` variables, so a pod is wired with
+`envFrom`. ⚠ The namespace is the client's assertion — it separates applications, not tenants
+(`charts/managed/monitor-component/conformance.yaml § owed`, `the-namespace-is-the-clients-assertion`).
+
+⚠ **The tenant boundary is the database, and the database comes from the platform's index.** A view
+runs on the request path — the gateway's process, like every synchronous action — and reads
+`ws_{guid:N}` of the workspace's GUID. A child's reconcile pass never learns its parent's GUID, so the
+action path now carries it: `ResourceManagerService` resolves the parent through the tenant's own
+index on every action and hands it to the handler as `ActionContext.Parent`
+(`ActionParentTests`). The workspace's row `ConfigMap` also names the database and was rejected as the
+source: it lives in a namespace of a cluster the tenant may administer, and a rewritten row would be a
+read of another tenant's telemetry.
+
+⚠ **Every statement is the platform's and every value is bound.** The views' SQL is constants in
+`ComponentViews`; the window, the row limit, the namespace and a trace id (held to 32 hex digits by the
+schema) are `{name:Type}` parameters; the database is the request's `database=` setting, never text in a
+statement. Five settings ride on every query — `readonly=2`, `max_execution_time`, `max_rows_to_read`,
+`max_memory_usage`, and unquoted 64-bit integers — and ClickHouse's own words go to the log, never to
+the caller: a budget refusal is a `400` naming it, an unprovisioned workspace a `409`, anything else a
+bare `500`. The percentiles are exact (`quantileExact`: position ⌊level × n⌋, no interpolation), which is
+what the look-back cap and `max_memory_usage` pay for. **Columns, not rows**: the schema has no array of
+objects, so each view is parallel arrays a chart can take as series.
+
+⚠ **Proved against the real thing.** `ComponentViewsAgainstClickHouseTests` emits OTLP, the pinned
+collector running the configuration `MonitorCollectors.CollectorConfig` renders exports it into a real
+ClickHouse, and every view's numbers are asserted through the real manager, dispatcher and handler —
+including that a component sees only its namespace and another tenant's component only its own
+database. `MonitorComponentViewsOverHttpTests` puts the gateway's stages on a real socket in front of the
+same manager: the owner's view answers `200` with its numbers, another tenant's caller gets `404` and the
+store is never asked. And the tables: `MonitorTelemetrySchema` holds the four statements the exporter
+itself creates with `create_schema: true` — measured, not recalled — and
+`ComponentViewsAgainstClickHouseTests.ThePlatformsTablesAreTheExportersShape` compares every column,
+key and index. ⚠ **Nothing in production runs them yet**, so a view on a real workspace answers `409`
+naming `collector-clickhouse-tables-are-the-exporters-shape`; the store the gateway reads is
+`CyberCloud:Monitor:Telemetry`, the refusing default until a region sets it, with one read credential
+for every workspace (`one-read-credential-for-every-workspace`). The portal's pages over the five
+views are #41's (`portal-views-are-not-built`); `cyc monitor component requests|dependencies|exceptions|application-map|transaction`
+are generated from the declaration like every other verb.
 
 ## What the platform monitors about itself
 

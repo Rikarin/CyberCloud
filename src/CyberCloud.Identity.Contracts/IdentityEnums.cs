@@ -158,7 +158,18 @@ public enum RevocationReason {
     ///     signs in again; under the hostile one (a code was stolen from a log or a <c>Referer</c>
     ///     and exchanged before the legitimate tab could) the thief's session is the one revoked.
     /// </remarks>
-    AuthorizationCodeReuseDetected = 7
+    AuthorizationCodeReuseDetected = 7,
+
+    /// <summary>
+    ///     The device code that opened this token session was redeemed a second time — RFC 8628's
+    ///     device code under <see cref="AuthorizationCodeReuseDetected" />'s rule, and for its reason.
+    /// </summary>
+    DeviceCodeReuseDetected = 8,
+
+    /// <summary>
+    ///     The client revoked its own refresh token at <c>/revoke</c> (RFC 7009) — <c>cyc logout</c>.
+    /// </summary>
+    RevokedByClient = 9
 }
 
 /// <summary>

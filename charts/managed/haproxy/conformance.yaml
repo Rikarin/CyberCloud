@@ -253,7 +253,8 @@ owed:
       set and paranoia level as that plugin's configuration — so the wasm image needs the digest
       discipline charts/bundle's `images:` lists have, not a moving tag. ⚠ TLS: cert-manager is in
       the bundle (phase 15), so ACME issuance is real; "an uploaded certificate from Vault" is not,
-      because CyberCloud.KeyVault/vaults is not one of the published types, and an upload is
+      because CyberCloud.KeyVault/vaults (published 2026-09-23) has no certificates yet — docs/plan/18
+      § What landed, and what is owed, `certificates` — and an upload is
       ReconcileContext's ISecretResolver until it is. ⚠ AND IT IS PRIVATE TO THE VPC UNTIL THE
       INBOUND ATTACHMENT LANDS, exactly as this row is — `nothing-can-be-reached-from-outside-the-vpc`
       above and charts/managed/kube-ovn-eip's `only-a-nat-gateway-can-be-given-an-address` — and it

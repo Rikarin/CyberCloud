@@ -20,15 +20,14 @@ namespace CyberCloud.Providers.RecoveryServices.ClusterConformance;
 ///         object the API server really admitted.
 ///     </para>
 ///     <para>
-///         ⚠ <b>Stubs, not the operator, and the reason is the companion.</b> A stub admits the
-///         PostgreSQL family's default body; CloudNativePG's real definition refuses it twice over —
-///         an empty <c>destinationPath</c>, then <i>"missing credentials"</i> — so a lane with the real
-///         operator installed cannot create the very server the vault protects
-///         (<c>charts/managed/postgres/conformance.yaml § owed</c>, <c>the-default-bucket-is-not-filled-in</c>).
-///         What the real operator does with the vault's schedule is a different question with a
-///         different answer, and it lives in its own process:
-///         <c>CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance</c>. One k3s per
-///         process is what keeps the two from installing over each other's definitions.
+///         ⚠ <b>Stubs, not the operator, and the reason is the process.</b> This lane proves the
+///         platform's half against a real API server; what the real operator does with the vault's
+///         schedule — and, since #30, the whole round trip through the platform's object store — lives
+///         in its own process, <c>CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance</c>.
+///         One k3s per process is what keeps the two from installing over each other's definitions:
+///         a stub created here first would make <c>helm install</c> refuse the real ones. The
+///         companion's backup section names the harness's in-memory store, which no operator reads
+///         against a stub.
 ///     </para>
 /// </remarks>
 /// <param name="fixture">The harness.</param>

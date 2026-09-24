@@ -283,6 +283,8 @@ owed:
       PostgresProvider already makes in its own remarks: "a recovery window the platform does not
       honour is a promise made" to a tenant who will find out when they use it.
   - id: backup-destination-is-not-filled-in
+    status: closed
+    closed: 2026-09-24
     says: >
       ⚠ FOUND BY #91 ON THE FIRST CONFORMANCE RUN THAT VALIDATED AGAINST CLOUDNATIVEPG'S REAL
       DEFINITION, AND IT WAS EVERY DEFAULT-BODIED SERVER. The schema defaults backup.enabled to true
@@ -302,14 +304,17 @@ owed:
       PostgresServers.Body names a destination so every suite converges a body the definition admits.
       PostgresReconcilerTests.BackupsOnWithNoDestinationAreRefusedBeforeAnythingIsAppliedAndNameTheProperty
       pins the refusal, the empty apply list, and the no-backup body rendering no backup block.
-      WHAT IS STILL OWED: the promise. A tenant who takes the defaults gets a refused operation
-      rather than a backed-up server, and the "default bucket" it names does not exist. Closing it is
-      either a platform-owned object store the reconciler can address on the tenant's behalf — a
-      CyberCloud.Storage/accounts the platform creates, with credentials the Cluster can mount —
-      which is docs/plan/15's work and not this chart's, or a new api-version whose default is
-      backup.enabled: false, which trades a refusal for a silence and is the worse trade on a
-      database. The default stays as published because a default is part of an immutable
-      api-version's contract; what changed is what the empty string means.
+      ✅ THE PROMISE, KEPT BY #30 (2026-09-24). The empty destination is now the platform's object
+      store: the reconciler makes the server a bucket of its own GUID, issues a key scoped to it
+      through the store's IAM API (IObjectStoreGrants), mints the key into the vault
+      (ObjectStoreCredentials.EnsureAsync — issue, mint-once, withdraw a race's losing key), renders
+      it into {name}-backup-s3 and names that Secret in barmanObjectStore.s3Credentials with the
+      store's data-plane endpointURL. The refusal turned round: a NAMED destination is what
+      BackupDestinationProblem refuses now, because no 2026-08-01 property can carry its credentials.
+      PostgresReconcilerTests.BackupsOnArchiveToTheServersOwnBucketWithAKeyTheVaultHolds and
+      ADestinationOfTheTenantsOwnIsRefusedBeforeAnythingIsAppliedAndNamesTheProperty; against the
+      real operator and a real SeaweedFS, RecoveryVaultAgainstCloudNativePg. What remains is listed
+      under the rows below that name the store.
   - id: synchronous-is-a-member-of-postgresql
     status: closed
     closed: 2026-09-18
@@ -357,6 +362,8 @@ owed:
       not expose it, so there is nothing to render it to — this is a published value that never had an
       implementation, the same shape as `backup-destination-is-not-filled-in` above.
   - id: the-default-bucket-is-not-filled-in
+    status: closed
+    closed: 2026-09-24
     says: >
       THE OTHER HALF OF `backup-destination-is-not-filled-in`, FOUND THE SAME DAY BY THE FIRST SUITE
       TO PUT A Cluster IN FRONT OF THE OPERATOR THE BUNDLE INSTALLS, AND THE HALF #91 DID NOT CLOSE.
@@ -383,10 +390,129 @@ owed:
       own k3s lane are green over it. Found by
       CyberCloud.RecoveryServices/vaults (#30); its operator lane creates the companion server with
       backups OFF — the one body the operator admits — and asserts the vault's refusal of it
-      (charts/managed/recovery-vault/conformance.yaml § owed, `the-store-is-the-servers`). Closing it
-      is the sentence the values row promised before #91 — a default destination in a tenant bucket
-      the Storage provider mints, with `s3Credentials` naming a Secret the reconciler writes from
-      listKeys — rendered as the Barman Cloud plugin rather than the native block the next operator
-      removes — or the honest alternative until then, `backup.enabled` defaulting to false so the
-      section is absent rather than refused. Either is a decision about docs/plan/12 § Backups' "to
-      the tenant's bucket", and it is this row's and not the vault's.
+      (charts/managed/recovery-vault/conformance.yaml § owed, `the-store-is-the-servers`).
+      ✅ CLOSED BY #30 (2026-09-24), WITH ONE DECISION TAKEN AGAINST THIS ROW'S FIRST SUGGESTION: the
+      default destination is a bucket on the PLATFORM's object store, not a tenant bucket the Storage
+      provider mints. A tenant bucket would put the server's backups inside something the tenant can
+      delete, and its credentials would have to cross from one provider's vault path to another's —
+      a write the cross-resource seam refuses by design. The platform store issues a key per server,
+      scoped to that server's bucket, and the vault holds it; `s3Credentials` names the Secret the
+      reconciler renders from the vault. Rendered as the in-tree barmanObjectStore, which the pinned
+      1.30.0 still serves — the plugin is `the-in-tree-archiver-goes-in-1-31` below.
+      docs/plan/12 § PostgreSQL's "to the tenant's bucket" is corrected to say so.
+  - id: the-in-tree-archiver-goes-in-1-31
+    says: >
+      The backup section is CloudNativePG's in-tree `barmanObjectStore`, and the operator's own
+      warning says it "will be completely removed in CloudNativePG 1.31.0". The bundle pins 1.30.0, so
+      it serves today and the round trip is measured against it (RecoveryVaultAgainstCloudNativePg).
+      Before the bundle moves past 1.30 the section has to become the Barman Cloud plugin:
+      charts/bundle gains plugin-barman-cloud (and cert-manager, which the plugin's TLS needs), this
+      chart renders a barmancloud.cnpg.io ObjectStore per server with the same endpoint, bucket and
+      Secret and `spec.plugins: [{name: barman-cloud.cloudnative-pg.io, isWALArchiver: true}]`
+      instead of `spec.backup`, a restore's bootstrap names the plugin in `recovery.source`, and the
+      vault's ScheduledBackup method (RecoveryVaults.BackupMethod) becomes `plugin` in the same
+      change. charts/bundle/bundle.yaml § The ordering rule applies: a new api-version is not needed — the body does not
+      change — but the bundle bump and the render must land together, or every server's archive
+      stops at the upgrade.
+  - id: an-issued-key-can-outlive-a-crash
+    says: >
+      ObjectStoreCredentials.EnsureAsync issues a key at the store, then mints it into the vault; the
+      store generates the pair (SeaweedFS's CreateAccessKey takes no caller-chosen value), so the
+      order cannot be reversed. A silo that dies between the two leaves a live key at the store that
+      no vault holds — it opens only this server's bucket, and the next pass issues another. The
+      race's loser withdraws its own key; a crash's does not. Closing it is ListAccessKeys for the
+      principal and a DeleteAccessKey for every key the vault does not name, on each pass that finds
+      the vault already holding one — one more call on IObjectStoreGrants.
+  - id: the-iam-endpoint-is-guarded-by-the-network
+    says: >
+      SeaweedFS 3.80's IAM API (`weed iam`) answered a CreateUser signed with a key it had never
+      issued, in the spike behind #30 — the S3 API refused the same key, so the store's identities
+      were enforced and the IAM process's own check was not. The platform's grants sign every IAM
+      request with the administrator's key regardless; what keeps a tenant from minting themselves a
+      key to every bucket is that ObjectStorageOptions.IamEndpoint must be reachable from the
+      platform's hosts and routable from no tenant pod. Nothing enforces that: the CloudNativePG lane
+      runs the store on the Docker bridge where k3s pods could reach :8111. Closing it is a
+      NetworkPolicy/egress rule in the tenant namespaces the platform renders, or a store version
+      whose IAM API authenticates — re-measured before the pin moves. ⚠ READ AGAINST THE SOURCE BY
+      #30'S REVIEW, AND IT IS NOT A MOMENT: weed/iamapi/iamapi_server.go builds its own
+      IdentityAccessManagement once, when `weed iam` starts, and subscribes to nothing, so an IAM API
+      that started on an empty store keeps authenticating nobody until the process restarts. A
+      restart after the bootstrap would close it; no installer does one, and none has been measured.
+  - id: an-iam-change-can-open-the-store-for-a-moment
+    status: closed
+    closed: 2026-09-24
+    says: >
+      SUSPECTED, AND RECORDED BECAUSE THE CONSEQUENCE IS A BREACH. In one full Fast-lane run (seventy
+      suites and their containers on one host), SeaweedFsGrantsTests saw a freshly issued key WRITE
+      INTO ANOTHER SERVER'S BUCKET right after its own first write succeeded; run alone, in isolation
+      and in the CloudNativePG lane it has always been refused. The reading that fits: SeaweedFS 3.80's
+      S3 gateway reloads its identities from the filer on every IAM change, and a reload that reads the
+      document mid-write sees no identities — which SeaweedFS treats as authentication OFF
+      (`iam.isAuthEnabled = len(identities) > 0`, the same line charts/managed/seaweedfs records for
+      tenant accounts). If so, every key issuance opens the platform's store to anyone for a moment.
+      The test now waits for a never-issued key to be refused before it asserts the neighbour's
+      refusal, which settles the test and not the hazard. Closing it is measuring it (a probe that
+      hammers a bogus key during a burst of issuances), then a store configuration that fails closed:
+      identities from a static file the platform rewrites, or a newer SeaweedFS whose embedded IAM
+      does — re-measured, since 4.41 in the same spike answered a bogus key as an administrator in the
+      filer-held mode.
+      ✅ CLOSED BY #30'S REVIEW (2026-09-24), WHICH FOUND THE SETTLE STEP HID THE FAIL-OPEN THE TEST WAS
+      FOR, AND THE READING ABOVE WRONG. weed/s3api/auth_credentials.go at the 3.80 tag assigns
+      `if !iam.isAuthEnabled { iam.isAuthEnabled = len(identities) > 0 }` — "one-directional, no
+      toggling" — so a reload with no identities cannot turn authentication OFF once it is on. What is
+      open is a FRESH store until its first identity reaches the S3 gateway, and the Fast-lane
+      observation fits that: SeaweedFsGrantsTests starts a container per test, and under the lane's
+      load the gateway had not loaded even the administrator when the neighbour write landed. Three
+      changes: SeaweedFsObjectStoreGrants.IssueKeyAsync asks the store to refuse a key nobody issued
+      (RefusesStrangersAsync) before it creates a user or a key, and fails retryably when it does not
+      (SeaweedFsOpenStoreTests); the install step waits for the same refusal after
+      BootstrapAdministratorAsync (SeaweedFsGrantsTests' fixture, the CloudNativePG lane's store); and
+      the neighbour assertion waits for nothing but the own-bucket write, the fail-closed direction.
+      The probe this row asked for is
+      SeaweedFsGrantsTests.NoAnswerDuringABurstOfIamChangesLetsAStrangerOrANeighbourIn: a neighbour
+      write and a stranger's write hammered through 8 issuances and 4 withdrawals — 5941 rounds, every
+      answer a refusal. Not re-run: the full Fast lane's load. The test that saw the breach now has
+      nothing to wait out, so a repeat would fail it rather than pass over it.
+  - id: no-deployment-wires-the-grants
+    says: >
+      FOUND BY #30'S REVIEW. The grants exist only inside the test fixtures: the silo registers
+      SeaweedFsObjectStoreGrants when CyberCloud:ObjectStorage names IamEndpoint and DataPlaneEndpoint,
+      and nothing a deployment runs names them — the AppHost's SeaweedFS reads a static one-identity
+      s3.json (CyberCloudTopology), which the spike measured to ignore IAM-issued identities, and
+      charts/ deploys no platform store at all. Every default-bodied server there used to retry
+      against UnavailableObjectStoreGrants for the operation's full hour; PostgresServerReconciler now
+      fails it once, terminally, at /properties/backup/enabled, naming backups off as the tenant's way
+      out (PostgresReconcilerTests.ADeploymentWithNoStoreFailsTheServerOnceAndNamesTheWayOut). Closing
+      it is a store a deployment starts in the IAM mode — `weed server -s3 -iam`, no -s3.config — an
+      installer step that runs BootstrapAdministratorAsync once and keeps the administrator's key in
+      the vault rather than in configuration (CreateAccessKey generates it, so no static environment
+      variable can carry it), the RefusesStrangersAsync wait, and IamEndpoint and DataPlaneEndpoint in
+      the AppHost and the platform chart. The AppHost cannot be started to measure it here: its ports
+      are fixed and the host is shared.
+  - id: the-backups-outlive-the-server-and-nothing-reclaims-them
+    says: >
+      A server's teardown deletes its Pooler and Cluster and deliberately leaves {name}-backup-s3:
+      recovery points outlive the server (the vault's schedule owns them), and a restore from a Backup
+      reads the credential Secret its status names, so removing it would make the restore a vault
+      exists for — the one after the server is gone — impossible. Nothing reclaims the Secret, the
+      bucket, the store identity or the vault path after a purge either: RetainedVolumesAsync names
+      claims and has no member for a bucket. Closing it is a reclaim step on the purge that empties
+      and removes pg-{id} once no vault still lists a point of it, withdraws the principal and deletes
+      the vault path — and until then the store accumulates one bucket per server ever created, which
+      nothing meters (charts/managed/recovery-vault/conformance.yaml § owed,
+      `backup-storage-is-not-metered`).
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.DBforPostgreSQL/servers. OWED. THE ENGINE STEP: PostgreSQL as CloudNativePG runs it
+      has no transparent data encryption, so at-rest encryption has to come from the volume — a
+      storage class that encrypts per claim with a key the platform can wrap — and the bundle installs
+      openebs-localpv, which encrypts nothing (LINSTOR, #19, is the replicated path and is not
+      installed). The backup half is the object store's and inherits charts/managed/seaweedfs § owed,
+      `customer-managed-keys`. What every family still needs is docs/plan/18 § What customer-managed
+      keys still need: (1) a key-use seam — the grant is expressible today, `keyVaultCryptoUser` with
+      principalType `resource` on a CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by
+      construction and wrapKey/unwrapKey are actions, so no reconciler can call them; (2) an
+      `encryption.keyUri` property on a NEW api-version of this type; (3) revocation — a disabled key
+      taking the data offline, which needs a re-unwrap on a schedule nothing runs. The key's home is
+      no longer the blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row
+      is started.

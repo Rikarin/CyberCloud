@@ -33,10 +33,11 @@ public sealed class ProviderRegistryTests {
         registration.ReadPermission.ShouldBe("read");
         registration.WritePermission.ShouldBe("write");
         registration.DeletePermission.ShouldBe("delete");
-        // restart, listKeys, orphaned and resize. `resize` declares a request and a response schema,
-        // which is the expressiveness an action had none of; `orphaned` declares no handler, which is
-        // the shape every action in the catalogue had before one could be named at all.
-        registration.Actions.Length.ShouldBe(4);
+        // restart, listKeys, orphaned, resize and clone. `resize` declares a request and a response
+        // schema, which is the expressiveness an action had none of; `orphaned` declares no handler,
+        // which is the shape every action in the catalogue had before one could be named at all;
+        // `clone` creates through ActionContext.Creator (#30).
+        registration.Actions.Length.ShouldBe(5);
 
         // ⚠ THE HANDLER REACHES THE REGISTRY, WHICH IS WHAT ActionDispatcher RESOLVES FROM. A
         // declaration that carried a handler the registry dropped would be an action that refuses at
@@ -137,6 +138,20 @@ public sealed class ProviderRegistryTests {
             .Message.ShouldContain(KubeLabels.ReservedNamespace);
     }
 
+    [Fact]
+    public void TheReservedNamespaceAdmitsATypeThatRendersNothingAndStillRefusesOneThatCould() {
+        // ⚠ NARROWED FOR #39, NOT OPENED. CyberCloud.Resources/deployments lives in the reserved
+        // namespace, as Azure's deployments live in Microsoft.Resources, and it renders nothing — no
+        // reconciler, no handler, no cluster — so no object it could produce carries a label for the
+        // drift scan or the labels gate to decline to check. The property the reservation protects is
+        // that; a type in the namespace that COULD render is refused exactly as before.
+        var registry = ProviderRegistry.Build([new DeploymentsProvider()]);
+        registry.TryGetType(Deployments.Type, out _).ShouldBeTrue();
+
+        Should.Throw<InvalidOperationException>(static () => ProviderRegistry.Build([new ReservedRenderingProvider()]))
+            .Message.ShouldContain("could render an object carrying the group's label");
+    }
+
     [Theory]
     [InlineData(RoleAssignmentId.ProviderNamespace)]
     [InlineData("cybercloud.authorization")]
@@ -163,6 +178,29 @@ public sealed class ProviderRegistryTests {
         // types answered as "not the resource graph's address". Case-insensitive, as above.
         Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new NamespacedProvider(spelling)]))
             .Message.ShouldContain(ResourceGraphAddress.ProviderNamespace);
+    }
+
+    [Theory]
+    [InlineData(PolicyAddress.ProviderNamespace)]
+    [InlineData("cybercloud.policy")]
+    public void AProviderMayNotDeclareThePolicyNamespace(string spelling) {
+        // ⚠ THE FOURTH RESERVATION (#46), FOR THE FIRST ROUTING REASON AGAIN. A policy assignment on a
+        // resource group is a well-formed ten-segment resource path of type
+        // CyberCloud.Policy/policyAssignments, and the gateway routes the whole namespace to the policy
+        // manager BEFORE it looks at the registry — PolicyAddress's remarks. Case-insensitive, as above.
+        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new NamespacedProvider(spelling)]))
+            .Message.ShouldContain(PolicyAddress.ProviderNamespace);
+    }
+
+    [Theory]
+    [InlineData(CostQueryAddress.ProviderNamespace)]
+    [InlineData("cybercloud.costmanagement")]
+    public void AProviderMayNotDeclareTheCostManagementNamespace(string spelling) {
+        // ⚠ RESERVED FOR THE COST QUERY (#38). {scope}/providers/CyberCloud.CostManagement/query on a
+        // resource group is a nine-segment resource collection path, and the gateway routes the whole
+        // namespace to the cost query BEFORE it looks at the registry — CostQueryAddress's remarks.
+        Should.Throw<InvalidOperationException>(() => ProviderRegistry.Build([new NamespacedProvider(spelling)]))
+            .Message.ShouldContain(CostQueryAddress.ProviderNamespace);
     }
 
     [Fact]
@@ -201,6 +239,15 @@ public sealed class ProviderRegistryTests {
         public string ProviderNamespace => KubeLabels.ReservedNamespace;
 
         public void Describe(IProviderBuilder builder) => builder.ResourceType("resourceGroups");
+    }
+
+    sealed class ReservedRenderingProvider : IResourceProvider {
+        public string ProviderNamespace => KubeLabels.ReservedNamespace;
+
+        public void Describe(IProviderBuilder builder) =>
+            builder.ResourceType("things")
+                .ApiVersion(TestingProvider.V2026, TestingProvider.Schema2026)
+                .Reconciler<ConformingReconciler>();
     }
 
     sealed class NamespacedProvider(string ns) : IResourceProvider {
@@ -619,12 +666,11 @@ public sealed class StubbedSeamTests {
     [Fact]
     public async Task TheDefaultPolicyEvaluatorSaysNoEngineRanRatherThanAllowing() {
         // ⚠ An Allow is indistinguishable from a policy engine that evaluated and permitted;
-        // NotSupported says no engine ran, which is what an audit log has to be able to state.
+        // NotSupported says no engine ran, which is what an audit log has to be able to state. It is
+        // no longer what a host gets — CatalogPolicyEvaluator is, since #46 — and stays for the
+        // hand-built harnesses whose subject is not policy.
         var decision = await new NotSupportedPolicyEvaluator().EvaluateAsync(
-            ResourceManagerCluster.Address("x"),
-            TestingProvider.V2026,
-            "{}",
-            ResourceManagerCluster.Caller(),
+            new() { Id = ResourceManagerCluster.Address("x"), Operation = "create", Caller = ResourceManagerCluster.Caller() },
             TestContext.Current.CancellationToken
         );
 

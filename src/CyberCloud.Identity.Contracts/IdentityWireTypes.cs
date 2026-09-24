@@ -258,6 +258,29 @@ public sealed record ApplicationRegistration {
     /// <summary>When it was registered.</summary>
     [Id(10)]
     public DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>
+    ///     When the platform last issued this client's secret, or <see langword="null" /> when it
+    ///     never has. Issue #41.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The second of two ways a confidential client holds a secret, and the one the
+    ///         administration API makes.</b> <see cref="ClientSecretRef" /> points into a vault the
+    ///         platform reads the value back from, which is right for a value somebody else chose.
+    ///         A secret the platform mints itself — 256 random bits, shown to its owner once —
+    ///         never has to be read back, only compared, so the application grain keeps its SHA-256
+    ///         and <c>IApplicationGrain.VerifyClientSecretAsync</c> compares. The digest is in the
+    ///         grain's state and never on this record, as a password hash is on
+    ///         <c>UserProfile</c>'s grain and never on the profile.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Set by the grain, never taken from a caller: <c>CreateAsync</c> and
+    ///         <c>UpdateAsync</c> keep the stored value whatever the body says.
+    ///     </para>
+    /// </remarks>
+    [Id(11)]
+    public DateTimeOffset? ClientSecretIssuedAt { get; init; }
 }
 
 /// <summary>
@@ -552,13 +575,28 @@ public sealed record SignInOutcome {
 }
 
 /// <summary>
-///     An invitation of an email address into a tenant. docs/plan/11 § Sign-up and tenant creation,
-///     the invited path.
+///     An invitation of an email address into a tenant, as <see cref="IInvitationGrain" /> holds it.
+///     docs/plan/11 § Sign-up and tenant creation, the invited path.
 /// </summary>
+/// <remarks>
+///     ⚠ <b>No role, and the member that carried one is gone (#43).</b> This record had a
+///     <c>Relation</c> — "the ReBAC relation to grant on acceptance" — written before anything used
+///     it. An invitation makes a <i>member</i>: a user in the tenant, and no tuple. What they may do
+///     is a role assignment, the separate request docs/plan/07 § Azure RBAC has and
+///     <c>IRoleAssignmentManager</c> serves, so there is one way to grant a role and it is checked,
+///     audited and revoked in one place. ⚠ <c>[Id(3)]</c> is retired, not free: v0.1.0 published this
+///     type with <c>Relation</c> at 3 (<c>build/wire/v0.1.0.txt</c>), so a v0.1.0 peer reads that id
+///     as a string and a new member there would be misread. Dropping it is legal — the Wire
+///     compatibility gate allows a removed member, and a peer skips a field it doesn't know — and it
+///     costs no data, because nothing produced an <see cref="Invitation" /> before
+///     <see cref="IInvitationGrain" /> (#43): no grain state, stream or call ever carried one. That is
+///     a different argument from the free window the top of this file describes, which closed with
+///     the v0.1.0 tag (<c>build/wire/burned.txt</c>).
+/// </remarks>
 [GenerateSerializer]
 [Alias("CyberCloud.Identity.Invitation")]
 public sealed record Invitation {
-    /// <summary>The user object created for the invitee, in <see cref="UserStatus.Invited" />.</summary>
+    /// <summary>The user object created for the invitee, in <see cref="UserStatus.Invited" /> until they accept.</summary>
     [Id(0)]
     public Guid UserId { get; init; }
 
@@ -570,13 +608,37 @@ public sealed record Invitation {
     [Id(2)]
     public string Email { get; init; } = string.Empty;
 
-    /// <summary>The ReBAC relation to grant on acceptance — <c>owner</c>, <c>contributor</c>.</summary>
-    [Id(3)]
-    public string Relation { get; init; } = string.Empty;
-
     /// <summary>When the invitation stops being redeemable.</summary>
     [Id(4)]
     public DateTimeOffset ExpiresAt { get; init; }
+
+    /// <summary>The invitation's own id — the grain key, and what its link carries beside the secret.</summary>
+    [Id(5)]
+    public Guid InvitationId { get; init; }
+
+    /// <summary>Where it stands. One past <see cref="ExpiresAt" /> reads <see cref="InvitationStatus.Expired" />.</summary>
+    [Id(6)]
+    public InvitationStatus Status { get; init; }
+
+    /// <summary>The user who sent it.</summary>
+    [Id(7)]
+    public Guid InvitedBy { get; init; }
+
+    /// <summary>The tenant's name as the mail and the page show it — its slug.</summary>
+    [Id(8)]
+    public string TenantName { get; init; } = string.Empty;
+
+    /// <summary>When it was accepted, or <see langword="null" />.</summary>
+    [Id(9)]
+    public DateTimeOffset? AcceptedAt { get; init; }
+
+    /// <summary>When the last mail went — the first, or the latest resend. Issue #41.</summary>
+    [Id(10)]
+    public DateTimeOffset SentAt { get; init; }
+
+    /// <summary>How many mails the invitation has sent, the first included. Issue #41.</summary>
+    [Id(11)]
+    public int Sendings { get; init; }
 }
 
 /// <summary>

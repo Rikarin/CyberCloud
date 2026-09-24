@@ -35,11 +35,17 @@ public sealed class CyberCloudCliCredential : TokenCredential {
     }
 
     /// <summary>
-    ///     The client id <c>cyc</c> registers as. ⚠ Placeholder — no document assigns one, and the
-    ///     identity module owns the application registrations (docs/plan/11 § The object model,
-    ///     <c>IApplicationGrain</c>). Reported.
+    ///     The client id <c>cyc</c> signs in as — <c>cyc-cli</c>, the static first-party registration
+    ///     docs/plan/11 § Protocol names and the identity host's <c>FirstPartyClients.Cli</c> holds.
     /// </summary>
-    public const string CliClientId = "cyc";
+    /// <remarks>
+    ///     ⚠ It was <c>"cyc"</c>, a placeholder written while no document assigned one, and every
+    ///     sign-in against the real identity host was <c>invalid_client</c> for it: the host has
+    ///     registered <c>cyc-cli</c> since #88. #43 found it by running <c>cyc login</c>'s device flow
+    ///     against the host instead of a scripted server; <c>Identity.Host.Tests</c> now pins the two
+    ///     strings together.
+    /// </remarks>
+    public const string CliClientId = "cyc-cli";
 
     /// <summary>Runs the CLI. Substituted by the tests.</summary>
     internal Func<IReadOnlyList<string>, CancellationToken, ValueTask<Subprocess.Result>> Run { get; set; } =

@@ -8,6 +8,9 @@ import type {
   AnalyticsClickhouseClustersData,
   AnalyticsClickhouseClustersListKeysResult,
   AnalyticsClickhouseClustersResource,
+  BillingBudgetsData,
+  BillingBudgetsResource,
+  BillingBudgetsShowStatusResult,
   CacheRedisData,
   CacheRedisListKeysResult,
   CacheRedisResource,
@@ -63,8 +66,60 @@ import type {
   DocumentDBAccountsData,
   DocumentDBAccountsListKeysResult,
   DocumentDBAccountsResource,
+  KeyVaultVaultsCreateKeyContent,
+  KeyVaultVaultsCreateKeyResult,
+  KeyVaultVaultsData,
+  KeyVaultVaultsDecryptContent,
+  KeyVaultVaultsDecryptResult,
+  KeyVaultVaultsDeleteKeyContent,
+  KeyVaultVaultsDeleteKeyResult,
+  KeyVaultVaultsDeleteSecretContent,
+  KeyVaultVaultsDeleteSecretResult,
+  KeyVaultVaultsEncryptContent,
+  KeyVaultVaultsEncryptResult,
+  KeyVaultVaultsGetKeyContent,
+  KeyVaultVaultsGetKeyResult,
+  KeyVaultVaultsGetSecretContent,
+  KeyVaultVaultsGetSecretResult,
+  KeyVaultVaultsImportKeyContent,
+  KeyVaultVaultsImportKeyResult,
+  KeyVaultVaultsListDeletedKeysResult,
+  KeyVaultVaultsListDeletedSecretsResult,
+  KeyVaultVaultsListKeyVersionsContent,
+  KeyVaultVaultsListKeyVersionsResult,
+  KeyVaultVaultsListKeysResult,
+  KeyVaultVaultsListSecretVersionsContent,
+  KeyVaultVaultsListSecretVersionsResult,
+  KeyVaultVaultsListSecretsResult,
+  KeyVaultVaultsPurgeDeletedKeyContent,
+  KeyVaultVaultsPurgeDeletedKeyResult,
+  KeyVaultVaultsPurgeDeletedSecretContent,
+  KeyVaultVaultsPurgeDeletedSecretResult,
+  KeyVaultVaultsRecoverDeletedKeyContent,
+  KeyVaultVaultsRecoverDeletedKeyResult,
+  KeyVaultVaultsRecoverDeletedSecretContent,
+  KeyVaultVaultsRecoverDeletedSecretResult,
+  KeyVaultVaultsResource,
+  KeyVaultVaultsSetSecretContent,
+  KeyVaultVaultsSetSecretResult,
+  KeyVaultVaultsSignContent,
+  KeyVaultVaultsSignResult,
+  KeyVaultVaultsUnwrapKeyContent,
+  KeyVaultVaultsUnwrapKeyResult,
+  KeyVaultVaultsUpdateKeyContent,
+  KeyVaultVaultsUpdateKeyResult,
+  KeyVaultVaultsUpdateSecretContent,
+  KeyVaultVaultsUpdateSecretResult,
+  KeyVaultVaultsVerifyContent,
+  KeyVaultVaultsVerifyResult,
+  KeyVaultVaultsWrapKeyContent,
+  KeyVaultVaultsWrapKeyResult,
   MailDomainsData,
+  MailDomainsDnsRecordsResult,
+  MailDomainsMailboxesData,
+  MailDomainsMailboxesResource,
   MailDomainsResource,
+  MailDomainsVerifyResult,
   ManagementGroupCreateContent,
   MessagingKafkaClustersData,
   MessagingKafkaClustersListKeysResult,
@@ -81,9 +136,26 @@ import type {
   MonitorWorkspacesCollectorsData,
   MonitorWorkspacesCollectorsListEndpointsResult,
   MonitorWorkspacesCollectorsResource,
+  MonitorWorkspacesComponentsApplicationMapContent,
+  MonitorWorkspacesComponentsApplicationMapResult,
+  MonitorWorkspacesComponentsData,
+  MonitorWorkspacesComponentsDependenciesContent,
+  MonitorWorkspacesComponentsDependenciesResult,
+  MonitorWorkspacesComponentsExceptionsContent,
+  MonitorWorkspacesComponentsExceptionsResult,
+  MonitorWorkspacesComponentsListConnectionStringResult,
+  MonitorWorkspacesComponentsRequestsContent,
+  MonitorWorkspacesComponentsRequestsResult,
+  MonitorWorkspacesComponentsResource,
+  MonitorWorkspacesComponentsTransactionContent,
+  MonitorWorkspacesComponentsTransactionResult,
   MonitorWorkspacesData,
   MonitorWorkspacesListKeysResult,
+  MonitorWorkspacesListMetricLabelsContent,
+  MonitorWorkspacesListMetricLabelsResult,
+  MonitorWorkspacesQueryMetricsContent,
   MonitorWorkspacesResource,
+  MonitorWorkspacesSearchLogsContent,
   NetworkPublicIpAddressesData,
   NetworkPublicIpAddressesResource,
   NetworkPublicIpAddressesShowAllocationResult,
@@ -106,12 +178,18 @@ import type {
   NetworkVirtualNetworksSubnetsListAddressUsageResult,
   NetworkVirtualNetworksSubnetsResource,
   OperationStatus,
+  RecoveryServicesVaultsBackupNowContent,
+  RecoveryServicesVaultsBackupNowResult,
   RecoveryServicesVaultsData,
   RecoveryServicesVaultsListRecoveryPointsResult,
   RecoveryServicesVaultsRecoverContent,
   RecoveryServicesVaultsRecoverResult,
   RecoveryServicesVaultsResource,
   ResourceGroupCreateContent,
+  ResourcesDeploymentsData,
+  ResourcesDeploymentsResource,
+  ResourcesDeploymentsWhatIfContent,
+  ResourcesDeploymentsWhatIfResult,
   SampleWidgetsData,
   SampleWidgetsPingContent,
   SampleWidgetsPingResult,
@@ -243,6 +321,36 @@ export class CyberCloudApi {
   /** listKeys — permission 'listKeys'. ⚠ The response carries secret material. */
   listKeysClickHouseCluster(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<AnalyticsClickhouseClustersListKeysResult>> {
     return this.transport.send<AnalyticsClickhouseClustersListKeysResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Analytics/clickhouseClusters/${CyberCloudApi.segment(resourceName)}/listKeys` });
+  }
+
+  /** Reads one Budget. */
+  getBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<BillingBudgetsResource>> {
+    return this.transport.send<BillingBudgetsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Budget. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: BillingBudgetsData): Promise<ApiResponse<BillingBudgetsResource>> {
+    return this.transport.send<BillingBudgetsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Budget. A merge patch: what is not set is not changed. */
+  updateBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<BillingBudgetsData>): Promise<ApiResponse<BillingBudgetsResource>> {
+    return this.transport.send<BillingBudgetsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Budget. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Budgets in a resource group. ⚠ A short page never means "that is all there is". */
+  listBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<BillingBudgetsResource>>> {
+    return this.transport.send<Page<BillingBudgetsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** showStatus — permission 'read'. */
+  showStatusBudget(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<BillingBudgetsShowStatusResult>> {
+    return this.transport.send<BillingBudgetsShowStatusResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Billing/budgets/${CyberCloudApi.segment(resourceName)}/showStatus` });
   }
 
   /** Reads one Valkey cache. */
@@ -785,6 +893,166 @@ export class CyberCloudApi {
     return this.transport.send<DocumentDBAccountsListKeysResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.DocumentDB/accounts/${CyberCloudApi.segment(resourceName)}/listKeys` });
   }
 
+  /** Reads one Key vault. */
+  getKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<KeyVaultVaultsResource>> {
+    return this.transport.send<KeyVaultVaultsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Key vault. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: KeyVaultVaultsData): Promise<ApiResponse<KeyVaultVaultsResource>> {
+    return this.transport.send<KeyVaultVaultsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Key vault. A merge patch: what is not set is not changed. */
+  updateKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<KeyVaultVaultsData>): Promise<ApiResponse<KeyVaultVaultsResource>> {
+    return this.transport.send<KeyVaultVaultsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Key vault. ⚠ Recoverable for 7 day(s). */
+  deleteKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Key vaults in a resource group. ⚠ A short page never means "that is all there is". */
+  listKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<KeyVaultVaultsResource>>> {
+    return this.transport.send<Page<KeyVaultVaultsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** createKey — permission 'writeKeys'. */
+  createKeyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsCreateKeyContent): Promise<ApiResponse<KeyVaultVaultsCreateKeyResult>> {
+    return this.transport.send<KeyVaultVaultsCreateKeyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/createKey`, body: content });
+  }
+
+  /** decrypt — permission 'useKeys'. ⚠ The response carries secret material. */
+  decryptKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsDecryptContent): Promise<ApiResponse<KeyVaultVaultsDecryptResult>> {
+    return this.transport.send<KeyVaultVaultsDecryptResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/decrypt`, body: content });
+  }
+
+  /** deleteKey — permission 'writeKeys'. */
+  deleteKeyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsDeleteKeyContent): Promise<ApiResponse<KeyVaultVaultsDeleteKeyResult>> {
+    return this.transport.send<KeyVaultVaultsDeleteKeyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/deleteKey`, body: content });
+  }
+
+  /** deleteSecret — permission 'writeSecrets'. */
+  deleteSecretKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsDeleteSecretContent): Promise<ApiResponse<KeyVaultVaultsDeleteSecretResult>> {
+    return this.transport.send<KeyVaultVaultsDeleteSecretResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/deleteSecret`, body: content });
+  }
+
+  /** encrypt — permission 'useKeys'. */
+  encryptKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsEncryptContent): Promise<ApiResponse<KeyVaultVaultsEncryptResult>> {
+    return this.transport.send<KeyVaultVaultsEncryptResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/encrypt`, body: content });
+  }
+
+  /** getKey — permission 'useKeys'. */
+  getKeyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsGetKeyContent): Promise<ApiResponse<KeyVaultVaultsGetKeyResult>> {
+    return this.transport.send<KeyVaultVaultsGetKeyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/getKey`, body: content });
+  }
+
+  /** getSecret — permission 'readSecrets'. ⚠ The response carries secret material. */
+  getSecretKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsGetSecretContent): Promise<ApiResponse<KeyVaultVaultsGetSecretResult>> {
+    return this.transport.send<KeyVaultVaultsGetSecretResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/getSecret`, body: content });
+  }
+
+  /** importKey — permission 'writeKeys'. */
+  importKeyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsImportKeyContent): Promise<ApiResponse<KeyVaultVaultsImportKeyResult>> {
+    return this.transport.send<KeyVaultVaultsImportKeyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/importKey`, body: content });
+  }
+
+  /** listDeletedKeys — permission 'useKeys'. */
+  listDeletedKeysKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<KeyVaultVaultsListDeletedKeysResult>> {
+    return this.transport.send<KeyVaultVaultsListDeletedKeysResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/listDeletedKeys` });
+  }
+
+  /** listDeletedSecrets — permission 'readSecrets'. */
+  listDeletedSecretsKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<KeyVaultVaultsListDeletedSecretsResult>> {
+    return this.transport.send<KeyVaultVaultsListDeletedSecretsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/listDeletedSecrets` });
+  }
+
+  /** listKeyVersions — permission 'useKeys'. */
+  listKeyVersionsKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsListKeyVersionsContent): Promise<ApiResponse<KeyVaultVaultsListKeyVersionsResult>> {
+    return this.transport.send<KeyVaultVaultsListKeyVersionsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/listKeyVersions`, body: content });
+  }
+
+  /** listKeys — permission 'useKeys'. */
+  listKeysKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<KeyVaultVaultsListKeysResult>> {
+    return this.transport.send<KeyVaultVaultsListKeysResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/listKeys` });
+  }
+
+  /** listSecretVersions — permission 'readSecrets'. */
+  listSecretVersionsKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsListSecretVersionsContent): Promise<ApiResponse<KeyVaultVaultsListSecretVersionsResult>> {
+    return this.transport.send<KeyVaultVaultsListSecretVersionsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/listSecretVersions`, body: content });
+  }
+
+  /** listSecrets — permission 'readSecrets'. */
+  listSecretsKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<KeyVaultVaultsListSecretsResult>> {
+    return this.transport.send<KeyVaultVaultsListSecretsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/listSecrets` });
+  }
+
+  /** purge — permission 'purge'. ⚠ Long-running. */
+  purgeKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<unknown>> {
+    return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/purge` });
+  }
+
+  /** purgeDeletedKey — permission 'purgeKeys'. */
+  purgeDeletedKeyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsPurgeDeletedKeyContent): Promise<ApiResponse<KeyVaultVaultsPurgeDeletedKeyResult>> {
+    return this.transport.send<KeyVaultVaultsPurgeDeletedKeyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/purgeDeletedKey`, body: content });
+  }
+
+  /** purgeDeletedSecret — permission 'purgeSecrets'. */
+  purgeDeletedSecretKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsPurgeDeletedSecretContent): Promise<ApiResponse<KeyVaultVaultsPurgeDeletedSecretResult>> {
+    return this.transport.send<KeyVaultVaultsPurgeDeletedSecretResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/purgeDeletedSecret`, body: content });
+  }
+
+  /** recoverDeletedKey — permission 'writeKeys'. */
+  recoverDeletedKeyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsRecoverDeletedKeyContent): Promise<ApiResponse<KeyVaultVaultsRecoverDeletedKeyResult>> {
+    return this.transport.send<KeyVaultVaultsRecoverDeletedKeyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/recoverDeletedKey`, body: content });
+  }
+
+  /** recoverDeletedSecret — permission 'writeSecrets'. */
+  recoverDeletedSecretKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsRecoverDeletedSecretContent): Promise<ApiResponse<KeyVaultVaultsRecoverDeletedSecretResult>> {
+    return this.transport.send<KeyVaultVaultsRecoverDeletedSecretResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/recoverDeletedSecret`, body: content });
+  }
+
+  /** restore — permission 'write'. ⚠ Long-running. */
+  restoreKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<unknown>> {
+    return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/restore` });
+  }
+
+  /** setSecret — permission 'writeSecrets'. */
+  setSecretKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsSetSecretContent): Promise<ApiResponse<KeyVaultVaultsSetSecretResult>> {
+    return this.transport.send<KeyVaultVaultsSetSecretResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/setSecret`, body: content });
+  }
+
+  /** sign — permission 'useKeys'. */
+  signKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsSignContent): Promise<ApiResponse<KeyVaultVaultsSignResult>> {
+    return this.transport.send<KeyVaultVaultsSignResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/sign`, body: content });
+  }
+
+  /** unwrapKey — permission 'useKeys'. ⚠ The response carries secret material. */
+  unwrapKeyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsUnwrapKeyContent): Promise<ApiResponse<KeyVaultVaultsUnwrapKeyResult>> {
+    return this.transport.send<KeyVaultVaultsUnwrapKeyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/unwrapKey`, body: content });
+  }
+
+  /** updateKey — permission 'writeKeys'. */
+  updateKeyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsUpdateKeyContent): Promise<ApiResponse<KeyVaultVaultsUpdateKeyResult>> {
+    return this.transport.send<KeyVaultVaultsUpdateKeyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/updateKey`, body: content });
+  }
+
+  /** updateSecret — permission 'writeSecrets'. */
+  updateSecretKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsUpdateSecretContent): Promise<ApiResponse<KeyVaultVaultsUpdateSecretResult>> {
+    return this.transport.send<KeyVaultVaultsUpdateSecretResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/updateSecret`, body: content });
+  }
+
+  /** verify — permission 'useKeys'. */
+  verifyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsVerifyContent): Promise<ApiResponse<KeyVaultVaultsVerifyResult>> {
+    return this.transport.send<KeyVaultVaultsVerifyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/verify`, body: content });
+  }
+
+  /** wrapKey — permission 'useKeys'. */
+  wrapKeyKeyVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: KeyVaultVaultsWrapKeyContent): Promise<ApiResponse<KeyVaultVaultsWrapKeyResult>> {
+    return this.transport.send<KeyVaultVaultsWrapKeyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.KeyVault/vaults/${CyberCloudApi.segment(resourceName)}/wrapKey`, body: content });
+  }
+
   /** Reads one Mail domain. */
   getMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<MailDomainsResource>> {
     return this.transport.send<MailDomainsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(resourceName)}` });
@@ -808,6 +1076,41 @@ export class CyberCloudApi {
   /** One page of the Mail domains in a resource group. ⚠ A short page never means "that is all there is". */
   listMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<MailDomainsResource>>> {
     return this.transport.send<Page<MailDomainsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** dnsRecords — permission 'read'. */
+  dnsRecordsMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<MailDomainsDnsRecordsResult>> {
+    return this.transport.send<MailDomainsDnsRecordsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(resourceName)}/dnsRecords` });
+  }
+
+  /** verify — permission 'write'. */
+  verifyMailDomain(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<MailDomainsVerifyResult>> {
+    return this.transport.send<MailDomainsVerifyResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(resourceName)}/verify` });
+  }
+
+  /** Reads one Mailbox. */
+  getMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, resourceName: string): Promise<ApiResponse<MailDomainsMailboxesResource>> {
+    return this.transport.send<MailDomainsMailboxesResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Mailbox. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, resourceName: string, data: MailDomainsMailboxesData): Promise<ApiResponse<MailDomainsMailboxesResource>> {
+    return this.transport.send<MailDomainsMailboxesResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Mailbox. A merge patch: what is not set is not changed. */
+  updateMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, resourceName: string, data: Partial<MailDomainsMailboxesData>): Promise<ApiResponse<MailDomainsMailboxesResource>> {
+    return this.transport.send<MailDomainsMailboxesResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Mailbox. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Mailboxes in a resource group. ⚠ A short page never means "that is all there is". */
+  listMailbox(tenantId: string, subscriptionId: string, resourceGroupName: string, domainsName: string, page: PageRequest = {}): Promise<ApiResponse<Page<MailDomainsMailboxesResource>>> {
+    return this.transport.send<Page<MailDomainsMailboxesResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Mail/domains/${CyberCloudApi.segment(domainsName)}/mailboxes`, query: CyberCloudApi.pageQuery(page) });
   }
 
   /** Reads one Kafka cluster. */
@@ -930,14 +1233,29 @@ export class CyberCloudApi {
     return this.transport.send<MonitorWorkspacesListKeysResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/listKeys` });
   }
 
+  /** listMetricLabels — permission 'read'. */
+  listMetricLabelsMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: MonitorWorkspacesListMetricLabelsContent): Promise<ApiResponse<MonitorWorkspacesListMetricLabelsResult>> {
+    return this.transport.send<MonitorWorkspacesListMetricLabelsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/listMetricLabels`, body: content });
+  }
+
   /** purge — permission 'purge'. ⚠ Long-running. */
   purgeMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<unknown>> {
     return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/purge` });
   }
 
+  /** queryMetrics — permission 'read'. */
+  queryMetricsMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: MonitorWorkspacesQueryMetricsContent): Promise<ApiResponse<unknown>> {
+    return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/queryMetrics`, body: content });
+  }
+
   /** restore — permission 'write'. ⚠ Long-running. */
   restoreMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<unknown>> {
     return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/restore` });
+  }
+
+  /** searchLogs — permission 'read'. */
+  searchLogsMonitorWorkspace(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: MonitorWorkspacesSearchLogsContent): Promise<ApiResponse<unknown>> {
+    return this.transport.send<unknown>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(resourceName)}/searchLogs`, body: content });
   }
 
   /** Reads one Alert rule. */
@@ -998,6 +1316,61 @@ export class CyberCloudApi {
   /** listEndpoints — permission 'read'. */
   listEndpointsOpenTelemetryCollector(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesCollectorsListEndpointsResult>> {
     return this.transport.send<MonitorWorkspacesCollectorsListEndpointsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/collectors/${CyberCloudApi.segment(resourceName)}/listEndpoints` });
+  }
+
+  /** Reads one Application component. */
+  getApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesComponentsResource>> {
+    return this.transport.send<MonitorWorkspacesComponentsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Application component. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, data: MonitorWorkspacesComponentsData): Promise<ApiResponse<MonitorWorkspacesComponentsResource>> {
+    return this.transport.send<MonitorWorkspacesComponentsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Application component. A merge patch: what is not set is not changed. */
+  updateApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, data: Partial<MonitorWorkspacesComponentsData>): Promise<ApiResponse<MonitorWorkspacesComponentsResource>> {
+    return this.transport.send<MonitorWorkspacesComponentsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Application component. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Application components in a resource group. ⚠ A short page never means "that is all there is". */
+  listApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, page: PageRequest = {}): Promise<ApiResponse<Page<MonitorWorkspacesComponentsResource>>> {
+    return this.transport.send<Page<MonitorWorkspacesComponentsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** applicationMap — permission 'read'. */
+  applicationMapApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsApplicationMapContent): Promise<ApiResponse<MonitorWorkspacesComponentsApplicationMapResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsApplicationMapResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/applicationMap`, body: content });
+  }
+
+  /** dependencies — permission 'read'. */
+  dependenciesApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsDependenciesContent): Promise<ApiResponse<MonitorWorkspacesComponentsDependenciesResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsDependenciesResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/dependencies`, body: content });
+  }
+
+  /** exceptions — permission 'read'. */
+  exceptionsApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsExceptionsContent): Promise<ApiResponse<MonitorWorkspacesComponentsExceptionsResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsExceptionsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/exceptions`, body: content });
+  }
+
+  /** listConnectionString — permission 'read'. */
+  listConnectionStringApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string): Promise<ApiResponse<MonitorWorkspacesComponentsListConnectionStringResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsListConnectionStringResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/listConnectionString` });
+  }
+
+  /** requests — permission 'read'. */
+  requestsApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsRequestsContent): Promise<ApiResponse<MonitorWorkspacesComponentsRequestsResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsRequestsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/requests`, body: content });
+  }
+
+  /** transaction — permission 'read'. */
+  transactionApplicationComponent(tenantId: string, subscriptionId: string, resourceGroupName: string, workspacesName: string, resourceName: string, content: MonitorWorkspacesComponentsTransactionContent): Promise<ApiResponse<MonitorWorkspacesComponentsTransactionResult>> {
+    return this.transport.send<MonitorWorkspacesComponentsTransactionResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Monitor/workspaces/${CyberCloudApi.segment(workspacesName)}/components/${CyberCloudApi.segment(resourceName)}/transaction`, body: content });
   }
 
   /** Reads one Public IP address. */
@@ -1235,6 +1608,11 @@ export class CyberCloudApi {
     return this.transport.send<Page<RecoveryServicesVaultsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults`, query: CyberCloudApi.pageQuery(page) });
   }
 
+  /** backupNow — permission 'write'. */
+  backupNowBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: RecoveryServicesVaultsBackupNowContent): Promise<ApiResponse<RecoveryServicesVaultsBackupNowResult>> {
+    return this.transport.send<RecoveryServicesVaultsBackupNowResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}/backupNow`, body: content });
+  }
+
   /** listRecoveryPoints — permission 'read'. */
   listRecoveryPointsBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<RecoveryServicesVaultsListRecoveryPointsResult>> {
     return this.transport.send<RecoveryServicesVaultsListRecoveryPointsResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}/listRecoveryPoints` });
@@ -1243,6 +1621,36 @@ export class CyberCloudApi {
   /** recover — permission 'write'. */
   recoverBackupVault(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: RecoveryServicesVaultsRecoverContent): Promise<ApiResponse<RecoveryServicesVaultsRecoverResult>> {
     return this.transport.send<RecoveryServicesVaultsRecoverResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.RecoveryServices/vaults/${CyberCloudApi.segment(resourceName)}/recover`, body: content });
+  }
+
+  /** Reads one Deployment. */
+  getDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<ResourcesDeploymentsResource>> {
+    return this.transport.send<ResourcesDeploymentsResource>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** Creates or replaces one Deployment. ⚠ Long-running: the response is a 202 carrying operationUrl. */
+  createOrUpdateDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: ResourcesDeploymentsData): Promise<ApiResponse<ResourcesDeploymentsResource>> {
+    return this.transport.send<ResourcesDeploymentsResource>({ method: 'PUT', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Amends one Deployment. A merge patch: what is not set is not changed. */
+  updateDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, data: Partial<ResourcesDeploymentsData>): Promise<ApiResponse<ResourcesDeploymentsResource>> {
+    return this.transport.send<ResourcesDeploymentsResource>({ method: 'PATCH', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}`, body: data });
+  }
+
+  /** Deletes one Deployment. ⚠ Permanent: this type declares no soft-delete window. */
+  deleteDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string): Promise<ApiResponse<void>> {
+    return this.transport.send<void>({ method: 'DELETE', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}` });
+  }
+
+  /** One page of the Deployments in a resource group. ⚠ A short page never means "that is all there is". */
+  listDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, page: PageRequest = {}): Promise<ApiResponse<Page<ResourcesDeploymentsResource>>> {
+    return this.transport.send<Page<ResourcesDeploymentsResource>>({ method: 'GET', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments`, query: CyberCloudApi.pageQuery(page) });
+  }
+
+  /** whatIf — permission 'write'. */
+  whatIfDeployment(tenantId: string, subscriptionId: string, resourceGroupName: string, resourceName: string, content: ResourcesDeploymentsWhatIfContent): Promise<ApiResponse<ResourcesDeploymentsWhatIfResult>> {
+    return this.transport.send<ResourcesDeploymentsWhatIfResult>({ method: 'POST', path: `/tenants/${CyberCloudApi.segment(tenantId)}/subscriptions/${CyberCloudApi.segment(subscriptionId)}/resourceGroups/${CyberCloudApi.segment(resourceGroupName)}/providers/CyberCloud.Resources/deployments/${CyberCloudApi.segment(resourceName)}/whatIf`, body: content });
   }
 
   /** Reads one Widget. */

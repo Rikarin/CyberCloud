@@ -92,8 +92,9 @@ static class GrainFactories {
     /// <remarks>
     ///     <para>
     ///         docs/plan/06 § Grain keys and <c>GrainKeyKind</c>'s own documentation: a platform
-    ///         singleton (<c>platform/{name}</c>) and a cluster connection (<c>cluster/{id:N}</c>)
-    ///         are null-tenant by construction. <c>ITenantDirectoryGrain</c>'s remarks are explicit —
+    ///         singleton (<c>platform/{name}</c>), a cluster connection (<c>cluster/{id:N}</c>) and
+    ///         a metrics account claim (<c>metrics-account/{accountId}</c>) are null-tenant by
+    ///         construction. <c>ITenantDirectoryGrain</c>'s remarks are explicit —
     ///         <i>
     ///             "reach it with a plain <c>IGrainFactory.GetGrain</c> — <b>not</b>
     ///             <c>ForTenant</c>"
@@ -118,6 +119,7 @@ static class GrainFactories {
             case "ShardMap":
             case "TenantDirectory":
             case "ClusterConnection":
+            case "MetricsAccount":
                 return true;
 
             default:

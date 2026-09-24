@@ -50,6 +50,14 @@ export function isList(field: FormField): boolean {
   return typeOf(field) === 'array';
 }
 
+/**
+ * Whether a list's elements are numbers — a budget's thresholds. The chips still hold text, as every
+ * chip does; `toBody` sends numbers, and a validator refuses a chip that isn't one.
+ */
+export function isNumberList(field: FormField): boolean {
+  return isList(field) && field.items !== undefined;
+}
+
 /** Whether a field is a group of other fields rather than a value. */
 export function isGroup(field: FormField): boolean {
   return field.control === 'xui-group';
@@ -83,7 +91,7 @@ export function treeOf(form: AnyForm): readonly FieldNode[] {
  * | string, any widget      | `string`                         |
  * | integer, number         | `number \| null`                 |
  * | boolean                 | `boolean`                        |
- * | array (chips, multi)    | `string[]`                       |
+ * | array (chips, multi)    | `string[]` — numbers too, as text |
  * | tag bag                 | `string[]` of `key=value` lines  |
  * | group                   | a nested `FormGroup`             |
  *
@@ -178,6 +186,7 @@ function validatorsOf(field: FormField): ValidatorFn[] {
   }
 
   if (type === 'array') {
+    if (field.items !== undefined) validators.push(everyNumber(field.items));
     if (field.pattern !== undefined) validators.push(everyMatches(new RegExp(field.pattern)));
     if (field.choices !== undefined && field.choices.length > 0)
       validators.push(everyOneOf(field.choices.map(c => c.value)));
@@ -213,6 +222,23 @@ const everyMatches =
   (pattern: RegExp): ValidatorFn =>
   control =>
     (control.value as string[]).every(v => pattern.test(v)) ? null : { pattern: { requiredPattern: pattern.source } };
+
+/** Every chip is a number of the element's type, inside its bounds. */
+const everyNumber =
+  (items: NonNullable<FormField['items']>): ValidatorFn =>
+  control =>
+    (control.value as string[]).every(chip => {
+      const value = Number(chip);
+      return (
+        chip.trim() !== '' &&
+        Number.isFinite(value) &&
+        (items.type !== 'integer' || Number.isInteger(value)) &&
+        (items.minimum === undefined || value >= items.minimum) &&
+        (items.maximum === undefined || value <= items.maximum)
+      );
+    })
+      ? null
+      : { itemNumber: items };
 
 /** A tag line is `key=value` with a non-empty key. `=` alone, or a bare word, is refused. */
 const tagLines: ValidatorFn = control =>
@@ -267,8 +293,13 @@ function bodyOf(node: FieldNode, raw: Record<string, unknown>): unknown {
   }
 
   switch (typeOf(field)) {
-    case 'array':
-      return (value as string[]).length === 0 && !field.required ? undefined : value;
+    case 'array': {
+      const chips = value as string[];
+      if (chips.length === 0 && !field.required) return undefined;
+      // ⚠ A list of numbers goes back as numbers. Sent as the chips' text it is the wrong type, and
+      // the write path refuses the whole body for it (#41).
+      return isNumberList(field) ? chips.map(Number) : chips;
+    }
     case 'integer':
     case 'number':
       return value === null && !field.required ? undefined : value;
@@ -321,6 +352,10 @@ export function messageFor(field: FormField, errors: ValidationErrors | null): s
   if (errors['oneOf'] !== undefined)
     return $localize`:@@forms.oneOf:${field.label}:label: is not one of the allowed values.`;
   if (errors['tagLine'] !== undefined) return $localize`:@@forms.tagLine:Write each tag as key=value.`;
+  if (errors['itemNumber'] !== undefined)
+    return field.items?.minimum !== undefined && field.items.maximum !== undefined
+      ? $localize`:@@forms.itemNumberRange:Each value in ${field.label}:label: must be a number from ${String(field.items.minimum)}:min: to ${String(field.items.maximum)}:max:.`
+      : $localize`:@@forms.itemNumber:Each value in ${field.label}:label: must be a number.`;
 
   return $localize`:@@forms.invalid:${field.label}:label: is not valid.`;
 }

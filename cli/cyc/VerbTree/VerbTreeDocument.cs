@@ -226,7 +226,7 @@ sealed class VerbTreeFlag {
     [JsonPropertyName("name")]
     public string Name { get => field ?? string.Empty; init; } = string.Empty;
 
-    /// <summary><c>string</c>, <c>integer</c>, <c>number</c>, <c>switch</c> or <c>keyValue</c>.</summary>
+    /// <summary><c>string</c>, <c>integer</c>, <c>number</c>, <c>switch</c>, <c>keyValue</c> or <c>json</c> — one JSON value.</summary>
     [JsonPropertyName("type")]
     public string Type { get => field ?? string.Empty; init; } = string.Empty;
 

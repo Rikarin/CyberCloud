@@ -607,6 +607,14 @@ export class AccessBlade {
         return $localize`:@@access.role.contributor:Contributor`;
       case 'reader':
         return $localize`:@@access.role.reader:Reader`;
+      case 'keyVaultSecretsOfficer':
+        return $localize`:@@access.role.keyVaultSecretsOfficer:Key Vault Secrets Officer`;
+      case 'keyVaultSecretsUser':
+        return $localize`:@@access.role.keyVaultSecretsUser:Key Vault Secrets User`;
+      case 'keyVaultCryptoOfficer':
+        return $localize`:@@access.role.keyVaultCryptoOfficer:Key Vault Crypto Officer`;
+      case 'keyVaultCryptoUser':
+        return $localize`:@@access.role.keyVaultCryptoUser:Key Vault Crypto User`;
     }
   }
 
@@ -742,6 +750,14 @@ function roleDescription(role: Role): string {
       return $localize`:@@access.role.contributorHint:Read and write, and deliberately not delete — narrower than Azure's Contributor.`;
     case 'reader':
       return $localize`:@@access.role.readerHint:Read only.`;
+    case 'keyVaultSecretsOfficer':
+      return $localize`:@@access.role.keyVaultSecretsOfficerHint:Set, read, delete, recover and purge a key vault's secrets. No control-plane right.`;
+    case 'keyVaultSecretsUser':
+      return $localize`:@@access.role.keyVaultSecretsUserHint:Read a key vault's secret values. No control-plane right.`;
+    case 'keyVaultCryptoOfficer':
+      return $localize`:@@access.role.keyVaultCryptoOfficerHint:Create, import, delete, recover, purge and use a key vault's keys. No control-plane right.`;
+    case 'keyVaultCryptoUser':
+      return $localize`:@@access.role.keyVaultCryptoUserHint:Encrypt, decrypt, wrap, unwrap, sign and verify with a key vault's keys. No control-plane right.`;
   }
 }
 

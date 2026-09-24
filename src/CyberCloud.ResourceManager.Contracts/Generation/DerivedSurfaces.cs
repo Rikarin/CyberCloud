@@ -364,9 +364,31 @@ public static class DerivedSurfaces {
         // Folding it in would make "one command per resource type" off by three and the invariant
         // would have to be relaxed to a range, which is the shape of a check that stops catching the
         // thing it was written for.
+        // ⚠ And the scope-object groups for the same reason — issue #46's `policy` comes from no
+        // provider either, and its own count is asserted below.
+        var objectGroups = DocumentReader.ScopeObjectsOf(document)
+            .Select(static x => CliTokens.GroupOf(x.ProviderNamespace))
+            .ToHashSet(StringComparer.Ordinal);
+
         var commandCount = groups
-            .Where(static x => !string.Equals(x.Key, CliEmitter.ScopeGroupName, StringComparison.Ordinal))
+            .Where(x => !string.Equals(x.Key, CliEmitter.ScopeGroupName, StringComparison.Ordinal)
+                && !objectGroups.Contains(x.Key)
+            )
             .Sum(static group => group.Value?["commands"] is JsonObject c ? c.Count : 0);
+
+        var objectCount = groups
+            .Where(x => objectGroups.Contains(x.Key))
+            .Sum(static group => group.Value?["commands"] is JsonObject c ? c.Count : 0);
+        var declaredObjects = DocumentReader.ScopeObjectsOf(document).Length;
+
+        if (objectCount != declaredObjects) {
+            problems.Add(
+                $"the verb tree's scope-object groups have {objectCount.ToString(CultureInfo.InvariantCulture)} "
+                + $"command(s) and the document declares {declaredObjects.ToString(CultureInfo.InvariantCulture)} "
+                + "object-and-scope pair(s). An address the CLI cannot reach is one a tenant can only use by "
+                + "hand — the state the review of issue #46 found policy in."
+            );
+        }
 
         var typeCount = DocumentReader.TypesOf(document).Length;
         var scopeCount = groups[CliEmitter.ScopeGroupName]?["commands"] is JsonObject scopes ? scopes.Count : 0;
@@ -408,7 +430,8 @@ public static class DerivedSurfaces {
             // would arrive here as the declaration ("", "", "") and collide with itself — three
             // messages naming an empty provider and an empty type, which is worse than no check.
             // Its own count is asserted above, and a JsonObject cannot hold one key twice.
-            if (!string.Equals(group.Key, CliEmitter.ScopeGroupName, StringComparison.Ordinal)) {
+            if (!string.Equals(group.Key, CliEmitter.ScopeGroupName, StringComparison.Ordinal)
+                && !objectGroups.Contains(group.Key)) {
                 problems.AddRange(CliTokens.Collisions(commands.Select(static x => Declaration(x.Value))));
             }
 

@@ -13,6 +13,13 @@
       server's service proxy with ClusterConformanceHarness.CreateApiServerClient; PodDiagnostics is
       the one helper they share.
 
+      ⚠ AND, SINCE #32'S FOURTH NOUN, ONE SUITE THAT NEEDS NO k3s AT ALL. The component's views read
+      ClickHouse rather than a cluster, so ComponentViewsAgainstClickHouseTests starts a ClickHouse and
+      the pinned collector on a Docker network (TelemetryWorld), lets the real exporter write what
+      TelemetryFeed emits, and asserts every view through the Docker-free harness's real manager. It is
+      here and not in the Docker-free project because it needs a daemon; it skips by name without one,
+      the convention the rest of this project follows.
+
       ⚠ ONE CRD STUB, DERIVED, AND TWO KINDS THAT NEED NONE. A bare k3s serves
       /api/v1/namespaces/{ns}/configmaps and /secrets without being told; it serves no REST path for
       operator.victoriametrics.com/v1beta1 VMUser, and until the harness installs a definition the

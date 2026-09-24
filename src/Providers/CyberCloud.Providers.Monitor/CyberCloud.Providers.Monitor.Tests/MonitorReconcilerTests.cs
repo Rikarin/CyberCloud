@@ -25,7 +25,7 @@ public sealed class MonitorReconcilerTests {
     public void TheReconcilerHoldsNoMutableState() {
         // Clause 2, checked structurally, in the cheap place. The conformance run checks it too; this
         // is the one that catches the field somebody adds in a hurry, before a suite has to boot.
-        ReconcilerConformance.CheckNoHiddenState(new MonitorWorkspaceReconciler(new FixedClock()))
+        ReconcilerConformance.CheckNoHiddenState(new MonitorWorkspaceReconciler(new FixedClock(), new DictionaryAccounts()))
             .ShouldBeEmpty();
     }
 
@@ -57,7 +57,7 @@ public sealed class MonitorReconcilerTests {
         // ⚠ THE TEST A SINGLE-TENANT TEST CANNOT BE, AND THE ONLY ONE THAT CATCHES THE CACHE ABOVE.
         // AddCyberCloudProvider registers a reconciler as a SINGLETON BY CONCRETE TYPE, so in a real
         // silo ONE instance serves every tenant in the process.
-        var reconciler = new MonitorWorkspaceReconciler(new FixedClock());
+        var reconciler = new MonitorWorkspaceReconciler(new FixedClock(), new DictionaryAccounts());
 
         // ⚠ THE SAME RESOURCE NAME IN BOTH TENANTS. Two tenants naming a workspace `prod` is the
         // ordinary case. ⚠ Each brings its OWN subscription, because ReconcileDriver.NamespaceFor is
@@ -114,7 +114,7 @@ public sealed class MonitorReconcilerTests {
         // accountID would go green through the whole suite and would let every tenant read every
         // other tenant's metrics. The same mistake on CyberCloud.Storage/accounts/buckets produces
         // two buckets fighting over one object; here it produces a data breach.
-        var reconciler = new MonitorWorkspaceReconciler(new FixedClock());
+        var reconciler = new MonitorWorkspaceReconciler(new FixedClock(), new DictionaryAccounts());
         var connection = new RecordingConnection();
         var vault = new InMemorySecretVault();
 
@@ -224,6 +224,57 @@ public sealed class MonitorReconcilerTests {
         }
     }
 
+    // ── #41's review: an accountID another tenant's workspace already holds ────────────────────
+
+    [Fact]
+    public async Task AWorkspaceFoldingOntoAHeldAccountIsRefusedBeforeAnythingIsMintedOrApplied() {
+        // ⚠⚠ THE COLLISION MonitorWorkspaces.AccountId CAN'T RULE OUT. The fold is 32 bits, so a
+        // workspace can land on an account another tenant's workspace holds, and the VMUser this pass
+        // would apply is then a write path into that tenant's series. Nothing searches for a real
+        // collision here: the ledger is told another GUID got there first, which is what a collision
+        // looks like from the reconciler.
+        var ledger = new DictionaryAccounts();
+        var reconciler = new MonitorWorkspaceReconciler(new FixedClock(), ledger);
+        var connection = new RecordingConnection();
+        var vault = new InMemorySecretVault();
+        var address = Address("prod", TenantB, SubscriptionB, WorkspaceB);
+        var account = MonitorWorkspaces.AccountId(address);
+
+        (await ledger.ClaimAsync(account, WorkspaceA, TestContext.Current.CancellationToken)).ShouldBeTrue();
+
+        using var body = JsonDocument.Parse(MonitorWorkspaces.Body(ClusterId));
+        var outcome = await Pass(reconciler, connection, vault, address, body.RootElement);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        outcome.Error.Message.ShouldContain(account.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        outcome.Error.Message.ShouldContain("Delete this workspace and create it again");
+        outcome.Error.Message.ShouldNotContain(WorkspaceA.ToString(), Case.Insensitive, "the refusal named the other tenant's workspace");
+
+        connection.Applied.ShouldBeEmpty("a refused workspace applied an object — the VMUser is the write path into the holder's series");
+
+        (await vault.ResolveAsync(MonitorWorkspaces.IngestKeyRef(address), TestContext.Current.CancellationToken))
+            .IsSuccess.ShouldBeFalse("a refused workspace minted an ingest key it can never use");
+
+        (await ledger.IsHeldByAsync(account, WorkspaceA, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("the refusal took the account from the workspace that held it");
+    }
+
+    [Fact]
+    public async Task AConvergedWorkspaceHoldsItsOwnAccount() {
+        var ledger = new DictionaryAccounts();
+        var reconciler = new MonitorWorkspaceReconciler(new FixedClock(), ledger);
+        var address = Address("prod", TenantA, SubscriptionA, WorkspaceA);
+
+        using var body = JsonDocument.Parse(MonitorWorkspaces.Body(ClusterId));
+
+        (await Pass(reconciler, new RecordingConnection(), new InMemorySecretVault(), address, body.RootElement))
+            .ShouldBe(ReconcileOutcome.Converged);
+
+        (await ledger.IsHeldByAsync(MonitorWorkspaces.AccountId(address), WorkspaceA, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("the explorer asks this ledger, and a workspace that converged without claiming reads nothing");
+    }
+
     // ── Failure class (c): a retention a tenant can shorten ─────────────────────────────────────
 
     [Fact]
@@ -234,7 +285,7 @@ public sealed class MonitorReconcilerTests {
         // merge when it detects expired data. The API cannot refuse it (ResourceSchema validates one
         // body against constants), so the reconciler does — BEFORE it applies anything, so a refused
         // shrink leaves the workspace exactly as it was.
-        var reconciler = new MonitorWorkspaceReconciler(new FixedClock());
+        var reconciler = new MonitorWorkspaceReconciler(new FixedClock(), new DictionaryAccounts());
         var connection = new RecordingConnection();
         var vault = new InMemorySecretVault();
         var address = Address("prod", TenantA, SubscriptionA, WorkspaceA);
@@ -278,7 +329,7 @@ public sealed class MonitorReconcilerTests {
         // The other side of the same check. A refusal that also blocked growth would make the priced
         // property unusable, which is the failure that would be found by a customer rather than by a
         // test.
-        var reconciler = new MonitorWorkspaceReconciler(new FixedClock());
+        var reconciler = new MonitorWorkspaceReconciler(new FixedClock(), new DictionaryAccounts());
         var connection = new RecordingConnection();
         var vault = new InMemorySecretVault();
         var address = Address("prod", TenantA, SubscriptionA, WorkspaceA);
@@ -434,7 +485,7 @@ public sealed class MonitorReconcilerTests {
 
         await Reconcile(connection, body.RootElement, vault);
 
-        var reconciler = new MonitorWorkspaceReconciler(new FixedClock());
+        var reconciler = new MonitorWorkspaceReconciler(new FixedClock(), new DictionaryAccounts());
         var deleted = await reconciler.DeleteAsync(
             Context(connection, body.RootElement, vault),
             TestContext.Current.CancellationToken
@@ -496,7 +547,7 @@ public sealed class MonitorReconcilerTests {
         JsonElement desired,
         InMemorySecretVault? vault = null
     ) =>
-        await new MonitorWorkspaceReconciler(new FixedClock())
+        await new MonitorWorkspaceReconciler(new FixedClock(), new DictionaryAccounts())
             .ReconcileAsync(Context(connection, desired, vault), TestContext.Current.CancellationToken);
 
     static async Task<ReconcileOutcome> Pass(
@@ -702,6 +753,17 @@ sealed class RecordingConnection : IKubeClusterConnection {
     ///     make the second apply overwrite the first and every read-back return the wrong document.
     /// </summary>
     internal static string Key(ObjectRef target) => target.Kind.Kind + "/" + target.Namespace + "/" + target.Name;
+}
+
+/// <summary>An account ledger in a dictionary: first claim wins, and nothing is released.</summary>
+sealed class DictionaryAccounts : IMonitorAccounts {
+    readonly ConcurrentDictionary<uint, Guid> holders = new();
+
+    public Task<bool> ClaimAsync(uint accountId, Guid workspaceId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(holders.GetOrAdd(accountId, workspaceId) == workspaceId);
+
+    public Task<bool> IsHeldByAsync(uint accountId, Guid workspaceId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(holders.TryGetValue(accountId, out var holder) && holder == workspaceId);
 }
 
 /// <summary>A clock that does not move. Nothing here depends on time passing.</summary>

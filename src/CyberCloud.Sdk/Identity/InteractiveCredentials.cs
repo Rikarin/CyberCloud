@@ -101,7 +101,7 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
         }
 
         var form = new List<KeyValuePair<string, string>> { new("client_id", clientId) };
-        AddScopes(form, context);
+        AddScopes(form, WithOfflineAccess(context));
 
         var authorization = await Identity.RequestDeviceCodeAsync(form, cancellationToken).ConfigureAwait(false);
 
@@ -133,13 +133,15 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
         var interval = TimeSpan.FromSeconds(Math.Max(authorization.Interval, 1));
         var deadline = DateTimeOffset.UtcNow.AddSeconds(authorization.ExpiresIn);
 
+        // ⚠ No `scope` on the poll. RFC 8628 § 3.4 lists three parameters, and the scopes were fixed
+        // by the device authorization request; OpenIddict refuses a device-code token request that
+        // carries one ("the 'scope' parameter is not valid in this context"), so a poll that sent
+        // them was refused on every attempt against the real host. #43.
         var form = new List<KeyValuePair<string, string>> {
             new("grant_type", OAuthGrants.DeviceCode),
             new("device_code", authorization.DeviceCode),
             new("client_id", clientId)
         };
-
-        AddScopes(form, context);
 
         while (DateTimeOffset.UtcNow < deadline) {
             await Delay(interval, cancellationToken).ConfigureAwait(false);
@@ -162,6 +164,23 @@ public sealed class DeviceCodeCredential : TokenEndpointCredential {
                 interval += TimeSpan.FromSeconds(5);
 
                 continue;
+            } catch (AuthenticationFailedException e) when (string.Equals(
+                                                                e.ErrorCode,
+                                                                "access_denied",
+                                                                StringComparison.Ordinal
+                                                            )) {
+                throw new AuthenticationFailedException("The sign-in was declined on the verification page.", e) {
+                    ErrorCode = e.ErrorCode
+                };
+            } catch (AuthenticationFailedException e) when (string.Equals(
+                                                                e.ErrorCode,
+                                                                "expired_token",
+                                                                StringComparison.Ordinal
+                                                            )) {
+                throw new AuthenticationFailedException(
+                    "The device code expired before the sign-in was completed. Run the sign-in again.",
+                    e
+                ) { ErrorCode = e.ErrorCode };
             }
 
             await StoreAsync(payload, cancellationToken).ConfigureAwait(false);
@@ -332,12 +351,15 @@ public sealed class InteractiveBrowserCredential : TokenEndpointCredential {
         Append(query, "code_challenge_method", Pkce.Method);
         Append(query, "state", state);
 
-        if (context.Scopes is { Length: > 0 }) {
-            Append(query, "scope", string.Join(' ', context.Scopes));
+        if (WithOfflineAccess(context).Scopes is { Length: > 0 } scopes) {
+            Append(query, "scope", string.Join(' ', scopes));
         }
 
+        // ⚠ `tenant`, the parameter the identity host's TenantHint reads — a tenant id or a slug.
+        // It was `tenant_id`, which the host ignores, so a named tenant fell back to the host's
+        // default and the person was signed into the wrong one. #43.
         if ((context.TenantId ?? Options.TenantId) is { } tenant) {
-            Append(query, "tenant_id", tenant);
+            Append(query, "tenant", tenant);
         }
 
         return new(query.ToString().TrimEnd('&'));

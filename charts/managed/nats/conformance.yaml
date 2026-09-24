@@ -234,3 +234,18 @@ owed:
       the mechanism NATS offers is `nats stream backup`, a client-side operation against a running
       server, which is neither a CR field nor a Velero policy. It is a real gap and it is a different
       one from the cache's.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.Messaging/natsClusters. OWED. THE ENGINE STEP, AND IT EXISTS IN THE ENGINE: JetStream
+      can encrypt its store at rest with a key named in the server configuration. ⚠ That key is a
+      value the server reads from its config, so honouring a customer key means the reconciler
+      unwrapping a data key and writing it into a Secret the pod mounts — which moves an unwrapped key
+      into the tenant's cluster, a weaker property than the vault's own "never leaves unwrapped", and
+      one to decide rather than drift into. What every family still needs is docs/plan/18 § What
+      customer-managed keys still need: (1) a key-use seam — the grant is expressible today,
+      `keyVaultCryptoUser` with principalType `resource` on a CyberCloud.KeyVault/vaults, but
+      `ctx.View` is read-only by construction and wrapKey/unwrapKey are actions, so no reconciler can
+      call them; (2) an `encryption.keyUri` property on a NEW api-version of this type; (3) revocation
+      — a disabled key taking the data offline, which needs a re-unwrap on a schedule nothing runs.
+      The key's home is no longer the blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23.
+      None of this row is started.

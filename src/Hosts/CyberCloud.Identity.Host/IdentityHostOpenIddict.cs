@@ -53,13 +53,24 @@ public static class IdentityHostOpenIddict {
     ///     Nothing noticed because nothing called <see cref="AddIdentityHostOpenIddict" />; the test
     ///     project asserted the path constants and the <em>other</em> registration.
     ///     <para>
-    ///         ⚠ Like the other four, the page behind it is owed — see
-    ///         <see cref="IdentityEndpoints" />, which says where the pages live and which of them
-    ///         exist. A path with a passthrough and no page is a 404; a flow allowed with no path at
-    ///         all is a host that does not start.
+    ///         This is the <c>verification_uri</c> the device prints, and since #43 its passthrough
+    ///         redirects to the identity app's device page (<c>/device-code</c>), carrying the user
+    ///         code when the link had one — <c>IdentityEndpoints.MapDeviceVerification</c>. The page
+    ///         takes the code, the sign-in and the answer; this path only has to exist and be short.
     ///     </para>
     /// </remarks>
     public const string EndUserVerificationPath = "/device/verify";
+
+    /// <summary>
+    ///     The revocation endpoint — RFC 7009, for refresh tokens only. <c>cyc logout</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Enabled by #43 against this file's own "no token revocation endpoint" rule, which was
+    ///     about <i>access</i> tokens and still holds: an access token presented here is answered
+    ///     <c>unsupported_token_type</c> (RFC 7009 § 2.2.1), never quietly accepted, and a refresh
+    ///     token revokes the token session behind it — <c>DegradedModeHandlers.ValidateRevocationRequest</c>.
+    /// </remarks>
+    public const string RevocationPath = "/revoke";
 
     /// <summary>The end-session endpoint.</summary>
     public const string EndSessionPath = "/logout";
@@ -92,11 +103,13 @@ public static class IdentityHostOpenIddict {
     ///             authorization code with PKCE.
     ///         </item>
     ///         <item>
-    ///             <b>No token revocation endpoint for access tokens.</b>
+    ///             <b>No revocation of access tokens.</b>
     ///             <see cref="AccessTokenPolicy.AccessTokensAreRevocable" /> is
     ///             <see langword="false" />; revocation happens by revoking the <i>session</i>, which
     ///             stops the refresh chain. Publishing a revocation endpoint that silently did
-    ///             nothing to an already-issued access token would be worse than not having one.
+    ///             nothing to an already-issued access token would be worse than not having one — so
+    ///             <see cref="RevocationPath" /> (#43, <c>cyc logout</c>) takes refresh tokens and
+    ///             answers an access token <c>unsupported_token_type</c>, out loud.
     ///         </item>
     ///     </list>
     ///     <para>
@@ -165,6 +178,7 @@ public static class IdentityHostOpenIddict {
     public static IServiceCollection AddIdentityHostOpenIddict(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);
 
+        services.TryAddSingleton<DeviceFlow>();
         services.TryAddSingleton<TokenApi>();
 
         // ⚠ The keys, through an IConfigureOptions rather than the builder's AddEphemeral* calls —
@@ -226,7 +240,18 @@ public static class IdentityHostOpenIddict {
                         .SetUserInfoEndpointUris(UserInfoPath)
                         .SetDeviceAuthorizationEndpointUris(DeviceAuthorizationPath)
                         .SetEndUserVerificationEndpointUris(EndUserVerificationPath)
-                        .SetEndSessionEndpointUris(EndSessionPath);
+                        .SetEndSessionEndpointUris(EndSessionPath)
+                        .SetRevocationEndpointUris(RevocationPath);
+
+                    // The device flow's codes (#43): both lifetimes, one number. ⚠ NOT the user-code
+                    // charset, length or display format, though the builder offers all three —
+                    // OpenIddict's post-configuration clears them whenever token storage is off,
+                    // which degraded mode implies ("custom event handlers must … return a user code
+                    // that can be used and entered by a human"). They were set here first and the
+                    // first code on the wire came back unformatted; DeviceCodes owns all three.
+                    options
+                        .SetDeviceCodeLifetime(DeviceCodes.Lifetime)
+                        .SetUserCodeLifetime(DeviceCodes.Lifetime);
 
                     // docs/plan/11 § Protocol's flow table, and nothing outside it.
                     options

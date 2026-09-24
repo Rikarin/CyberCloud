@@ -20,6 +20,19 @@
                                           code, /authorize, /token with PKCE, the refresh cookie and
                                           its Origin rule, the replay, /logout, and a restart on the
                                           same key directory
+        DeviceFlowOverHttpTests         — RFC 8628 (#43): /device, the device page's API, every
+                                          answer /token gives a poll, the refresh and /revoke
+        DeviceFlowThroughTheSdkTests    — the SDK's device credential, refresh and sign-out, the
+                                          protocol half of `cyc login` and `cyc logout`, against
+                                          this host
+        InvitationsOverHttpTests        — the invitation's mail, read out of Mailpit, and what the
+                                          link does at the invitation page's API
+        InvitationThroughTheGatewayTests — the invite itself: an owner's device-flow token, a POST
+                                          to the real gateway, the real InvitationService and grain,
+                                          then the mail, the accept, and the colleague refused
+        IdentityHostInItsOwnProcessTests — #43's grain calls from the host's own executable, a
+                                          separate process joined to this cluster, so the type
+                                          manifest the test process shares hides nothing
 
       ⚠ NO TestServer AND NO WebApplicationFactory, AND THAT IS A DELIBERATE CHOICE RATHER THAN A
       MISSING PACKAGE. Both would need Microsoft.AspNetCore.Mvc.Testing, which docs/plan/02's
@@ -41,6 +54,8 @@
         <PackageReference Include="Shouldly"/>
         <PackageReference Include="Microsoft.Orleans.TestingHost"/>
         <PackageReference Include="Orleans.Multitenant"/>
+        <!-- #43: the invitation suite's Mailpit — the generic builder, as CyberCloud.Communication.Tests uses, because there is no Testcontainers.Mailpit. -->
+        <PackageReference Include="Testcontainers"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -57,6 +72,19 @@
         <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
         <ProjectReference Include="../../CyberCloud.Tenancy/CyberCloud.Tenancy.csproj"/>
         <ProjectReference Include="../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <!-- #43: cyc login's protocol half, run against this host rather than a scripted server — DeviceFlowThroughTheSdkTests says what the scripted one had agreed to that this host did not. -->
+        <ProjectReference Include="../../CyberCloud.Sdk/CyberCloud.Sdk.csproj"/>
+        <!-- #43: the mail path the invitation suite runs for real — the communication module and its SMTP carrier, in the silo. -->
+        <ProjectReference Include="../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <!--
+          #43, after review: the gateway, for InvitationThroughTheGatewayTests alone. The invite is a
+          POST to the gateway that the resource manager inside it checks, and until this reference
+          every suite that touched it substituted one side: Gateway.Host.Tests the manager,
+          CyberCloud.Isolation the HTTP and the token, InvitationsOverHttpTests the whole front half.
+          GatewayComposition.BuildAsync is what the gateway's own Program.cs calls, joined to this
+          project's cluster and told to trust this project's identity host.
+        -->
+        <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
     </ItemGroup>
 
 </Project>

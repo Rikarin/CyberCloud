@@ -167,6 +167,21 @@ public sealed record WriteTrace {
     [Id(0)]
     public ImmutableArray<WriteStep> Reached { get; init; } = [];
 
+    /// <summary>
+    ///     What happened inside <see cref="WriteStep.Policy" /> — every assignment that applied to the
+    ///     request, in the order the engine evaluated them, with the rewrites a modify made.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Inside step 5's span and not a step of its own.</b> The closed twelve are the
+    ///     document's numbers and <see cref="Canonical" /> is asserted ordinally; a modify is something
+    ///     that happens <i>at</i> step 5, the way a membership record happens at step 7.
+    ///     ⚠ <b>Visible to an in-process caller of <c>IResourceManager</c> only.</b> The gateway renders no
+    ///     part of <see cref="WriteTrace" />, so an HTTP caller still finds a rewrite by reading the
+    ///     resource back — docs/plan/08 § Policy lists it as owed.
+    /// </remarks>
+    [Id(1)]
+    public ImmutableArray<PolicyTraceEntry> Policy { get; init; } = [];
+
     /// <summary>The step the request stopped at, or <see cref="WriteStep.Accepted" /> when it did not.</summary>
     public WriteStep StoppedAt => Reached.IsDefaultOrEmpty ? WriteStep.None : Reached[^1];
 
@@ -912,6 +927,19 @@ public sealed record OperationStatus {
     /// </remarks>
     [Id(13)]
     public Guid ResourceId { get; init; }
+
+    /// <summary>
+    ///     The parent operation this one is a child of, or <see cref="Guid.Empty" /> for an operation
+    ///     nothing started on another's behalf.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Appended at 14, and the number is never reused</b> — docs/plan/05 § Serialization and
+    ///     schema evolution. A peer that predates it reads <see cref="Guid.Empty" />, which is what
+    ///     every operation it could have started was. <see cref="Children" /> is the other direction
+    ///     and has been on the wire since the type was published, empty until a deployment filled it.
+    /// </remarks>
+    [Id(14)]
+    public Guid ParentOperationId { get; init; }
 
     /// <summary>Whether the operation has reached a terminal state.</summary>
     public bool IsTerminal => State is OperationState.Succeeded or OperationState.Failed or OperationState.Canceled;

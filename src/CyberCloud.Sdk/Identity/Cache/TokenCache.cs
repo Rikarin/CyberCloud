@@ -10,14 +10,14 @@ namespace CyberCloud.Sdk;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         ⚠ <b>Never a plaintext file.</b> docs/plan/21 § `cyc`, on the token cache row:
-///         <i>
-///             "OS
-///             keychain (DPAPI / Keychain / libsecret). ⚠ <b>Never a plaintext file</b> — that is how CI
-///             credentials leak into container images."
-///         </i> Every implementation of this interface that
-///         ships here is a keychain or a process-lifetime dictionary; there is no file-backed one to
-///         reach for in a hurry.
+///         ⚠ <b>The keychain first, and a file only where there is no keychain.</b> docs/plan/21
+///         § Decisions' token-cache row: the OS keychain (Credential Manager / Keychain / libsecret),
+///         and CI signs in with no cache at all, because a file is how CI credentials leak into
+///         container images. Until #43 the rule was "never a file", and on a headless box with no
+///         <c>secret-tool</c> that meant no cache — so the device flow, the one sign-in built for such
+///         a box, persisted nothing there. <see cref="FileTokenCache" /> is now the fallback, owner-only
+///         on write and refused on read when it is not, and its remarks say what it does and does not
+///         protect against.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>The SDK reads and writes it; the CLI does neither.</b> docs/plan/21 § The .NET SDK's
@@ -60,10 +60,11 @@ public static class TokenCache {
     ///     The OS keychain: Keychain on macOS, Credential Manager on Windows, libsecret on Linux.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Falls back to <see cref="None" /> rather than to a file when no keychain is reachable —
-    ///     a headless container with no <c>secret-tool</c> gets no persistence and re-authenticates,
-    ///     which is the behaviour docs/plan/21 § `cyc`'s "never a plaintext file" rule demands. The
-    ///     fallback is silent to the caller and visible through <see cref="ITokenCache.IsAvailable" />.
+    ///     ⚠ Falls back to <see cref="FileTokenCache" /> in <see cref="FileTokenCache.DefaultDirectory" />
+    ///     when no keychain is reachable — a headless box with no <c>secret-tool</c> — and no longer to
+    ///     <see cref="None" />, which is what made <c>cyc login --device-code</c> a sign-in that the
+    ///     next command could not find (#43). <see cref="IsFileBacked" /> tells a caller which one it
+    ///     got, so <c>cyc login</c> can say where the token went.
     /// </remarks>
     public static ITokenCache CreatePersistent() {
         if (OperatingSystem.IsMacOS()) {
@@ -78,10 +79,15 @@ public static class TokenCache {
             return Fallback(new LibSecretTokenCache());
         }
 
-        return None;
+        return new FileTokenCache(FileTokenCache.DefaultDirectory);
 
-        static ITokenCache Fallback(ITokenCache cache) => cache.IsAvailable ? cache : None;
+        static ITokenCache Fallback(ITokenCache cache) =>
+            cache.IsAvailable ? cache : new FileTokenCache(FileTokenCache.DefaultDirectory);
     }
+
+    /// <summary>Whether <paramref name="cache" /> keeps entries in a file rather than a keychain.</summary>
+    /// <param name="cache">A cache <see cref="CreatePersistent" /> returned, or any other.</param>
+    public static bool IsFileBacked(ITokenCache cache) => cache is FileTokenCache;
 
     /// <summary>A cache that lives as long as the process. What the tests use, and what a server-side host wants.</summary>
     public static ITokenCache CreateInMemory() => new InMemoryTokenCache();
@@ -175,17 +181,102 @@ public sealed class InMemoryTokenCache : ITokenCache {
 ///     Credential Manager is in the OS, reachable with <c>[LibraryImport]</c> — which the AOT analyser
 ///     is happy with — and is the store a Windows user can actually inspect and revoke, which a
 ///     DPAPI blob in a file is not.
+///     <para>
+///         ⚠ <b>A record is written in chunks, because one credential holds 2,560 bytes and a real
+///         record does not fit.</b> The access token, the refresh token OpenIddict encrypts and the
+///         metadata beside them came to 2,951 bytes against the real identity host, and
+///         <c>CredWriteW</c> refused the write — so <c>cyc login</c> on Windows failed after the
+///         person had approved it, and no scripted-server test could see it, because a scripted
+///         token is thirty bytes. #43 found it (<c>Identity.Host.Tests</c>'
+///         <c>DeviceFlowThroughTheSdkTests</c> measures the record); the first chunk's first byte
+///         is the count and the rest follow under <c>{target}#1</c>, <c>#2</c> and so on.
+///     </para>
 /// </remarks>
 [SupportedOSPlatform("windows")]
 sealed partial class WindowsCredentialManagerTokenCache : ITokenCache {
     const int CredentialTypeGeneric = 1;
     const int CredentialPersistLocalMachine = 2;
 
+    /// <summary><c>CRED_MAX_CREDENTIAL_BLOB_SIZE</c> — 5 × 512 bytes. <c>CredWriteW</c> refuses anything larger.</summary>
+    const int MaxBlob = 2_560;
+
+    /// <summary>The most chunks a record may take — far past any record this SDK writes, and a byte.</summary>
+    const int MaxChunks = 16;
+
     public bool IsAvailable => OperatingSystem.IsWindows();
 
     public ValueTask<TokenCacheRecord?> GetAsync(string key, CancellationToken cancellationToken = default) {
-        if (!CredRead(TargetName(key), CredentialTypeGeneric, 0, out var handle)) {
+        if (Read(TargetName(key, 0)) is not { Length: > 0 } first) {
             return ValueTask.FromResult<TokenCacheRecord?>(null);
+        }
+
+        // ⚠ A record written before chunking starts with its JSON's '{'; a chunked one starts with
+        // its chunk count, which is never that byte. Read either.
+        if (first[0] == (byte)'{') {
+            return ValueTask.FromResult(TokenCache.Deserialise(first));
+        }
+
+        var chunks = first[0];
+        var payload = new List<byte>(first.Length * chunks);
+        payload.AddRange(first.AsSpan(1));
+
+        for (var index = 1; index < chunks; index++) {
+            if (Read(TargetName(key, index)) is not { } chunk) {
+                // A chunk missing is a record half-written or half-removed: absent, not an error.
+                return ValueTask.FromResult<TokenCacheRecord?>(null);
+            }
+
+            payload.AddRange(chunk);
+        }
+
+        return ValueTask.FromResult(TokenCache.Deserialise(payload.ToArray()));
+    }
+
+    public ValueTask SetAsync(string key, TokenCacheRecord record, CancellationToken cancellationToken = default) {
+        var bytes = TokenCache.Serialise(record);
+
+        try {
+            // ⚠ Chunked: see the type's remarks. The first chunk carries the count in its first byte.
+            var chunks = (bytes.Length + MaxBlob) / MaxBlob;
+
+            if (chunks > MaxChunks) {
+                throw new AuthenticationFailedException(
+                    "The token cache entry is too large for Credential Manager even in chunks."
+                );
+            }
+
+            for (var index = 0; index < chunks; index++) {
+                var blob = index == 0
+                    ? [(byte)chunks, .. bytes.AsSpan(0, Math.Min(bytes.Length, MaxBlob - 1))]
+                    : bytes.AsSpan(index * MaxBlob - 1, Math.Min(MaxBlob, bytes.Length - (index * MaxBlob - 1))).ToArray();
+
+                try {
+                    Write(TargetName(key, index), blob);
+                } finally {
+                    CryptographicOperations.ZeroMemory(blob);
+                }
+            }
+
+            // A shorter record than the last one leaves chunks behind; clear them.
+            for (var index = chunks; index < MaxChunks && CredDelete(TargetName(key, index), CredentialTypeGeneric, 0); index++) { }
+        } finally {
+            CryptographicOperations.ZeroMemory(bytes);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default) {
+        CredDelete(TargetName(key, 0), CredentialTypeGeneric, 0);
+
+        for (var index = 1; index < MaxChunks && CredDelete(TargetName(key, index), CredentialTypeGeneric, 0); index++) { }
+
+        return ValueTask.CompletedTask;
+    }
+
+    static byte[]? Read(string target) {
+        if (!CredRead(target, CredentialTypeGeneric, 0, out var handle)) {
+            return null;
         }
 
         try {
@@ -193,16 +284,15 @@ sealed partial class WindowsCredentialManagerTokenCache : ITokenCache {
             var bytes = new byte[credential.CredentialBlobSize];
             Marshal.Copy(credential.CredentialBlob, bytes, 0, bytes.Length);
 
-            return ValueTask.FromResult(TokenCache.Deserialise(bytes));
+            return bytes;
         } finally {
             CredFree(handle);
         }
     }
 
-    public ValueTask SetAsync(string key, TokenCacheRecord record, CancellationToken cancellationToken = default) {
-        var bytes = TokenCache.Serialise(record);
+    static void Write(string targetName, byte[] bytes) {
         var blob = Marshal.AllocCoTaskMem(bytes.Length);
-        var target = Marshal.StringToCoTaskMemUni(TargetName(key));
+        var target = Marshal.StringToCoTaskMemUni(targetName);
 
         try {
             Marshal.Copy(bytes, 0, blob, bytes.Length);
@@ -224,20 +314,14 @@ sealed partial class WindowsCredentialManagerTokenCache : ITokenCache {
             // ⚠ Zeroed before it is freed. A refresh token left in released unmanaged memory is a
             // refresh token in whatever allocates that page next, and this is the one place in the SDK
             // where the runtime is not doing that for us.
-            CryptographicOperations.ZeroMemory(bytes);
             Marshal.Copy(new byte[bytes.Length], 0, blob, bytes.Length);
             Marshal.FreeCoTaskMem(blob);
             Marshal.FreeCoTaskMem(target);
         }
-
-        return ValueTask.CompletedTask;
     }
 
-    public ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default) {
-        CredDelete(TargetName(key), CredentialTypeGeneric, 0);
-
-        return ValueTask.CompletedTask;
-    }
+    static string TargetName(string key, int chunk) =>
+        chunk == 0 ? TargetName(key) : TargetName(key) + "#" + chunk.ToString(CultureInfo.InvariantCulture);
 
     static string TargetName(string key) => $"{TokenCache.ServiceName}:{key}";
 

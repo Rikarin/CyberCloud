@@ -13,12 +13,16 @@
       the PostgreSQL family's default body (charts/managed/postgres/conformance.yaml § owed,
       `the-default-bucket-is-not-filled-in`). One k3s per process — ClusterSlot — is the boundary.
 
-      ⚠ WHAT IT PROVES IS BOUNDED BY THAT REFUSAL, AND THE BOUND IS THE FINDING. No PostgreSQL server
-      with backups on can be admitted by the operator the bundle installs today, so the companion here
-      has backups OFF and the vault is asserted to REFUSE it at its pointer — the honest platform
-      state. The vault's rendering is then applied by hand and the operator's half is asserted: the
-      real webhook admits the six-field schedule, the controller creates a Backup labelled
-      cnpg.io/scheduled-backup, and listRecoveryPoints lists it with the operator's own reason.
+      ⚠ WHAT IT PROVES, SINCE #30: THE WHOLE ROUND TRIP. A PostgreSQL server with backups on archives
+      to a bucket of its own on a real SeaweedFS (the platform's object store, started beside k3s),
+      with a key issued by the store's IAM API and held in the vault; a vault protects it; backupNow
+      completes; recover creates a NEW server resource through the caller's write path; and the row
+      written before the backup is in the restored database. The first cut of this lane could only
+      assert the vault's refusal of a backups-off server, because the chart rendered a store with no
+      credentials and the operator's webhook refused every server with backups on.
+
+      ⚠ IT REFERENCES CyberCloud.ObjectStorage — the shipping SeaweedFsObjectStoreGrants the silo is
+      given, and the S3 client that reads the bucket back.
 
       ⚠ IT REFERENCES test/CyberCloud.Bundle.Cluster.Conformance FOR BundleInstaller — the one place
       install.sh is run from managed code. A second runner here would be a second reading of
@@ -41,6 +45,7 @@
         <ProjectReference Include="../CyberCloud.Providers.RecoveryServices.Conformance/CyberCloud.Providers.RecoveryServices.Conformance.csproj"/>
         <ProjectReference Include="../../../../test/CyberCloud.Cluster.Conformance/CyberCloud.Cluster.Conformance.csproj"/>
         <ProjectReference Include="../../../../test/CyberCloud.Bundle.Cluster.Conformance/CyberCloud.Bundle.Cluster.Conformance.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.ObjectStorage/CyberCloud.ObjectStorage.csproj"/>
     </ItemGroup>
 
 </Project>
