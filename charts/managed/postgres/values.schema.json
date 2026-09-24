@@ -10,9 +10,9 @@
       "properties": {
         "destinationPath": {
           "default": "",
-          "description": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.",
+          "description": "Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.",
           "examples": [
-            "s3://tenant-bucket/postgres"
+            ""
           ],
           "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
           "type": "string",
@@ -78,7 +78,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 8,
+      "x-cybercloud-order": 9,
       "x-cybercloud-pointer": "/properties/bootstrap"
     },
     "extensions": {
@@ -108,7 +108,7 @@
       "type": "string",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.",
-      "x-cybercloud-order": 11,
+      "x-cybercloud-order": 12,
       "x-cybercloud-pointer": "/properties/imageName"
     },
     "monitoring": {
@@ -124,7 +124,7 @@
         }
       },
       "type": "object",
-      "x-cybercloud-order": 9,
+      "x-cybercloud-order": 10,
       "x-cybercloud-pointer": "/properties/monitoring"
     },
     "nameOverride": {
@@ -133,7 +133,7 @@
       "type": "string",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "Helm plumbing. Nothing about it belongs in a resource body.",
-      "x-cybercloud-order": 12,
+      "x-cybercloud-order": 13,
       "x-cybercloud-pointer": "/properties/nameOverride"
     },
     "platform": {
@@ -148,6 +148,24 @@
           "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
           "x-cybercloud-order": 5,
           "x-cybercloud-pointer": "/properties/platform/apiVersion"
+        },
+        "backupBucket": {
+          "default": "",
+          "description": "The server's own bucket on the platform's object store, pg-{resourceId}. Written by the reconciler, which also writes the {name}-backup-s3 Secret holding the key to it. Empty renders no backup section.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 7,
+          "x-cybercloud-pointer": "/properties/platform/backupBucket"
+        },
+        "backupEndpoint": {
+          "default": "",
+          "description": "The platform object store's data-plane endpoint, as a pod in this cluster reaches it.",
+          "type": "string",
+          "x-cybercloud-api": false,
+          "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
+          "x-cybercloud-order": 8,
+          "x-cybercloud-pointer": "/properties/platform/backupEndpoint"
         },
         "managedBy": {
           "default": "cybercloud",
@@ -207,7 +225,7 @@
       "type": "object",
       "x-cybercloud-api": false,
       "x-cybercloud-internal-reason": "Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.",
-      "x-cybercloud-order": 10,
+      "x-cybercloud-order": 11,
       "x-cybercloud-pointer": "/properties/platform"
     },
     "pooling": {
@@ -255,6 +273,25 @@
       "type": "integer",
       "x-cybercloud-order": 1,
       "x-cybercloud-pointer": "/properties/replicas"
+    },
+    "restore": {
+      "additionalProperties": false,
+      "description": "Where the server's data comes from when it is created from a recovery point rather than empty.",
+      "properties": {
+        "recoveryPoint": {
+          "default": "",
+          "description": "A completed recovery point of a server in this resource group, as a backup vault's listRecoveryPoints names it. Empty means a new, empty database. Set at creation: a restore always creates a new server and never writes into one.",
+          "maxLength": 253,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?)$",
+          "type": "string",
+          "x-cybercloud-immutable": true,
+          "x-cybercloud-order": 0,
+          "x-cybercloud-pointer": "/properties/restore/recoveryPoint"
+        }
+      },
+      "type": "object",
+      "x-cybercloud-order": 8,
+      "x-cybercloud-pointer": "/properties/restore"
     },
     "sizing": {
       "additionalProperties": false,

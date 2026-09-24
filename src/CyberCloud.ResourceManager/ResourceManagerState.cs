@@ -125,6 +125,14 @@ public sealed class ResourceState {
     [Id(19)]
     public int ChangesDropped { get; set; }
 
+    /// <summary>
+    ///     The last <see cref="OperationKind.Refresh" /> this grain's periodic reminder started, or
+    ///     <see cref="Guid.Empty" />. Read on the next tick, so a pass that is still running is not
+    ///     joined by a second one.
+    /// </summary>
+    [Id(20)]
+    public Guid PassOperationId { get; set; }
+
     /// <summary>Whether anything has ever been written here.</summary>
     public bool Exists => Path.Length > 0;
 }

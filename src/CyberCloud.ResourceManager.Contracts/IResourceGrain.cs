@@ -349,6 +349,22 @@ public interface IResourceGrain : IGrainWithStringKey {
     /// </remarks>
     Task<Result> AcknowledgeChangesAsync(long throughSequence);
 
+    /// <summary>
+    ///     Starts a manager-started pass over this resource, if its type declares one and nothing else
+    ///     owns the resource right now — docs/plan/08 § The manager-started pass.
+    /// </summary>
+    /// <returns>
+    ///     The <see cref="OperationKind.Refresh" /> operation started, or <see cref="Guid.Empty" />
+    ///     when the tick had nothing to do: the type declares no period, the resource is not
+    ///     <c>Succeeded</c>, a write owns it, or the previous pass is still running.
+    /// </returns>
+    /// <remarks>
+    ///     ⚠ <b>The body the <c>periodic-pass</c> reminder calls, and the one a test drives</b> — the
+    ///     split <c>IOperationGrain.DriveAsync</c> makes, for its reason: Orleans' reminder floor is a
+    ///     minute and a test that waited for one would be a slow test.
+    /// </remarks>
+    Task<Result<Guid>> RunPeriodicPassAsync();
+
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
     Task DeactivateAsync();
 }

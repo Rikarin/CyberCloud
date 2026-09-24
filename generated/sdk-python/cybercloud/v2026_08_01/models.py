@@ -3178,7 +3178,7 @@ class PostgreSQLServerData:
         class Backup:
             """Backup to the tenant's object store, using CloudNativePG's barman-cloud."""
 
-            # Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.
+            # Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.
             destination_path: Optional[str] = None
             # Whether continuous backup and WAL archiving run.
             enabled: Optional[bool] = None
@@ -3284,6 +3284,27 @@ class PostgreSQLServerData:
                 return wire
 
         @dataclass
+        class Restore:
+            """Where the server's data comes from when it is created from a recovery point rather than empty."""
+
+            # A completed recovery point of a server in this resource group, as a backup vault's listRecoveryPoints names it. Empty means a new, empty database. Set at creation: a restore always creates a new server and never writes into one.
+            recovery_point: Optional[str] = None
+
+            @classmethod
+            def from_wire(cls, wire: Wire) -> PostgreSQLServerData.Properties.Restore:
+                """Reads one off the wire. Unknown members are ignored."""
+                return cls(
+                    recovery_point=wire.get("recoveryPoint"),
+                )
+
+            def to_wire(self) -> Wire:
+                """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+                wire: Wire = {}
+                if self.recovery_point is not None:
+                    wire["recoveryPoint"] = self.recovery_point
+                return wire
+
+        @dataclass
         class Sizing:
             """CPU and memory, either by preset or explicitly."""
 
@@ -3360,6 +3381,8 @@ class PostgreSQLServerData:
         monitoring: Optional[PostgreSQLServerData.Properties.Monitoring] = None
         # PgBouncer in front of the cluster.
         pooling: Optional[PostgreSQLServerData.Properties.Pooling] = None
+        # Where the server's data comes from when it is created from a recovery point rather than empty.
+        restore: Optional[PostgreSQLServerData.Properties.Restore] = None
         # CPU and memory, either by preset or explicitly.
         sizing: Optional[PostgreSQLServerData.Properties.Sizing] = None
         # The data volume.
@@ -3379,6 +3402,7 @@ class PostgreSQLServerData:
                 extensions=wire.get("extensions"),
                 monitoring=_opt(wire, "monitoring", PostgreSQLServerData.Properties.Monitoring.from_wire),
                 pooling=_opt(wire, "pooling", PostgreSQLServerData.Properties.Pooling.from_wire),
+                restore=_opt(wire, "restore", PostgreSQLServerData.Properties.Restore.from_wire),
                 sizing=_opt(wire, "sizing", PostgreSQLServerData.Properties.Sizing.from_wire),
                 storage=_opt(wire, "storage", PostgreSQLServerData.Properties.Storage.from_wire),
                 synchronous_replication=wire.get("synchronousReplication"),
@@ -3400,6 +3424,8 @@ class PostgreSQLServerData:
                 wire["monitoring"] = self.monitoring.to_wire()
             if self.pooling is not None:
                 wire["pooling"] = self.pooling.to_wire()
+            if self.restore is not None:
+                wire["restore"] = self.restore.to_wire()
             if self.sizing is not None:
                 wire["sizing"] = self.sizing.to_wire()
             if self.storage is not None:
@@ -7296,6 +7322,52 @@ class BackupVaultResource:
 
 
 @dataclass
+class BackupVaultBackupNowContent:
+    """The parameters of backupNow."""
+
+    # The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items.
+    item: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BackupVaultBackupNowContent:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            item=wire["item"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["item"] = self.item
+        return wire
+
+
+@dataclass
+class BackupVaultBackupNowResult:
+    """What backupNow returns."""
+
+    # The protected server the recovery point is being taken of.
+    item: str
+    # The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`.
+    recovery_point: str
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BackupVaultBackupNowResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            item=wire["item"],
+            recovery_point=wire["recoveryPoint"],
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["item"] = self.item
+        wire["recoveryPoint"] = self.recovery_point
+        return wire
+
+
+@dataclass
 class BackupVaultListRecoveryPointsResult:
     """What listRecoveryPoints returns."""
 
@@ -7330,7 +7402,7 @@ class BackupVaultRecoverContent:
 
     # The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`.
     recovery_point: str
-    # The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.
+    # The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites.
     target_name: str
 
     @classmethod
@@ -7353,9 +7425,9 @@ class BackupVaultRecoverContent:
 class BackupVaultRecoverResult:
     """What recover returns."""
 
-    # What was created. Always `Cluster` — a CloudNativePG cluster object.
+    # What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers.
     kind: str
-    # The restored cluster's name, as asked for.
+    # The restored server's name, as asked for.
     name: str
     # The namespace it was created in — the vault's resource group's.
     namespace: str
@@ -7363,6 +7435,10 @@ class BackupVaultRecoverResult:
     recovery_point: str
     # The protected item the recovery point was taken of, as its resource id path.
     source: str
+    # The create's operation, to poll for the restore's progress.
+    operation_id: Optional[str] = None
+    # The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged.
+    resource_id: Optional[str] = None
 
     @classmethod
     def from_wire(cls, wire: Wire) -> BackupVaultRecoverResult:
@@ -7373,6 +7449,8 @@ class BackupVaultRecoverResult:
             namespace=wire["namespace"],
             recovery_point=wire["recoveryPoint"],
             source=wire["source"],
+            operation_id=wire.get("operationId"),
+            resource_id=wire.get("resourceId"),
         )
 
     def to_wire(self) -> Wire:
@@ -7383,6 +7461,10 @@ class BackupVaultRecoverResult:
         wire["namespace"] = self.namespace
         wire["recoveryPoint"] = self.recovery_point
         wire["source"] = self.source
+        if self.operation_id is not None:
+            wire["operationId"] = self.operation_id
+        if self.resource_id is not None:
+            wire["resourceId"] = self.resource_id
         return wire
 
 
@@ -8842,6 +8924,8 @@ __all__ = [
     "SubnetListAddressUsageResult",
     "BackupVaultData",
     "BackupVaultResource",
+    "BackupVaultBackupNowContent",
+    "BackupVaultBackupNowResult",
     "BackupVaultListRecoveryPointsResult",
     "BackupVaultRecoverContent",
     "BackupVaultRecoverResult",

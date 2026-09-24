@@ -273,6 +273,14 @@ public sealed class OperationGrain(
         // delete already did it and the reconciler is idempotent, so the pass converges on the first
         // read-back. It is still driven rather than skipped, because a purge must also converge for a
         // resource whose soft-delete teardown never finished.
+        // ⚠ A MANAGER-STARTED PASS TEARS NOTHING DOWN ON CANCEL. It applied nothing the resource did
+        // not already have, so a cancelled refresh has nothing of its own to undo; running DeleteAsync
+        // here would tear down a converged resource because a pass nobody asked for was stopped.
+        if (spec.Kind == OperationKind.Refresh && state.State.CancelRequested) {
+            await TerminateAsync(OperationState.Canceled, null);
+            return Result<OperationStatus>.Success(Status());
+        }
+
         var tearingDown = spec.Kind is OperationKind.Delete or OperationKind.Purge
             || state.State.CancelRequested;
 
@@ -349,6 +357,14 @@ public sealed class OperationGrain(
 
     /// <summary>The pass converged. Which ending that is depends on why we were tearing down.</summary>
     async Task ConvergedAsync(OperationSpec spec, bool tearingDown) {
+        // ⚠ A MANAGER-STARTED PASS ENDS HERE, AND EVERYTHING BELOW IS A WRITE'S ENDING. Nothing was
+        // reserved, so nothing is committed; the resource never left Succeeded, so there is no
+        // transition to stamp on it, its group member or the resource-changed stream.
+        if (spec.Kind == OperationKind.Refresh) {
+            await TerminateAsync(OperationState.Succeeded, null);
+            return;
+        }
+
         if (tearingDown && state.State.CancelRequested && spec.Kind != OperationKind.Delete) {
             // ⚠ A CANCELLED CREATE, COMPLETED. The teardown converged, so everything this operation
             // applied is gone, and only now does the operation report Canceled. docs/plan/08
@@ -806,6 +822,17 @@ public sealed class OperationGrain(
     async Task FailAsync(Error error) {
         var spec = state.State.Spec!;
 
+        // ⚠ A failed manager-started pass is the operation's failure and not the resource's. The
+        // resource is still the converged thing its last write made it; marking it Failed would
+        // report a tenant's healthy vault as broken because one pass over it could not finish, and
+        // it would clobber the state of a write that started while this pass ran. The reason is on
+        // this operation's record, where RunPeriodicPassAsync's next tick looks before starting
+        // another.
+        if (spec.Kind == OperationKind.Refresh) {
+            await TerminateAsync(OperationState.Failed, error);
+            return;
+        }
+
         await ReleaseAsync(spec);
 
         // ⚠ A FAILED TEARDOWN LEAVES THE RESOURCE IN Deleting AND VISIBLE.
@@ -872,7 +899,9 @@ public sealed class OperationGrain(
         // reason on the resource, not only in an operation they would have to know to poll. The
         // resource grain refuses to move a Deleting resource to Failed, so this records the reason
         // and leaves the state alone.
-        if (outcome.Kind == ReconcileOutcomeKind.Failed && outcome.Error is not null) {
+        if (outcome.Kind == ReconcileOutcomeKind.Failed
+            && outcome.Error is not null
+            && state.State.Spec!.Kind != OperationKind.Refresh) {
             await FinishResourceAsync(state.State.Spec!, ProvisioningState.Failed, outcome.Error);
         }
 

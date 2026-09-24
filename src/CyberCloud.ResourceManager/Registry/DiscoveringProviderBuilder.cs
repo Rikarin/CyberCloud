@@ -109,4 +109,7 @@ sealed class DiscoveringProviderBuilder : IResourceTypeBuilder {
 
     /// <inheritdoc />
     public IResourceTypeBuilder RequiresCluster(string clusterIdPointer = ClusterPlacement.DefaultPointer) => this;
+
+    /// <inheritdoc />
+    public IResourceTypeBuilder PassEvery(TimeSpan period) => this;
 }

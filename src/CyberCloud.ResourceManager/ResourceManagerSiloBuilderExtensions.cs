@@ -133,6 +133,7 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
         services.TryAddSingleton<ISecretWriter, UnavailableSecretWriter>();
         services.TryAddSingleton<IObjectStore, UnavailableObjectStore>();
+        services.TryAddSingleton<IObjectStoreGrants, UnavailableObjectStoreGrants>();
         services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
         services.TryAddSingleton<IClusterConnectionRegistrar, UnavailableClusterConnectionRegistrar>();
         // The agent-tunnel seam (#36). A host with a silo registers GrainAgentTunnels first; the

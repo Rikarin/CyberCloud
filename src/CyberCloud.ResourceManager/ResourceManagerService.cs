@@ -150,6 +150,61 @@ public sealed class ResourceManagerService(
         }
     }
 
+    /// <summary>
+    ///     Creates a resource beside an action's own, as the action's caller — the body of
+    ///     <see cref="CallerResourceCreator" />.
+    /// </summary>
+    /// <param name="owner">The resource the action is on. The new one goes in its subscription and group.</param>
+    /// <param name="caller">The action's caller, who becomes the create's caller.</param>
+    /// <param name="type">The type to create.</param>
+    /// <param name="name">The new resource's name.</param>
+    /// <param name="apiVersion">The api-version of <paramref name="body" />.</param>
+    /// <param name="body">The body.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <remarks>
+    ///     ⚠ <b>Nothing here is a second write path.</b> The request is a <c>PUT</c> handed to
+    ///     <see cref="WriteAsync" />, so authorization, locks, policy, quota, the index claim and the
+    ///     operation are all the ordinary ones, checked against <paramref name="caller" />. The only
+    ///     rule added is the one a restore needs: an existing name is refused, never replaced.
+    /// </remarks>
+    internal async Task<Result<ResourceCreated>> CreateForActionAsync(
+        ResourceId owner,
+        CallerContext caller,
+        ResourceTypeName type,
+        string name,
+        string apiVersion,
+        string body,
+        CancellationToken cancellationToken
+    ) {
+        var address = new ResourceId(owner.TenantId, owner.SubscriptionId, owner.ResourceGroup, type, name, Guid.Empty);
+        var request = new WriteRequest {
+            Path = address.Path,
+            ApiVersion = apiVersion,
+            Verb = WriteVerb.Put,
+            Body = body,
+            Caller = caller
+        };
+
+        var resolved = await ResolveAsync(request, new WriteTraceBuilder());
+
+        if (resolved.IsSuccess && resolved.GetValueOrThrow().Exists) {
+            return Result<ResourceCreated>.Failure(
+                ErrorCode.ResourceAlreadyExists,
+                $"'{address.Path}' already exists. This action creates a new resource and never writes "
+                + "over one that is there — choose another name."
+            );
+        }
+
+        var accepted = await WriteAsync(request, cancellationToken);
+
+        if (accepted.TryGetError(out var writeError)) {
+            return Result<ResourceCreated>.Failure(writeError);
+        }
+
+        var written = accepted.GetValueOrThrow();
+        return Result<ResourceCreated>.Success(new(address.WithId(written.Resource.Id), written.OperationId));
+    }
+
     /// <inheritdoc />
     public async Task<Result<ResourceSnapshot>> ReadAsync(
         WriteRequest request,
@@ -1850,6 +1905,10 @@ public sealed class ResourceManagerService(
             action,
             input.GetValueOrThrow(),
             body.RootElement,
+            // ⚠ BOUND TO THIS REQUEST'S CALLER HERE, AND THE HANDLER CANNOT REBIND IT. Whatever the
+            // handler creates is this caller's write, through every step of WriteAsync — see
+            // IResourceCreator for why an action may create and a reconciler may not.
+            new CallerResourceCreator(this, target.Id, request.Caller),
             cancellationToken
         );
 

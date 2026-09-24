@@ -314,6 +314,32 @@ public sealed class SoftDeletableReconciler(IClock clock) : IResourceReconciler 
 ///         <see cref="ReconcileAsync" /> consults instead of reading the world back (clause 4).
 ///     </para>
 /// </remarks>
+/// <summary>
+///     <see cref="ConformingReconciler" />'s behaviour under the periodic type's name — so
+///     <see cref="FakeWorld.Passes" /> counts the manager-started passes the same way it counts a
+///     write's.
+/// </summary>
+public sealed class PeriodicReconciler(IClock clock) : IResourceReconciler {
+    readonly ConformingReconciler inner = new(clock);
+
+    public ResourceTypeName Type => TestingProvider.PeriodicTypeName;
+
+    public Task<ReconcileOutcome> ReconcileAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        inner.ReconcileAsync(context, cancellationToken);
+
+    public Task<ReconcileOutcome> DeleteAsync(
+        ReconcileContext context,
+        CancellationToken cancellationToken = default
+    ) =>
+        inner.DeleteAsync(context, cancellationToken);
+
+    public Task<ObservedState> ObserveAsync(ObserveContext context, CancellationToken cancellationToken = default) =>
+        inner.ObserveAsync(context, cancellationToken);
+}
+
 public sealed class NonConformingReconciler : IResourceReconciler {
     // ⚠ THE VIOLATION. Not readonly, not a primary-constructor capture — a field somebody declared to
     // remember something between passes.
@@ -488,6 +514,17 @@ public sealed class TestingProvider : IResourceProvider {
                 response: ResizeResponse,
                 longRunning: true
             )
+            // ⚠ THE ONE ACTION THAT CREATES, through ActionContext.Creator — the seam #30's `recover`
+            // uses. Its own permission, `clone`, so a test can grant it and withhold `write` and see
+            // the create refused as the caller's own PUT would be.
+            .Action(
+                "clone",
+                ActionKind.Post,
+                "clone",
+                request: CloneRequest,
+                response: CloneResponse,
+                handler: typeof(CloneHandler)
+            )
             .Display("Testing widget", "Testing widgets", "twidget")
             // ⚠ NO SupportsSoftDelete, AND IT USED TO DECLARE ONE. While nothing in the manager read
             // SoftDeleteDays the declaration was inert and this type could carry it for the emitters'
@@ -562,8 +599,42 @@ public sealed class TestingProvider : IResourceProvider {
             // separable, and a fixture that spelled them the same would make every purge-authorization
             // test pass without the separation existing.
             .SupportsSoftDelete(7, "purge", PurgeProtectionPointer)
-            .Display("Testing vault", "Testing vaults", "tvault");
+            .Display("Testing vault", "Testing vaults", "tvault")
+            // ── The fifth type: the only one with a MANAGER-STARTED PASS ────────────────────────
+            //
+            // ⚠ A TYPE OF ITS OWN rather than PassEvery on `widgets`: an armed reminder fires on its
+            // own schedule, and a Refresh pass landing in the middle of another class's assertion
+            // about FakeWorld.Passes would be a flake with no author. docs/plan/08 § The
+            // manager-started pass.
+            .ResourceType(PeriodicType)
+            .ApiVersion(V2026, Schema2026)
+            .Reconciler<PeriodicReconciler>()
+            .Meters(QuotaMeter.Resources)
+            .Permissions("read", "write", "delete")
+            .PassEvery(PeriodicPass.MinimumPeriod)
+            .Display("Testing gauge", "Testing gauges", "tgauge");
     }
+
+    // ── The fifth type: a periodic pass ───────────────────────────────────────────────────────
+
+    /// <summary>The type with a manager-started pass.</summary>
+    public const string PeriodicType = "gauges";
+
+    /// <summary>Its name.</summary>
+    public static ResourceTypeName PeriodicTypeName { get; } = new("CyberCloud.Testing", PeriodicType);
+
+    /// <summary>What a <c>POST …/clone</c> takes.</summary>
+    public static ResourceSchema CloneRequest { get; } =
+        ResourceSchema.Of([new("/name", SchemaKind.Text, true)]);
+
+    /// <summary>What a <c>POST …/clone</c> returns.</summary>
+    public static ResourceSchema CloneResponse { get; } =
+        ResourceSchema.Of(
+            [
+                new("/resourceId", SchemaKind.Text, true),
+                new("/operationId", SchemaKind.Text, true)
+            ]
+        );
 
     // ── The fourth type: soft-deletable ────────────────────────────────────────────────────────
 

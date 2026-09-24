@@ -3263,6 +3263,8 @@
         "/properties/pooling/instances",
         "/properties/pooling/mode",
         "/properties/replicas",
+        "/properties/restore",
+        "/properties/restore/recoveryPoint",
         "/properties/sizing",
         "/properties/sizing/cpu",
         "/properties/sizing/memory",
@@ -3324,10 +3326,10 @@
           "type": "string",
           "required": false,
           "section": "backup",
-          "hint": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.",
+          "hint": "Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.",
           "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
           "default": "",
-          "placeholder": "s3://tenant-bucket/postgres"
+          "placeholder": ""
         },
         {
           "jsonPointer": "/properties/backup/enabled",
@@ -3528,6 +3530,31 @@
           "minimum": 1,
           "maximum": 5,
           "default": 2
+        },
+        {
+          "jsonPointer": "/properties/restore",
+          "name": "restore",
+          "label": "Restore",
+          "control": "xui-group",
+          "type": "object",
+          "required": false,
+          "section": "general",
+          "hint": "Where the server's data comes from when it is created from a recovery point rather than empty."
+        },
+        {
+          "jsonPointer": "/properties/restore/recoveryPoint",
+          "name": "recoveryPoint",
+          "label": "Recovery point",
+          "control": "xui-input",
+          "type": "string",
+          "required": false,
+          "section": "restore",
+          "hint": "A completed recovery point of a server in this resource group, as a backup vault's listRecoveryPoints names it. Empty means a new, empty database. Set at creation: a restore always creates a new server and never writes into one.",
+          "maxLength": 253,
+          "pattern": "^(?:([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?)$",
+          "disabledAfterCreate": true,
+          "disabledReason": "This value cannot change after the resource is created. Create a new PostgreSQL server to change it.",
+          "default": ""
         },
         {
           "jsonPointer": "/properties/sizing",
@@ -7952,6 +7979,22 @@
         }
       ],
       "actions": [
+        {
+          "name": "backupNow",
+          "label": "Backup now",
+          "permission": "write",
+          "longRunning": false,
+          "secret": false,
+          "fields": [
+            {
+              "jsonPointer": "/item",
+              "name": "item",
+              "label": "Item",
+              "control": "xui-input",
+              "required": true
+            }
+          ]
+        },
         {
           "name": "listRecoveryPoints",
           "label": "List recovery points",

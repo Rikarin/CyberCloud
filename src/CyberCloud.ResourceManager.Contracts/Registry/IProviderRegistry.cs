@@ -387,6 +387,12 @@ public sealed record ResourceTypeRegistration {
     /// </remarks>
     public string ClusterIdPointer { get; init; } = string.Empty;
 
+    /// <summary>
+    ///     How often a converged resource of this type gets a pass nobody asked for, or
+    ///     <see cref="TimeSpan.Zero" /> for a type that declared none — <c>PassEvery</c>.
+    /// </summary>
+    public TimeSpan PassPeriod { get; init; }
+
     /// <summary>What this type is called, for the surfaces a human reads.</summary>
     public DisplayMetadata Display { get; init; }
 

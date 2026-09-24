@@ -312,6 +312,22 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         return this;
     }
 
+    /// <inheritdoc />
+    public IResourceTypeBuilder PassEvery(TimeSpan period) {
+        if (period < PeriodicPass.MinimumPeriod) {
+            throw new ArgumentOutOfRangeException(
+                nameof(period),
+                period,
+                $"A periodic pass runs on an Orleans reminder, whose floor is {PeriodicPass.MinimumPeriod}. "
+                + "A shorter period would be stretched to the floor without anybody being told, so it is "
+                + "refused instead."
+            );
+        }
+
+        Open(nameof(PassEvery)).PassPeriod = period;
+        return this;
+    }
+
     /// <summary>Freezes the drafts into registrations, checking what only the whole can check.</summary>
     /// <exception cref="InvalidOperationException">
     ///     A type declares no api-version, or declares <c>RequiresCluster</c> without the property
@@ -357,6 +373,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
                     SupportsTags = draft.SupportsTags,
                     RequiresCluster = draft.RequiresCluster,
                     ClusterIdPointer = draft.RequiresCluster ? draft.ClusterIdPointer : string.Empty,
+                    PassPeriod = draft.PassPeriod,
                     Display = draft.Display
                 }
             );
@@ -651,6 +668,8 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         public bool RequiresCluster { get; set; }
 
         public string ClusterIdPointer { get; set; } = ClusterPlacement.DefaultPointer;
+
+        public TimeSpan PassPeriod { get; set; }
 
         public DisplayMetadata Display { get; set; }
     }

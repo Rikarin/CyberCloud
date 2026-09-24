@@ -566,6 +566,12 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
     /// <summary>The built registry.</summary>
     public IProviderRegistry Registry { get; private set; } = null!;
 
+    /// <summary>
+    ///     The silo's container — for <c>IReminderTable</c>, which is how a test reads the row a grain
+    ///     registered rather than a proxy for it.
+    /// </summary>
+    public IServiceProvider SiloServices => cluster.GetSiloServiceProvider();
+
     /// <summary>A tenant-qualified grain factory.</summary>
     public TenantGrainFactory For(Guid tenant) => Grains.ForTenant(tenant.ToString("D", CultureInfo.InvariantCulture));
 
@@ -756,6 +762,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
 
         services.AddSingleton<RestartHandler>();
         services.AddSingleton<ListKeysHandler>();
+        services.AddSingleton<CloneHandler>();
 
         return services.BuildServiceProvider();
     }
@@ -863,6 +870,7 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // assertion fails somewhere else entirely. Adding a type here is adding a line
                     // here.
                     services.AddSingleton<SoftDeletableReconciler>();
+                    services.AddSingleton<PeriodicReconciler>();
                     services.AddSingleton<IResourceProvider, TestingProvider>();
                     services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }

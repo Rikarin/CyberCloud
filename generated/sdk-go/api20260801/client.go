@@ -2062,6 +2062,16 @@ func (c *BackupVaultClient) List(tenantID, subscriptionID, resourceGroupName str
 	return newPager[BackupVaultResource](c.transport, path, options)
 }
 
+// BackupNow runs backupNow — permission 'write'.
+func (c *BackupVaultClient) BackupNow(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content BackupVaultBackupNowContent) (*BackupVaultBackupNowResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName) + "/backupNow"
+	var result BackupVaultBackupNowResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // ListRecoveryPoints runs listRecoveryPoints — permission 'read'.
 func (c *BackupVaultClient) ListRecoveryPoints(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*BackupVaultListRecoveryPointsResult, error) {
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.RecoveryServices/vaults/" + segment(resourceName) + "/listRecoveryPoints"

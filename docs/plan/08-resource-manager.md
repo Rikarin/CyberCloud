@@ -235,6 +235,47 @@ surfaces the two things nothing else would find: **orphans** (labelled objects w
 gone — deleted and billed for) and **strays** (resources whose objects vanished — someone `kubectl
 delete`d production).
 
+### The manager-started pass
+
+Built 2026-09-24 for #30. A converged resource has no operation and no reminder, so until now a pass
+ran only when something started one — a `PUT`, a restore, an action. That is right for a type whose
+desired state is a pure function of its body, and wrong for one with a clock in it: a backup vault's
+`retentionDays` becomes true of a recovery point with nobody writing to the vault.
+
+- **Declared, per type.** `IResourceTypeBuilder.PassEvery(period)` records
+  `ResourceTypeRegistration.PassPeriod`, at least a minute (Orleans' reminder floor; a shorter period is
+  refused rather than silently stretched). `CyberCloud.RecoveryServices/vaults` declares an hour and is
+  the only type that does.
+- **A reminder per resource, on the resource grain.** `ResourceGrain.CompleteAsync(Succeeded)` registers
+  `periodic-pass` when `GetReminder` answers nothing (the #83 lesson — re-registering on every write
+  would push the tick out for ever), due first at `PeriodicPass.FirstDue`: the second half of the period,
+  chosen by the resource's GUID, so a thousand resources created by one script do not tick in the same
+  minute and a re-arm does not move a resource's slot. `BeginDeleteAsync` removes it — at the *start*
+  of the delete, so a parked resource wakes nothing for seven days — and a restore's converged write
+  arms it again.
+- **The tick starts an operation; it does not reconcile.** `RunPeriodicPassAsync` (the reminder's body,
+  and what a test drives) starts an `OperationKind.Refresh` and returns, so the grain still never
+  provisions inline. It starts nothing when the resource is not `Succeeded`, when a write's operation
+  owns it, or when the previous refresh has not finished — one driver per resource.
+- **A refresh is not a write.** The driver runs the ordinary `ReconcileAsync` over the stored body — and
+  converges without running it if the resource stopped being at rest after the pass was started. The
+  operation reserves and commits no quota, never moves the provisioning state, bumps no etag, emits no
+  `resource-changed`, and on cancel tears nothing down. A pass that fails fails *the operation*: the
+  resource stays `Succeeded`, because a converged resource reported `Failed` over a transient fault in a
+  pass nobody asked for is a false alarm, and because a write that began meanwhile owns the state.
+
+`ManagerStartedPassTests` pins the arm (read out of the silo's own `IReminderTable`), the pass, the
+one-at-a-time rule, the failure that leaves the resource alone and the disarm on delete; the vault's
+CloudNativePG lane reads the row out of the real Redis table.
+
+**Owed.** (1) A failing periodic pass is visible only on its operation — nothing on the resource or a
+portal blade says "the last pass failed", which for a vault means retention can stop silently
+(`charts/managed/recovery-vault/conformance.yaml § owed`, `retention-is-enforced-on-passes`). (2) A
+`resource-changed` delivery still starts nothing: `NotifyChangedAsync` records the event for the next
+pass, and starting a `Refresh` from it is what turns "tell me when X changes" into "run me when X
+changes". (3) The drift scan's own per-cluster reminder is a separate owed item and this does not
+replace it: a periodic pass re-applies what a type renders, it does not find orphans.
+
 ## Long-running operations
 
 ```csharp
@@ -1338,7 +1379,7 @@ Rules that make this useful rather than decorative:
 | Rate limit | Gateway | Per-request work must not touch a grain |
 | Emit metrics/logs for tenants | Providers → `CyberCloud.Telemetry` | Volume |
 | Decide *where* a resource goes | The subscription's default cluster, or the explicit `clusterId` | Placement policy is M3 and would be a scheduler; the manager just carries the id |
-| Let one provider *write* another's resource | Nowhere — see below | A write needs a caller, and a reconciler has none |
+| Let one provider *write* another's resource | Nowhere — see below. An *action* may create one, as its caller | A write needs a caller; a reconciler has none and an action does |
 
 ### The cross-resource seam: what one provider may see of another, and why it is read-only
 
@@ -1391,6 +1432,21 @@ keeps it that way. A provider that needs another resource to *change* asks the t
 publishes an action on its own type — which is what a vault does: it writes snapshots *beside* the
 protected resource, under its own id, never into it.
 
+**An action may create, as its caller.** Added 2026-09-24 for #30. The argument above is about a
+reconciler, and an action is the other case: the person who `POST`ed it is authenticated and their
+request is open. So `ActionContext.Creator` — `IResourceCreator.CreateAsync(type, name, apiVersion,
+body)` — lets a handler create *one new resource in the action's own subscription and group*, and
+`ResourceManagerService.CreateForActionAsync` turns it into a `PUT` through every step of § The write
+path, with the action's caller as the caller: authorised for the created type's write permission,
+locked, reserved against quota, indexed, recorded as that caller's create. An existing name is refused
+with `ResourceAlreadyExists` rather than replaced (the check precedes the write and does not hold the
+name, so two racing creates of one name can both pass it and the second becomes an update of the same
+body — recorded, not closed). The creator is built per request by `CompleteActionAsync` and registered
+in no container, so a handler cannot obtain one without a caller. The vault's `recover` is the first
+user: a restore is a `CyberCloud.DBforPostgreSQL/servers` resource with `/properties/restore/recoveryPoint`,
+not an object under the vault's labels. `ActionCreatesAsTheCallerTests` pins the caller, the refusal of a
+caller who may act and not write, and the refusal of a taken name.
+
 **Implementation over contracts, enforced.** The view returns `ResourceSnapshot` and Kubernetes
 `ObjectRef` — the other provider's public *contract* (its schema) and nothing from its assembly. Rule
 2 still forbids the assembly reference, and a new rule 8 in the Assembly graph gate fails a provider
@@ -1429,13 +1485,13 @@ for the registration call and nothing else, because the view is safe exactly as 
 - The view sees the target's *current* snapshot; a target mid-update reports `Updating`, and a
   reconciler that must act on a settled shape checks the state before it does.
 
-**What is owed, precisely.** Delivery is durable and the pass that runs next sees it. What does not
-exist is the pass itself: a converged resource has no operation and no reminder, so a delivered change
-waits for the next pass something else starts — a `PUT`, a restore, or the drift scan of § The
-reconcile loop, which is itself owed its reminder. The hook for a manager-started pass is
-`IResourceGrain.NotifyChangedAsync`, and the kind it would start is a seventh `OperationKind` that
-converges without a body change and tears nothing down on cancel; when it lands, "tell me when X
-changes" becomes "run me when X changes" without a change to the provider seam. The vault and the key
+**What is owed, precisely.** Delivery is durable and the pass that runs next sees it. ⚠ *Corrected
+2026-09-24:* the pass exists now for a type that declares one — § The manager-started pass, the seventh
+`OperationKind` (`Refresh`) this paragraph predicted, converging without a body change and tearing
+nothing down on cancel. What remains is the pass a *delivery* starts: `IResourceGrain.NotifyChangedAsync`
+records the event and wakes nothing, so a watcher with no period still waits for a `PUT`, a restore, or
+the drift scan of § The reconcile loop, which is itself owed its reminder. Starting a `Refresh` there is
+what turns "tell me when X changes" into "run me when X changes", without a change to the provider seam. The vault and the key
 themselves remain owed at `charts/managed/seaweedfs/conformance.yaml § owed` — what this decision
 removed is the sentence that said the seam was the blocker.
 
@@ -1453,7 +1509,9 @@ removed is the sentence that said the seam was the blocker.
 > the tenant reads at `/properties/protectedItems/{i}`, naming `resource:{vault}` and the role to
 > grant. The key remains owed where the sentence above says; the manager-started pass is what the
 > vault's retention now waits on (`charts/managed/recovery-vault/conformance.yaml § owed`,
-> `retention-is-enforced-on-passes`).
+> `retention-is-enforced-on-passes`) — and, *2026-09-24*, what it has: the vault declares
+> `PassEvery(1h)` (§ The manager-started pass), and its `recover` creates a server through
+> `ActionContext.Creator` rather than writing a `Cluster` itself.
 
 ## Effort
 

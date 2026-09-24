@@ -43,13 +43,16 @@ public sealed class K3sFixture : IAsyncLifetime {
     ///     The kubelet drop-in that lets 1.35 start on a cgroup v1 host — a Docker Desktop on
     ///     Windows whose WSL2 kernel boots cgroup v1 is one, and this machine was one until
     ///     2026-09-15 (<c>cgroup_no_v1=all</c> in <c>.wslconfig</c>; docs/plan/23 § The lane that
-    ///     needs a kubelet). Kept for the next machine in that state. The same two lines as
+    ///     needs a kubelet). Kept for the next machine in that state. The same lines as
     ///     <c>ClusterInfrastructure.KubeletDropIn</c> in <c>test/CyberCloud.Cluster.Conformance</c>,
-    ///     whose remarks say why the flag form is refused and why the suffix must be <c>.conf</c>;
-    ///     that assembly cannot be referenced from here.
+    ///     whose remarks say why the flag form is refused, why the suffix must be <c>.conf</c>, and
+    ///     why the disk thresholds are 1% (#30 measured the Docker VM's disk at 96% and the node at
+    ///     <c>DiskPressure</c> with the kubelet's defaults); that assembly cannot be referenced from here.
     /// </summary>
     const string KubeletDropIn =
-        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n";
+        "apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nfailCgroupV1: false\n"
+        + "evictionHard:\n  memory.available: \"100Mi\"\n  nodefs.available: \"1%\"\n  nodefs.inodesFree: \"5%\"\n"
+        + "  imagefs.available: \"1%\"\nimageGCHighThresholdPercent: 99\nimageGCLowThresholdPercent: 98\n";
 
     /// <summary>
     ///     The same wrapper entrypoint as <c>ClusterInfrastructure.SharedVarRunScript</c>: a

@@ -3,6 +3,7 @@ using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using System.Collections.Concurrent;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -164,7 +165,7 @@ public sealed class PostgresReconcilerTests {
 
         (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
 
-        connection.Applied.Select(static x => x.Target.Kind.Kind).ShouldBe(ClusterThenPooler);
+        connection.Rendered.Select(static x => x.Target.Kind.Kind).ShouldBe(ClusterThenPooler);
 
         // ⚠ ADR-013's seven, on a CUSTOM RESOURCE. The sample proved them on a core-group ConfigMap;
         // the rendered object here goes through the same KubeCommand injection, and that is the point
@@ -221,7 +222,16 @@ public sealed class PostgresReconcilerTests {
             .DeleteAsync(Context(connection, desired.RootElement), TestContext.Current.CancellationToken);
 
         torn.IsConverged.ShouldBeTrue();
-        connection.Objects.ShouldBeEmpty();
+
+        // ⚠ THE BACKUP KEY'S SECRET STAYS, ON PURPOSE (#30). A server's recovery points outlive it —
+        // the vault's schedules own them — and CloudNativePG restores from a Backup by reading the
+        // credential Secret its status names, which is this one. Removing it with the Cluster would
+        // make the restore a vault exists for, the one after the server is gone, impossible. What
+        // reclaims it is owed: charts/managed/postgres/conformance.yaml § owed,
+        // `the-backups-outlive-the-server-and-nothing-reclaims-them`.
+        connection.Objects.Keys.ShouldBe(
+            [RecordingConnection.Key(PostgresServers.BackupSecretRef(ReconcileDriver.NamespaceFor(Address("observed", TenantA, SubscriptionA)), "observed"))]
+        );
 
         // ⚠ The Pooler goes first. It references the Cluster by name, so removing the referent first
         // leaves the operator reconciling a Pooler whose cluster is gone — noise in the tenant's own
@@ -289,7 +299,7 @@ public sealed class PostgresReconcilerTests {
         using var desired = JsonDocument.Parse(body.ToJsonString());
         await Reconcile(connection, desired.RootElement);
 
-        var spec = Spec(connection.Applied[0].Body);
+        var spec = Spec(connection.Rendered[0].Body);
 
         spec["resources"]!["requests"]!["cpu"]!.GetValue<string>().ShouldBe("2");
         spec["resources"]!["limits"]!["memory"]!.GetValue<string>().ShouldBe("8Gi");
@@ -463,14 +473,57 @@ public sealed class PostgresReconcilerTests {
     }
 
     [Fact]
-    public async Task BackupsOnWithNoDestinationAreRefusedBeforeAnythingIsAppliedAndNameTheProperty() {
-        // ⚠ ISSUE #91's FINDING FOR THIS FAMILY. The schema's own defaults — backup.enabled true,
-        // destinationPath "" — rendered `spec.backup.barmanObjectStore.destinationPath: ""`, which
-        // CloudNativePG's definition refuses (minLength 1), and FakeKubeCluster echoed for a month.
-        // The refusal is the reconciler's now, before the apply, terminal, and it names the tenant's
+    public async Task BackupsOnArchiveToTheServersOwnBucketWithAKeyTheVaultHolds() {
+        // ⚠ #30, THE HALF #91 LEFT. The default body — backups on, no destination — used to be refused,
+        // and a named destination rendered a store with no credentials, which CloudNativePG's webhook
+        // refuses ("missing credentials"). Now the platform gives the server a bucket of its own and a
+        // key to it, minted into the vault, rendered into a Secret the Cluster names.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+        var address = Address("observed", TenantA, SubscriptionA);
+        var bucket = ObjectStoreCredentials.BucketFor(PostgresServers.BucketPrefix, address.Id);
+
+        var outcome = await Reconcile(connection, desired.RootElement);
+        outcome.IsConverged.ShouldBeTrue(outcome.ToString());
+
+        Grants.Buckets.ShouldContain(bucket);
+
+        var held = await Vault.ResolveAsync(
+            new() { Path = ObjectStoreCredentials.VaultPathFor(address), Field = ObjectStoreCredentials.AccessKeyIdField },
+            TestContext.Current.CancellationToken
+        );
+        var accessKeyId = held.GetValueOrThrow();
+
+        // The Secret goes first — the Cluster names it — and carries the vault's key and nothing else.
+        connection.Applied[0].Target.ShouldBe(PostgresServers.BackupSecretRef(ReconcileDriver.NamespaceFor(address), "observed"));
+        var data = JsonNode.Parse(connection.Applied[0].Body)!["data"]!.AsObject();
+        Encoding.UTF8.GetString(Convert.FromBase64String(data[PostgresServers.AccessKeyIdKey]!.GetValue<string>()))
+            .ShouldBe(accessKeyId);
+
+        var store = Spec(connection.Rendered[0].Body)["backup"]!["barmanObjectStore"]!.AsObject();
+        store["destinationPath"]!.GetValue<string>().ShouldBe("s3://" + bucket + "/");
+        store["endpointURL"]!.GetValue<string>().ShouldBe(InMemoryObjectStoreGrants.Endpoint);
+        store["s3Credentials"]!["accessKeyId"]!["name"]!.GetValue<string>().ShouldBe("observed-backup-s3");
+        store["s3Credentials"]!["secretAccessKey"]!["key"]!.GetValue<string>().ShouldBe(PostgresServers.SecretAccessKeyKey);
+
+        // ⚠ The second pass reads the vault back and issues no second key — mint-once, end to end.
+        var issued = Grants.Issued;
+        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+        Grants.Issued.ShouldBe(issued, "a converged server's every pass would otherwise leave a live key behind");
+
+        // Nothing the tenant can read back holds the key — not the body, not the rendered Cluster.
+        desired.RootElement.GetRawText().ShouldNotContain(accessKeyId);
+        connection.Rendered[0].Body.ShouldNotContain(accessKeyId);
+    }
+
+    [Fact]
+    public async Task ADestinationOfTheTenantsOwnIsRefusedBeforeAnythingIsAppliedAndNamesTheProperty() {
+        // ⚠ #91 refused an EMPTY destination; #30 turns it round. A named destination has no
+        // credentials this api-version can carry, and CloudNativePG's webhook refuses a store with
+        // none, so the only honest place to say so is here, before the apply, naming the tenant's
         // property rather than the operator's field.
         var connection = new RecordingConnection();
-        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId, backupDestination: string.Empty));
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId, backupDestination: "s3://tenant-bucket/postgres"));
 
         var outcome = await Reconcile(connection, desired.RootElement);
 
@@ -481,15 +534,61 @@ public sealed class PostgresReconcilerTests {
         outcome.Error.Message.ShouldContain("/properties/backup/enabled to false");
         connection.Applied.ShouldBeEmpty("a refused server must leave no half-built Cluster behind");
 
-        // Backups off and no destination is a body the definition admits: no backup block at all.
-        var body = JsonNode.Parse(PostgresServers.Body(ClusterId, backupDestination: string.Empty))!.AsObject();
+        // Backups off is a body the definition admits whatever the destination says: no backup block,
+        // no Secret, no key.
+        var body = JsonNode.Parse(PostgresServers.Body(ClusterId, backupDestination: "s3://tenant-bucket/postgres"))!.AsObject();
         body["properties"]!["backup"]!["enabled"] = false;
         using var withoutBackups = JsonDocument.Parse(body.ToJsonString());
 
         await Reconcile(connection, withoutBackups.RootElement);
 
         connection.Applied.ShouldNotBeEmpty();
-        Spec(connection.Applied[0].Body).ContainsKey("backup").ShouldBeFalse();
+        connection.Applied.ShouldNotContain(static x => x.Target.Kind.Kind == "Secret");
+        Spec(connection.Rendered[0].Body).ContainsKey("backup").ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task AStoreThatRefusesIsRetriedAndAppliesNothing() {
+        // The store is a network call on the pass. An unreachable store is a server still coming, and
+        // a Cluster applied without its archive's credential would archive into nothing.
+        var connection = new RecordingConnection();
+        var refusing = new InMemoryObjectStoreGrants { Refuse = true };
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+        var address = Address("refused", TenantA, SubscriptionA);
+
+        var outcome = await new PostgresServerReconciler(new FixedClock()).ReconcileAsync(
+            new ReconcileContext(address, PostgresServers.V2026, desired.RootElement, null, ReconcileDriver.NamespaceFor(address), connection, Vault, new NullLog()) {
+                SecretWriter = Vault,
+                Grants = refusing
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Retryable.ShouldBeTrue("an unreachable store is transient");
+        connection.Applied.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void ARestoreBootstrapsFromTheRecoveryPointAndStillArchivesToItsOwnBucket() {
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId, recoveryPoint: "observed-20260924-0100"));
+        var store = PostgresServers.BackupStore.For(Guid.NewGuid(), "restored", InMemoryObjectStoreGrants.Endpoint);
+
+        var spec = Spec(PostgresServers.ClusterJson("restored", desired.RootElement, store));
+
+        var bootstrap = spec["bootstrap"]!.AsObject();
+        bootstrap.ContainsKey("initdb").ShouldBeFalse("a restore that also ran initdb would be two bootstraps");
+        bootstrap["recovery"]!["backup"]!["name"]!.GetValue<string>().ShouldBe("observed-20260924-0100");
+        bootstrap["recovery"]!["database"]!.GetValue<string>().ShouldBe("app");
+        spec["backup"]!["barmanObjectStore"]!["destinationPath"]!.GetValue<string>().ShouldBe(store.DestinationPath);
+
+        var rendered = JsonNode.Parse(PostgresServers.ClusterJson("restored", desired.RootElement, store))!.AsObject();
+        rendered["kind"] = "Cluster";
+        PostgresServers.Matches(rendered.ToJsonString(), desired.RootElement).ShouldBeTrue();
+
+        using var fresh = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+        PostgresServers.Matches(rendered.ToJsonString(), fresh.RootElement)
+            .ShouldBeFalse("a Cluster restored from a point is not the Cluster a new server's body describes");
     }
 
     [Fact]
@@ -521,7 +620,7 @@ public sealed class PostgresReconcilerTests {
 
         await Reconcile(connection, withoutPooling.RootElement);
 
-        connection.Applied.ShouldHaveSingleItem().Target.Kind.Kind.ShouldBe("Cluster");
+        connection.Rendered.ShouldHaveSingleItem().Target.Kind.Kind.ShouldBe("Cluster");
     }
 
     [Fact]
@@ -539,7 +638,7 @@ public sealed class PostgresReconcilerTests {
 
         await Reconcile(connection, desired.RootElement);
 
-        var spec = Spec(connection.Applied[0].Body);
+        var spec = Spec(connection.Rendered[0].Body);
         spec["postgresql"]!.AsObject().ContainsKey("synchronous").ShouldBeFalse();
         spec.ContainsKey("postgresql_synchronous").ShouldBeFalse();
     }
@@ -563,7 +662,7 @@ public sealed class PostgresReconcilerTests {
 
         await Reconcile(connection, desired.RootElement);
 
-        var spec = Spec(connection.Applied[0].Body);
+        var spec = Spec(connection.Rendered[0].Body);
         spec.ContainsKey("postgresql_synchronous")
             .ShouldBeFalse(
                 "`postgresql_synchronous` is not a field of CloudNativePG's Cluster spec; the apply patch refuses it"
@@ -581,7 +680,13 @@ public sealed class PostgresReconcilerTests {
         // permanent re-apply loop.
         using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
 
-        var rendered = JsonNode.Parse(PostgresServers.ClusterJson("subset", desired.RootElement))!.AsObject();
+        var rendered = JsonNode.Parse(
+            PostgresServers.ClusterJson(
+                "subset",
+                desired.RootElement,
+                PostgresServers.BackupStore.For(Guid.NewGuid(), "subset", InMemoryObjectStoreGrants.Endpoint)
+            )
+        )!.AsObject();
         rendered["kind"] = "Cluster";
         rendered["status"] = new JsonObject { ["readyInstances"] = 2 };
         rendered["spec"]!.AsObject()["addedByTheOperator"] = "x";
@@ -887,9 +992,12 @@ public sealed class PostgresReconcilerTests {
                 null,
                 ReconcileDriver.NamespaceFor(address),
                 connection,
-                new UnavailableSecretResolver(),
+                Vault,
                 new NullLog()
-            ),
+            ) {
+                SecretWriter = Vault,
+                Grants = Grants
+            },
             TestContext.Current.CancellationToken
         );
 
@@ -903,10 +1011,23 @@ public sealed class PostgresReconcilerTests {
             null,
             ReconcileDriver.NamespaceFor(address),
             connection,
-            new UnavailableSecretResolver(),
+            Vault,
             new NullLog()
-        );
+        ) {
+            SecretWriter = Vault,
+            Grants = Grants
+        };
     }
+
+    /// <summary>
+    ///     The vault every hand-built context reads and mints through. ⚠ Shared across the class: the
+    ///     paths are per resource GUID, and a server whose key was minted by an earlier test reads it
+    ///     back, which is the second-pass behaviour the reconciler relies on anyway.
+    /// </summary>
+    static readonly InMemorySecretVault Vault = new();
+
+    /// <summary>The store every hand-built context is given buckets and keys by.</summary>
+    static readonly InMemoryObjectStoreGrants Grants = new();
 
     /// <summary>An address in a named tenant and its own subscription.</summary>
     static ResourceId Address(string name, Guid tenant, Guid subscription) =>
@@ -938,6 +1059,12 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
     /// <summary>Every command applied, in order.</summary>
     public List<KubeCommand> Applied { get; } = [];
+
+    /// <summary>
+    ///     The applies of CloudNativePG objects, without the backup key's Secret every pass with backups
+    ///     on writes first since #30.
+    /// </summary>
+    public List<KubeCommand> Rendered => [.. Applied.Where(static x => x.Target.Kind.Kind != "Secret")];
 
     /// <summary>Every object deleted, in order.</summary>
     public List<ObjectRef> Deleted { get; } = [];

@@ -71,10 +71,18 @@ backup:
   ## @param retentionDays {integer} How long base backups and WAL are kept. The point-in-time-recovery window is this number of days.
   ## @range 1..365
   retentionDays: 14
-  ## @param destinationPath {string} Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.
+  ## @param destinationPath {string} Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.
   ## @pattern (s3://[a-z0-9][a-z0-9.\-]*[a-z0-9](/[^\s]*)?)?
-  ## @example "s3://tenant-bucket/postgres"
+  ## @example ""
   destinationPath: ""
+
+## @param restore {object} Where the server's data comes from when it is created from a recovery point rather than empty.
+restore:
+  ## @param recoveryPoint {string} A completed recovery point of a server in this resource group, as a backup vault's listRecoveryPoints names it. Empty means a new, empty database. Set at creation: a restore always creates a new server and never writes into one.
+  ## @immutable
+  ## @length ..253
+  ## @pattern ([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?
+  recoveryPoint: ""
 
 ## @param bootstrap {object} What exists in the database the moment it comes up.
 bootstrap:
@@ -114,6 +122,10 @@ platform:
   apiVersion: "2026-08-01"
   ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
   managedBy: cybercloud
+  ## @param backupBucket {string} The server's own bucket on the platform's object store, pg-{resourceId}. Written by the reconciler, which also writes the {name}-backup-s3 Secret holding the key to it. Empty renders no backup section.
+  backupBucket: ""
+  ## @param backupEndpoint {string} The platform object store's data-plane endpoint, as a pod in this cluster reaches it.
+  backupEndpoint: ""
 
 ## @param imageName {string} Override the operator's default PostgreSQL image. Empty means the operator chooses, which is what keeps minor upgrades automatic.
 ## @internal A pinned image defeats automatic minor upgrades, so it is a platform escape hatch rather than a tenant setting.

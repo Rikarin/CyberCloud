@@ -92,7 +92,8 @@ public sealed class ReconcileDriver(
     NamespaceEnsurer namespaces,
     IClock clock,
     ResourceViews views,
-    IAgentTunnels? agents = null
+    IAgentTunnels? agents = null,
+    IObjectStoreGrants? grants = null
 ) {
     /// <summary>How long one pass may take. Clause 3 of docs/plan/08 § The reconcile loop.</summary>
     public static TimeSpan PassBudget { get; } = TimeSpan.FromSeconds(30);
@@ -123,6 +124,22 @@ public sealed class ReconcileDriver(
         }
 
         var reconcileInput = input.GetValueOrThrow();
+
+        // ⚠ A MANAGER-STARTED PASS RUNS ONLY OVER A RESOURCE THAT IS AT REST. A delete or a write that
+        // began after the pass was started owns the resource now: a refresh that reconciled a
+        // Deleting resource would re-apply what the teardown is removing, and one over an Updating
+        // resource would race the write's own pass with nothing to add. Converging without a pass
+        // is the honest ending — the next tick finds the resource at rest or gone.
+        if (spec.Kind == OperationKind.Refresh && reconcileInput.ProvisioningState != ProvisioningState.Succeeded) {
+            var skipped = Progress(
+                "skipped",
+                $"The resource is {reconcileInput.ProvisioningState}, so the periodic pass leaves it to the "
+                + "operation that owns it.",
+                100
+            );
+
+            return new(ReconcileOutcome.Converged, [skipped], false);
+        }
 
         var address = ResourceId.ParsePath(reconcileInput.Path);
         if (address.TryGetError(out var addressError)) {
@@ -312,6 +329,7 @@ public sealed class ReconcileDriver(
                 // — a test, a conformance harness — gets RefusingSecretWriter and has to say otherwise.
                 SecretWriter = secretWriter,
                 Objects = objects,
+                Grants = grants ?? new UnavailableObjectStoreGrants(),
                 // ⚠ COLLECTED HERE AND ACTED ON BELOW, WHICH IS WHAT KEEPS THE ATTACH BEHIND THE
                 // CONVERGENCE. The reconciler reports; this driver decides whether the report is due.
                 ClusterConnections = produced,
@@ -579,6 +597,7 @@ public sealed class ReconcileDriver(
         ) {
                 SecretWriter = secretWriter,
                 Objects = objects,
+                Grants = grants ?? new UnavailableObjectStoreGrants(),
                 Agents = agents ?? new UnavailableAgentTunnels(),
                 // The same seams a reconcile pass carries, bound the same way; RetainedVolumesAsync
                 // is a read of what this resource kept and may need to name another resource's disks.

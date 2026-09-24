@@ -714,19 +714,13 @@ public sealed record CompanionCase {
     ///     family's own <see cref="ProviderConformanceCase.Body" />.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Exists because the other family's default body can be one a real operator refuses.</b>
-    ///     <c>PostgresServers.Body</c> renders a backup section with a <c>destinationPath</c> and no
-    ///     credentials, which the committed definition admits — the fake and the k3s harness both
-    ///     validate against it — and CloudNativePG's admission webhook refuses for
-    ///     <i>
-    ///         "missing
-    ///         credentials"
-    ///     </i>: found the first time a companion met the operator the bundle installs
-    ///     (<c>charts/managed/postgres/conformance.yaml § owed</c>,
-    ///     <c>the-default-bucket-is-not-filled-in</c>). A lane that runs against the real operator
-    ///     gives its companion a body the operator admits — backups off — and asserts what the case
-    ///     under test then says about it; the override is a function of the same cluster id, so the two
-    ///     bodies differ in what the lane says and nothing else.
+    ///     ⚠ <b>Exists because a lane against a real operator needs a companion sized for it.</b> It was
+    ///     added when <c>PostgresServers.Body</c> rendered a backup section CloudNativePG's webhook
+    ///     refused for <i>"missing credentials"</i> (<c>charts/managed/postgres/conformance.yaml § owed</c>,
+    ///     <c>the-default-bucket-is-not-filled-in</c>, closed by #30); the vault's CloudNativePG lane
+    ///     now uses it for one instance, no pooler and a one-gibibyte volume — a server a k3s in Docker
+    ///     brings up in minutes. The override is a function of the same cluster id, so the two bodies
+    ///     differ in what the lane says and nothing else.
     /// </remarks>
     public Func<Guid, string>? Body { get; init; }
 

@@ -149,6 +149,18 @@ public readonly record struct ReconcileContext(
     public IObjectStore Objects { get; init; } = new RefusingObjectStore();
 
     /// <summary>
+    ///     Buckets on the platform's object store and keys scoped to them, for a type whose workload
+    ///     writes there from its own pods — a PostgreSQL server's WAL archive. docs/plan/15 § Backup as
+    ///     a service.
+    /// </summary>
+    /// <remarks>
+    ///     An <c>init</c> property with a refusing default, for <see cref="SecretWriter" />'s reason. What
+    ///     a reconciler does with it goes through <see cref="ObjectStoreCredentials.EnsureAsync" />, so
+    ///     the key it is handed is always the one the vault holds.
+    /// </remarks>
+    public IObjectStoreGrants Grants { get; init; } = new RefusingObjectStoreGrants();
+
+    /// <summary>
     ///     Where a pass that produced a reachable cluster says so. ⚠ Reported, not attached — the
     ///     driver performs the write, and only after the pass converges.
     /// </summary>
