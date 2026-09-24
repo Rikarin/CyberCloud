@@ -1200,7 +1200,7 @@ export interface DBforPostgreSQLServersData {
   properties?: {
     /** Backup to the tenant's object store, using CloudNativePG's barman-cloud. */
     backup?: {
-      /** Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property. */
+      /** Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need. */
       destinationPath?: string;
       /** Whether continuous backup and WAL archiving run. */
       enabled?: boolean;
@@ -1234,6 +1234,11 @@ export interface DBforPostgreSQLServersData {
     };
     /** Number of instances, including the primary. One is a single point of failure and is offered for development only. */
     replicas: number;
+    /** Where the server's data comes from when it is created from a recovery point rather than empty. */
+    restore?: {
+      /** The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database. */
+      recoveryPoint?: string;
+    };
     /** CPU and memory, either by preset or explicitly. */
     sizing?: {
       /** Explicit vCPU quantity in Kubernetes form, for example 500m or 2. Empty means take it from the preset. */
@@ -1411,6 +1416,748 @@ export interface DocumentDBAccountsListKeysResult {
   password: string;
   /** The PostgreSQL role a client authenticates as. Not secret on its own; useless without the password below. */
   username: string;
+}
+
+/** Key vault. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection. */
+export interface KeyVaultVaultsData {
+  /** The region the vault is billed in and served from. */
+  location: string;
+  /** The vault's own settings. */
+  properties?: {
+    /** What the vault is for, shown in the portal beside its name. */
+    description?: string;
+    /** Whether a deleted vault, secret or key may be purged before its seven-day recovery window ends. Once true it stays true: a write that sets it false is refused, and so is every purge until the window is out. */
+    enablePurgeProtection?: boolean;
+  };
+  /** Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused. */
+  tags?: Record<string, string>;
+}
+
+/** One Key vault, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface KeyVaultVaultsResource extends Resource, KeyVaultVaultsData {
+  readonly type: 'CyberCloud.KeyVault/vaults';
+}
+
+/** The values /curve accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsCreateKeyContentCurve =
+  | 'P-256'
+  | 'P-384'
+  | 'P-521';
+
+/** The values /keyOps accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsCreateKeyContentKeyOps =
+  | 'encrypt'
+  | 'decrypt'
+  | 'sign'
+  | 'verify'
+  | 'wrapKey'
+  | 'unwrapKey';
+
+/** The values /kty accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsCreateKeyContentKty =
+  | 'RSA'
+  | 'EC';
+
+/** The parameters of createKey. */
+export interface KeyVaultVaultsCreateKeyContent {
+  /** An EC key's curve. P-256 when omitted; refused on an RSA key. */
+  curve?: KeyVaultVaultsCreateKeyContentCurve;
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only. */
+  keyOps?: KeyVaultVaultsCreateKeyContentKeyOps[];
+  /** An RSA key's modulus in bits: 2048, 3072 or 4096. 2048 when omitted; refused on an EC key. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: KeyVaultVaultsCreateKeyContentKty;
+  /** The version is refused before this time. */
+  notBefore?: string;
+}
+
+/** What createKey returns. */
+export interface KeyVaultVaultsCreateKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsDecryptContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of decrypt. */
+export interface KeyVaultVaultsDecryptContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsDecryptContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The ciphertext or wrapped key, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What decrypt returns. ⚠ Secret material — never log or persist this. */
+export interface KeyVaultVaultsDecryptResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The plaintext, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The parameters of deleteKey. */
+export interface KeyVaultVaultsDeleteKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What deleteKey returns. */
+export interface KeyVaultVaultsDeleteKeyResult {
+  /** When the item was deleted. */
+  deletedOn: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** When the item is purged unless it is recovered first. */
+  scheduledPurgeDate: string;
+}
+
+/** The parameters of deleteSecret. */
+export interface KeyVaultVaultsDeleteSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What deleteSecret returns. */
+export interface KeyVaultVaultsDeleteSecretResult {
+  /** When the item was deleted. */
+  deletedOn: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** When the item is purged unless it is recovered first. */
+  scheduledPurgeDate: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsEncryptContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of encrypt. */
+export interface KeyVaultVaultsEncryptContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsEncryptContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The plaintext to encrypt or the key to wrap, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What encrypt returns. */
+export interface KeyVaultVaultsEncryptResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The result, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The parameters of getKey. */
+export interface KeyVaultVaultsGetKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What getKey returns. */
+export interface KeyVaultVaultsGetKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The parameters of getSecret. */
+export interface KeyVaultVaultsGetSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What getSecret returns. ⚠ Secret material — never log or persist this. */
+export interface KeyVaultVaultsGetSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The secret's value. */
+  value: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The values /keyOps accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsImportKeyContentKeyOps =
+  | 'encrypt'
+  | 'decrypt'
+  | 'sign'
+  | 'verify'
+  | 'wrapKey'
+  | 'unwrapKey';
+
+/** The parameters of importKey. */
+export interface KeyVaultVaultsImportKeyContent {
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only. */
+  keyOps?: KeyVaultVaultsImportKeyContentKeyOps[];
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** The private key as unencrypted PKCS#8 DER, in standard base64. RSA of 2048, 3072 or 4096 bits, or EC on P-256, P-384 or P-521. Sealed on arrival and never returned. */
+  pkcs8: string;
+}
+
+/** What importKey returns. */
+export interface KeyVaultVaultsImportKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** What listDeletedKeys returns. */
+export interface KeyVaultVaultsListDeletedKeysResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** What listDeletedSecrets returns. */
+export interface KeyVaultVaultsListDeletedSecretsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** The parameters of listKeyVersions. */
+export interface KeyVaultVaultsListKeyVersionsContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What listKeyVersions returns. */
+export interface KeyVaultVaultsListKeyVersionsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** What listKeys returns. */
+export interface KeyVaultVaultsListKeysResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** The parameters of listSecretVersions. */
+export interface KeyVaultVaultsListSecretVersionsContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What listSecretVersions returns. */
+export interface KeyVaultVaultsListSecretVersionsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** What listSecrets returns. */
+export interface KeyVaultVaultsListSecretsResult {
+  /** How many lines follow. */
+  count: number;
+  /** One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'. */
+  items: string[];
+}
+
+/** The parameters of purgeDeletedKey. */
+export interface KeyVaultVaultsPurgeDeletedKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What purgeDeletedKey returns. */
+export interface KeyVaultVaultsPurgeDeletedKeyResult {
+  /** The secret's or key's name. */
+  name: string;
+  /** True: the item and every version of it are gone. */
+  purged: boolean;
+}
+
+/** The parameters of purgeDeletedSecret. */
+export interface KeyVaultVaultsPurgeDeletedSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What purgeDeletedSecret returns. */
+export interface KeyVaultVaultsPurgeDeletedSecretResult {
+  /** The secret's or key's name. */
+  name: string;
+  /** True: the item and every version of it are gone. */
+  purged: boolean;
+}
+
+/** The parameters of recoverDeletedKey. */
+export interface KeyVaultVaultsRecoverDeletedKeyContent {
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+}
+
+/** What recoverDeletedKey returns. */
+export interface KeyVaultVaultsRecoverDeletedKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The parameters of recoverDeletedSecret. */
+export interface KeyVaultVaultsRecoverDeletedSecretContent {
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+}
+
+/** What recoverDeletedSecret returns. */
+export interface KeyVaultVaultsRecoverDeletedSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The parameters of setSecret. */
+export interface KeyVaultVaultsSetSecretContent {
+  /** What the value is, for the consumer — for example text/plain. Not interpreted. */
+  contentType?: string;
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+  /** The secret's value. Sealed under the vault's root before it is stored. */
+  value: string;
+}
+
+/** What setSecret returns. */
+export interface KeyVaultVaultsSetSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsSignContentAlg =
+  | 'RS256'
+  | 'RS384'
+  | 'RS512'
+  | 'PS256'
+  | 'PS384'
+  | 'PS512'
+  | 'ES256'
+  | 'ES384'
+  | 'ES512';
+
+/** The parameters of sign. */
+export interface KeyVaultVaultsSignContent {
+  /** A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521. */
+  alg: KeyVaultVaultsSignContentAlg;
+  /** The digest to sign, base64url. Its length must be the algorithm's hash length. */
+  digest: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What sign returns. */
+export interface KeyVaultVaultsSignResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The result, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsUnwrapKeyContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of unwrapKey. */
+export interface KeyVaultVaultsUnwrapKeyContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsUnwrapKeyContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The ciphertext or wrapped key, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What unwrapKey returns. ⚠ Secret material — never log or persist this. */
+export interface KeyVaultVaultsUnwrapKeyResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The plaintext, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The values /keyOps accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsUpdateKeyContentKeyOps =
+  | 'encrypt'
+  | 'decrypt'
+  | 'sign'
+  | 'verify'
+  | 'wrapKey'
+  | 'unwrapKey';
+
+/** The parameters of updateKey. */
+export interface KeyVaultVaultsUpdateKeyContent {
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only. */
+  keyOps?: KeyVaultVaultsUpdateKeyContentKeyOps[];
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What updateKey returns. */
+export interface KeyVaultVaultsUpdateKeyResult {
+  /** When the version was created. */
+  created: string;
+  /** An EC key's curve. */
+  crv?: string;
+  /** An RSA key's public exponent, base64url. */
+  e?: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** Whether the key was imported rather than generated here. */
+  imported: boolean;
+  /** The operations the key permits. */
+  keyOps: string[];
+  /** An RSA key's modulus in bits. */
+  keySize?: number;
+  /** RSA or EC. */
+  kty: string;
+  /** An RSA key's modulus, base64url. */
+  n?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+  /** An EC key's x coordinate, base64url. */
+  x?: string;
+  /** An EC key's y coordinate, base64url. */
+  y?: string;
+}
+
+/** The parameters of updateSecret. */
+export interface KeyVaultVaultsUpdateSecretContent {
+  /** What the value is, for the consumer — for example text/plain. Not interpreted. */
+  contentType?: string;
+  /** Whether the version may be used. A disabled version is refused, not hidden. */
+  enabled?: boolean;
+  /** The version is refused from this time on. */
+  expiresOn?: string;
+  /** The version is refused before this time. */
+  notBefore?: string;
+  /** The secret's name: 1–127 letters, digits and dashes. */
+  secretName: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What updateSecret returns. */
+export interface KeyVaultVaultsUpdateSecretResult {
+  /** What the value is. Absent when unset. */
+  contentType?: string;
+  /** When the version was created. */
+  created: string;
+  /** Whether the version may be used. */
+  enabled: boolean;
+  /** Refused from this time on. Absent when unset. */
+  expiresOn?: string;
+  /** The secret's or key's name. */
+  name: string;
+  /** Refused before this time. Absent when unset. */
+  notBefore?: string;
+  /** When the version's attributes last changed. */
+  updated: string;
+  /** The version this response is about. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsVerifyContentAlg =
+  | 'RS256'
+  | 'RS384'
+  | 'RS512'
+  | 'PS256'
+  | 'PS384'
+  | 'PS512'
+  | 'ES256'
+  | 'ES384'
+  | 'ES512';
+
+/** The parameters of verify. */
+export interface KeyVaultVaultsVerifyContent {
+  /** A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521. */
+  alg: KeyVaultVaultsVerifyContentAlg;
+  /** The digest to sign, base64url. Its length must be the algorithm's hash length. */
+  digest: string;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The signature, base64url. An EC signature is r‖s, as JWS spells it. */
+  signature: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What verify returns. */
+export interface KeyVaultVaultsVerifyResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** Whether the signature is valid. */
+  value: boolean;
+  /** The key version that did the work. */
+  version: string;
+}
+
+/** The values /alg accepts. ⚠ Closed: the write path refuses anything else. */
+export type KeyVaultVaultsWrapKeyContentAlg =
+  | 'RSA-OAEP'
+  | 'RSA-OAEP-256';
+
+/** The parameters of wrapKey. */
+export interface KeyVaultVaultsWrapKeyContent {
+  /** RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256). */
+  alg: KeyVaultVaultsWrapKeyContentAlg;
+  /** The key's name: 1–127 letters, digits and dashes. */
+  keyName: string;
+  /** The plaintext to encrypt or the key to wrap, base64url without padding. */
+  value: string;
+  /** A version, as 32 hex digits. Omit it for the newest. */
+  version?: string;
+}
+
+/** What wrapKey returns. */
+export interface KeyVaultVaultsWrapKeyResult {
+  /** The algorithm used. */
+  alg: string;
+  /** The key that did the work. */
+  name: string;
+  /** The result, base64url. */
+  value: string;
+  /** The key version that did the work. */
+  version: string;
 }
 
 /** The values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else. */
@@ -2469,6 +3216,20 @@ export interface RecoveryServicesVaultsResource extends Resource, RecoveryServic
   readonly type: 'CyberCloud.RecoveryServices/vaults';
 }
 
+/** The parameters of backupNow. */
+export interface RecoveryServicesVaultsBackupNowContent {
+  /** The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items. */
+  item: string;
+}
+
+/** What backupNow returns. */
+export interface RecoveryServicesVaultsBackupNowResult {
+  /** The protected server the recovery point is being taken of. */
+  item: string;
+  /** The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`. */
+  recoveryPoint: string;
+}
+
 /** What listRecoveryPoints returns. */
 export interface RecoveryServicesVaultsListRecoveryPointsResult {
   /** How many of them are restorable — CloudNativePG phase `completed`. */
@@ -2483,22 +3244,73 @@ export interface RecoveryServicesVaultsListRecoveryPointsResult {
 export interface RecoveryServicesVaultsRecoverContent {
   /** The recovery point to restore, by the name listRecoveryPoints gives it. It must be one of this vault's and its phase must be `completed`. */
   recoveryPoint: string;
-  /** The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites. */
+  /** The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites. */
   targetName: string;
 }
 
 /** What recover returns. */
 export interface RecoveryServicesVaultsRecoverResult {
-  /** What was created. Always `Cluster` — a CloudNativePG cluster object. */
+  /** What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers. */
   kind: string;
-  /** The restored cluster's name, as asked for. */
+  /** The restored server's name, as asked for. */
   name: string;
   /** The namespace it was created in — the vault's resource group's. */
   namespace: string;
+  /** The create's operation, to poll for the restore's progress. */
+  operationId?: string;
   /** The recovery point it was bootstrapped from. */
   recoveryPoint: string;
+  /** The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged. */
+  resourceId?: string;
   /** The protected item the recovery point was taken of, as its resource id path. */
   source: string;
+}
+
+/** Deployment. A template of resources deployed in dependency order, each through the write path as its creator. */
+export interface ResourcesDeploymentsData {
+  /** The template, its parameters, and the record of the last run. */
+  properties?: {
+    /** Why the last run failed, naming the resource that stopped it. Empty when it did not. */
+    readonly error?: string;
+    /** Every resource the last run created or updated, in the order it did. */
+    readonly outputResources?: string[];
+    /** The parameter values, as JSON text: { "name": { "value": … } }. */
+    parameters?: string;
+    /** What a rollback would remove. Rollback is recorded and never performed. */
+    readonly rollback?: string;
+    /** One line per template resource, in dependency order: its state, its id and the operation that drove it. */
+    readonly steps?: string[];
+    /** The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list. */
+    template: string;
+  };
+}
+
+/** One Deployment, as the API returns it: the Resource envelope, then the body, then tags. */
+export interface ResourcesDeploymentsResource extends Resource, ResourcesDeploymentsData {
+  readonly type: 'CyberCloud.Resources/deployments';
+}
+
+/** The parameters of whatIf. */
+export interface ResourcesDeploymentsWhatIfContent {
+  /** The template to evaluate and its parameters. */
+  properties: {
+    /** The parameter values, as JSON text. */
+    parameters?: string;
+    /** The template, as JSON text — the same shape a PUT takes. */
+    template: string;
+  };
+}
+
+/** What whatIf returns. */
+export interface ResourcesDeploymentsWhatIfResult {
+  /** The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it. */
+  creates: string[];
+  /** The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'. */
+  modifies: string[];
+  /** The resources a deployment would leave as they are, in deployment order. */
+  noChanges: string[];
+  /** Succeeded: the template evaluated and every resource was compared. */
+  status: string;
 }
 
 /** The values /properties/tier accepts. ⚠ Closed: the write path refuses anything else. */

@@ -60,6 +60,24 @@ public sealed record MembershipIndexSnapshot {
     public IReadOnlyDictionary<string, IReadOnlyList<SubjectRef>> Usersets { get; init; } =
         new Dictionary<string, IReadOnlyList<SubjectRef>>(StringComparer.Ordinal);
 
+    /// <summary>
+    ///     The relations formed on this object whose closure leaves out an expiring edge — one on
+    ///     the userset itself or on any userset the closure reaches. A reader never answers "no"
+    ///     from such a closure; it answers "walk it". docs/plan/07 § Time-bounded relations.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>An expiring tuple is never an edge of the closure, and this is what that costs.</b>
+    ///     A closure holds no clock: a member it records is a member until a write removes it. So
+    ///     an edge that stops granting on its own at an instant is left out of
+    ///     <see cref="Members" /> and <see cref="Usersets" />, and every userset above it is marked
+    ///     here instead. A member it would have carried is then found by the walk, which filters
+    ///     expired tuples at read time, and a "no" is never taken from a closure that couldn't have
+    ///     said "yes". The alternative — each member stamped with the widest-path expiry over every
+    ///     route to it — is recorded as owed in the same section.
+    /// </remarks>
+    [Id(4)]
+    public IReadOnlyList<string> Unclosed { get; init; } = [];
+
     /// <summary>The closed members of <c>{Object}#{relation}</c>, or an empty list.</summary>
     /// <param name="relation">The userset relation formed on this object.</param>
     public IReadOnlyList<SubjectRef> MembersOf(string relation) =>
@@ -69,6 +87,10 @@ public sealed record MembershipIndexSnapshot {
     /// <param name="subjectRelation">The subject's own userset relation, or empty for the concrete object.</param>
     public IReadOnlyList<SubjectRef> UsersetsOf(string subjectRelation) =>
         Usersets.TryGetValue(subjectRelation, out var usersets) ? usersets : [];
+
+    /// <summary>Whether the closure of <c>{Object}#{relation}</c> leaves out an expiring edge.</summary>
+    /// <param name="relation">The userset relation formed on this object.</param>
+    public bool IsUnclosed(string relation) => Unclosed.Contains(relation, StringComparer.Ordinal);
 }
 
 /// <summary>
@@ -127,9 +149,24 @@ public sealed record MembershipIndexChange {
     [Id(5)]
     public bool Reset { get; init; }
 
+    /// <summary>
+    ///     Relations whose closure leaves out an expiring edge — see
+    ///     <see cref="MembershipIndexSnapshot.Unclosed" />.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Two readings, told apart by <see cref="ReplaceMembers" />.</b> For a relation this
+    ///     change replaces, the mark is replaced too: set if listed here, cleared if not — a
+    ///     recomputation knows the whole closure, so it knows whether any expiring edge is left in
+    ///     it. For every other relation a listed one is marked and nothing is cleared, which is the
+    ///     union a write is. Both readings are idempotent, so the sweeper's replay stays harmless.
+    /// </remarks>
+    [Id(6)]
+    public IReadOnlyList<string> Unclosed { get; init; } = [];
+
     /// <summary>Whether the change would touch nothing.</summary>
     public bool IsEmpty =>
         !Reset
+        && Unclosed.Count == 0
         && AddMembers.Count == 0
         && ReplaceMembers.Count == 0
         && AddUsersets.Count == 0

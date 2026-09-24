@@ -913,6 +913,19 @@ public sealed record OperationStatus {
     [Id(13)]
     public Guid ResourceId { get; init; }
 
+    /// <summary>
+    ///     The parent operation this one is a child of, or <see cref="Guid.Empty" /> for an operation
+    ///     nothing started on another's behalf.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Appended at 14, and the number is never reused</b> — docs/plan/05 § Serialization and
+    ///     schema evolution. A peer that predates it reads <see cref="Guid.Empty" />, which is what
+    ///     every operation it could have started was. <see cref="Children" /> is the other direction
+    ///     and has been on the wire since the type was published, empty until a deployment filled it.
+    /// </remarks>
+    [Id(14)]
+    public Guid ParentOperationId { get; init; }
+
     /// <summary>Whether the operation has reached a terminal state.</summary>
     public bool IsTerminal => State is OperationState.Succeeded or OperationState.Failed or OperationState.Canceled;
 

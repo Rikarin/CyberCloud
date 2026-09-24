@@ -33,10 +33,11 @@ public sealed class ProviderRegistryTests {
         registration.ReadPermission.ShouldBe("read");
         registration.WritePermission.ShouldBe("write");
         registration.DeletePermission.ShouldBe("delete");
-        // restart, listKeys, orphaned and resize. `resize` declares a request and a response schema,
-        // which is the expressiveness an action had none of; `orphaned` declares no handler, which is
-        // the shape every action in the catalogue had before one could be named at all.
-        registration.Actions.Length.ShouldBe(4);
+        // restart, listKeys, orphaned, resize and clone. `resize` declares a request and a response
+        // schema, which is the expressiveness an action had none of; `orphaned` declares no handler,
+        // which is the shape every action in the catalogue had before one could be named at all;
+        // `clone` creates through ActionContext.Creator (#30).
+        registration.Actions.Length.ShouldBe(5);
 
         // ⚠ THE HANDLER REACHES THE REGISTRY, WHICH IS WHAT ActionDispatcher RESOLVES FROM. A
         // declaration that carried a handler the registry dropped would be an action that refuses at
@@ -137,6 +138,20 @@ public sealed class ProviderRegistryTests {
             .Message.ShouldContain(KubeLabels.ReservedNamespace);
     }
 
+    [Fact]
+    public void TheReservedNamespaceAdmitsATypeThatRendersNothingAndStillRefusesOneThatCould() {
+        // ⚠ NARROWED FOR #39, NOT OPENED. CyberCloud.Resources/deployments lives in the reserved
+        // namespace, as Azure's deployments live in Microsoft.Resources, and it renders nothing — no
+        // reconciler, no handler, no cluster — so no object it could produce carries a label for the
+        // drift scan or the labels gate to decline to check. The property the reservation protects is
+        // that; a type in the namespace that COULD render is refused exactly as before.
+        var registry = ProviderRegistry.Build([new DeploymentsProvider()]);
+        registry.TryGetType(Deployments.Type, out _).ShouldBeTrue();
+
+        Should.Throw<InvalidOperationException>(static () => ProviderRegistry.Build([new ReservedRenderingProvider()]))
+            .Message.ShouldContain("could render an object carrying the group's label");
+    }
+
     [Theory]
     [InlineData(RoleAssignmentId.ProviderNamespace)]
     [InlineData("cybercloud.authorization")]
@@ -201,6 +216,15 @@ public sealed class ProviderRegistryTests {
         public string ProviderNamespace => KubeLabels.ReservedNamespace;
 
         public void Describe(IProviderBuilder builder) => builder.ResourceType("resourceGroups");
+    }
+
+    sealed class ReservedRenderingProvider : IResourceProvider {
+        public string ProviderNamespace => KubeLabels.ReservedNamespace;
+
+        public void Describe(IProviderBuilder builder) =>
+            builder.ResourceType("things")
+                .ApiVersion(TestingProvider.V2026, TestingProvider.Schema2026)
+                .Reconciler<ConformingReconciler>();
     }
 
     sealed class NamespacedProvider(string ns) : IResourceProvider {

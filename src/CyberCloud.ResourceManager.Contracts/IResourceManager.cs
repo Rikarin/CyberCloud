@@ -48,6 +48,91 @@ public interface IResourceManager {
     /// </returns>
     Task<Result<WriteAccepted>> WriteAsync(WriteRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     The write path entered by a parent operation on behalf of the caller it recorded — all
+    ///     twelve steps, with that caller's subject in step 3, and the new operation made a child of
+    ///     the parent. <c>PUT</c> only.
+    /// </summary>
+    /// <param name="parentOperationId">
+    ///     The parent operation. Recorded as <see cref="OperationSpec.ParentOperationId" /> on the
+    ///     child, which is what lets the child tell the parent when it ends.
+    /// </param>
+    /// <param name="request">
+    ///     The child's write. <see cref="WriteRequest.Caller" /> is the parent's
+    ///     <see cref="OperationSpec.Caller" />, unchanged — the one identity the gateway authenticated
+    ///     when the parent was accepted.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the request. ⚠ Not the operation it starts.</param>
+    /// <returns>
+    ///     <see cref="WriteAccepted" />, or the first step's refusal exactly as
+    ///     <see cref="WriteAsync" /> would give it to that caller — so a child the caller may not
+    ///     write is <see cref="ErrorCode.ResourceNotFound" /> or <see cref="ErrorCode.AuthorizationFailed" />,
+    ///     never a success. Refused outright for an empty parent, an empty subject, a verb other
+    ///     than <see cref="WriteVerb.Put" />, and a child that is itself a deployment.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>THE ARGUMENT FOR WRITING AS A RECORDED CALLER, WRITTEN DOWN.</b> A deployment's
+    ///         children are written long after the request that asked for them has returned, by a
+    ///         grain, from a reminder. Nothing on that path carries a token. What it carries is the
+    ///         <see cref="CallerContext" /> the gateway built from one when the deployment's own
+    ///         <c>PUT</c> passed step 3 at the resource group — persisted in the parent's
+    ///         <see cref="OperationSpec.Caller" /> and never re-derived. Replaying that identity is
+    ///         safe for three reasons, and each is a property of this method rather than of its
+    ///         caller's care:
+    ///     </para>
+    ///     <list type="number">
+    ///         <item>
+    ///             <b>Every child is checked at its own scope, now, against the durable rows.</b> This is
+    ///             <see cref="WriteAsync" />'s body: step 3 runs the caller's subject against the child's
+    ///             address — its group, or the child itself on an update — at the moment the child is
+    ///             written, and for a child it runs <c>FullyConsistent</c>. A deployment therefore grants
+    ///             nothing its creator does not hold at each child, and a right revoked between two
+    ///             children is honoured at the second.
+    ///             <para>
+    ///                 ⚠ <b>"Now" was not true at <c>MinimizeLatency</c>, which every other write uses.</b>
+    ///                 <c>CheckGrain</c> answers that mode from any cached entry with no TTL, and the
+    ///                 deployment's own <c>PUT</c> has just cached an allow for its creator at the group —
+    ///                 so a revoked creator went on writing children as themselves, from a reminder, until
+    ///                 the template ran out (the review of #39 saw exactly that, and
+    ///                 <c>DeploymentAuthorizationTests.ARightRevokedBetweenTwoChildrenIsHonouredAtTheSecond</c>
+    ///                 now holds the line). The same bypass lets a grant made after a refused child reach
+    ///                 the rerun, where a cached deny used to answer instead.
+    ///             </para>
+    ///         </item>
+    ///         <item>
+    ///             <b>There is no platform identity to fall back to.</b> The platform has no system
+    ///             principal (see <see cref="ExpiredPurgeRequest" />), so the only subject a write
+    ///             can carry is a tenant's; an empty subject is refused here rather than handed to
+    ///             step 3 to deny, so a spec that lost its caller fails loudly instead of looking like
+    ///             a permissions problem.
+    ///         </item>
+    ///         <item>
+    ///             <b>The gateway cannot reach it.</b> A request's caller is always the token's; this
+    ///             method is the one way to name a caller that is not the current request's, and it is
+    ///             not in the gateway's dispatch (<c>GatewayIsolationTests</c> reads the source for
+    ///             it). Its one production caller is <c>DeploymentDriver</c>, passing its own spec's
+    ///             caller.
+    ///         </item>
+    ///     </list>
+    ///     <para>
+    ///         ⚠ <b>Impersonation travels with it.</b> <see cref="CallerContext.ImpersonatedBy" /> is on
+    ///         the caller and so on every child, and the audit trail of each child names the operator
+    ///         the deployment's own did.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It does not ask the parent whether it exists.</b> The parent is the grain calling
+    ///         this, inside its own turn, and a call back into a non-reentrant grain from within its
+    ///         turn is a deadlock rather than a check. The parent id is recorded, and a child whose
+    ///         parent is gone ends normally and tells nobody.
+    ///     </para>
+    /// </remarks>
+    Task<Result<WriteAccepted>> WriteChildAsync(
+        Guid parentOperationId,
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    );
+
     /// <summary>Reads a resource, projected to the requested api-version.</summary>
     /// <param name="request">
     ///     The request. <see cref="WriteRequest.Verb" /> and <see cref="WriteRequest.Body" /> are

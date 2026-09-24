@@ -95,6 +95,18 @@ public sealed class RecoveryServicesProvider : IResourceProvider {
                 response: RecoveryVaults.RecoverResponse,
                 handler: typeof(RecoveryVaultRecoverHandler)
             )
+            .Action(
+                RecoveryVaults.BackupNowAction,
+                ActionKind.Post,
+                RecoveryVaults.BackupNowPermission,
+                request: RecoveryVaults.BackupNowRequest,
+                response: RecoveryVaults.BackupNowResponse,
+                handler: typeof(RecoveryVaultBackupNowHandler)
+            )
+            // ⚠ THE FIRST TYPE TO DECLARE A MANAGER-STARTED PASS, and the reason one exists: retention
+            // is "prune what is older than N days", which becomes true of a point with nobody writing
+            // to the vault. docs/plan/08 § The manager-started pass.
+            .PassEvery(RecoveryVaults.PassPeriod)
             // ⚠ `backupvault`, and not `vault`: docs/plan/24 § What has landed lists
             // CyberCloud.KeyVault/vaults as a catalogue type this tree has not published, and `az
             // keyvault` / `az backup vault` is the split Azure's own CLI makes. Neither this

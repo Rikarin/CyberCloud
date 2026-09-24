@@ -33,8 +33,9 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///             see it.
 ///         </item>
 ///         <item>
-///             <b>Bounded.</b> In the steady state, at most two applies, three reads and one
-///             conditional delete, all on the caller's token; a teardown or a restore adds one
+///             <b>Bounded.</b> In the steady state, at most three applies, four reads and one
+///             conditional delete, all on the caller's token — and, with backups on, one bucket
+///             <c>PUT</c> that answers "already there" and two vault reads; a teardown or a restore adds one
 ///             list and one read, one ownership change and one read-back per claim, which is a
 ///             handful of small metadata calls rather than a wait. ⚠ There is no wait for the
 ///             cluster to be <i>ready</i> — a
@@ -149,8 +150,22 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             );
         }
 
+        // ── Where the backups go, before the Cluster that archives there ─────────────────────────
+        var backups = PostgresServers.BackupEnabled(context.Desired);
+        PostgresServers.BackupStore? store = null;
+
+        if (backups) {
+            var (backupProblemOutcome, provisioned) = await ProvisionBackupStoreAsync(context, cluster, cancellationToken);
+
+            if (backupProblemOutcome is not null) {
+                return backupProblemOutcome;
+            }
+
+            store = provisioned;
+        }
+
         // ── The claims a previous life left, handed over before the operator looks ──────────────
-        if (await AdoptRetainedClaimsAsync(context, cluster, cancellationToken) is { } custodyProblem) {
+        if (await AdoptRetainedClaimsAsync(context, cluster, store, cancellationToken) is { } custodyProblem) {
             return custodyProblem;
         }
 
@@ -164,7 +179,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             context,
             cluster,
             PostgresServers.ClusterKind,
-            PostgresServers.ClusterJson(name, context.Desired),
+            PostgresServers.ClusterJson(name, context.Desired, store),
             cancellationToken
         );
 
@@ -195,7 +210,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         }
 
         // ── Clause 4. Everything above this line is a claim; this is the reading. ───────────────
-        foreach (var target in Targets(context.Namespace, name, pooling)) {
+        foreach (var target in Targets(context.Namespace, name, pooling, backups)) {
             var read = await cluster.GetAsync(target, cancellationToken);
 
             if (read.TryGetError(out var readError)) {
@@ -205,6 +220,12 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
                         TimeSpan.FromSeconds(5)
                     )
                     : ReconcileOutcome.FromFailure(readError);
+            }
+
+            // The key's Secret is read back for existence and nothing more: its value is the vault's,
+            // and comparing it here would put the secret into a comparison nothing needs.
+            if (target.Kind == PostgresServers.SecretKind) {
+                continue;
             }
 
             var stored = read.GetValueOrThrow().Json;
@@ -284,7 +305,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         // ⚠ Converged once the objects are GONE, read back — not once the deletes were issued. Same
         // clause, other direction: believing a delete is how a resource stops being billed while its
         // pods are still running.
-        foreach (var target in Targets(context.Namespace, name, true)) {
+        foreach (var target in Targets(context.Namespace, name, true, false)) {
             var read = await cluster.GetAsync(target, cancellationToken);
 
             if (read.IsSuccess) {
@@ -509,6 +530,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
     static async Task<ReconcileOutcome?> AdoptRetainedClaimsAsync(
         ReconcileContext context,
         IKubeClusterConnection cluster,
+        PostgresServers.BackupStore? store,
         CancellationToken cancellationToken
     ) {
         var name = context.Id.Name;
@@ -547,7 +569,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             context,
             cluster,
             PostgresServers.ClusterKind,
-            PostgresServers.ClusterJson(name, context.Desired),
+            PostgresServers.ClusterJson(name, context.Desired, store),
             true,
             cancellationToken
         );
@@ -780,11 +802,101 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
     }
 
     /// <summary>The objects a body implies, in apply order.</summary>
-    static IEnumerable<ObjectRef> Targets(string ns, string name, bool pooling) {
+    static IEnumerable<ObjectRef> Targets(string ns, string name, bool pooling, bool backups) {
+        if (backups) {
+            yield return PostgresServers.BackupSecretRef(ns, name);
+        }
+
         yield return PostgresServers.ClusterRef(ns, name);
 
         if (pooling) {
             yield return PostgresServers.PoolerRef(ns, name);
         }
+    }
+
+    /// <summary>
+    ///     Gives the server a bucket of its own on the platform's store and a key to it, held in the
+    ///     vault and rendered into the <c>Secret</c> the operator reads.
+    /// </summary>
+    /// <returns>
+    ///     The outcome to return from the pass, or <see langword="null" /> and the store to render.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Before the <c>Cluster</c>, because the <c>Cluster</c> names the <c>Secret</c>.</b>
+    ///         CloudNativePG starts archiving WAL the moment the primary is up, and an archive command
+    ///         whose credential Secret is absent fails every segment until it appears — a server that
+    ///         reported <c>Succeeded</c> with a broken archive, which is the failure #91 was about in
+    ///         another shape.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The key never touches the body, the grain or the log.</b> It comes out of
+    ///         <see cref="ObjectStoreCredentials.EnsureAsync" /> — the vault's copy, once one exists —
+    ///         and goes into one <c>Secret</c> document, in a local, for the length of this pass.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A store that refuses is retried, not failed</b>: <c>FromFailure</c> treats the
+    ///         store's <c>InternalError</c> as transient, which an unreachable store is. A host with no
+    ///         store wired refuses with the same code and a message naming the configuration, so the
+    ///         operation's progress says why after the first pass.
+    ///     </para>
+    /// </remarks>
+    static async Task<(ReconcileOutcome? Problem, PostgresServers.BackupStore? Store)> ProvisionBackupStoreAsync(
+        ReconcileContext context,
+        IKubeClusterConnection cluster,
+        CancellationToken cancellationToken
+    ) {
+        var name = context.Id.Name;
+        var bucket = ObjectStoreCredentials.BucketFor(PostgresServers.BucketPrefix, context.Id.Id);
+
+        // ⚠ A DEPLOYMENT WITH NO STORE FAILS THE PASS, TERMINALLY — #30's review. The refusing default's
+        // InternalError is retryable, so on a host that wires no grants (the AppHost is one: its
+        // SeaweedFS reads a static identities file that ignores issued keys) every default-bodied server
+        // stayed Creating for the operation's full hour with nothing a tenant could act on. Waiting wires
+        // nothing; the tenant's move is backup.enabled false, and the operator's is the store.
+        if (context.Grants.DataPlaneEndpoint.Length == 0) {
+            return (
+                ReconcileOutcome.Failed(
+                    new Error(
+                        ErrorCode.InvalidRequestBody,
+                        "Backups are on, and this deployment has no platform object store to put them in, so no "
+                        + "bucket can be made and no key issued. Set backup.enabled to false to run the server "
+                        + "without backups, or ask the platform operator to configure the store's IAM and "
+                        + "data-plane endpoints (CyberCloud:ObjectStorage).",
+                        "/properties/backup/enabled"
+                    ),
+                    false
+                ),
+                null
+            );
+        }
+
+        context.Log.Report("backup-store", $"ensuring bucket '{bucket}' and a key to it on the platform's object store", 10);
+
+        var key = await ObjectStoreCredentials.EnsureAsync(
+            context.Grants,
+            context.Secrets,
+            context.SecretWriter,
+            ObjectStoreCredentials.VaultPathFor(context.Id),
+            bucket,
+            bucket,
+            cancellationToken
+        );
+
+        if (key.TryGetError(out var keyError)) {
+            return (ReconcileOutcome.FromFailure(keyError), null);
+        }
+
+        var secret = await Apply(
+            context,
+            cluster,
+            PostgresServers.SecretKind,
+            PostgresServers.BackupSecretJson(name, key.GetValueOrThrow()),
+            cancellationToken
+        );
+
+        return secret is not null
+            ? (secret, null)
+            : (null, PostgresServers.BackupStore.For(context.Id.Id, name, context.Grants.DataPlaneEndpoint));
     }
 }

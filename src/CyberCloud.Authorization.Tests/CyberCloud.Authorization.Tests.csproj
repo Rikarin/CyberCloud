@@ -35,6 +35,11 @@
         <PackageReference Include="Npgsql"/>
         <!-- GrainId/tenant extensions, and ForTenant on the factory. -->
         <PackageReference Include="Orleans.Multitenant"/>
+        <!--
+          The tuple store's expiry sweep is a reminder (issue #49), stored in the same Redis as the
+          hot tier — what CyberCloud.Silo.Host wires (docs/plan/04 § Reminders).
+        -->
+        <PackageReference Include="Microsoft.Orleans.Reminders.Redis"/>
     </ItemGroup>
 
     <ItemGroup Label="Orleans' own PostgreSQL DDL">

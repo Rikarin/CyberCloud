@@ -28,7 +28,7 @@
                                         Stage 2. Validates a bearer JWT against the identity host's
                                         published key set — discovery, JWKS, signature, issuer,
                                         audience, expiry — from JwksCallerContextResolver.
-        Providers.*.Application         ⚠ TWELVE OF THEM, AND RULE 5 IS WHAT MAKES THEM LEGAL —
+        Providers.*.Application         ⚠ ONE PER FAMILY, AND RULE 5 IS WHAT MAKES THEM LEGAL —
                                         "the gateway references no provider IMPLEMENTATION assembly,
                                         only .Contracts and .Application". Stage 6 resolves a path
                                         against IProviderRegistry, the registry is built from the
@@ -142,11 +142,12 @@
         -->
         <ProjectReference Include="../../CyberCloud.Identity.Validation/CyberCloud.Identity.Validation.csproj"/>
         <!--
-          docs/plan/18's OpenBao client. The reference is here rather than on CyberCloud.Silo.Host
-          because THIS host is the one that composes the resource manager, and a synchronous action —
-          `listKeys` — is served inside ResourceManagerService.ActionAsync in this process. Program.cs
-          calls AddOpenBaoSecretResolver only when CyberCloud:Vault is configured; without it the
-          refusing seams stay, which is a supported shape.
+          docs/plan/18's OpenBao client. Here because this host composes the resource manager, and a
+          synchronous action — `listKeys` — is served inside ResourceManagerService.ActionAsync in
+          this process. ⚠ CyberCloud.Silo.Host carries the same reference for the rest: every mint,
+          every reconcile's read and every key vault's data plane run on a silo. Program.cs calls
+          AddOpenBaoSecretResolver only when CyberCloud:Vault is configured; without it the refusing
+          seams stay, which is a supported shape.
         -->
         <ProjectReference Include="../../CyberCloud.Vault/CyberCloud.Vault.csproj"/>
         <!--
@@ -175,7 +176,7 @@
     </ItemGroup>
 
     <!--
-      ── Every provider module, the same twelve the silo loads ───────────────────────────────────
+      ── Every provider module, the same set the silo loads ──────────────────────────────────────
 
       ⚠ THE .Application PROJECT AND NEVER THE IMPLEMENTATION, which is rule 5 stated as a build
       graph. Each of these references its own provider implementation, so the implementations do end
@@ -208,6 +209,8 @@
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Application/CyberCloud.Providers.Search.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Application/CyberCloud.Providers.Storage.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Application/CyberCloud.Providers.RecoveryServices.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.Application/CyberCloud.Providers.Resources.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Application/CyberCloud.Providers.KeyVault.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Application/CyberCloud.Providers.Terminal.Application.csproj"/>
     </ItemGroup>
 

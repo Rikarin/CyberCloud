@@ -1,5 +1,6 @@
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
+using CyberCloud.ResourceManager.Orchestration;
 using CyberCloud.ResourceManager.Reconcile;
 using Microsoft.Extensions.Logging;
 using Orleans.Multitenant;
@@ -81,13 +82,85 @@ public sealed class ResourceManagerService(
     IGrainFactory grains,
     ActionDispatcher actions,
     ILogger<ResourceManagerService> logger,
-    ResourceWatchFanout? watches = null
+    ResourceWatchFanout? watches = null,
+    IEnumerable<IResourceBodyValidator>? validators = null
 )
     : IResourceManager {
+    readonly ImmutableArray<IResourceBodyValidator> bodyValidators = [.. validators ?? []];
+
     /// <inheritdoc />
-    public async Task<Result<WriteAccepted>> WriteAsync(
+    public Task<Result<WriteAccepted>> WriteAsync(
         WriteRequest request,
         CancellationToken cancellationToken = default
+    ) =>
+        WriteCoreAsync(request, false, Guid.Empty, cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<Result<WriteAccepted>> WriteChildAsync(
+        Guid parentOperationId,
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(request);
+
+        // ⚠ THE THREE REFUSALS THAT MAKE THIS A NARROWER DOOR THAN WriteAsync, NOT A WIDER ONE. The
+        // remarks on IResourceManager.WriteChildAsync carry the argument; each line here is one of
+        // its premises, checked rather than assumed.
+        if (parentOperationId == Guid.Empty) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.InternalError,
+                $"A child write to '{request.Path}' names no parent operation. WriteChildAsync exists "
+                + "to record one; a write with no parent is WriteAsync's."
+            );
+        }
+
+        // An empty subject is a spec that lost its caller. Step 3 would deny it anyway, and would say
+        // so as a 404 on the child — which reads as a permissions problem on a resource and hides the
+        // real one, that the parent is replaying nobody.
+        if (string.IsNullOrWhiteSpace(request.Caller.SubjectId) || request.Caller.TenantId == Guid.Empty) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.InternalError,
+                $"Operation {parentOperationId:D} tried to write '{request.Path}' with no caller. A child "
+                + "is written as the subject that created its parent and never as the platform, which "
+                + "has no identity to lend — the parent's spec has lost the caller it was accepted with."
+            );
+        }
+
+        if (request.Verb != WriteVerb.Put) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.InternalError,
+                $"A child write is a PUT, and operation {parentOperationId:D} asked for {request.Verb} on "
+                + $"'{request.Path}'. A deployment's resources are full replacements, which is what "
+                + "makes re-running one idempotent."
+            );
+        }
+
+        if (ResourceId.TryParsePath(request.Path, out var child) && Deployments.Is(child.Type)) {
+            return Result<WriteAccepted>.Failure(
+                ErrorCode.InvalidRequestBody,
+                $"'{request.Path}' is a deployment, and a deployment may not deploy one: nested "
+                + "deployments are not supported."
+            );
+        }
+
+        // ⚠ byAnAction is false: a deployment child is a tenant PUT replayed as its caller, and may
+        // set no property a type declared SetOnlyByAnAction — #30's restore bypass stays closed.
+        return await WriteCoreAsync(request, false, parentOperationId, cancellationToken);
+    }
+
+    /// <summary>The write path, told whether the write came through an action's creator.</summary>
+    /// <param name="request">The write.</param>
+    /// <param name="byAnAction">
+    ///     Whether <see cref="CreateForActionAsync" /> sent it. Only then may the body set a property
+    ///     the type declared <c>SetOnlyByAnAction</c>.
+    /// </param>
+    /// <param name="parentOperationId">The parent operation of a child write, or empty.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    async Task<Result<WriteAccepted>> WriteCoreAsync(
+        WriteRequest request,
+        bool byAnAction,
+        Guid parentOperationId,
+        CancellationToken cancellationToken
     ) {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -146,8 +219,92 @@ public sealed class ResourceManagerService(
                 return Result<WriteAccepted>.Failure(schemaError);
             }
 
-            return await ContinueWriteAsync(request, target, body.RootElement, trace, cancellationToken);
+            // ── 2b. A property only an action may set ───────────────────────────────────────────
+            //
+            // ⚠ FOUND BY #30'S REVIEW: a server's restore.recoveryPoint was a property any caller with
+            // `write` on servers could PUT, and it bootstrapped the new server from any Backup in the
+            // group's namespace — past the vault's `recover` permission, its ownership check and its
+            // phase check, with listKeys on the copy at the end. See IResourceTypeBuilder.SetOnlyByAnAction.
+            if (!byAnAction && target.Registration.ActionOnlyPointers.Length > 0) {
+                var refusal = await ActionOnlyRefusalAsync(request, target, body.RootElement);
+                if (refusal is { } setByAnAction) {
+                    return Result<WriteAccepted>.Failure(setByAnAction);
+                }
+            }
+
+            // ⚠ WHAT THE SCHEMA CANNOT SAY, STILL AT STEP 2. A deployment's body is a program; the
+            // registry checks that the template is a string and IResourceBodyValidator checks that the
+            // string deploys. Same step, same refusal shape, same place in the order.
+            foreach (var validator in bodyValidators) {
+                if (!validator.Type.Equals(target.Registration.Type)) {
+                    continue;
+                }
+
+                var checkedBody = validator.Validate(target.Id, body.RootElement, request.Verb);
+                if (checkedBody.TryGetError(out var bodyError)) {
+                    return Result<WriteAccepted>.Failure(bodyError);
+                }
+            }
+
+            return await ContinueWriteAsync(request, target, body.RootElement, trace, parentOperationId, cancellationToken);
         }
+    }
+
+    /// <summary>
+    ///     Creates a resource beside an action's own, as the action's caller — the body of
+    ///     <see cref="CallerResourceCreator" />.
+    /// </summary>
+    /// <param name="owner">The resource the action is on. The new one goes in its subscription and group.</param>
+    /// <param name="caller">The action's caller, who becomes the create's caller.</param>
+    /// <param name="type">The type to create.</param>
+    /// <param name="name">The new resource's name.</param>
+    /// <param name="apiVersion">The api-version of <paramref name="body" />.</param>
+    /// <param name="body">The body.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <remarks>
+    ///     ⚠ <b>Nothing here is a second write path.</b> The request is a <c>PUT</c> handed to
+    ///     <see cref="WriteAsync" />, so authorization, locks, policy, quota, the index claim and the
+    ///     operation are all the ordinary ones, checked against <paramref name="caller" />. It adds one
+    ///     rule, the one a restore needs: an existing name is refused, never replaced. It lifts one:
+    ///     the body may set a property the type declared <c>SetOnlyByAnAction</c>, because the
+    ///     action's handler has already checked what that property grants.
+    /// </remarks>
+    internal async Task<Result<ResourceCreated>> CreateForActionAsync(
+        ResourceId owner,
+        CallerContext caller,
+        ResourceTypeName type,
+        string name,
+        string apiVersion,
+        string body,
+        CancellationToken cancellationToken
+    ) {
+        var address = new ResourceId(owner.TenantId, owner.SubscriptionId, owner.ResourceGroup, type, name, Guid.Empty);
+        var request = new WriteRequest {
+            Path = address.Path,
+            ApiVersion = apiVersion,
+            Verb = WriteVerb.Put,
+            Body = body,
+            Caller = caller
+        };
+
+        var resolved = await ResolveAsync(request, new WriteTraceBuilder());
+
+        if (resolved.IsSuccess && resolved.GetValueOrThrow().Exists) {
+            return Result<ResourceCreated>.Failure(
+                ErrorCode.ResourceAlreadyExists,
+                $"'{address.Path}' already exists. This action creates a new resource and never writes "
+                + "over one that is there — choose another name."
+            );
+        }
+
+        var accepted = await WriteCoreAsync(request, true, Guid.Empty, cancellationToken);
+
+        if (accepted.TryGetError(out var writeError)) {
+            return Result<ResourceCreated>.Failure(writeError);
+        }
+
+        var written = accepted.GetValueOrThrow();
+        return Result<ResourceCreated>.Success(new(address.WithId(written.Resource.Id), written.OperationId));
     }
 
     /// <inheritdoc />
@@ -1593,6 +1750,70 @@ public sealed class ResourceManagerService(
             : null;
     }
 
+    /// <summary>
+    ///     The refusal a caller's own write gets when it sets a property only an action may set, or
+    ///     <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Allowed: the property absent, its schema default, or the value the stored resource
+    ///         already holds, so a client that reads a restored server and sends the body back is not
+    ///         refused. Refused: anything else, on a create and on an update alike.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Before authorization, and that is safe.</b> The answer depends only on the body and
+    ///         on the resource being written, never on another resource, so a refusal here confirms
+    ///         nothing a <c>404</c> would hide. The stored value is read only when the body sets a
+    ///         guarded pointer and the resource exists.
+    ///     </para>
+    /// </remarks>
+    async Task<Error?> ActionOnlyRefusalAsync(WriteRequest request, WriteTarget target, JsonElement body) {
+        string? stored = null;
+
+        foreach (var pointer in target.Registration.ActionOnlyPointers) {
+            if (MeterDerivation.Resolve(body, pointer) is not { } incoming) {
+                continue;
+            }
+
+            var defaultJson = target.Schema.Properties.Where(x => string.Equals(x.JsonPointer, pointer, StringComparison.Ordinal))
+                .Select(static x => x.DefaultJson)
+                .FirstOrDefault();
+
+            if (defaultJson is { Length: > 0 }) {
+                using var fallback = JsonDocument.Parse(defaultJson);
+                if (JsonElement.DeepEquals(incoming, fallback.RootElement)) {
+                    continue;
+                }
+            }
+
+            if (target.Exists) {
+                stored ??= await Resource(target).GetAsync(target.ApiVersion.Value, []) is { IsSuccess: true } read
+                    ? read.GetValueOrThrow().Body
+                    : string.Empty;
+
+                if (stored.Length > 0) {
+                    using var storedBody = JsonDocument.Parse(stored);
+                    if (MeterDerivation.Resolve(storedBody.RootElement, pointer) is { } held
+                        && JsonElement.DeepEquals(incoming, held)) {
+                        continue;
+                    }
+                }
+            }
+
+            return new(
+                ErrorCode.InvalidRequestBody,
+                $"'{pointer}' is set only by the action that creates this resource, not by a write: "
+                + $"{request.Verb} '{request.Path}' may send back the value the resource already holds, and "
+                + "nothing else. For a PostgreSQL server's restore, that action is a backup vault's recover, "
+                + "which checks that the point is the vault's own and complete and that you may recover "
+                + "from the vault.",
+                pointer
+            );
+        }
+
+        return null;
+    }
+
     /// <summary>Whether this resource has purge protection turned on.</summary>
     /// <remarks>
     ///     ⚠
@@ -1850,6 +2071,10 @@ public sealed class ResourceManagerService(
             action,
             input.GetValueOrThrow(),
             body.RootElement,
+            // ⚠ BOUND TO THIS REQUEST'S CALLER HERE, AND THE HANDLER CANNOT REBIND IT. Whatever the
+            // handler creates is this caller's write, through every step of WriteAsync — see
+            // IResourceCreator for why an action may create and a reconciler may not.
+            new CallerResourceCreator(this, target.Id, request.Caller),
             cancellationToken
         );
 
@@ -1952,6 +2177,7 @@ public sealed class ResourceManagerService(
         WriteTarget target,
         JsonElement body,
         WriteTraceBuilder trace,
+        Guid parentOperationId,
         CancellationToken cancellationToken
     ) {
         // ── 3. ReBAC Check — BEFORE quota, BEFORE the index claim, BEFORE any provider ──────────
@@ -1961,6 +2187,17 @@ public sealed class ResourceManagerService(
         // discover a customer's resource names by probing. 403 is returned only when the caller can
         // read the object but not perform the action." IResourceAuthorizer takes both permissions for
         // exactly that reason, and nothing below this line runs when it refuses.
+        //
+        // ⚠ FullyConsistent for a child, and MinimizeLatency for everything else. A child is written as
+        // a caller recorded when the parent was accepted, from a reminder, up to MaxResources steps
+        // later — and the deployment's own PUT has just cached an allow for that caller at the group.
+        // CheckGrain answers MinimizeLatency from any cached entry with no TTL, so at that mode a
+        // contributor revoked mid-deployment went on writing children as themselves until the end
+        // (the review of #39 ran exactly that and saw the second child created), and a deny cached
+        // by a refused child outlived the grant that should have cured it. docs/plan/07 § Consistency
+        // puts "anything where a stale allow is a real incident" on FullyConsistent; replaying a
+        // recorded identity with no token behind it is that case. It costs one durable walk per
+        // child, which the delete path already pays per request.
         trace.Enter(WriteStep.AuthorizationCheck);
 
         var authorized = await authorizer.AuthorizeAsync(
@@ -1968,7 +2205,7 @@ public sealed class ResourceManagerService(
             target.Registration.WritePermission,
             target.Registration.ReadPermission,
             request.Caller,
-            false,
+            parentOperationId != Guid.Empty,
             cancellationToken
         );
 
@@ -2318,7 +2555,10 @@ public sealed class ResourceManagerService(
                     // update, which is correct in both cases: the first has no parent resource, and
                     // the second did not write an edge to begin with.
                     ParentResourceId = resolvedTarget.ParentId,
-                    Caller = request.Caller
+                    Caller = request.Caller,
+                    // Empty for a request; a parent operation's id for a child written through
+                    // WriteChildAsync, which is what lets the child tell the parent when it ends.
+                    ParentOperationId = parentOperationId
                 }
             );
 

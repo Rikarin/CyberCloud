@@ -26,15 +26,24 @@ import {
 import { joinType, links } from '../../app/routes/portal-links';
 import { NeedsTenant, activeTenantId } from '../shared/page-state';
 
-/** What the last call did, shown once above the form and replaced by the next call. */
+/**
+ * What the last call did, shown once above the form and replaced by the next call. `expiresOn` is
+ * the served end of a just-in-time grant, on the outcomes that read one back.
+ */
 type Outcome =
-  | { readonly kind: 'granted' | 'repeated' | 'assigned' | 'absent' | 'revoked'; readonly name: string }
+  | {
+      readonly kind: 'granted' | 'repeated' | 'assigned' | 'absent' | 'revoked';
+      readonly name: string;
+      readonly expiresOn?: string | null;
+    }
   | { readonly kind: 'failed'; readonly name: string; readonly message: string };
 
 /** One assignment the page knows about, with its name parsed for the table. */
 interface KnownAssignment {
   readonly name: RoleAssignmentName;
   readonly rendered: string;
+  /** When it ends, as the platform served it — `null` for a permanent grant. */
+  readonly expiresOn: string | null;
 }
 
 /**
@@ -59,6 +68,12 @@ interface KnownAssignment {
  * accepts any well-formed id of a closed principal type and writes the tuple. The page checks the
  * id's shape (`RelationNaming.IdPattern`) and no more, and its hint says the id is the
  * directory's — a typo grants something nobody can use, and nothing here would notice.
+ *
+ * ⚠ **An end makes the grant just-in-time, and no end makes it permanent** — issue #49. The
+ * field is a local date and time, sent as the UTC instant it names, and the table shows what the
+ * platform served back rather than what was typed. A repeated grant with the field empty removes
+ * the end it had, because a `PUT` states the whole assignment; the hint says so. A grant whose end
+ * has passed answers `404` on its next check, and the row goes like any other absent one.
  *
  * ⚠ **Revoke is two clicks, and a grant is one.** A grant is reversible by the button beside it;
  * revoking `owner` from yourself is a lockout that only another owner can undo, so the row asks
@@ -168,6 +183,31 @@ interface KnownAssignment {
             </div>
           </div>
 
+          <div class="flex max-w-80 flex-col gap-1.5">
+            <label class="text-sm font-medium" for="cc-access-expires-on" i18n="@@access.expiresOn"
+              >Ends (optional)</label
+            >
+            <input
+              xuiInput
+              id="cc-access-expires-on"
+              type="datetime-local"
+              [value]="expiresOn()"
+              (input)="onExpiresOn($event)"
+              [attr.aria-describedby]="
+                endMessage() === null ? 'cc-access-expires-on-hint' : 'cc-access-expires-on-error'
+              "
+              [attr.aria-invalid]="endMessage() === null ? null : 'true'"
+            />
+            @if (endMessage(); as message) {
+              <p class="text-error text-xs" id="cc-access-expires-on-error" role="alert">{{ message }}</p>
+            } @else {
+              <p class="text-foreground-muted text-xs" id="cc-access-expires-on-hint" i18n="@@access.expiresOnHint">
+                In your local time. With an end, the role stops granting at that instant on its own. Leave it empty for
+                a permanent grant — assigning a role again with no end makes it permanent.
+              </p>
+            }
+          </div>
+
           <p class="text-sm">
             <ng-container i18n="@@access.derivedName">Assignment name</ng-container>
             <code
@@ -222,8 +262,8 @@ interface KnownAssignment {
               }
               @case ('repeated') {
                 <p i18n="@@access.outcome.repeated">
-                  <code>{{ outcome.name }}</code> was already granted here. Nothing changed — a repeated grant is the
-                  same assignment.
+                  <code>{{ outcome.name }}</code> was already granted here — a repeated grant is the same assignment,
+                  and its end is now the one this grant sent.
                 </p>
               }
               @case ('assigned') {
@@ -246,6 +286,11 @@ interface KnownAssignment {
                 <p>{{ outcome.message }}</p>
               }
             }
+            @if (outcome.kind !== 'failed' && outcome.expiresOn) {
+              <p class="mt-1" [attr.data-outcome-ends]="outcome.expiresOn" i18n="@@access.outcome.ends">
+                It ends {{ formatEnd(outcome.expiresOn) }}, on its own — nothing has to revoke it.
+              </p>
+            }
           </xui-callout>
         }
       </section>
@@ -265,6 +310,7 @@ interface KnownAssignment {
               <xui-th class="w-32" i18n="@@access.col.role">Role</xui-th>
               <xui-th class="w-40" i18n="@@access.col.principalType">Principal type</xui-th>
               <xui-th class="flex-1" i18n="@@access.col.principalId">Principal id</xui-th>
+              <xui-th class="w-48" i18n="@@access.col.expiresOn">Ends</xui-th>
               <xui-th class="w-56" i18n="@@access.col.actions">
                 <span class="sr-only">Actions</span>
               </xui-th>
@@ -276,6 +322,9 @@ interface KnownAssignment {
                 <xui-td class="flex-1" truncate
                   ><code class="text-xs">{{ item.name.principalId }}</code></xui-td
                 >
+                <xui-td class="w-48" [attr.data-expires-on]="item.expiresOn ?? ''">{{
+                  item.expiresOn === null ? permanentLabel : formatEnd(item.expiresOn)
+                }}</xui-td>
                 <xui-td class="w-56">
                   @if (removing() === item.rendered) {
                     <span class="flex flex-wrap items-center gap-2">
@@ -429,6 +478,17 @@ export class AccessBlade {
     return null;
   });
 
+  /** The end field's raw `datetime-local` value — empty for a permanent grant. */
+  protected readonly expiresOn = signal('');
+
+  /**
+   * Why the end can't be sent, or `null`. Set when Assign is pressed rather than computed, because
+   * "later than now" moves while the page sits open and a computed would hold the first answer.
+   */
+  protected readonly endMessage = signal<string | null>(null);
+
+  protected readonly permanentLabel = $localize`:@@access.permanent:Permanent`;
+
   protected readonly busy = signal<'assign' | 'check' | 'revoke' | null>(null);
   protected readonly outcome = signal<Outcome | null>(null);
   protected readonly known = signal<readonly KnownAssignment[]>([]);
@@ -547,6 +607,14 @@ export class AccessBlade {
         return $localize`:@@access.role.contributor:Contributor`;
       case 'reader':
         return $localize`:@@access.role.reader:Reader`;
+      case 'keyVaultSecretsOfficer':
+        return $localize`:@@access.role.keyVaultSecretsOfficer:Key Vault Secrets Officer`;
+      case 'keyVaultSecretsUser':
+        return $localize`:@@access.role.keyVaultSecretsUser:Key Vault Secrets User`;
+      case 'keyVaultCryptoOfficer':
+        return $localize`:@@access.role.keyVaultCryptoOfficer:Key Vault Crypto Officer`;
+      case 'keyVaultCryptoUser':
+        return $localize`:@@access.role.keyVaultCryptoUser:Key Vault Crypto User`;
     }
   }
 
@@ -562,21 +630,41 @@ export class AccessBlade {
     this.principalId.set((event.target as HTMLInputElement).value);
   }
 
+  protected onExpiresOn(event: Event): void {
+    this.expiresOn.set((event.target as HTMLInputElement).value);
+    this.endMessage.set(null);
+  }
+
+  /** A served end in the viewer's own locale and time zone, to the minute. */
+  protected formatEnd(expiresOn: string): string {
+    return new Date(expiresOn).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
   protected async onAssign(event: Event): Promise<void> {
     event.preventDefault();
     const scope = this.scope();
     const name = this.assignmentName();
+    const end = parseEnd(this.expiresOn(), Date.now());
     this.touched.set(true);
-    if (scope === null || name === null || this.busy() !== null) return;
+    this.endMessage.set(
+      end === undefined
+        ? $localize`:@@access.expiresOnInvalid:The end must be a date and time later than now. Leave it empty for a permanent grant.`
+        : null
+    );
+    if (scope === null || name === null || end === undefined || this.busy() !== null) return;
 
     this.busy.set('assign');
     this.outcome.set(null);
 
     try {
-      const response = await this.api.assign(scope, name);
+      const response = await this.api.assign(scope, name, end);
       if (this.moved(scope)) return;
       this.remember(response.value);
-      this.outcome.set({ kind: response.status === 201 ? 'granted' : 'repeated', name: renderName(name) });
+      this.outcome.set({
+        kind: response.status === 201 ? 'granted' : 'repeated',
+        name: renderName(name),
+        expiresOn: response.value.properties.expiresOn ?? null
+      });
     } catch (error) {
       if (!this.moved(scope)) this.outcome.set(failed(renderName(name), error));
     } finally {
@@ -597,7 +685,11 @@ export class AccessBlade {
       const response = await this.api.read(scope, name);
       if (this.moved(scope)) return;
       this.remember(response.value);
-      this.outcome.set({ kind: 'assigned', name: renderName(name) });
+      this.outcome.set({
+        kind: 'assigned',
+        name: renderName(name),
+        expiresOn: response.value.properties.expiresOn ?? null
+      });
     } catch (error) {
       if (this.moved(scope)) return;
       if (error instanceof ApiCallError && error.status === 404) {
@@ -640,7 +732,7 @@ export class AccessBlade {
     const name = parseName(served.name);
     if (name === null) return;
 
-    const row: KnownAssignment = { name, rendered: served.name };
+    const row: KnownAssignment = { name, rendered: served.name, expiresOn: served.properties.expiresOn ?? null };
     this.known.update(known => [...known.filter(k => k.rendered !== row.rendered), row]);
   }
 
@@ -658,6 +750,14 @@ function roleDescription(role: Role): string {
       return $localize`:@@access.role.contributorHint:Read and write, and deliberately not delete — narrower than Azure's Contributor.`;
     case 'reader':
       return $localize`:@@access.role.readerHint:Read only.`;
+    case 'keyVaultSecretsOfficer':
+      return $localize`:@@access.role.keyVaultSecretsOfficerHint:Set, read, delete, recover and purge a key vault's secrets. No control-plane right.`;
+    case 'keyVaultSecretsUser':
+      return $localize`:@@access.role.keyVaultSecretsUserHint:Read a key vault's secret values. No control-plane right.`;
+    case 'keyVaultCryptoOfficer':
+      return $localize`:@@access.role.keyVaultCryptoOfficerHint:Create, import, delete, recover, purge and use a key vault's keys. No control-plane right.`;
+    case 'keyVaultCryptoUser':
+      return $localize`:@@access.role.keyVaultCryptoUserHint:Encrypt, decrypt, wrap, unwrap, sign and verify with a key vault's keys. No control-plane right.`;
   }
 }
 
@@ -672,6 +772,19 @@ function principalTypeLabel(value: PrincipalType): string {
     case 'group':
       return $localize`:@@access.principalType.group:Group`;
   }
+}
+
+/**
+ * The end field as an instant: `null` when it's empty, `undefined` when it isn't one later than
+ * `now`. A `datetime-local` value has no offset, and `new Date` reads such a value as local time —
+ * the time the field showed — so the instant sent is the one the user picked.
+ */
+function parseEnd(value: string, now: number): Date | null | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+
+  const end = new Date(trimmed);
+  return Number.isNaN(end.getTime()) || end.getTime() <= now ? undefined : end;
 }
 
 function failed(name: string, error: unknown): Outcome {

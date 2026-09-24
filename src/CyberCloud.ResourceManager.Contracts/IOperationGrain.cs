@@ -115,6 +115,29 @@ public interface IOperationGrain : IGrainWithStringKey {
     /// </remarks>
     Task<Result<OperationStatus>> DriveAsync();
 
+    /// <summary>
+    ///     Tells a parent operation that one of its children has reached a terminal state, so the
+    ///     parent runs its next pass now rather than at its next reminder tick.
+    /// </summary>
+    /// <param name="childOperationId">The child that ended.</param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>One-way, and that is what keeps it from deadlocking.</b> The parent's pass calls
+    ///         the child (<see cref="GetAsync" />, <see cref="CancelAsync" />), and the child calls this
+    ///         from inside its own pass. Two non-reentrant grains each awaiting the other is a
+    ///         deadlock that ends in a timeout; a one-way call is queued on the parent and the child
+    ///         moves on, so the parent's pass finds the child idle.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>A hint and never the state.</b> The parent reads each child's status itself on
+    ///         every pass and does not trust this call's argument for anything but "drive now"; a
+    ///         notification that is lost, duplicated or late costs one reminder period and changes
+    ///         no outcome. An operation that is not a parent, or has ended, ignores it.
+    ///     </para>
+    /// </remarks>
+    [Orleans.Concurrency.OneWay]
+    Task NotifyChildTerminalAsync(Guid childOperationId);
+
     /// <summary>Drops this activation — see <c>ITenantGrain.DeactivateAsync</c>.</summary>
     /// <remarks>
     ///     ⚠ Used by the suite to prove resumability: deactivate mid-operation, call anything, and the

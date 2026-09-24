@@ -2,6 +2,7 @@ using CyberCloud.Core.Time;
 using CyberCloud.Kubernetes.Contracts.Tunnel;
 using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts.Registry;
+using CyberCloud.ResourceManager.Orchestration;
 using CyberCloud.ResourceManager.Drift;
 using CyberCloud.ResourceManager.Expiry;
 using CyberCloud.ResourceManager.Grains;
@@ -79,6 +80,11 @@ public static class ResourceManagerSiloBuilderExtensions {
                 // call will not — the lesson AddCyberCloudProvider taught this file the hard way.
                 // ExpirySweeperBackfillOptions.RunOnStart is how a harness turns it off.
                 services.AddHostedService<ExpirySweeperBackfill>();
+
+                // ⚠ The same walk for the manager-started pass, for the same reason: a write arms the
+                // reminder when it converges, and a resource that converged before its type had a pass
+                // has had no write since. PeriodicPassBackfillOptions.RunOnStart turns it off.
+                services.AddHostedService<PeriodicPassBackfill>();
             }
         );
     }
@@ -133,6 +139,7 @@ public static class ResourceManagerSiloBuilderExtensions {
         services.TryAddSingleton<ISecretResolver, UnavailableSecretResolver>();
         services.TryAddSingleton<ISecretWriter, UnavailableSecretWriter>();
         services.TryAddSingleton<IObjectStore, UnavailableObjectStore>();
+        services.TryAddSingleton<IObjectStoreGrants, UnavailableObjectStoreGrants>();
         services.TryAddSingleton<IClusterConnectionFactory, NoClusterConnectionFactory>();
         services.TryAddSingleton<IClusterConnectionRegistrar, UnavailableClusterConnectionRegistrar>();
         // The agent-tunnel seam (#36). A host with a silo registers GrainAgentTunnels first; the
@@ -179,6 +186,19 @@ public static class ResourceManagerSiloBuilderExtensions {
         // (docs/plan/08 § The write path, end to end), a synchronous action runs inside ActionAsync,
         // so a `listKeys` executes in the gateway's process and reads the gateway's ISecretResolver.
         services.TryAddSingleton<ActionDispatcher>();
+
+        // ── Deployments. docs/plan/08 § Long-running operations, "Nested operations". ─────────────
+        //
+        // ⚠ THE VALIDATOR IS WHAT THE WRITE PATH'S STEP 2 RUNS FOR A DEPLOYMENT'S BODY, and it is
+        // registered before the manager so the manager's IEnumerable<IResourceBodyValidator> finds
+        // it; TryAddEnumerable because a second registration of the same validator would run it twice.
+        // The driver is the parent operation's pass and is resolved on a silo only; the what-if is
+        // resolved in the gateway, which routes the action to it — the same both-sides arrangement
+        // DriftScanner and ReconcileDriver already have.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IResourceBodyValidator, DeploymentBodyValidator>());
+        services.TryAddSingleton<DeploymentDriver>();
+        services.TryAddSingleton<IDeploymentManager, DeploymentManagerService>();
+
         services.TryAddSingleton<IResourceManager, ResourceManagerService>();
 
         // ── The scope path. docs/plan/06 § The hierarchy — a subscription and a resource group. ───

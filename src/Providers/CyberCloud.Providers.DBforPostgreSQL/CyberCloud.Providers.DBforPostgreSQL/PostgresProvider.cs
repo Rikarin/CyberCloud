@@ -152,7 +152,12 @@ public sealed class PostgresProvider : IResourceProvider {
             // committed — see the remarks on this class for why that is the right price for a database.
             .SupportsSoftDelete(PostgresServers.SoftDeleteDays)
             .SupportsTags()
-            .RequiresCluster();
+            .RequiresCluster()
+            // ⚠ A RECOVERY POINT IS A CAPABILITY, NOT A SETTING — #30's review. It names a Backup in
+            // the group's namespace, and only the vault's recover checks that the point is the vault's,
+            // that it completed and that the caller may recover. A caller's own PUT may echo the
+            // value a restored server holds and may not choose one.
+            .SetOnlyByAnAction(PostgresServers.RecoveryPointPointer);
     }
 
     // ── What a server draws ────────────────────────────────────────────────────────────────────

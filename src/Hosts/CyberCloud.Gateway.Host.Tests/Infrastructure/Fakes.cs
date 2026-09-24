@@ -84,20 +84,39 @@ sealed class OneTypeRegistry : IProviderRegistry {
             ],
             SoftDeleteDays = 7,
             PurgePermission = SoftDeletePolicy.DefaultPurgePermission
+        },
+        // ⚠ THE DEPLOYMENT TYPE, STATED BY HAND FOR THE REASON THE SOFT-DELETE ACTIONS ABOVE ARE: this
+        // assembly holds no ProviderBuilder. The schema and the what-if's request are the real ones from
+        // Deployments; what is copied is the registration's shape — no reconciler, one synchronous action
+        // served by an entry point — which DeploymentDeclarationTests pins against the real builder.
+        new() {
+            Type = Deployments.Type,
+            ApiVersions = [new(ApiVersion.Parse(Deployments.V2026), Deployments.Schema2026)],
+            Actions = [
+                new(Deployments.WhatIfAction, ActionKind.Post, "write", false) {
+                    Request = Deployments.WhatIfRequest, EntryPoint = Deployments.WhatIfEntryPoint
+                }
+            ]
         }
     ];
 
     /// <inheritdoc />
-    public ImmutableArray<string> Namespaces { get; } = ["CyberCloud.DBforPostgreSQL"];
+    public ImmutableArray<string> Namespaces { get; } = ["CyberCloud.DBforPostgreSQL", Deployments.ProviderNamespace];
 
     /// <inheritdoc />
     public bool TryGetType(ResourceTypeName type, out ResourceTypeRegistration registration) {
-        registration = Types[0];
-        return type == TheType;
+        registration = Deployments.Is(type) ? Types[1] : Types[0];
+        return type == TheType || Deployments.Is(type);
     }
 
     /// <inheritdoc />
     public Result<TypeResolution> Resolve(ResourceTypeName type, string? apiVersion) {
+        if (Deployments.Is(type)) {
+            return Result<TypeResolution>.Success(
+                new(Types[1], ApiVersion.Parse(Deployments.V2026), Deployments.Schema2026)
+            );
+        }
+
         if (type != TheType) {
             return Result<TypeResolution>.Failure(ErrorCode.InvalidResourceType, $"'{type}' is unknown.");
         }
@@ -217,6 +236,22 @@ sealed class RecordingResourceManager : IResourceManager {
         CancellationToken cancellationToken = default
     ) =>
         Record(request, OnWrite);
+
+    /// <summary>
+    ///     How many times anything called <see cref="WriteChildAsync" />. ⚠ The gateway must never:
+    ///     a request's caller is the token's, and the child entry point names a caller that is not.
+    /// </summary>
+    public int ChildWrites { get; private set; }
+
+    /// <inheritdoc />
+    public Task<Result<WriteAccepted>> WriteChildAsync(
+        Guid parentOperationId,
+        WriteRequest request,
+        CancellationToken cancellationToken = default
+    ) {
+        ChildWrites++;
+        return Record(request, OnWrite);
+    }
 
     /// <inheritdoc />
     public Task<Result<ResourceSnapshot>> ReadAsync(
@@ -736,5 +771,36 @@ sealed class RecordingResourceGraphQuery : IResourceGraphQuery {
         ArgumentNullException.ThrowIfNull(request);
         Requests.Enqueue(request);
         return Task.FromResult(OnQuery(request));
+    }
+}
+
+/// <summary>
+///     The deployment entry point stage 8 routes a deployment's <c>whatIf</c> to, recording what it was
+///     asked and answering a scripted what-if.
+/// </summary>
+sealed class RecordingDeploymentManager : IDeploymentManager {
+    /// <summary>Every what-if request, in order.</summary>
+    public ConcurrentQueue<WriteRequest> WhatIfs { get; } = new();
+
+    /// <summary>What <see cref="WhatIfAsync" /> answers. Default: one create.</summary>
+    public Func<WriteRequest, Result<DeploymentWhatIf>> OnWhatIf { get; set; } =
+        static request => Result<DeploymentWhatIf>.Success(
+            new(
+                [
+                    new(
+                        request.Path.Replace("CyberCloud.Resources/deployments/rollout", "CyberCloud.Sample/widgets/a", StringComparison.Ordinal),
+                        "CyberCloud.Sample/widgets",
+                        WhatIfChangeTypes.Create,
+                        [new("/properties/message", WhatIfChangeTypes.PropertyCreate, null, "\"hi\"")]
+                    )
+                ]
+            )
+        );
+
+    /// <inheritdoc />
+    public Task<Result<DeploymentWhatIf>> WhatIfAsync(WriteRequest request, CancellationToken cancellationToken = default) {
+        ArgumentNullException.ThrowIfNull(request);
+        WhatIfs.Enqueue(request);
+        return Task.FromResult(OnWhatIf(request));
     }
 }

@@ -75,6 +75,31 @@ namespace CyberCloud.Authorization.Evaluation;
 ///         nobody does is find the slices no write has touched — see docs/plan/07 § The Leopard
 ///         index for what that owes.
 ///     </para>
+///     <para>
+///         ⚠
+///         <b>
+///             A tuple with an expiry is never an edge, and the usersets it would have extended are
+///             marked unclosed instead
+///         </b> — docs/plan/07 § Time-bounded relations. A closure holds no
+///         clock, so a member it recorded through an edge that stops granting on its own would stay
+///         a member after the edge had expired. So the graph above is the <i>permanent</i> edges; an
+///         expiring edge <c>U → S</c> marks <c>U</c> and every userset above it
+///         (<see cref="MembershipIndexSnapshot.Unclosed" />), and a permanent edge into a userset
+///         that's marked carries the mark up with it. A marked closure can still say "yes" — every
+///         member in it got there through permanent edges — and never says "no": the reader answers
+///         "walk it", and the walk filters expired tuples at read time. On the shipping schema the
+///         only indexed relation is <c>group#member</c>, and a just-in-time role is a tuple on a
+///         role relation, which is never an edge, so the index gives up nothing for the feature it
+///         is marking around.
+///     </para>
+///     <para>
+///         ⚠ <b>Changing an edge's expiry is a delete and a write, in that order.</b> Shortening a
+///         permanent edge to an expiring one must take its members out of every closure above it,
+///         which only a recomputation can do. <c>TupleStoreGrain</c> therefore runs
+///         <see cref="ApplyDeleteAsync" /> for a rewrite whose expiry differs, before the forward
+///         half, and <see cref="ApplyWriteAsync" /> after — so no crash can leave a closure holding
+///         a member the edge no longer permanently grants.
+///     </para>
 /// </remarks>
 public sealed class MembershipIndexMaintainer {
     /// <summary>How many slice writes are in flight at once. A group of ten thousand is ten thousand writes.</summary>
@@ -143,11 +168,25 @@ public sealed class MembershipIndexMaintainer {
             return Result<int>.Failure(error);
         }
 
-        var (above, below) = ends.GetValueOrThrow();
+        var (above, below, belowUnclosed) = ends.GetValueOrThrow();
         var changes = new ChangeSet(schema.Version);
+
+        if (tuple.ExpiresOn is not null) {
+            // Not an edge: nothing joins any closure, and everything above it can no longer say
+            // "no" from its closure alone. See the remarks on this type.
+            foreach (var upper in above) {
+                changes.MarkUnclosed(upper);
+            }
+
+            return await ApplyAsync(changes, cancellationToken).ConfigureAwait(false);
+        }
 
         foreach (var upper in above) {
             changes.AddMembers(upper, below);
+
+            if (belowUnclosed) {
+                changes.MarkUnclosed(upper);
+            }
         }
 
         foreach (var lower in below) {
@@ -180,7 +219,7 @@ public sealed class MembershipIndexMaintainer {
             return Result<int>.Failure(error);
         }
 
-        var (above, below) = ends.GetValueOrThrow();
+        var (above, below, _) = ends.GetValueOrThrow();
         var walker = new ClosureWalker(schema, new ExcludingReader(forward, tuple), reverse);
         var changes = new ChangeSet(schema.Version);
         Dictionary<SubjectRef, HashSet<SubjectRef>> recomputed = [];
@@ -191,8 +230,9 @@ public sealed class MembershipIndexMaintainer {
                 return Result<int>.Failure(walkError);
             }
 
-            recomputed[upper] = members.GetValueOrThrow();
-            changes.ReplaceMembers(upper, recomputed[upper]);
+            var (reached, unclosed) = members.GetValueOrThrow();
+            recomputed[upper] = reached;
+            changes.ReplaceMembers(upper, reached, unclosed);
         }
 
         foreach (var lower in below) {
@@ -237,7 +277,12 @@ public sealed class MembershipIndexMaintainer {
                 return Result<MembershipIndexChange>.Failure(downError);
             }
 
-            changes.AddMembers(userset, members.GetValueOrThrow());
+            var (reached, unclosed) = members.GetValueOrThrow();
+            changes.AddMembers(userset, reached);
+
+            if (unclosed) {
+                changes.MarkUnclosed(userset);
+            }
         }
 
         var entries = await reverse.ReadAsync(subjectObject, cancellationToken).ConfigureAwait(false);
@@ -268,14 +313,14 @@ public sealed class MembershipIndexMaintainer {
     ///     the subject and everything below it. Both read from the index, both including their
     ///     own end.
     /// </summary>
-    async ValueTask<Result<(List<SubjectRef> Above, List<SubjectRef> Below)>> EndsAsync(
+    async ValueTask<Result<(List<SubjectRef> Above, List<SubjectRef> Below, bool BelowUnclosed)>> EndsAsync(
         SubjectRef userset,
         SubjectRef subject,
         CancellationToken cancellationToken
     ) {
         var upperSlice = await CurrentAsync(userset.Object, cancellationToken).ConfigureAwait(false);
         if (upperSlice.TryGetError(out var upperError)) {
-            return Result<(List<SubjectRef>, List<SubjectRef>)>.Failure(upperError);
+            return Result<(List<SubjectRef>, List<SubjectRef>, bool)>.Failure(upperError);
         }
 
         List<SubjectRef> above = [userset];
@@ -286,21 +331,26 @@ public sealed class MembershipIndexMaintainer {
         }
 
         List<SubjectRef> below = [subject];
+        var belowUnclosed = false;
 
         if (IsExpandable(schema, subject)) {
             var lowerSlice = await CurrentAsync(subject.Object, cancellationToken).ConfigureAwait(false);
             if (lowerSlice.TryGetError(out var lowerError)) {
-                return Result<(List<SubjectRef>, List<SubjectRef>)>.Failure(lowerError);
+                return Result<(List<SubjectRef>, List<SubjectRef>, bool)>.Failure(lowerError);
             }
 
-            foreach (var candidate in lowerSlice.GetValueOrThrow().MembersOf(subject.Relation)) {
+            var lower = lowerSlice.GetValueOrThrow();
+
+            foreach (var candidate in lower.MembersOf(subject.Relation)) {
                 if (!below.Contains(candidate)) {
                     below.Add(candidate);
                 }
             }
+
+            belowUnclosed = lower.IsUnclosed(subject.Relation);
         }
 
-        return Result<(List<SubjectRef>, List<SubjectRef>)>.Success((above, below));
+        return Result<(List<SubjectRef>, List<SubjectRef>, bool)>.Success((above, below, belowUnclosed));
     }
 
     /// <summary>
@@ -368,8 +418,17 @@ public sealed class MembershipIndexMaintainer {
         public void AddMembers(SubjectRef userset, IEnumerable<SubjectRef> members) =>
             Union(SliceFor(userset.Object).AddMembers, userset.Relation, members);
 
-        public void ReplaceMembers(SubjectRef userset, IEnumerable<SubjectRef> members) =>
-            Union(SliceFor(userset.Object).ReplaceMembers, userset.Relation, members);
+        public void ReplaceMembers(SubjectRef userset, IEnumerable<SubjectRef> members, bool unclosed) {
+            var slice = SliceFor(userset.Object);
+            Union(slice.ReplaceMembers, userset.Relation, members);
+
+            // A replaced relation's mark is replaced with it: listed means set, absent means clear.
+            if (unclosed) {
+                slice.Unclosed.Add(userset.Relation);
+            }
+        }
+
+        public void MarkUnclosed(SubjectRef userset) => SliceFor(userset.Object).Unclosed.Add(userset.Relation);
 
         public void AddUsersets(SubjectRef subject, IEnumerable<SubjectRef> usersets) =>
             Union(SliceFor(subject.Object).AddUsersets, subject.Relation, usersets);
@@ -398,7 +457,8 @@ public sealed class MembershipIndexMaintainer {
                 AddMembers = Freeze(slice.AddMembers),
                 ReplaceMembers = Freeze(slice.ReplaceMembers),
                 AddUsersets = Freeze(slice.AddUsersets),
-                RemoveUsersets = Freeze(slice.RemoveUsersets)
+                RemoveUsersets = Freeze(slice.RemoveUsersets),
+                Unclosed = [.. slice.Unclosed.Order(StringComparer.Ordinal)]
             };
 
         static void Union(Dictionary<string, HashSet<SubjectRef>> into, string key, IEnumerable<SubjectRef> values) {
@@ -427,6 +487,8 @@ public sealed class MembershipIndexMaintainer {
             public Dictionary<string, HashSet<SubjectRef>> AddUsersets { get; } = new(StringComparer.Ordinal);
 
             public Dictionary<string, HashSet<SubjectRef>> RemoveUsersets { get; } = new(StringComparer.Ordinal);
+
+            public HashSet<string> Unclosed { get; } = new(StringComparer.Ordinal);
         }
     }
 
@@ -472,34 +534,52 @@ public sealed class MembershipIndexMaintainer {
         readonly Dictionary<ObjectRef, ObjectRelationsSnapshot> snapshots = [];
         readonly Dictionary<ObjectRef, IReadOnlyList<SubjectIndexEntry>> entries = [];
 
-        /// <summary>Every subject the userset reaches: its members, closed.</summary>
-        public async ValueTask<Result<HashSet<SubjectRef>>> DownAsync(
+        /// <summary>
+        ///     Every subject the userset reaches through permanent edges — its members, closed — and
+        ///     whether any userset on the way has an expiring edge the closure left out.
+        /// </summary>
+        public async ValueTask<Result<(HashSet<SubjectRef> Reached, bool Unclosed)>> DownAsync(
             SubjectRef userset,
             CancellationToken cancellationToken
         ) {
             HashSet<SubjectRef> reached = [];
+            HashSet<SubjectRef> expanded = [userset];
             Queue<SubjectRef> pending = new();
             pending.Enqueue(userset);
+            var unclosed = false;
 
             while (pending.Count > 0) {
                 var current = pending.Dequeue();
 
-                var snapshot = await SnapshotAsync(current.Object, cancellationToken).ConfigureAwait(false);
-                if (snapshot.TryGetError(out var error)) {
-                    return Result<HashSet<SubjectRef>>.Failure(error);
+                var read = await SnapshotAsync(current.Object, cancellationToken).ConfigureAwait(false);
+                if (read.TryGetError(out var error)) {
+                    return Result<(HashSet<SubjectRef>, bool)>.Failure(error);
                 }
 
-                foreach (var subject in snapshot.GetValueOrThrow().Subjects(current.Relation)) {
-                    if (reached.Add(subject) && IsExpandable(schema, subject)) {
+                var snapshot = read.GetValueOrThrow();
+
+                foreach (var subject in snapshot.Subjects(current.Relation)) {
+                    if (snapshot.ExpiryOf(current.Relation, subject) is not null) {
+                        // Not an edge — see the remarks on MembershipIndexMaintainer.
+                        unclosed = true;
+                        continue;
+                    }
+
+                    reached.Add(subject);
+
+                    if (IsExpandable(schema, subject) && expanded.Add(subject)) {
                         pending.Enqueue(subject);
                     }
                 }
             }
 
-            return Result<HashSet<SubjectRef>>.Success(reached);
+            return Result<(HashSet<SubjectRef>, bool)>.Success((reached, unclosed));
         }
 
-        /// <summary>Every userset that reaches the subject: the usersets it is in, closed.</summary>
+        /// <summary>
+        ///     Every userset that reaches the subject through permanent edges: the usersets it's in,
+        ///     closed.
+        /// </summary>
         public async ValueTask<Result<HashSet<SubjectRef>>> UpAsync(
             SubjectRef subject,
             CancellationToken cancellationToken
@@ -518,7 +598,8 @@ public sealed class MembershipIndexMaintainer {
 
                 foreach (var entry in read.GetValueOrThrow()) {
                     if (!string.Equals(entry.SubjectRelation, current.Relation, StringComparison.Ordinal)
-                        || !IsIndexed(schema, entry.Object.Type, entry.Relation)) {
+                        || !IsIndexed(schema, entry.Object.Type, entry.Relation)
+                        || entry.ExpiresOn is not null) {
                         continue;
                     }
 

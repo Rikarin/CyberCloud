@@ -152,10 +152,26 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         ResourceSchema? request = null,
         ResourceSchema? response = null,
         bool longRunning = false,
-        Type? handler = null
+        Type? handler = null,
+        string entryPoint = ""
     ) {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(permission);
+        ArgumentNullException.ThrowIfNull(entryPoint);
+
+        // ⚠ One server per action. An entry point is what serves an action that has to run as the
+        // caller (ActionRegistration.EntryPoint); a handler beside it would be a second answer to
+        // "what runs this", and a long-running entry-point action would advertise an operation that
+        // the operation grain would drive through the type's reconciler instead.
+        if (entryPoint.Length > 0 && (handler is not null || longRunning)) {
+            throw new ArgumentException(
+                $"'{name}' names the entry point '{entryPoint}' and also "
+                + (handler is not null ? $"the handler '{handler.FullName}'" : "longRunning: true")
+                + ". An entry-point action is synchronous and has no handler: the gateway routes it to "
+                + "the entry point and nothing else runs it.",
+                nameof(entryPoint)
+            );
+        }
 
         // ⚠ Checked here rather than where the handler is resolved, and the difference is when you
         // find out. A Type that does not implement the interface is a typo in a declaration, and a
@@ -230,7 +246,11 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         // would make declaring the shape a prerequisite for having the action at all.
         draft.Actions.Add(
             new(name, kind, permission, secret) {
-                Request = request, Response = response, LongRunning = longRunning, HandlerType = handler
+                Request = request,
+                Response = response,
+                LongRunning = longRunning,
+                HandlerType = handler,
+                EntryPoint = entryPoint
             }
         );
 
@@ -312,6 +332,38 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         return this;
     }
 
+    /// <inheritdoc />
+    public IResourceTypeBuilder PassEvery(TimeSpan period) {
+        if (period < PeriodicPass.MinimumPeriod) {
+            throw new ArgumentOutOfRangeException(
+                nameof(period),
+                period,
+                $"A periodic pass runs on an Orleans reminder, whose floor is {PeriodicPass.MinimumPeriod}. "
+                + "A shorter period would be stretched to the floor without anybody being told, so it is "
+                + "refused instead."
+            );
+        }
+
+        Open(nameof(PassEvery)).PassPeriod = period;
+        return this;
+    }
+
+    /// <inheritdoc />
+    public IResourceTypeBuilder SetOnlyByAnAction(string propertyPointer) {
+        ArgumentException.ThrowIfNullOrEmpty(propertyPointer);
+
+        if (propertyPointer[0] != '/') {
+            throw new ArgumentException(
+                $"'{propertyPointer}' is not an RFC 6901 pointer: it must start with '/'. The write path "
+                + "reads the property out of the body, so the registry has to be told where.",
+                nameof(propertyPointer)
+            );
+        }
+
+        Open(nameof(SetOnlyByAnAction)).ActionOnlyPointers.Add(propertyPointer);
+        return this;
+    }
+
     /// <summary>Freezes the drafts into registrations, checking what only the whole can check.</summary>
     /// <exception cref="InvalidOperationException">
     ///     A type declares no api-version, or declares <c>RequiresCluster</c> without the property
@@ -331,6 +383,7 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
 
             CheckClusterPlacement(draft);
             CheckPurgeProtection(draft);
+            CheckActionOnly(draft);
 
             built.Add(
                 new() {
@@ -357,6 +410,8 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
                     SupportsTags = draft.SupportsTags,
                     RequiresCluster = draft.RequiresCluster,
                     ClusterIdPointer = draft.RequiresCluster ? draft.ClusterIdPointer : string.Empty,
+                    PassPeriod = draft.PassPeriod,
+                    ActionOnlyPointers = [.. draft.ActionOnlyPointers],
                     Display = draft.Display
                 }
             );
@@ -511,6 +566,36 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
     }
 
     /// <summary>
+    ///     Gives <c>SetOnlyByAnAction</c> its schema consequence: every api-version declares the
+    ///     property, as an immutable one.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A pointer no api-version declares would guard nothing, and the write path would refuse
+    ///     nothing: the property would be settable by anyone the day a version added it. Immutable,
+    ///     because a value only an action may set is a value fixed at creation; one a later write could
+    ///     move is a setting, and it needs a different rule.
+    /// </remarks>
+    static void CheckActionOnly(TypeDraft draft) {
+        foreach (var pointer in draft.ActionOnlyPointers) {
+            foreach (var version in draft.ApiVersions) {
+                var declared = version.Schema.Properties.Where(x => string.Equals(x.JsonPointer, pointer, StringComparison.Ordinal))
+                    .Select(static x => (SchemaProperty?)x)
+                    .FirstOrDefault();
+
+                if (declared is not { Immutable: true }) {
+                    throw new InvalidOperationException(
+                        $"'{draft.Type}' declares SetOnlyByAnAction('{pointer}') and its api-version "
+                        + $"'{version.Version}' "
+                        + (declared is null ? "does not declare that property" : "declares it as mutable")
+                        + ". A property only an action may set is declared, and fixed at creation, in "
+                        + "every version the type serves."
+                    );
+                }
+            }
+        }
+    }
+
+    /// <summary>
     ///     Gives <c>RequiresCluster</c> its schema consequence: every api-version must declare the
     ///     property that supplies the cluster id, as a required string.
     /// </summary>
@@ -651,6 +736,10 @@ sealed class ProviderBuilder(string providerNamespace) : IResourceTypeBuilder {
         public bool RequiresCluster { get; set; }
 
         public string ClusterIdPointer { get; set; } = ClusterPlacement.DefaultPointer;
+
+        public TimeSpan PassPeriod { get; set; }
+
+        public List<string> ActionOnlyPointers { get; } = [];
 
         public DisplayMetadata Display { get; set; }
     }

@@ -2216,11 +2216,17 @@ for it (§ Hard rule above). What that measured:
   is *"should be at least 1 chars long"*, a filled-in one is *"missing credentials"* — so **no
   PostgreSQL server with backups on can be created on a real cluster today**, which is now
   `the-default-bucket-is-not-filled-in` on that chart. The fake and every harness stub admit it,
-  which is why no run before this one saw it.
+  which is why no run before this one saw it. *Closed 2026-09-24 (#30): the server's reconciler
+  gives it a bucket on the platform's object store and a vault-held key through `ReconcileContext.Grants`
+  — the first platform seam a provider reaches for a workload's storage rather than its own.*
 - **⚠ `restore` is a reserved action name.** `ProviderBuilder.Action` refuses it — soft delete's own
   dispatch — and the first conformance run found the refusal. The action is `recover`, and the
   restored cluster is a cluster object rather than a `DBforPostgreSQL/servers` resource, because the
   seam has no member that writes and that type has no bootstrap property: `a-restore-is-not-yet-a-resource`.
+  *Closed 2026-09-24 (#30): the server gained `/properties/restore/recoveryPoint`, and `recover` creates
+  one through `ActionContext.Creator` — the caller's own write, which is how an action may create a
+  resource of another family without the provider referencing it (docs/plan/08 § The cross-resource
+  seam).*
 - **⚠ The chart surface cannot carry a per-element format**, so `protectedItems` declares none and the
   reconciler checks the shape — the second sighting of `charts/managed/kafka`'s `cidr-shape-is-unenforced`.
 - **⚠ A second k3s lane installs the operator, in its own process.**
@@ -2327,6 +2333,43 @@ attached to and a child shares its parent's lifetime by construction.
   reader every family owes), container instances (`container-instances-are-not-landed`: a different
   namespace, waiting for a log-streaming path), and `deallocate` (`deallocate-is-stop`: a halted
   KubeVirt machine already holds no compute and keeps every disk).
+
+### What the nineteenth provider measured
+
+`CyberCloud.KeyVault/vaults`, [18 § `CyberCloud.KeyVault/vaults`](../../docs/plan/18-security-vault-and-malware-scan.md),
+M1 · 2.0 EM, 2026-09-23 — the prerequisite #30's customer-managed keys named. Secrets and RSA/EC keys
+behind a data plane of 25 actions through the gateway, sealed under a per-vault root the platform vault
+holds. What it measured:
+
+- **⚠ THE FIRST FAMILY WHOSE ACTIONS CHECK PERMISSIONS NO CONTROL-PLANE ROLE HOLDS, AND THE SCHEMA HAD
+  TO LEARN THEM FIRST.** Every earlier action checks `read`, `write` or a name like `listKeys`; these
+  check six data-plane permissions defined in `CyberCloudSchema` (`SchemaVersion` 4) in terms of four
+  new grantable roles on every scope — `keyVaultSecretsOfficer/User`, `keyVaultCryptoOfficer/User` —
+  and of nothing `owner` reaches. The provider spells the six without referencing the schema
+  (docs/plan/07 § The enforcement seam), so `KeyVaultDeclarationTests.TheSixPermissionsAreTheSchemasAndNoControlPlaneRoleHoldsThem`
+  pins the two spellings and walks each permission's rewrite for a control-plane role, and
+  `KeyVaultOverTheGatewayTests.AControlPlaneRoleIsRefusedEveryDataPlaneAction` drives the refusal over
+  HTTP for `owner`, `contributor` and `reader` across all 25 actions. Widening `readSecrets` to
+  `reader` turned the walk red and all three HTTP rows red (`403` expected, the grain's `404`
+  found). The first pass had seen the same when it widened `readSecrets` to `owner`.
+- **⚠ THE THIRD PROVIDER GRAIN, AND THE FIRST WHOSE STATE IS CIPHERTEXT BY CONSTRUCTION.**
+  `KeyVaultGrain` holds every version of every item AES-256-GCM-sealed under a root minted into
+  OpenBao through `ISecretWriter` and read back through `ISecretResolver` — the platform vault seam,
+  not a second client. `durable-grains.txt` carries the argument; `CC1005` stays on in the assembly and
+  has nothing to say, because no member is named like a secret and none holds one.
+- **⚠ A SOFT DELETE AND A PURGE WERE THE SAME CALL.** Both run `DeleteAsync`, and every earlier type's
+  data plane lived in a cluster, where the manager reclaims what a park kept. A grain-backed vault has
+  nothing the manager can reclaim, so `ReconcileContext.Parking` now carries the operation's own
+  `SoftDelete` flag; setting it to `false` in the driver turned the shared suite's
+  `DeleteTearsDownTheDataPlaneAndTheResourceIsGone` red — the restore never converged, because the park
+  had destroyed the vault it was restoring.
+- **⚠ The world the suite reads is the grain, through `IConvergedModule`**, the Communication family's
+  registration: a seal stands for "removed behind the reconciler's back" and a changed recovery window
+  for "edited", both of which a pass puts back from the body.
+- **⚠ What is owed is in [18 § What landed, and what is owed](../../docs/plan/18-security-vault-and-malware-scan.md)**
+  — certificates, rotation, the caller on the audit line, crypto-shredding the root on purge — and what
+  customer-managed keys still need is one `customer-managed-keys` row per stateful family's
+  `conformance.yaml § owed`, all pointing at the key-use seam `ctx.View` cannot be.
 
 ## Namespaces
 
@@ -2604,8 +2647,16 @@ apply, get and delete and no list member at all**, which is why there was nowher
   incomplete discovery leaves a namespace stuck in `Terminating` with
   `NamespaceDeletionDiscoveryFailure` — so refusing *before* issuing the delete is strictly better
   than issuing one that hangs, and the condition clears on its own when the apiserver comes back.
-  What the platform owes is a refusal that names the group, and
-  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` asserts it.
+  What the platform owes is a refusal that names the group.
+- **⚠ That refusal was proved by a race, and #96 replaced the race with a provocation.** Which arm of
+  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` ran depended on whether
+  metrics-server had come up by the time the suite reached it, and `CyberCloud.Network`'s cluster
+  suite went red and green on one tree for that reason alone. The test k3s recipes now pass
+  `--disable=metrics-server`, as the AppHost's always has (`ClusterInfrastructure.DisableMetricsServer`);
+  the listing there waits for every `APIService` to report `Available` and must succeed; and
+  `NamespaceDiscoveryRefusalTests` registers an `APIService` whose service does not exist, against
+  `CyberCloud.Kubernetes.Tests`' k3s, and asserts the refusal names that group and the namespace —
+  then removes it and asserts the listing succeeds again.
 - **Two smaller repairs fell out.** A list body that would not parse was returned as an *empty page with
   no cursor*, which reads as "this kind holds nothing"; it is now a failure. And an empty
   `labelSelector` was sent as `labelSelector=` rather than omitted, which only mattered once a caller
@@ -2635,6 +2686,21 @@ on the next pass; not forgetting when it was gone costs an hour of failed reconc
   nothing performs.
 - **A cross-silo broadcast** would close the memo from the writing end rather than the reading end.
   Nothing needs it while the `404` channel exists.
+- **The cluster suite's "nothing of it is left" sees only what carries its `resource-id` (#96).**
+  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` scopes its after-teardown check to
+  the resource under test by that label, because every class in a provider's assembly shares one
+  namespace with the harness's ancestors, siblings and companions. An object a controller made from
+  ours without copying the label, such as a `Secret` an operator writes under its own labels, is
+  outside it. (A `Service`'s `EndpointSlice` isn't an example: the EndpointSlice controller copies the
+  `Service`'s labels onto it.) The limit is the test's and not the product's: the real reclaim weighs every occupant
+  and refuses over such an object. Closing it needs `KubeObjectSummary` to carry `ownerReferences`, so
+  the test can follow the chain rather than the label.
+- **A cluster-scoped object that outlives its resource is found by nothing yet (#96).** docs/plan/08
+  § Reclaiming a resource group's namespace leaves such an object out of the reclaim on purpose and
+  calls it an orphan for the drift scan. `DriftScanner`'s diff would name it, but the shipped
+  `IClusterObjectInventory` is `UnavailableClusterObjectInventory`, which refuses, so the scan can't run
+  against a real cluster. A leaked `Vpc` or `Subnet` stays unseen until the informer-backed inventory of
+  docs/plan/09 § Observing lands.
 
 ### Closed: the drift scan no longer calls a namespace an orphan
 

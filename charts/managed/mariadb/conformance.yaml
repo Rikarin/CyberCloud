@@ -141,6 +141,21 @@ owed:
 # ⚠ These are BILLING meters (docs/plan/22) and are not the QUOTA meters Describe declares. The four
 # quota meters — vcpu, memoryGb, storageGb, resources — are asserted in MariaDbDeclarationTests,
 # against the registry, which is the only place either kind is real today.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.DBforMySQL/servers. OWED. THE ENGINE STEP, AND THIS ENGINE HAS ONE THE OTHERS LACK:
+      MariaDB encrypts tablespaces and logs at rest through a key-management plugin, and one of its
+      plugins reads keys from a Vault-style KV store — so a per-server data key the platform unwraps
+      with the customer's key and writes where the plugin reads it is a plausible shape. ⚠ Unmeasured
+      here: whether mariadb-operator renders the plugin, and whether the plugin speaks to OpenBao
+      unmodified, are both unread, and the chart renders no encryption today. What every family still
+      needs is docs/plan/18 § What customer-managed keys still need: (1) a key-use seam — the grant is
+      expressible today, `keyVaultCryptoUser` with principalType `resource` on a
+      CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and wrapKey/unwrapKey
+      are actions, so no reconciler can call them; (2) an `encryption.keyUri` property on a NEW
+      api-version of this type; (3) revocation — a disabled key taking the data offline, which needs a
+      re-unwrap on a schedule nothing runs. The key's home is no longer the blocker:
+      CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.
 meters:
   - mariadb.instance.hours
   - mariadb.storage.gib.hours

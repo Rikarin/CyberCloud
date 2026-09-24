@@ -149,17 +149,22 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
             CancelReason = "the user changed their mind",
             Attempts = 3,
             Activations = 2,
-            Children = [Guid.NewGuid()]
+            Children = [Guid.NewGuid(), Guid.NewGuid()],
+            ParentOperationId = Guid.NewGuid()
         };
 
         var round = RoundTrip(value);
 
+        // ⚠ Both directions of #39's nesting. ParentOperationId is appended at [Id(14)] and Children
+        // was on the wire empty until a deployment filled it; a child whose status came back with an
+        // empty parent would be a child nothing can walk back from.
+        round.ParentOperationId.ShouldBe(value.ParentOperationId);
+        round.Children.ShouldBe(value.Children);
         round.State.ShouldBe(OperationState.Running);
         round.CancelRequested.ShouldBeTrue();
         round.CancelReason.ShouldBe(value.CancelReason);
         round.Attempts.ShouldBe(3);
         round.Activations.ShouldBe(2);
-        round.Children.Length.ShouldBe(1);
         round.Progress.Length.ShouldBe(2);
         round.Progress[0].Step.ShouldBe("applying");
         round.LastProgress!.Detail.ShouldBe("2 of 3 replicas ready");
@@ -394,7 +399,11 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
                     Scope = "/tenants/t/subscriptions/s/resourceGroups/rg",
                     RoleDefinitionId = "reader",
                     PrincipalType = "group",
-                    PrincipalId = "2b4a1c662e704a9d9d0a1f7ec1f1a4b3"
+                    PrincipalId = "2b4a1c662e704a9d9d0a1f7ec1f1a4b3",
+
+                    // A just-in-time row — issue #49. An offset other than zero, so a serializer
+                    // that kept only the ticks would be caught by the equality below.
+                    ExpiresOn = new DateTimeOffset(2026, 9, 24, 11, 0, 0, TimeSpan.FromHours(2))
                 }
             ],
             Continuation =
@@ -409,6 +418,9 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
         round.Assignments[0].Inherited.ShouldBeTrue();
         round.Assignments[1].ShouldBe(value.Assignments[1]);
         round.Assignments[1].Inherited.ShouldBeFalse();
+        round.Assignments[0].ExpiresOn.ShouldBeNull("a permanent row came back with an expiry");
+        round.Assignments[1].ExpiresOn.ShouldBe(value.Assignments[1].ExpiresOn);
+        round.Assignments[1].ExpiresOn!.Value.Offset.ShouldBe(TimeSpan.FromHours(2));
         round.Continuation.ShouldBe(value.Continuation);
         round.HasMore.ShouldBeTrue();
 

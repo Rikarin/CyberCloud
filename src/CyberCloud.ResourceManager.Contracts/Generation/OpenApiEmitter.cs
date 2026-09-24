@@ -1024,6 +1024,24 @@ public static class OpenApiEmitter {
         }
     ];
 
+    /// <summary>The sentence every action's description opens with, true of the route that serves it.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The 404 is the handler route's rule, and an entry point is not on that route.</b>
+    ///     <c>IResourceManager.ActionAsync</c> refuses an action on a name that does not exist; the
+    ///     gateway sends an action with an <see cref="ActionRegistration.EntryPoint" /> past it, and the
+    ///     one such action — a deployment's <c>whatIf</c> — exists to answer for a deployment that has
+    ///     not been created. Printing the handler's sentence on it published a 404 the API never gives.
+    ///     The action carries <c>x-cybercloud-entry-point</c> so the derived surfaces, which read the
+    ///     document and not the registry, can say the same (<see cref="DocumentAction.EntryPoint" />).
+    /// </remarks>
+    internal static string ActionRule(ActionRegistration action) =>
+        action.EntryPoint.Length == 0
+            ? "An action never creates: a POST to a name that does not exist is a 404 — "
+            + "docs/plan/08 § The write path, end to end."
+            : "An action never creates. This one is served by the platform's " + action.EntryPoint
+            + " rather than by a handler: it runs as the caller, and it answers for a name that does not "
+            + "exist yet rather than refusing it with a 404.";
+
     static JsonObject ActionPathItem(
         ResourceTypeRegistration type,
         ActionRegistration action,
@@ -1044,8 +1062,7 @@ public static class OpenApiEmitter {
             ["operationId"] = OperationIdOf(type.Type, Capitalise(action.Name)),
             ["summary"] = action.Name + " a " + type.Type + ".",
             ["description"] =
-                "An action never creates: a POST to a name that does not exist is a 404 — "
-                + "docs/plan/08 § The write path, end to end."
+                ActionRule(action)
                 + (action.Secret
                         ? " ⚠ The response carries secret material. It is always audited and is never "
                         + "cached — docs/plan/08 § The provider registry."
@@ -1091,6 +1108,12 @@ public static class OpenApiEmitter {
         post["x-cybercloud-permission"] = action.Permission;
         post["x-cybercloud-secret"] = action.Secret;
         post["x-cybercloud-long-running"] = action.LongRunning;
+
+        // Only where there is one, so every handler-served action's document is what it was. The
+        // derived surfaces read it back (DocumentAction.EntryPoint) to say what ActionRule says.
+        if (action.EntryPoint.Length > 0) {
+            post["x-cybercloud-entry-point"] = action.EntryPoint;
+        }
 
         var item = new JsonObject {
             ["parameters"] = ResourceParameters(type.Type),

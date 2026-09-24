@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the ABP module a host [DependsOn]s to load CyberCloud.Resources, and no
+      application service, for the reason every family's .Application gives: a deployment's PUT, GET,
+      DELETE and list are generic resource-manager verbs the gateway routes from the registry, and its
+      one action is routed to IDeploymentManager, which the resource manager registers itself.
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.csproj"/>
+        <!-- AddCyberCloudProvider — the registration call, and the only name rule 8 lets this assembly bind. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

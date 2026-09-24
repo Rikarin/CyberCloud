@@ -9438,6 +9438,2372 @@
       "x-cybercloud-resource-type": "CyberCloud.DocumentDB/accounts",
       "x-cybercloud-action": "listKeys"
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_KeyVault_vaults_List",
+        "summary": "List the CyberCloud.KeyVault/vaults in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_KeyVault_vaults_Get",
+        "summary": "Read a CyberCloud.KeyVault/vaults.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_KeyVault_vaults_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.KeyVault/vaults.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_KeyVault_vaults_Update",
+        "summary": "Merge-patch a CyberCloud.KeyVault/vaults.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_KeyVault_vaults_Delete",
+        "summary": "Delete a CyberCloud.KeyVault/vaults.",
+        "description": "A deleted CyberCloud.KeyVault/vaults is recoverable for 7 day(s) — docs/plan/06 § Tags, locks. Its data plane is torn down, so nothing keeps running and nothing keeps being metered for compute; its stored state and its volumes are kept, so a restore re-applies exactly what was there. Its old address answers 404 for the whole window, its name is held, and its quota stays committed so that a restore cannot fail against an allowance spent since. Restore it, or purge it to end the window early — a purge needs 'purge', which is a separate right from 'delete'.",
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 7,
+        "x-cybercloud-purge-permission": "purge"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-display": {
+        "name": "Key vault",
+        "plural": "Key vaults",
+        "alias": "vault",
+        "summary": "Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": true,
+      "x-cybercloud-requires-cluster": false,
+      "x-cybercloud-cluster-id-pointer": "",
+      "x-cybercloud-soft-delete-days": 7,
+      "x-cybercloud-purge-permission": "purge",
+      "x-cybercloud-purge-protection-pointer": "/properties/enablePurgeProtection",
+      "x-cybercloud-meters": [
+        {
+          "meter": "Resources",
+          "amountPointer": "",
+          "fallback": 1,
+          "expression": "1",
+          "reads": []
+        }
+      ]
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/createKey": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_CreateKey",
+        "summary": "createKey a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.CreateKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.CreateKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "writeKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "createKey"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/decrypt": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_Decrypt",
+        "summary": "decrypt a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.DecryptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.DecryptResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "decrypt"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/deleteKey": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_DeleteKey",
+        "summary": "deleteKey a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.DeleteKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.DeleteKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "writeKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "deleteKey"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/deleteSecret": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_DeleteSecret",
+        "summary": "deleteSecret a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.DeleteSecretRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.DeleteSecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "writeSecrets",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "deleteSecret"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/encrypt": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_Encrypt",
+        "summary": "encrypt a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.EncryptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.EncryptResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "encrypt"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/getKey": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_GetKey",
+        "summary": "getKey a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.GetKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.GetKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "getKey"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/getSecret": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_GetSecret",
+        "summary": "getSecret a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.GetSecretRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.GetSecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "readSecrets",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "getSecret"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/importKey": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_ImportKey",
+        "summary": "importKey a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ImportKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ImportKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "writeKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "importKey"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/listDeletedKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_ListDeletedKeys",
+        "summary": "listDeletedKeys a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ListDeletedKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "listDeletedKeys"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/listDeletedSecrets": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_ListDeletedSecrets",
+        "summary": "listDeletedSecrets a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ListDeletedSecretsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "readSecrets",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "listDeletedSecrets"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/listKeyVersions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_ListKeyVersions",
+        "summary": "listKeyVersions a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ListKeyVersionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ListKeyVersionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "listKeyVersions"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/listKeys": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_ListKeys",
+        "summary": "listKeys a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ListKeysResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "listKeys"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/listSecretVersions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_ListSecretVersions",
+        "summary": "listSecretVersions a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ListSecretVersionsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ListSecretVersionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "readSecrets",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "listSecretVersions"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/listSecrets": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_ListSecrets",
+        "summary": "listSecrets a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.ListSecretsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "readSecrets",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "listSecrets"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/purge": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_Purge",
+        "summary": "purge a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "purge",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "purge"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/purgeDeletedKey": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_PurgeDeletedKey",
+        "summary": "purgeDeletedKey a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.PurgeDeletedKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.PurgeDeletedKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "purgeKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "purgeDeletedKey"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/purgeDeletedSecret": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_PurgeDeletedSecret",
+        "summary": "purgeDeletedSecret a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.PurgeDeletedSecretRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.PurgeDeletedSecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "purgeSecrets",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "purgeDeletedSecret"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/recoverDeletedKey": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_RecoverDeletedKey",
+        "summary": "recoverDeletedKey a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.RecoverDeletedKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.RecoverDeletedKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "writeKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "recoverDeletedKey"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/recoverDeletedSecret": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_RecoverDeletedSecret",
+        "summary": "recoverDeletedSecret a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.RecoverDeletedSecretRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.RecoverDeletedSecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "writeSecrets",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "recoverDeletedSecret"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/restore": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_Restore",
+        "summary": "restore a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. This action is long-running: it answers 202 and an operation to poll, like every other write.",
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": true
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "restore"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/setSecret": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_SetSecret",
+        "summary": "setSecret a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.SetSecretRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.SetSecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "writeSecrets",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "setSecret"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/sign": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_Sign",
+        "summary": "sign a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.SignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.SignResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "sign"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/unwrapKey": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_UnwrapKey",
+        "summary": "unwrapKey a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end. ⚠ The response carries secret material. It is always audited and is never cached — docs/plan/08 § The provider registry.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.UnwrapKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.UnwrapKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": true,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "unwrapKey"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/updateKey": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_UpdateKey",
+        "summary": "updateKey a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.UpdateKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.UpdateKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "writeKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "updateKey"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/updateSecret": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_UpdateSecret",
+        "summary": "updateSecret a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.UpdateSecretRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.UpdateSecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "writeSecrets",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "updateSecret"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/verify": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_Verify",
+        "summary": "verify a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.VerifyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.VerifyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "verify"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.KeyVault/vaults/{resourceName}/wrapKey": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_KeyVault_vaults_WrapKey",
+        "summary": "wrapKey a CyberCloud.KeyVault/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.WrapKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults.WrapKeyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "useKeys",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.KeyVault/vaults",
+      "x-cybercloud-action": "wrapKey"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Mail/domains": {
       "parameters": [
         {
@@ -16549,6 +18915,81 @@
         }
       ]
     },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults/{resourceName}/backupNow": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_RecoveryServices_vaults_BackupNow",
+        "summary": "backupNow a CyberCloud.RecoveryServices/vaults.",
+        "description": "An action never creates: a POST to a name that does not exist is a 404 — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.RecoveryServices.vaults.BackupNowRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.RecoveryServices.vaults.BackupNowResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false
+      },
+      "x-cybercloud-resource-type": "CyberCloud.RecoveryServices/vaults",
+      "x-cybercloud-action": "backupNow"
+    },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.RecoveryServices/vaults/{resourceName}/listRecoveryPoints": {
       "parameters": [
         {
@@ -16688,6 +19129,439 @@
       },
       "x-cybercloud-resource-type": "CyberCloud.RecoveryServices/vaults",
       "x-cybercloud-action": "recover"
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        },
+        {
+          "name": "$top",
+          "in": "query",
+          "required": false,
+          "description": "How many resources to examine. ⚠ A cap the platform clamps and not a promise: the filter runs once per member, so this bounds the work and not the number of results.",
+          "schema": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        {
+          "name": "$skipToken",
+          "in": "query",
+          "required": false,
+          "description": "Where to resume. Take it from the previous page's nextLink rather than constructing one.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Resources_deployments_List",
+        "summary": "List the CyberCloud.Resources/deployments in a resource group.",
+        "description": "Returns one page of the resources of this type in the resource group the path names, including any that are being deleted — docs/plan/06 § Two-phase create keeps a resource whose teardown has not converged visible with that state, because its pods still run and its meter still ticks.",
+        "responses": {
+          "200": {
+            "description": "One page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments.List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Resources/deployments",
+      "x-cybercloud-collection": true
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments/{resourceName}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "get": {
+        "operationId": "CyberCloud_Resources_deployments_Get",
+        "summary": "Read a CyberCloud.Resources/deployments.",
+        "description": "The body is this api-version's projection of the resource: docs/plan/08 § The provider registry keeps grain state as a superset and a read at an older version drops what that version did not declare.",
+        "responses": {
+          "200": {
+            "description": "The resource: the Resource envelope's five members, then the body, then tags.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "read"
+      },
+      "put": {
+        "operationId": "CyberCloud_Resources_deployments_CreateOrUpdate",
+        "summary": "Create or replace a CyberCloud.Resources/deployments.",
+        "description": "A full replacement. Every property the schema marks required must be present; a read-only property is refused rather than ignored — docs/plan/08 § The write path, end to end.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "patch": {
+        "operationId": "CyberCloud_Resources_deployments_Update",
+        "summary": "Merge-patch a CyberCloud.Resources/deployments.",
+        "description": "A merge patch. The patch itself may omit required properties; the merged result is what is validated — see ResourceSchema.Validate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write"
+      },
+      "delete": {
+        "operationId": "CyberCloud_Resources_deployments_Delete",
+        "summary": "Delete a CyberCloud.Resources/deployments.",
+        "description": "The delete is permanent: this type declares no soft-delete window.",
+        "responses": {
+          "202": {
+            "description": "Accepted. The body is the resource as the manager holds it now that the write is accepted — provisioningState says which write is in flight: Creating, Updating or Deleting after a PUT, PATCH or DELETE; unchanged by a long-running action, which serves the read that followed its start. Poll the Azure-AsyncOperation target until the status is terminal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+                }
+              }
+            },
+            "headers": {
+              "Azure-AsyncOperation": {
+                "description": "The absolute URL of the operation to poll.",
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "Retry-After": {
+                "description": "Seconds to wait before the first poll.",
+                "required": true,
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "delete",
+        "x-cybercloud-soft-delete-days": 0,
+        "x-cybercloud-purge-permission": ""
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Resources/deployments",
+      "x-cybercloud-display": {
+        "name": "Deployment",
+        "plural": "Deployments",
+        "alias": "deployment",
+        "summary": "A template of resources deployed in dependency order, each through the write path as its creator.",
+        "declared": true
+      },
+      "x-cybercloud-supports-tags": false,
+      "x-cybercloud-requires-cluster": false,
+      "x-cybercloud-cluster-id-pointer": "",
+      "x-cybercloud-soft-delete-days": 0,
+      "x-cybercloud-purge-permission": "",
+      "x-cybercloud-purge-protection-pointer": "",
+      "x-cybercloud-meters": []
+    },
+    "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Resources/deployments/{resourceName}/whatIf": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/TenantId"
+        },
+        {
+          "$ref": "#/components/parameters/SubscriptionId"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceGroupName"
+        },
+        {
+          "$ref": "#/components/parameters/ResourceName"
+        },
+        {
+          "$ref": "#/components/parameters/ApiVersion"
+        }
+      ],
+      "post": {
+        "operationId": "CyberCloud_Resources_deployments_WhatIf",
+        "summary": "whatIf a CyberCloud.Resources/deployments.",
+        "description": "An action never creates. This one is served by the platform's IDeploymentManager rather than by a handler: it runs as the caller, and it answers for a name that does not exist yet rather than refusing it with a 404.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CyberCloud.Resources.deployments.WhatIfRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The action's result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CyberCloud.Resources.deployments.WhatIfResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "412": {
+            "$ref": "#/components/responses/PreconditionFailed"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "default": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "x-cybercloud-permission": "write",
+        "x-cybercloud-secret": false,
+        "x-cybercloud-long-running": false,
+        "x-cybercloud-entry-point": "IDeploymentManager"
+      },
+      "x-cybercloud-resource-type": "CyberCloud.Resources/deployments",
+      "x-cybercloud-action": "whatIf"
     },
     "/tenants/{tenantId}/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/CyberCloud.Sample/widgets": {
       "parameters": [
@@ -23159,8 +26033,8 @@
                 "properties": {
                   "destinationPath": {
                     "default": "",
-                    "description": "Object-store URL for base backups and WAL, for example s3://tenant-bucket/postgres. Required while backup.enabled is true: the platform does not fill in a default bucket yet, and a body that leaves it empty with backups on is refused naming this property.",
-                    "example": "s3://tenant-bucket/postgres",
+                    "description": "Leave empty. Base backups and WAL go to the platform's object store, in a bucket of this server's own, with a key the platform issues and holds. A destination of your own is refused naming this property: this api-version has nowhere to carry the credentials it would need.",
+                    "example": "",
                     "pattern": "^(?:(s3://[a-z0-9][a-z0-9.\\-]*[a-z0-9](/[^\\s]*)?)?)$",
                     "type": "string"
                   },
@@ -23273,6 +26147,21 @@
                 "maximum": 5,
                 "minimum": 1,
                 "type": "integer"
+              },
+              "restore": {
+                "additionalProperties": false,
+                "description": "Where the server's data comes from when it is created from a recovery point rather than empty.",
+                "properties": {
+                  "recoveryPoint": {
+                    "default": "",
+                    "description": "The recovery point this server was restored from. Set only by a backup vault's recover action, which creates the server: a write may send back the value the server holds and nothing else. Empty means the server started as a new, empty database.",
+                    "maxLength": 253,
+                    "pattern": "^(?:([a-z0-9]([-a-z0-9.]*[a-z0-9])?)?)$",
+                    "type": "string",
+                    "x-cybercloud-immutable": true
+                  }
+                },
+                "type": "object"
               },
               "sizing": {
                 "additionalProperties": false,
@@ -23905,6 +26794,1886 @@
           "username"
         ],
         "title": "CyberCloud.DocumentDB.accounts.ListKeysResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.KeyVault/vaults: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
+          "location": {
+            "description": "The region the vault is billed in and served from.",
+            "example": "eu-central",
+            "format": "cybercloud-region",
+            "type": "string",
+            "x-cybercloud-immutable": true,
+            "x-cybercloud-widget": "region"
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The vault's own settings.",
+            "properties": {
+              "description": {
+                "description": "What the vault is for, shown in the portal beside its name.",
+                "maxLength": 256,
+                "type": "string"
+              },
+              "enablePurgeProtection": {
+                "default": false,
+                "description": "Whether a deleted vault, secret or key may be purged before its seven-day recovery window ends. Once true it stays true: a write that sets it false is refused, and so is every purge until the window is out.",
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
+          "tags": {
+            "type": "object",
+            "description": "Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 50,
+            "x-cybercloud-widget": "tag-input"
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "location"
+        ],
+        "title": "CyberCloud.KeyVault/vaults",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.CreateKeyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/createKey.",
+        "properties": {
+          "curve": {
+            "description": "An EC key's curve. P-256 when omitted; refused on an RSA key.",
+            "enum": [
+              "P-256",
+              "P-384",
+              "P-521"
+            ],
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "description": "Whether the version may be used. A disabled version is refused, not hidden.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "The version is refused from this time on.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "keyOps": {
+            "description": "The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.",
+            "items": {
+              "enum": [
+                "encrypt",
+                "decrypt",
+                "sign",
+                "verify",
+                "wrapKey",
+                "unwrapKey"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "keySize": {
+            "description": "An RSA key's modulus in bits: 2048, 3072 or 4096. 2048 when omitted; refused on an EC key.",
+            "maximum": 4096,
+            "minimum": 2048,
+            "type": "integer"
+          },
+          "kty": {
+            "description": "RSA or EC.",
+            "enum": [
+              "RSA",
+              "EC"
+            ],
+            "example": "RSA",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "The version is refused before this time.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyName",
+          "kty"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.CreateKeyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.CreateKeyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/createKey returns.",
+        "properties": {
+          "created": {
+            "description": "When the version was created.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "crv": {
+            "description": "An EC key's curve.",
+            "type": "string"
+          },
+          "e": {
+            "description": "An RSA key's public exponent, base64url.",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "Refused from this time on. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "imported": {
+            "description": "Whether the key was imported rather than generated here.",
+            "type": "boolean"
+          },
+          "keyOps": {
+            "description": "The operations the key permits.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "keySize": {
+            "description": "An RSA key's modulus in bits.",
+            "type": "integer"
+          },
+          "kty": {
+            "description": "RSA or EC.",
+            "type": "string"
+          },
+          "n": {
+            "description": "An RSA key's modulus, base64url.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "Refused before this time. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated": {
+            "description": "When the version's attributes last changed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version this response is about.",
+            "type": "string"
+          },
+          "x": {
+            "description": "An EC key's x coordinate, base64url.",
+            "type": "string"
+          },
+          "y": {
+            "description": "An EC key's y coordinate, base64url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created",
+          "enabled",
+          "imported",
+          "keyOps",
+          "kty",
+          "name",
+          "updated",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.CreateKeyResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.DecryptRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/decrypt.",
+        "properties": {
+          "alg": {
+            "description": "RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).",
+            "enum": [
+              "RSA-OAEP",
+              "RSA-OAEP-256"
+            ],
+            "example": "RSA-OAEP-256",
+            "type": "string"
+          },
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "value": {
+            "description": "The ciphertext or wrapped key, base64url without padding.",
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "keyName",
+          "value"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.DecryptRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.DecryptResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/decrypt returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "alg": {
+            "description": "The algorithm used.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The key that did the work.",
+            "type": "string"
+          },
+          "value": {
+            "description": "The plaintext, base64url.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "version": {
+            "description": "The key version that did the work.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "name",
+          "value",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.DecryptResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.DeleteKeyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/deleteKey.",
+        "properties": {
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.DeleteKeyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.DeleteKeyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/deleteKey returns.",
+        "properties": {
+          "deletedOn": {
+            "description": "When the item was deleted.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "scheduledPurgeDate": {
+            "description": "When the item is purged unless it is recovered first.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deletedOn",
+          "name",
+          "scheduledPurgeDate"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.DeleteKeyResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.DeleteSecretRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/deleteSecret.",
+        "properties": {
+          "secretName": {
+            "description": "The secret's name: 1–127 letters, digits and dashes.",
+            "example": "db-password",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secretName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.DeleteSecretRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.DeleteSecretResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/deleteSecret returns.",
+        "properties": {
+          "deletedOn": {
+            "description": "When the item was deleted.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "scheduledPurgeDate": {
+            "description": "When the item is purged unless it is recovered first.",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deletedOn",
+          "name",
+          "scheduledPurgeDate"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.DeleteSecretResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.EncryptRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/encrypt.",
+        "properties": {
+          "alg": {
+            "description": "RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).",
+            "enum": [
+              "RSA-OAEP",
+              "RSA-OAEP-256"
+            ],
+            "example": "RSA-OAEP-256",
+            "type": "string"
+          },
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "value": {
+            "description": "The plaintext to encrypt or the key to wrap, base64url without padding.",
+            "format": "password",
+            "maxLength": 4096,
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "keyName",
+          "value"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.EncryptRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.EncryptResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/encrypt returns.",
+        "properties": {
+          "alg": {
+            "description": "The algorithm used.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The key that did the work.",
+            "type": "string"
+          },
+          "value": {
+            "description": "The result, base64url.",
+            "type": "string"
+          },
+          "version": {
+            "description": "The key version that did the work.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "name",
+          "value",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.EncryptResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.GetKeyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/getKey.",
+        "properties": {
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.GetKeyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.GetKeyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/getKey returns.",
+        "properties": {
+          "created": {
+            "description": "When the version was created.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "crv": {
+            "description": "An EC key's curve.",
+            "type": "string"
+          },
+          "e": {
+            "description": "An RSA key's public exponent, base64url.",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "Refused from this time on. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "imported": {
+            "description": "Whether the key was imported rather than generated here.",
+            "type": "boolean"
+          },
+          "keyOps": {
+            "description": "The operations the key permits.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "keySize": {
+            "description": "An RSA key's modulus in bits.",
+            "type": "integer"
+          },
+          "kty": {
+            "description": "RSA or EC.",
+            "type": "string"
+          },
+          "n": {
+            "description": "An RSA key's modulus, base64url.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "Refused before this time. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated": {
+            "description": "When the version's attributes last changed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version this response is about.",
+            "type": "string"
+          },
+          "x": {
+            "description": "An EC key's x coordinate, base64url.",
+            "type": "string"
+          },
+          "y": {
+            "description": "An EC key's y coordinate, base64url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created",
+          "enabled",
+          "imported",
+          "keyOps",
+          "kty",
+          "name",
+          "updated",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.GetKeyResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.GetSecretRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/getSecret.",
+        "properties": {
+          "secretName": {
+            "description": "The secret's name: 1–127 letters, digits and dashes.",
+            "example": "db-password",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secretName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.GetSecretRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.GetSecretResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/getSecret returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "contentType": {
+            "description": "What the value is. Absent when unset.",
+            "type": "string"
+          },
+          "created": {
+            "description": "When the version was created.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "Refused from this time on. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "Refused before this time. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated": {
+            "description": "When the version's attributes last changed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "value": {
+            "description": "The secret's value.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "version": {
+            "description": "The version this response is about.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created",
+          "enabled",
+          "name",
+          "updated",
+          "value",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.GetSecretResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.ImportKeyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/importKey.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "description": "Whether the version may be used. A disabled version is refused, not hidden.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "The version is refused from this time on.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "keyOps": {
+            "description": "The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.",
+            "items": {
+              "enum": [
+                "encrypt",
+                "decrypt",
+                "sign",
+                "verify",
+                "wrapKey",
+                "unwrapKey"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "notBefore": {
+            "description": "The version is refused before this time.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "pkcs8": {
+            "description": "The private key as unencrypted PKCS#8 DER, in standard base64. RSA of 2048, 3072 or 4096 bits, or EC on P-256, P-384 or P-521. Sealed on arrival and never returned.",
+            "format": "password",
+            "maxLength": 16384,
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          }
+        },
+        "required": [
+          "keyName",
+          "pkcs8"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ImportKeyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.ImportKeyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/importKey returns.",
+        "properties": {
+          "created": {
+            "description": "When the version was created.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "crv": {
+            "description": "An EC key's curve.",
+            "type": "string"
+          },
+          "e": {
+            "description": "An RSA key's public exponent, base64url.",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "Refused from this time on. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "imported": {
+            "description": "Whether the key was imported rather than generated here.",
+            "type": "boolean"
+          },
+          "keyOps": {
+            "description": "The operations the key permits.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "keySize": {
+            "description": "An RSA key's modulus in bits.",
+            "type": "integer"
+          },
+          "kty": {
+            "description": "RSA or EC.",
+            "type": "string"
+          },
+          "n": {
+            "description": "An RSA key's modulus, base64url.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "Refused before this time. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated": {
+            "description": "When the version's attributes last changed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version this response is about.",
+            "type": "string"
+          },
+          "x": {
+            "description": "An EC key's x coordinate, base64url.",
+            "type": "string"
+          },
+          "y": {
+            "description": "An EC key's y coordinate, base64url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created",
+          "enabled",
+          "imported",
+          "keyOps",
+          "kty",
+          "name",
+          "updated",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ImportKeyResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.List": {
+        "type": "object",
+        "title": "CyberCloud.KeyVault.vaults.List",
+        "description": "One page of CyberCloud.KeyVault/vaults. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.KeyVault.vaults"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.KeyVault.vaults.ListDeletedKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/listDeletedKeys returns.",
+        "properties": {
+          "count": {
+            "description": "How many lines follow.",
+            "type": "integer"
+          },
+          "items": {
+            "description": "One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "items"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ListDeletedKeysResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.ListDeletedSecretsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/listDeletedSecrets returns.",
+        "properties": {
+          "count": {
+            "description": "How many lines follow.",
+            "type": "integer"
+          },
+          "items": {
+            "description": "One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "items"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ListDeletedSecretsResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.ListKeyVersionsRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/listKeyVersions.",
+        "properties": {
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ListKeyVersionsRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.ListKeyVersionsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/listKeyVersions returns.",
+        "properties": {
+          "count": {
+            "description": "How many lines follow.",
+            "type": "integer"
+          },
+          "items": {
+            "description": "One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "items"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ListKeyVersionsResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.ListKeysResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/listKeys returns.",
+        "properties": {
+          "count": {
+            "description": "How many lines follow.",
+            "type": "integer"
+          },
+          "items": {
+            "description": "One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "items"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ListKeysResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.ListSecretVersionsRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/listSecretVersions.",
+        "properties": {
+          "secretName": {
+            "description": "The secret's name: 1–127 letters, digits and dashes.",
+            "example": "db-password",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secretName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ListSecretVersionsRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.ListSecretVersionsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/listSecretVersions returns.",
+        "properties": {
+          "count": {
+            "description": "How many lines follow.",
+            "type": "integer"
+          },
+          "items": {
+            "description": "One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "items"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ListSecretVersionsResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.ListSecretsResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/listSecrets returns.",
+        "properties": {
+          "count": {
+            "description": "How many lines follow.",
+            "type": "integer"
+          },
+          "items": {
+            "description": "One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "items"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.ListSecretsResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.PurgeDeletedKeyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/purgeDeletedKey.",
+        "properties": {
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.PurgeDeletedKeyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.PurgeDeletedKeyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/purgeDeletedKey returns.",
+        "properties": {
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "purged": {
+            "description": "True: the item and every version of it are gone.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "purged"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.PurgeDeletedKeyResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.PurgeDeletedSecretRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/purgeDeletedSecret.",
+        "properties": {
+          "secretName": {
+            "description": "The secret's name: 1–127 letters, digits and dashes.",
+            "example": "db-password",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secretName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.PurgeDeletedSecretRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.PurgeDeletedSecretResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/purgeDeletedSecret returns.",
+        "properties": {
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "purged": {
+            "description": "True: the item and every version of it are gone.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "purged"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.PurgeDeletedSecretResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.RecoverDeletedKeyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/recoverDeletedKey.",
+        "properties": {
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.RecoverDeletedKeyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.RecoverDeletedKeyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/recoverDeletedKey returns.",
+        "properties": {
+          "created": {
+            "description": "When the version was created.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "crv": {
+            "description": "An EC key's curve.",
+            "type": "string"
+          },
+          "e": {
+            "description": "An RSA key's public exponent, base64url.",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "Refused from this time on. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "imported": {
+            "description": "Whether the key was imported rather than generated here.",
+            "type": "boolean"
+          },
+          "keyOps": {
+            "description": "The operations the key permits.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "keySize": {
+            "description": "An RSA key's modulus in bits.",
+            "type": "integer"
+          },
+          "kty": {
+            "description": "RSA or EC.",
+            "type": "string"
+          },
+          "n": {
+            "description": "An RSA key's modulus, base64url.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "Refused before this time. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated": {
+            "description": "When the version's attributes last changed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version this response is about.",
+            "type": "string"
+          },
+          "x": {
+            "description": "An EC key's x coordinate, base64url.",
+            "type": "string"
+          },
+          "y": {
+            "description": "An EC key's y coordinate, base64url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created",
+          "enabled",
+          "imported",
+          "keyOps",
+          "kty",
+          "name",
+          "updated",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.RecoverDeletedKeyResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.RecoverDeletedSecretRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/recoverDeletedSecret.",
+        "properties": {
+          "secretName": {
+            "description": "The secret's name: 1–127 letters, digits and dashes.",
+            "example": "db-password",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secretName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.RecoverDeletedSecretRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.RecoverDeletedSecretResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/recoverDeletedSecret returns.",
+        "properties": {
+          "contentType": {
+            "description": "What the value is. Absent when unset.",
+            "type": "string"
+          },
+          "created": {
+            "description": "When the version was created.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "Refused from this time on. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "Refused before this time. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated": {
+            "description": "When the version's attributes last changed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version this response is about.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created",
+          "enabled",
+          "name",
+          "updated",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.RecoverDeletedSecretResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.SetSecretRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/setSecret.",
+        "properties": {
+          "contentType": {
+            "description": "What the value is, for the consumer — for example text/plain. Not interpreted.",
+            "maxLength": 255,
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "description": "Whether the version may be used. A disabled version is refused, not hidden.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "The version is refused from this time on.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "The version is refused before this time.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "secretName": {
+            "description": "The secret's name: 1–127 letters, digits and dashes.",
+            "example": "db-password",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "value": {
+            "description": "The secret's value. Sealed under the vault's root before it is stored.",
+            "format": "password",
+            "maxLength": 25600,
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          }
+        },
+        "required": [
+          "secretName",
+          "value"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.SetSecretRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.SetSecretResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/setSecret returns.",
+        "properties": {
+          "contentType": {
+            "description": "What the value is. Absent when unset.",
+            "type": "string"
+          },
+          "created": {
+            "description": "When the version was created.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "Refused from this time on. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "Refused before this time. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated": {
+            "description": "When the version's attributes last changed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version this response is about.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created",
+          "enabled",
+          "name",
+          "updated",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.SetSecretResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.SignRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/sign.",
+        "properties": {
+          "alg": {
+            "description": "A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.",
+            "enum": [
+              "RS256",
+              "RS384",
+              "RS512",
+              "PS256",
+              "PS384",
+              "PS512",
+              "ES256",
+              "ES384",
+              "ES512"
+            ],
+            "example": "ES256",
+            "type": "string"
+          },
+          "digest": {
+            "description": "The digest to sign, base64url. Its length must be the algorithm's hash length.",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "digest",
+          "keyName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.SignRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.SignResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/sign returns.",
+        "properties": {
+          "alg": {
+            "description": "The algorithm used.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The key that did the work.",
+            "type": "string"
+          },
+          "value": {
+            "description": "The result, base64url.",
+            "type": "string"
+          },
+          "version": {
+            "description": "The key version that did the work.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "name",
+          "value",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.SignResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.UnwrapKeyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/unwrapKey.",
+        "properties": {
+          "alg": {
+            "description": "RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).",
+            "enum": [
+              "RSA-OAEP",
+              "RSA-OAEP-256"
+            ],
+            "example": "RSA-OAEP-256",
+            "type": "string"
+          },
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "value": {
+            "description": "The ciphertext or wrapped key, base64url without padding.",
+            "maxLength": 4096,
+            "type": "string"
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "keyName",
+          "value"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.UnwrapKeyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.UnwrapKeyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/unwrapKey returns. ⚠ Secret material. docs/plan/08 § The provider registry makes a secret action the only path a secret value leaves by; this schema is therefore the complete list of what does.",
+        "properties": {
+          "alg": {
+            "description": "The algorithm used.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The key that did the work.",
+            "type": "string"
+          },
+          "value": {
+            "description": "The plaintext, base64url.",
+            "format": "password",
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "version": {
+            "description": "The key version that did the work.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "name",
+          "value",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.UnwrapKeyResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.UpdateKeyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/updateKey.",
+        "properties": {
+          "enabled": {
+            "description": "Whether the version may be used. A disabled version is refused, not hidden.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "The version is refused from this time on.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "keyOps": {
+            "description": "The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.",
+            "items": {
+              "enum": [
+                "encrypt",
+                "decrypt",
+                "sign",
+                "verify",
+                "wrapKey",
+                "unwrapKey"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "notBefore": {
+            "description": "The version is refused before this time.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.UpdateKeyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.UpdateKeyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/updateKey returns.",
+        "properties": {
+          "created": {
+            "description": "When the version was created.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "crv": {
+            "description": "An EC key's curve.",
+            "type": "string"
+          },
+          "e": {
+            "description": "An RSA key's public exponent, base64url.",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "Refused from this time on. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "imported": {
+            "description": "Whether the key was imported rather than generated here.",
+            "type": "boolean"
+          },
+          "keyOps": {
+            "description": "The operations the key permits.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "keySize": {
+            "description": "An RSA key's modulus in bits.",
+            "type": "integer"
+          },
+          "kty": {
+            "description": "RSA or EC.",
+            "type": "string"
+          },
+          "n": {
+            "description": "An RSA key's modulus, base64url.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "Refused before this time. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated": {
+            "description": "When the version's attributes last changed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version this response is about.",
+            "type": "string"
+          },
+          "x": {
+            "description": "An EC key's x coordinate, base64url.",
+            "type": "string"
+          },
+          "y": {
+            "description": "An EC key's y coordinate, base64url.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created",
+          "enabled",
+          "imported",
+          "keyOps",
+          "kty",
+          "name",
+          "updated",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.UpdateKeyResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.UpdateSecretRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/updateSecret.",
+        "properties": {
+          "contentType": {
+            "description": "What the value is, for the consumer — for example text/plain. Not interpreted.",
+            "maxLength": 255,
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used. A disabled version is refused, not hidden.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "The version is refused from this time on.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "The version is refused before this time.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "secretName": {
+            "description": "The secret's name: 1–127 letters, digits and dashes.",
+            "example": "db-password",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secretName"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.UpdateSecretRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.UpdateSecretResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/updateSecret returns.",
+        "properties": {
+          "contentType": {
+            "description": "What the value is. Absent when unset.",
+            "type": "string"
+          },
+          "created": {
+            "description": "When the version was created.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "enabled": {
+            "description": "Whether the version may be used.",
+            "type": "boolean"
+          },
+          "expiresOn": {
+            "description": "Refused from this time on. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "name": {
+            "description": "The secret's or key's name.",
+            "type": "string"
+          },
+          "notBefore": {
+            "description": "Refused before this time. Absent when unset.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "updated": {
+            "description": "When the version's attributes last changed.",
+            "format": "date-time",
+            "type": "string"
+          },
+          "version": {
+            "description": "The version this response is about.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created",
+          "enabled",
+          "name",
+          "updated",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.UpdateSecretResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.VerifyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/verify.",
+        "properties": {
+          "alg": {
+            "description": "A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.",
+            "enum": [
+              "RS256",
+              "RS384",
+              "RS512",
+              "PS256",
+              "PS384",
+              "PS512",
+              "ES256",
+              "ES384",
+              "ES512"
+            ],
+            "example": "ES256",
+            "type": "string"
+          },
+          "digest": {
+            "description": "The digest to sign, base64url. Its length must be the algorithm's hash length.",
+            "maxLength": 128,
+            "type": "string"
+          },
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "signature": {
+            "description": "The signature, base64url. An EC signature is r‖s, as JWS spells it.",
+            "maxLength": 1024,
+            "type": "string"
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "digest",
+          "keyName",
+          "signature"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.VerifyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.VerifyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/verify returns.",
+        "properties": {
+          "alg": {
+            "description": "The algorithm used.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The key that did the work.",
+            "type": "string"
+          },
+          "value": {
+            "description": "Whether the signature is valid.",
+            "type": "boolean"
+          },
+          "version": {
+            "description": "The key version that did the work.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "name",
+          "value",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.VerifyResponse",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.WrapKeyRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.KeyVault/vaults/wrapKey.",
+        "properties": {
+          "alg": {
+            "description": "RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).",
+            "enum": [
+              "RSA-OAEP",
+              "RSA-OAEP-256"
+            ],
+            "example": "RSA-OAEP-256",
+            "type": "string"
+          },
+          "keyName": {
+            "description": "The key's name: 1–127 letters, digits and dashes.",
+            "example": "signing",
+            "pattern": "^(?:^[0-9A-Za-z-]{1,127}$)$",
+            "type": "string"
+          },
+          "value": {
+            "description": "The plaintext to encrypt or the key to wrap, base64url without padding.",
+            "format": "password",
+            "maxLength": 4096,
+            "type": "string",
+            "writeOnly": true,
+            "x-cybercloud-secret": true
+          },
+          "version": {
+            "description": "A version, as 32 hex digits. Omit it for the newest.",
+            "pattern": "^(?:^[0-9a-f]{32}$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "keyName",
+          "value"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.WrapKeyRequest",
+        "type": "object"
+      },
+      "CyberCloud.KeyVault.vaults.WrapKeyResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.KeyVault/vaults/wrapKey returns.",
+        "properties": {
+          "alg": {
+            "description": "The algorithm used.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The key that did the work.",
+            "type": "string"
+          },
+          "value": {
+            "description": "The result, base64url.",
+            "type": "string"
+          },
+          "version": {
+            "description": "The key version that did the work.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alg",
+          "name",
+          "value",
+          "version"
+        ],
+        "title": "CyberCloud.KeyVault.vaults.WrapKeyResponse",
         "type": "object"
       },
       "CyberCloud.Mail.domains": {
@@ -27471,6 +32240,43 @@
         "title": "CyberCloud.RecoveryServices/vaults",
         "type": "object"
       },
+      "CyberCloud.RecoveryServices.vaults.BackupNowRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.RecoveryServices/vaults/backupNow.",
+        "properties": {
+          "item": {
+            "description": "The protected server to back up, by the resource name listRecoveryPoints prints first on each line. It must be one of this vault's protected items.",
+            "maxLength": 63,
+            "pattern": "^(?:^[a-z0-9]([-a-z0-9]*[a-z0-9])?$)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "title": "CyberCloud.RecoveryServices.vaults.BackupNowRequest",
+        "type": "object"
+      },
+      "CyberCloud.RecoveryServices.vaults.BackupNowResponse": {
+        "additionalProperties": false,
+        "description": "What CyberCloud.RecoveryServices/vaults/backupNow returns.",
+        "properties": {
+          "item": {
+            "description": "The protected server the recovery point is being taken of.",
+            "type": "string"
+          },
+          "recoveryPoint": {
+            "description": "The new recovery point's name. listRecoveryPoints reports its phase; recover takes it once the phase is `completed`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "recoveryPoint"
+        ],
+        "title": "CyberCloud.RecoveryServices.vaults.BackupNowResponse",
+        "type": "object"
+      },
       "CyberCloud.RecoveryServices.vaults.List": {
         "type": "object",
         "title": "CyberCloud.RecoveryServices.vaults.List",
@@ -27531,7 +32337,7 @@
             "type": "string"
           },
           "targetName": {
-            "description": "The name of the NEW cluster the recovery point is restored into, in the vault's resource group. Refused when a cluster of that name already exists — a restore never overwrites.",
+            "description": "The name of the NEW PostgreSQL server the recovery point is restored into, in the vault's resource group. Refused when a server or a cluster of that name already exists — a restore never overwrites.",
             "maxLength": 63,
             "pattern": "^(?:^[a-z0-9]([-a-z0-9]*[a-z0-9])?$)$",
             "type": "string"
@@ -27549,19 +32355,28 @@
         "description": "What CyberCloud.RecoveryServices/vaults/recover returns.",
         "properties": {
           "kind": {
-            "description": "What was created. Always `Cluster` — a CloudNativePG cluster object.",
+            "description": "What was created: the resource type of the new server, CyberCloud.DBforPostgreSQL/servers.",
             "type": "string"
           },
           "name": {
-            "description": "The restored cluster's name, as asked for.",
+            "description": "The restored server's name, as asked for.",
             "type": "string"
           },
           "namespace": {
             "description": "The namespace it was created in — the vault's resource group's.",
             "type": "string"
           },
+          "operationId": {
+            "description": "The create's operation, to poll for the restore's progress.",
+            "format": "uuid",
+            "type": "string"
+          },
           "recoveryPoint": {
             "description": "The recovery point it was bootstrapped from.",
+            "type": "string"
+          },
+          "resourceId": {
+            "description": "The new server's resource id path. It is created through the ordinary write path, as the caller of this action, and reports Creating until the restore has converged.",
             "type": "string"
           },
           "source": {
@@ -27577,6 +32392,190 @@
           "source"
         ],
         "title": "CyberCloud.RecoveryServices.vaults.RecoverResponse",
+        "type": "object"
+      },
+      "CyberCloud.Resources.deployments": {
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          }
+        ],
+        "description": "A CyberCloud.Resources/deployments: the envelope every resource is read in (allOf Resource, whose five members are readOnly and refused on a write) plus the body a caller writes — location, properties and tags. The body is generated from the provider registry's schema, which is the same object the write path validates against — docs/plan/08 § The provider registry.",
+        "properties": {
+          "etag": {
+            "type": "string",
+            "description": "The concurrency token. Send it back as If-Match on a write to refuse a lost update — docs/plan/08 § The write path, end to end.",
+            "readOnly": true
+          },
+          "id": {
+            "type": "string",
+            "description": "The resource's own path — docs/plan/06 § Identifiers — which is also the URL it was read from.",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "description": "The last segment of the path: the name the caller chose on the PUT.",
+            "readOnly": true
+          },
+          "properties": {
+            "additionalProperties": false,
+            "description": "The template, its parameters, and the record of the last run.",
+            "properties": {
+              "error": {
+                "description": "Why the last run failed, naming the resource that stopped it. Empty when it did not.",
+                "readOnly": true,
+                "type": "string"
+              },
+              "outputResources": {
+                "description": "Every resource the last run created or updated, in the order it did.",
+                "items": {
+                  "type": "string"
+                },
+                "readOnly": true,
+                "type": "array"
+              },
+              "parameters": {
+                "description": "The parameter values, as JSON text: { \"name\": { \"value\": … } }.",
+                "maxLength": 262144,
+                "type": "string"
+              },
+              "rollback": {
+                "description": "What a rollback would remove. Rollback is recorded and never performed.",
+                "readOnly": true,
+                "type": "string"
+              },
+              "steps": {
+                "description": "One line per template resource, in dependency order: its state, its id and the operation that drove it.",
+                "items": {
+                  "type": "string"
+                },
+                "readOnly": true,
+                "type": "array"
+              },
+              "template": {
+                "description": "The template, as JSON text: parameters, variables and resources, each with type, name, apiVersion, properties and dependsOn. Expressions are parameters(), variables(), resourceId() and concat(); anything else is refused with that list.",
+                "maxLength": 1048576,
+                "type": "string"
+              }
+            },
+            "required": [
+              "template"
+            ],
+            "type": "object"
+          },
+          "provisioningState": {
+            "type": "string",
+            "description": "Azure's provisioning vocabulary — docs/plan/06 § Tags, locks. ⚠ Deleting is a state a listing still shows: a resource whose teardown has not converged keeps running and keeps being metered.",
+            "enum": [
+              "Canceled",
+              "Creating",
+              "Deleting",
+              "Failed",
+              "Succeeded",
+              "Updating"
+            ],
+            "readOnly": true
+          },
+          "type": {
+            "type": "string",
+            "description": "The fully qualified resource type — the same string this path item's x-cybercloud-resource-type carries.",
+            "readOnly": true
+          }
+        },
+        "title": "CyberCloud.Resources/deployments",
+        "type": "object"
+      },
+      "CyberCloud.Resources.deployments.List": {
+        "type": "object",
+        "title": "CyberCloud.Resources.deployments.List",
+        "description": "One page of CyberCloud.Resources/deployments. ⚠ The page holds what the caller may read: a listing runs a permission check per member (docs/plan/07 § The enforcement seam), so a short or empty page means \"that is what you may see\" and never \"that is all there is\". Stop when nextLink is absent, never when a page is smaller than you asked for.",
+        "properties": {
+          "nextLink": {
+            "type": "string",
+            "description": "The absolute URL of the next page. Absent on the last page — there is no empty-string form, because an empty URL is one a polite client requests."
+          },
+          "value": {
+            "type": "array",
+            "description": "The resources on this page, ordered by id. Each element is exactly what a GET of that resource returns, member for member.",
+            "items": {
+              "$ref": "#/components/schemas/CyberCloud.Resources.deployments"
+            }
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "additionalProperties": false
+      },
+      "CyberCloud.Resources.deployments.WhatIfRequest": {
+        "additionalProperties": false,
+        "description": "The body of a POST to CyberCloud.Resources/deployments/whatIf.",
+        "properties": {
+          "properties": {
+            "additionalProperties": false,
+            "description": "The template to evaluate and its parameters.",
+            "properties": {
+              "parameters": {
+                "description": "The parameter values, as JSON text.",
+                "maxLength": 262144,
+                "type": "string"
+              },
+              "template": {
+                "description": "The template, as JSON text — the same shape a PUT takes.",
+                "maxLength": 1048576,
+                "type": "string"
+              }
+            },
+            "required": [
+              "template"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "properties"
+        ],
+        "title": "CyberCloud.Resources.deployments.WhatIfRequest",
+        "type": "object"
+      },
+      "CyberCloud.Resources.deployments.WhatIfResponse": {
+        "additionalProperties": true,
+        "description": "What CyberCloud.Resources/deployments/whatIf returns.",
+        "properties": {
+          "creates": {
+            "description": "The resources a deployment would create, in deployment order. A resource the caller cannot read is listed here, because that is the one answer that says nothing about it.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "modifies": {
+            "description": "The resources a deployment would change, in deployment order. Each one's property delta is in 'changes'.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "noChanges": {
+            "description": "The resources a deployment would leave as they are, in deployment order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "description": "Succeeded: the template evaluated and every resource was compared.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "creates",
+          "modifies",
+          "noChanges",
+          "status"
+        ],
+        "title": "CyberCloud.Resources.deployments.WhatIfResponse",
         "type": "object"
       },
       "CyberCloud.Sample.widgets": {
@@ -29212,5 +34211,5 @@
       }
     }
   },
-  "x-cybercloud-resource-type-count": 39
+  "x-cybercloud-resource-type-count": 41
 }

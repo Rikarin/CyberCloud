@@ -1011,7 +1011,11 @@ public static class SdkEmitter {
 
         built.Append("\n    /// <summary>")
             .Append(Escape(name))
-            .Append(". ⚠ An action never creates — a POST to a name that does not exist is a 404.")
+            .Append(
+                action.EntryPoint.Length == 0
+                    ? ". ⚠ An action never creates — a POST to a name that does not exist is a 404."
+                    : ". ⚠ An action never creates. This one runs as the caller and answers for a name that does not exist yet."
+            )
             .Append(action.Secret ? " ⚠ The response carries secret material and is always audited." : string.Empty)
             .Append("</summary>\n")
             .Append("    public partial Task<")

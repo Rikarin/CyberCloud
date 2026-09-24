@@ -21,6 +21,16 @@ Two things Azure does that we copy exactly, because they are load-bearing and no
   subscriptions — production, staging, per-team — is the shape every real customer wants within a
   month, and retrofitting it later means renumbering every resource id.
 
+⚠ **The first bullet is the design and not yet the behaviour, and #39 changed what stands between them.**
+A resource group's delete refuses while the group holds anything (`IScopeManager.DeleteAsync`, with the
+argument on it). What a cascade needs — one parent operation with a child operation per resource,
+ordered by the dependency graph, whose failure and cancellation reach the parent — was built on
+2026-09-23 for deployments, the other user [08 § Long-running operations](08-resource-manager.md)
+named, and the cascade is owed there as its second. A deployment is also the first thing that writes
+into more than one group at once: `CyberCloud.Resources/deployments` lives in one group and its template
+may place a resource in another group of the same subscription, which is written as the deployment's
+creator and checked at *that* group — never inherited from the one the deployment lives in.
+
 **The management group landed with #39, as a scope path and not as a typed resource.** It is
 `/tenants/{t}/managementGroups/{name}` — four segments like a subscription, told apart by the literal,
 the name a DNS-1123 label unique within the tenant — with a flat collection at

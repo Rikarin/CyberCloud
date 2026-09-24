@@ -256,11 +256,13 @@
     "CyberCloud.DBforPostgreSQL",
     "CyberCloud.Dashboard",
     "CyberCloud.DocumentDB",
+    "CyberCloud.KeyVault",
     "CyberCloud.Mail",
     "CyberCloud.Messaging",
     "CyberCloud.Monitor",
     "CyberCloud.Network",
     "CyberCloud.RecoveryServices",
+    "CyberCloud.Resources",
     "CyberCloud.Sample",
     "CyberCloud.Search",
     "CyberCloud.Storage",
@@ -502,6 +504,19 @@
       }
     },
     {
+      "type": "CyberCloud.KeyVault/vaults",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Key vault",
+        "plural": "Key vaults",
+        "alias": "vault",
+        "summary": "Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.",
+        "declared": true
+      }
+    },
+    {
       "type": "CyberCloud.Mail/domains",
       "apiVersions": [
         "2026-08-01"
@@ -693,6 +708,19 @@
         "plural": "Backup vaults",
         "alias": "backupvault",
         "summary": "A backup policy — a schedule and a retention — over the PostgreSQL servers in a resource group, with the recovery points it produces and a restore into a new cluster.",
+        "declared": true
+      }
+    },
+    {
+      "type": "CyberCloud.Resources/deployments",
+      "apiVersions": [
+        "2026-08-01"
+      ],
+      "display": {
+        "name": "Deployment",
+        "plural": "Deployments",
+        "alias": "deployment",
+        "summary": "A template of resources deployed in dependency order, each through the write path as its creator.",
         "declared": true
       }
     },
