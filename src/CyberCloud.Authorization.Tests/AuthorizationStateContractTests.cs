@@ -25,6 +25,7 @@ public sealed class AuthorizationStateContractTests {
 
     static readonly (string Type, int Id, string Member)[] Baseline = [
         ("ObjectRelationsState", 0, "ByRelation"),
+        ("ObjectRelationsState", 1, "Expiries"),
 
         ("SubjectRelationsState", 0, "Entries"),
 
@@ -35,17 +36,21 @@ public sealed class AuthorizationStateContractTests {
         ("TupleStoreState", 0, "Version"),
         ("TupleStoreState", 1, "Pending"),
         ("TupleStoreState", 2, "NextSequence"),
+        ("TupleStoreState", 3, "Expiring"),
+        ("TupleStoreState", 4, "Fences"),
 
         ("CheckCacheEntry", 0, "Allowed"),
         ("CheckCacheEntry", 1, "Version"),
         ("CheckCacheEntry", 2, "SchemaVersion"),
+        ("CheckCacheEntry", 3, "ValidUntil"),
 
         ("CheckCacheState", 0, "Entries"),
 
         // The Leopard index, issue #37 — one slice per subject object, both directions.
         ("MembershipIndexState", 0, "SchemaVersion"),
         ("MembershipIndexState", 1, "Members"),
-        ("MembershipIndexState", 2, "Usersets")
+        ("MembershipIndexState", 2, "Usersets"),
+        ("MembershipIndexState", 3, "Unclosed")
     ];
 
     static readonly (string Type, string Alias)[] Aliases = [

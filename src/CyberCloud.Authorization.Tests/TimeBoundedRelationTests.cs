@@ -1,0 +1,823 @@
+using CyberCloud.Authorization.Contracts;
+using CyberCloud.Authorization.Grains;
+using CyberCloud.Authorization.Tests.Infrastructure;
+using CyberCloud.Core.Resources;
+using Microsoft.Extensions.DependencyInjection;
+using Shouldly;
+
+namespace CyberCloud.Authorization.Tests;
+
+/// <summary>
+///     Just-in-time roles, through the real grains — docs/plan/07 § Time-bounded relations, issue #49.
+/// </summary>
+/// <remarks>
+///     <para>
+///         Everything here runs against one real silo, real PostgreSQL shards, and the real Redis the
+///         hot tier and the reminders share, with <see cref="MovableClock" /> as the silo's
+///         <c>IClock</c>. Nothing waits: a grant is written to end an hour from the clock's start,
+///         and the test moves the clock. What that exercises is the production filter in
+///         <c>ObjectRelationsGrain</c>, the production cache comparison in <c>CheckGrain</c>, the
+///         production closure rule in the maintainer, and the production sweep — not a shortened
+///         copy of any of them.
+///     </para>
+///     <para>
+///         ⚠ <b>Every test puts the clock back.</b> The collection shares one silo, and a clock left
+///         an hour ahead would expire the next test's grant before it was checked.
+///     </para>
+/// </remarks>
+[Collection(AuthorizationSuite.Name)]
+public sealed class TimeBoundedRelationTests(AuthorizationCluster cluster) {
+    static readonly DateTimeOffset Start = MovableClock.Start;
+    static readonly DateTimeOffset InAnHour = Start.AddHours(1);
+
+    static readonly string[] BothResources = ["jit-f-r1", "jit-f-r2"];
+    static readonly string[] TheGroup = ["jit-g"];
+
+    static SubjectRef Alice => SubjectRef.Of(ObjectTypes.User, "alice");
+
+    // ── Allowed, then denied, and nothing wrote in between ─────────────────────────────────────
+
+    [Fact]
+    public async Task AGrantWithAnExpiryAllowsUntilTheClockReachesItAndThenDeniesWithNoWrite() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4900);
+                var scope = Group("jit-a");
+
+                var granted = await WriteAsync(tenant, "resourceGroup:jit-a#reader@user:alice", InAnHour);
+
+                var allowed = await CheckAsync(tenant, scope, Consistency.FullyConsistent);
+                allowed.Allowed.ShouldBeTrue();
+                allowed.ValidUntil.ShouldBe(InAnHour, "the allow rests on one tuple, and that tuple ends then");
+
+                cluster.Clock.UtcNow = InAnHour - TimeSpan.FromTicks(1);
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeTrue(
+                    "a tick before its expiry the grant still holds"
+                );
+
+                cluster.Clock.UtcNow = InAnHour;
+                var denied = await CheckAsync(tenant, scope, Consistency.FullyConsistent);
+                denied.Allowed.ShouldBeFalse(
+                    "the expiry instant is the first instant the grant no longer holds — TupleExpiry.IsLive"
+                );
+
+                // ⚠ AND NOTHING WROTE. The deny above came from the clock alone: the tenant's relation
+                // version is exactly the one the grant's write returned, so no revoke, no sweep and no
+                // cache invalidation had any part in it.
+                var token = (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow();
+                token.Version.ShouldBe(granted.Version, "a tuple expiring is not a write, and moved no version");
+                denied.Token.Version.ShouldBe(granted.Version);
+            }
+        );
+    }
+
+    [Fact]
+    public async Task ATokenMintedBeforeTheExpiryIsSatisfiedAfterItAndReadsTheGrantAsGone() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4901);
+                var scope = Group("jit-b");
+
+                // ⚠ The zookie a portal holds right after the grant — and still holds an hour later.
+                var token = await WriteAsync(tenant, "resourceGroup:jit-b#reader@user:alice", InAnHour);
+                (await CheckAsync(tenant, scope, Consistency.AtLeastAsFresh(token))).Allowed.ShouldBeTrue();
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                // A token is a lower bound on the writes an answer reflects, never a point in time to
+                // read at; there is no revision at which the tuple is still live to go back to. So the
+                // same token, presented after the expiry, is satisfied — and the grant is gone.
+                var after = await CheckAsync(tenant, scope, Consistency.AtLeastAsFresh(token));
+                after.Allowed.ShouldBeFalse(
+                    "a consistency token minted while the grant was live kept it alive past its expiry — "
+                    + "docs/plan/07 § Time-bounded relations says a token cannot"
+                );
+                after.Token.Version.ShouldBe(token.Version);
+            }
+        );
+    }
+
+    // ── The cache rule ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ACachedAllowIsServedUntilTheExpiryInstantAndNotATickLongerInAnyMode() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4902);
+                var scope = Group("jit-c");
+
+                await WriteAsync(tenant, "resourceGroup:jit-c#reader@user:alice", InAnHour);
+
+                var walked = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                walked.FromCache.ShouldBeFalse();
+                walked.ValidUntil.ShouldBe(InAnHour);
+
+                var cached = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                cached.FromCache.ShouldBeTrue("the second identical check is the cache's");
+                cached.Allowed.ShouldBeTrue();
+                cached.ValidUntil.ShouldBe(InAnHour, "the entry carries the instant it was proved until");
+
+                cluster.Clock.UtcNow = InAnHour - TimeSpan.FromTicks(1);
+                var lastTick = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                lastTick.FromCache.ShouldBeTrue("a tick before the expiry the cached allow is still true");
+                lastTick.Allowed.ShouldBeTrue();
+
+                // ⚠ THE RULE. MinimizeLatency is "any cached result" and no write has moved the
+                // version, so nothing but the entry's own instant can stop it being served here — and
+                // a memoised allow that outlived its grant is the whole failure JIT roles can have.
+                cluster.Clock.UtcNow = InAnHour;
+                var atExpiry = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                atExpiry.FromCache.ShouldBeFalse(
+                    "the check cache served an allow at the instant the tuple that proved it expired"
+                );
+                atExpiry.Allowed.ShouldBeFalse();
+                atExpiry.ValidUntil.ShouldBeNull("a deny with no negation under it can't change by expiring");
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AnAllowWithALongerLivedSecondDerivationIsReWalkedAtTheExpiryAndStaysAllowed() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4903);
+                var resource = ObjectRef.Of(ObjectTypes.Resource, "jit-d-r1");
+
+                // A just-in-time Reader directly on the resource — the first arm the walk tries — and
+                // a permanent Reader on its group, which it reaches only through `parent`.
+                await cluster.WriteAsync(tenant, "resource:jit-d-r1#parent@resourceGroup:jit-d");
+                await cluster.WriteAsync(tenant, "resourceGroup:jit-d#reader@user:alice");
+                await WriteAsync(tenant, "resource:jit-d-r1#reader@user:alice", InAnHour);
+
+                var first = await CheckAsync(tenant, resource, Consistency.MinimizeLatency);
+                first.Allowed.ShouldBeTrue();
+                first.ValidUntil.ShouldBe(
+                    InAnHour,
+                    "the walk short-circuits on the direct tuple, so the instant is that tuple's — early, "
+                    + "which is allowed, and this test is what shows early is harmless"
+                );
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                var rewalked = await CheckAsync(tenant, resource, Consistency.MinimizeLatency);
+                rewalked.FromCache.ShouldBeFalse("the cached entry ended with the tuple that proved it");
+                rewalked.Allowed.ShouldBeTrue("Reader on the group still reaches the resource");
+                rewalked.ValidUntil.ShouldBeNull("the derivation left is permanent");
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AnExpiringSuspensionDeniesAssignRoleUntilItEndsAndTheCachedDenyEndsWithIt() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4904);
+                var scope = Group("jit-e");
+
+                // `assignRole` is Rel(owner) & !Rel(suspended): the one shape where time can turn a
+                // deny into an allow, so the one deny the cache must not keep.
+                await cluster.WriteAsync(tenant, "resourceGroup:jit-e#owner@user:alice");
+                await WriteAsync(tenant, "resourceGroup:jit-e#suspended@user:alice", InAnHour);
+
+                var denied = await CheckAsync(tenant, scope, Consistency.MinimizeLatency, Permissions.AssignRole);
+                denied.Allowed.ShouldBeFalse();
+                denied.ValidUntil.ShouldBe(InAnHour, "the deny rests on a suspension that ends then");
+
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency, Permissions.AssignRole))
+                    .FromCache.ShouldBeTrue();
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                var allowed = await CheckAsync(tenant, scope, Consistency.MinimizeLatency, Permissions.AssignRole);
+                allowed.FromCache.ShouldBeFalse("a cached deny outlived the suspension that proved it");
+                allowed.Allowed.ShouldBeTrue("the owner is no longer suspended");
+            }
+        );
+    }
+
+    // ── ListObjects ────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListObjectsDropsAnExpiredGrantAtTheSameInstantACheckDoes() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4905);
+
+                await cluster.WriteAsync(tenant, "resourceGroup:jit-f#parent@subscription:jit-f-sub");
+                await cluster.WriteAsync(tenant, "resource:jit-f-r1#parent@resourceGroup:jit-f");
+                await cluster.WriteAsync(tenant, "resource:jit-f-r2#parent@resourceGroup:jit-f");
+
+                await WriteAsync(tenant, "resourceGroup:jit-f#reader@user:alice", InAnHour);
+
+                (await ListAsync(tenant, Alice)).ShouldBe(BothResources);
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                (await ListAsync(tenant, Alice)).ShouldBeEmpty(
+                    "the listing still reached resources through a grant every check has stopped honouring"
+                );
+            }
+        );
+    }
+
+    // ── The membership index ───────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AnExpiringGroupMembershipIsWalkedRatherThanClosedAndStopsGrantingOnTime() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4906);
+                var scope = Group("jit-g");
+                var eng = ObjectRef.Of(ObjectTypes.Group, "jit-g-eng");
+
+                await cluster.WriteAsync(tenant, "resourceGroup:jit-g#reader@group:jit-g-eng#member");
+                await WriteAsync(tenant, "group:jit-g-eng#member@user:alice", InAnHour);
+
+                // ⚠ The closure has no clock, so the edge is not in it — and the userset says so.
+                var slice = (await cluster.Index(tenant, eng).ReadAsync()).GetValueOrThrow();
+                slice.MembersOf(Relations.Member).ShouldNotContain(Alice, "an expiring edge was closed over");
+                slice.IsUnclosed(Relations.Member).ShouldBeTrue("the userset's closure left an edge out and doesn't say so");
+
+                var allowed = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                allowed.Allowed.ShouldBeTrue("the walk sees the live membership the closure left out");
+                allowed.ValidUntil.ShouldBe(InAnHour, "the membership the walk crossed ends then");
+
+                (await ListGroupsAsync(tenant, Alice)).ShouldBe(TheGroup);
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).Allowed.ShouldBeFalse();
+                (await ListGroupsAsync(tenant, Alice)).ShouldBeEmpty();
+            }
+        );
+    }
+
+    [Fact]
+    public async Task ShorteningAPermanentMembershipTakesItOutOfTheClosure() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4907);
+                var scope = Group("jit-h");
+                var eng = ObjectRef.Of(ObjectTypes.Group, "jit-h-eng");
+
+                await cluster.WriteAsync(tenant, "resourceGroup:jit-h#reader@group:jit-h-eng#member");
+                await cluster.WriteAsync(tenant, "group:jit-h-eng#member@user:alice");
+
+                (await cluster.Index(tenant, eng).ReadAsync()).GetValueOrThrow()
+                    .MembersOf(Relations.Member).ShouldContain(Alice, "the permanent membership is closed over");
+
+                // An allow the closure proved, cached while the membership was permanent — the
+                // answer the rewrite below has to retire as well as the closure.
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).ValidUntil.ShouldBeNull();
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).FromCache.ShouldBeTrue();
+
+                // ⚠ THE REWRITE THAT NEEDS A RECOMPUTE. The same tuple, now ending in an hour. A union
+                // can't take a member out of a closure; without TupleStoreGrain's step 2 on a rewrite,
+                // the index would keep answering "yes" for Alice after the hour — from the fast path,
+                // with no walk to notice.
+                await WriteAsync(tenant, "group:jit-h-eng#member@user:alice", InAnHour);
+
+                var slice = (await cluster.Index(tenant, eng).ReadAsync()).GetValueOrThrow();
+                slice.MembersOf(Relations.Member).ShouldNotContain(Alice, "the shortened membership is still closed over");
+                slice.IsUnclosed(Relations.Member).ShouldBeTrue();
+
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).Allowed.ShouldBeTrue();
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).Allowed.ShouldBeFalse(
+                    "a membership shortened to an hour still granted after the hour"
+                );
+
+                // And made permanent again, the closure takes it back and the mark goes.
+                cluster.Clock.UtcNow = Start;
+                await cluster.WriteAsync(tenant, "group:jit-h-eng#member@user:alice");
+
+                var restored = (await cluster.Index(tenant, eng).ReadAsync()).GetValueOrThrow();
+                restored.MembersOf(Relations.Member).ShouldContain(Alice);
+                restored.IsUnclosed(Relations.Member).ShouldBeFalse("nothing expiring is left beneath the userset");
+            }
+        );
+    }
+
+    // ── A grant shortened after its answer was cached ──────────────────────────────────────────
+    //
+    // ⚠ The review of #49 found this with a probe against this silo. An allow a permanent grant
+    // proved carries no ValidUntil, and a MinimizeLatency hit compares no version, so a rewrite that
+    // set an end on the grant changed nothing a hit looks at, and the allow outlived the end.
+    // MinimizeLatency is what ReBacResourceAuthorizer and ReBacScopeAuthorizer ask with. The store's
+    // CacheFence is the fix, and TupleExpiry.ShorteningNotice is what keeps it off the hit path.
+
+    [Fact]
+    public async Task AnAllowCachedWhileTheGrantWasPermanentEndsWhenARewriteShortensIt() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4935);
+                var scope = Group("jit-r");
+                const string grant = "resourceGroup:jit-r#reader@user:alice";
+
+                await cluster.WriteAsync(tenant, grant);
+
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).FromCache.ShouldBeFalse();
+                var cached = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                cached.FromCache.ShouldBeTrue();
+                cached.ValidUntil.ShouldBeNull("a permanent grant proved it, so it carries no end");
+
+                await WriteAsync(tenant, grant, InAnHour);
+
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).Allowed.ShouldBeTrue(
+                    "the shortened grant still runs until the hour"
+                );
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                var after = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                after.Allowed.ShouldBeFalse(
+                    $"the allow cached while the grant was permanent outlived the end a rewrite set on it; FromCache={after.FromCache}"
+                );
+                after.FromCache.ShouldBeFalse();
+            }
+        );
+    }
+
+    [Fact]
+    public async Task TheFenceIsTenantWideSoAnInheritedAllowAndATokenFromBeforeTheRewriteEndToo() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4936);
+                var scope = Group("jit-s");
+                var resource = ObjectRef.Of(ObjectTypes.Resource, "jit-s-r1");
+                const string grant = "resourceGroup:jit-s#reader@user:alice";
+
+                await cluster.WriteAsync(tenant, "resource:jit-s-r1#parent@resourceGroup:jit-s");
+                var permanent = await cluster.WriteAsync(tenant, grant);
+
+                // Two answers cached while the grant was permanent: one on the resource, a hop below
+                // the tuple, which is the object the enforcement seam checks, and one on the group
+                // under the token the grant's write returned.
+                await CheckAsync(tenant, resource, Consistency.MinimizeLatency);
+                (await CheckAsync(tenant, resource, Consistency.MinimizeLatency)).FromCache.ShouldBeTrue();
+                await CheckAsync(tenant, scope, Consistency.AtLeastAsFresh(permanent));
+                (await CheckAsync(tenant, scope, Consistency.AtLeastAsFresh(permanent))).FromCache.ShouldBeTrue();
+
+                await WriteAsync(tenant, grant, InAnHour);
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                (await CheckAsync(tenant, resource, Consistency.MinimizeLatency)).Allowed.ShouldBeFalse(
+                    "an allow cached on a resource below the shortened grant outlived the grant's end"
+                );
+                (await CheckAsync(tenant, scope, Consistency.AtLeastAsFresh(permanent))).Allowed.ShouldBeFalse(
+                    "a token minted before the rewrite kept a cached allow past the end the rewrite set"
+                );
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AShorteningNeedsANoticeAndOneThatGivesExactlyItEndsOnTime() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4937);
+                var scope = Group("jit-t");
+                const string grant = "resourceGroup:jit-t#reader@user:alice";
+                var notice = TupleExpiry.ShorteningNotice;
+
+                await cluster.WriteAsync(tenant, grant);
+
+                // Cached, and a hit, so the check grain has read the fences at the start: it trusts
+                // that read for exactly one notice.
+                await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                (await CheckAsync(tenant, scope, Consistency.MinimizeLatency)).FromCache.ShouldBeTrue();
+
+                var before = (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow();
+
+                var refused = await cluster.Store(tenant)
+                    .WriteAsync(Tuple(grant) with { ExpiresOn = Start + notice - TimeSpan.FromTicks(1) });
+                refused.IsFailure.ShouldBeTrue("a shortening that ends inside the notice was accepted");
+                refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+                (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow().Version.ShouldBe(before.Version);
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(0);
+                (await cluster.Store(tenant).GetCacheFencesAsync()).GetValueOrThrow().ShouldBeEmpty();
+
+                // A new grant rests no cached answer on anything, so it needs no notice.
+                await WriteAsync(tenant, "resourceGroup:jit-t#reader@user:bob", Start.AddSeconds(10));
+
+                // ⚠ THE EDGE. Written at the start, ending one notice later: the instant the fence
+                // takes effect is the instant the check grain's read of the fences goes stale.
+                await WriteAsync(tenant, grant, Start + notice);
+
+                cluster.Clock.UtcNow = Start + notice - TimeSpan.FromTicks(1);
+                var lastTick = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                lastTick.Allowed.ShouldBeTrue();
+                lastTick.FromCache.ShouldBeTrue("a tick before the end, the cached allow is still true");
+
+                cluster.Clock.UtcNow = Start + notice;
+                var atEnd = await CheckAsync(tenant, scope, Consistency.MinimizeLatency);
+                atEnd.Allowed.ShouldBeFalse("a grant shortened with exactly the notice outlived its end");
+                atEnd.FromCache.ShouldBeFalse();
+            }
+        );
+    }
+
+    // ── The sweep ──────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task TheSweepDeletesAnExpiredTupleAuditsItAndDisarmsOnceNothingIsLeft() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4908);
+                var scope = Group("jit-i");
+                var later = Start.AddHours(3);
+
+                await WriteAsync(tenant, "resourceGroup:jit-i#reader@user:alice", InAnHour);
+                await WriteAsync(tenant, "resourceGroup:jit-i#contributor@user:bob", later);
+
+                // Before anything has expired: nothing to remove, both registered, the reminder armed.
+                var idle = await SweepAsync(tenant);
+                idle.Removed.ShouldBe(0);
+                idle.Remaining.ShouldBe(2);
+                idle.Armed.ShouldBeTrue("a tenant with expiring grants has no reminder to sweep them");
+
+                cluster.Clock.UtcNow = InAnHour;
+                var before = (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow();
+
+                var swept = await SweepAsync(tenant);
+                swept.Removed.ShouldBe(1);
+                swept.Remaining.ShouldBe(1, "Bob's grant has two hours left");
+                swept.Armed.ShouldBeTrue();
+                swept.Failed.ShouldBe(0);
+
+                (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow().Version.ShouldBeGreaterThan(
+                    before.Version,
+                    "the sweep's delete is a delete — journalled, applied, and covered by a new version"
+                );
+
+                // ⚠ THE AUDIT EVENT: when the grant ended and when storage caught up, as fields.
+                var removed = cluster.Audit.Events.Where(static e => e.Id == 1701).ToList();
+                removed.ShouldContain(
+                    e => (string?)e.Fields["Tuple"] == "resourceGroup:jit-i#reader@user:alice"
+                        && (DateTimeOffset?)e.Fields["ExpiresOn"] == InAnHour
+                        && (DateTimeOffset?)e.Fields["SweptAt"] == InAnHour
+                        && (Guid?)e.Fields["TenantId"] == tenant,
+                    "the sweep removed an expired grant and wrote no audit event for it"
+                );
+
+                // ⚠ DELETED, NOT HIDDEN. Put the clock back before the expiry: a tuple still in
+                // storage would be live again and would allow. Neither index may still hold it either.
+                cluster.Clock.UtcNow = Start;
+
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the swept tuple is still in the forward index — the sweep hid it rather than deleting it"
+                );
+
+                (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow()
+                    .ShouldNotContain(e => e.Object == scope, "the swept tuple is still in the reverse index");
+
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent, Permissions.Write, Bob)).Allowed
+                    .ShouldBeTrue("the sweep took a grant that had not expired");
+
+                cluster.Clock.UtcNow = later;
+
+                var last = await SweepAsync(tenant);
+                last.Removed.ShouldBe(1);
+                last.Remaining.ShouldBe(0);
+                last.Armed.ShouldBeFalse("nothing is left to sweep and the reminder is still registered");
+            }
+        );
+    }
+
+    [Fact]
+    public async Task ARewriteReplacesTheExpiryAndAPermanentOneLeavesNothingToSweep() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4909);
+                var scope = Group("jit-j");
+                const string grant = "resourceGroup:jit-j#reader@user:alice";
+
+                await WriteAsync(tenant, grant, InAnHour);
+
+                // Extended: the new instant is the one that holds, and the register follows it.
+                var extended = Start.AddHours(2);
+                await WriteAsync(tenant, grant, extended);
+
+                cluster.Clock.UtcNow = InAnHour;
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeTrue(
+                    "the grant ended at its first expiry although a rewrite had extended it"
+                );
+                (await SweepAsync(tenant)).Removed.ShouldBe(0, "the sweep removed a grant a rewrite had extended");
+
+                // Made permanent: nothing to expire, nothing registered, nothing armed.
+                await cluster.WriteAsync(tenant, grant);
+
+                cluster.Clock.UtcNow = Start.AddDays(30);
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeTrue();
+
+                var sweep = await SweepAsync(tenant);
+                sweep.Removed.ShouldBe(0);
+                sweep.Remaining.ShouldBe(0, "a permanent grant is still registered for the sweep");
+                sweep.Armed.ShouldBeFalse();
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AnExpiryThatIsNotLaterThanNowIsRefusedAndNothingLands() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4910);
+                var before = (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow();
+
+                var refused = await cluster.Store(tenant)
+                    .WriteAsync(Tuple("resourceGroup:jit-k#reader@user:alice") with { ExpiresOn = Start });
+
+                refused.IsFailure.ShouldBeTrue("a grant that ends now grants nothing and must not be stored");
+                refused.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(0);
+                (await cluster.Store(tenant).GetTokenAsync()).GetValueOrThrow().Version.ShouldBe(before.Version);
+                (await cluster.Objects(tenant, Group("jit-k")).ReadDurableAsync()).GetValueOrThrow().Count.ShouldBe(0);
+            }
+        );
+    }
+
+    // ── The journal under the sweep ────────────────────────────────────────────────────────────
+    //
+    // ⚠ The review of #49 found both of these with a probe against this silo. The sweep replays the
+    // journal on every tick, and an entry used to leave the journal only by its own sequence
+    // number, so a write that died half-applied stayed there after a later write or delete of the
+    // same tuple had landed — and the next tick replayed it over the later one.
+
+    [Fact]
+    public async Task ARevokeAfterAFailedExpiringWriteIsNotUndoneByTheSweep() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4930);
+                var scope = Group("jit-m");
+                const string grant = "resourceGroup:jit-m#reader@user:alice";
+
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() =>
+                    cluster.Store(tenant).WriteAsync(Tuple(grant) with { ExpiresOn = InAnHour })
+                );
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(1);
+
+                // The owner revokes it, and the revoke lands in full.
+                await cluster.RevokeAsync(tenant, grant);
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(
+                    0,
+                    "the revoke is the tuple's latest intent, and the failed write it supersedes is still journalled"
+                );
+
+                await SweepAsync(tenant);
+
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the sweep replayed a failed just-in-time write over the revoke that came after it"
+                );
+                (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow()
+                    .ShouldNotContain(e => e.Object == scope, "the replay put the revoked grant back in the reverse index");
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AReplayOfTwoJournalledEntriesForOneTupleAppliesOnlyTheLater() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4931);
+                var scope = Group("jit-n");
+                const string grant = "resourceGroup:jit-n#reader@user:alice";
+
+                // Both die between their halves, so both stay journalled — the case step 7's drop
+                // can't reach, because neither one got there.
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() =>
+                    cluster.Store(tenant).WriteAsync(Tuple(grant) with { ExpiresOn = InAnHour })
+                );
+
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() => cluster.Store(tenant).DeleteAsync(Tuple(grant)));
+
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(2);
+
+                var replayed = (await cluster.Store(tenant).SweepAsync()).GetValueOrThrow();
+                replayed.Pending.ShouldBe(2);
+                replayed.Superseded.ShouldBe(1, "the write is older than the delete and must not be replayed");
+                replayed.Repaired.ShouldBe(1);
+                replayed.Remaining.ShouldBe(0);
+
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the replay applied the older write after the newer delete"
+                );
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AShortenedGrantIsNotMadePermanentAgainByTheSweep() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4932);
+                var scope = Group("jit-o");
+                const string grant = "resourceGroup:jit-o#reader@user:alice";
+
+                // A permanent grant whose first attempt died, and whose retry landed.
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() => cluster.Store(tenant).WriteAsync(Tuple(grant)));
+                await cluster.WriteAsync(tenant, grant);
+
+                // Then shortened to an hour.
+                await WriteAsync(tenant, grant, InAnHour);
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(0);
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                var swept = await SweepAsync(tenant);
+                swept.Removed.ShouldBe(1, "the shortened grant was not swept");
+                swept.Armed.ShouldBeFalse();
+
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the sweep replayed the failed permanent write and the shortened grant outlived its hour"
+                );
+
+                cluster.Audit.Events.ShouldContain(
+                    e => e.Id == 1701 && (string?)e.Fields["Tuple"] == grant && (Guid?)e.Fields["TenantId"] == tenant,
+                    "the grant's end was not audited"
+                );
+
+                // Deleted rather than hidden, as in the sweep's own test.
+                cluster.Clock.UtcNow = Start;
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse();
+            }
+        );
+    }
+
+    // ── The reminder ───────────────────────────────────────────────────────────────────────────
+    //
+    // ⚠ The tick is delivered by hand, as the call the reminder service itself makes: the grain as
+    // IRemindable, with the store's own reminder name. What Orleans owns — a timer firing a row
+    // five minutes out — isn't waited for; what this code owns is that the row exists with the
+    // period the grain asked for, that the tick runs the sweep, and that the row goes when the
+    // sweep leaves nothing. The row is read from the silo's IReminderTable, which is the Redis
+    // table here, as OrphanReaperArmingTests does in CyberCloud.Tenancy.Tests.
+
+    [Fact]
+    public async Task TheSweepReminderIsARowInTheTableAndItsTickSweepsAndDisarms() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4933);
+                var scope = Group("jit-p");
+                const string grant = "resourceGroup:jit-p#reader@user:alice";
+
+                (await ReminderRowAsync(tenant)).ShouldBeNull("nothing expiring was written yet");
+
+                await WriteAsync(tenant, grant, InAnHour);
+
+                var row = (await ReminderRowAsync(tenant)).ShouldNotBeNull("an expiring write left no reminder row");
+                row.Period.ShouldBe(TupleStoreGrain.SweepPeriod);
+
+                cluster.Clock.UtcNow = InAnHour;
+                await TickAsync(tenant);
+
+                cluster.Audit.Events.ShouldContain(
+                    e => e.Id == 1701 && (string?)e.Fields["Tuple"] == grant && (Guid?)e.Fields["TenantId"] == tenant,
+                    "the reminder's tick did not sweep the expired grant"
+                );
+
+                (await ReminderRowAsync(tenant)).ShouldBeNull("the tick left nothing to sweep and kept its row");
+
+                cluster.Clock.UtcNow = Start;
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the tick's sweep hid the tuple rather than deleting it"
+                );
+            }
+        );
+    }
+
+    [Fact]
+    public async Task AnExpiringWriteThatDiesIsStillArmedAndTheTickReplaysItThenSweepsIt() {
+        await AtStartAsync(async () => {
+                var tenant = AuthorizationCluster.Tenant(4934);
+                var scope = Group("jit-q");
+                const string grant = "resourceGroup:jit-q#reader@user:alice";
+
+                // ⚠ The reminder is armed BEFORE the journal write, so the write that dies between
+                // its halves has already put the row there — and that row is what replays it.
+                cluster.Interceptor.Armed = true;
+                await Should.ThrowAsync<Exception>(() =>
+                    cluster.Store(tenant).WriteAsync(Tuple(grant) with { ExpiresOn = InAnHour })
+                );
+
+                (await ReminderRowAsync(tenant)).ShouldNotBeNull("a write that died after arming left no row");
+                (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow()
+                    .ShouldNotContain(e => e.Object == scope, "the write died before step 5");
+
+                await TickAsync(tenant);
+
+                (await cluster.Store(tenant).PendingCountAsync()).GetValueOrThrow().ShouldBe(0, "the tick didn't replay the journal");
+                (await cluster.SubjectIndex(tenant, Alice).ListAsync()).GetValueOrThrow()
+                    .ShouldContain(e => e.Object == scope && e.ExpiresOn == InAnHour, "the replay didn't land the reverse half");
+                (await ReminderRowAsync(tenant)).ShouldNotBeNull("the replayed grant is registered and has to stay armed");
+
+                cluster.Clock.UtcNow = InAnHour;
+                await TickAsync(tenant);
+
+                (await ReminderRowAsync(tenant)).ShouldBeNull();
+                cluster.Clock.UtcNow = Start;
+                (await CheckAsync(tenant, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse(
+                    "the replayed grant was not swept at its expiry"
+                );
+            }
+        );
+    }
+
+    // ── The tenant boundary ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task OneTenantsExpiryAndSweepLeaveAnotherTenantsSameTupleAlone() {
+        await AtStartAsync(async () => {
+                var (a, b) = cluster.SplitPair(4911);
+                var scope = Group("jit-l");
+                const string grant = "resourceGroup:jit-l#reader@user:alice";
+
+                // The same tuple, spelled the same way, in two tenants on two shards: one ends in an
+                // hour, one is permanent. Nothing about one may touch the other.
+                await WriteAsync(a, grant, InAnHour);
+                await cluster.WriteAsync(b, grant);
+
+                cluster.Clock.UtcNow = InAnHour;
+
+                (await CheckAsync(a, scope, Consistency.FullyConsistent)).Allowed.ShouldBeFalse();
+                (await CheckAsync(b, scope, Consistency.FullyConsistent)).Allowed.ShouldBeTrue(
+                    "tenant A's expiry reached tenant B's tuple"
+                );
+
+                (await SweepAsync(a)).Removed.ShouldBe(1);
+
+                (await CheckAsync(b, scope, Consistency.FullyConsistent)).Allowed.ShouldBeTrue(
+                    "tenant A's sweep deleted tenant B's tuple"
+                );
+
+                var bSweep = await SweepAsync(b);
+                bSweep.Removed.ShouldBe(0);
+                bSweep.Remaining.ShouldBe(0, "tenant A's expiring tuple is registered in tenant B's store");
+                bSweep.Armed.ShouldBeFalse();
+            }
+        );
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────────────────────
+
+    static SubjectRef Bob => SubjectRef.Of(ObjectTypes.User, "bob");
+
+    static ObjectRef Group(string id) => ObjectRef.Of(ObjectTypes.ResourceGroup, id);
+
+    static RelationTuple Tuple(string text) => RelationTuple.Parse(text).GetValueOrThrow();
+
+    /// <summary>Runs a test from the clock's start and puts the clock back however it ends.</summary>
+    async Task AtStartAsync(Func<Task> test) {
+        cluster.Clock.UtcNow = Start;
+
+        try {
+            await test();
+        } finally {
+            cluster.Clock.UtcNow = Start;
+        }
+    }
+
+    async Task<ConsistencyToken> WriteAsync(Guid tenant, string tuple, DateTimeOffset expiresOn) {
+        var written = await cluster.Store(tenant).WriteAsync(Tuple(tuple) with { ExpiresOn = expiresOn });
+        written.IsSuccess.ShouldBeTrue(written.Error?.Message);
+        return written.GetValueOrThrow();
+    }
+
+    async Task<CheckResult> CheckAsync(
+        Guid tenant,
+        ObjectRef target,
+        Consistency consistency,
+        string permission = Permissions.Read,
+        SubjectRef? subject = null
+    ) {
+        var result = await cluster.Check(tenant, target).CheckAsync(permission, subject ?? Alice, consistency);
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        return result.GetValueOrThrow();
+    }
+
+    async Task<ExpirySweepReport> SweepAsync(Guid tenant) {
+        var swept = await cluster.Store(tenant).SweepExpiredAsync();
+        swept.IsSuccess.ShouldBeTrue(swept.Error?.Message);
+        return swept.GetValueOrThrow();
+    }
+
+    /// <summary>The store's sweep reminder as the reminder table holds it, or <c>null</c>.</summary>
+    async Task<ReminderEntry?> ReminderRowAsync(Guid tenant) =>
+        await cluster.Services.GetRequiredService<IReminderTable>()
+            .ReadRow(cluster.Store(tenant).GetGrainId(), TupleStoreGrain.SweepReminderName);
+
+    /// <summary>Delivers one tick of the sweep reminder, as the reminder service would.</summary>
+    Task TickAsync(Guid tenant) =>
+        cluster.Store(tenant)
+            .AsReference<IRemindable>()
+            .ReceiveReminder(
+                TupleStoreGrain.SweepReminderName,
+                new(Start.UtcDateTime, TupleStoreGrain.SweepPeriod, cluster.Clock.UtcNow.UtcDateTime)
+            );
+
+    async Task<string[]> ListAsync(Guid tenant, SubjectRef subject) =>
+        await ListOfAsync(tenant, subject, ObjectTypes.Resource);
+
+    async Task<string[]> ListGroupsAsync(Guid tenant, SubjectRef subject) =>
+        await ListOfAsync(tenant, subject, ObjectTypes.ResourceGroup);
+
+    async Task<string[]> ListOfAsync(Guid tenant, SubjectRef subject, string type) {
+        var listed = await cluster.For(tenant)
+            .GetGrain<IListObjectsGrain>(GrainKeys.ListObjects(subject.Type, subject.Id))
+            .ListObjectsAsync(new() { ObjectType = type, Permission = Permissions.Read });
+
+        listed.IsSuccess.ShouldBeTrue(listed.Error?.Message);
+        return [.. listed.GetValueOrThrow().Objects.Select(static x => x.Id)];
+    }
+}

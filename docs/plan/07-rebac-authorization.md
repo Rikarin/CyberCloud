@@ -96,7 +96,9 @@ tuple, and there is no second durable thing to keep in step with the first. What
 client that mints its own GUIDs; the Bicep `guid(scope, principal, role)` idiom exists because a
 deterministic name is what people want from this address anyway. The body's three properties
 (`principalId`, `principalType`, `roleDefinitionId` — a role *name*, since there are no role
-definitions to address) are optional and must agree with the address when present. Only `assignRole`
+definitions to address) are optional and must agree with the address when present. A fourth,
+`expiresOn` (issue #49), names nothing and agrees with nothing: it is when the grant ends, and
+§ Time-bounded relations is its section. Only `assignRole`
 holders may `PUT` or `DELETE` — `Rel("owner") & !Rel("suspended")`, which is Azure's
 `roleAssignments/write` sitting in Owner and in no built-in role beneath it — and a `GET` needs
 `read`. A `group` principal is written as the userset `group:{id}#member`, which is row two of the
@@ -438,6 +440,12 @@ child is written as a recorded caller, from a reminder, with no token to be fres
 is `FullyConsistent` — which also closes the grant direction above *for children*
 (`DeploymentAuthorizationTests.ARightRevokedBetweenTwoChildrenIsHonouredAtTheSecond`).
 
+⚠ **A tuple that expires changes an answer with no write, so no token can describe it.** Every mode
+applies expiry at the instant a check is evaluated, and every cached entry — `MinimizeLatency`'s
+included — stops being served at the earliest expiry that proved it. § Time-bounded relations says
+why that is the only reading a token without a clock can have, and why an entry cached *before* a
+write set that expiry is retired at it too, although `MinimizeLatency` still reads no version.
+
 ## The Leopard index — and why it is not optional
 
 The naive `Check` walks group membership at request time. For `group:eng#member@group:platform#member`
@@ -625,6 +633,215 @@ other one. The membership index's subject-to-usersets read happens where the par
 it, on the list query, once per caller. See § The Leopard index below and
 [08 § The resource-graph projection](08-resource-manager.md).
 
+## Time-bounded relations — just-in-time roles (issue #49)
+
+[01](01-azure-parity-catalogue.md)'s row is *"a ReBAC tuple with an expiry is the whole feature"*, and
+the tuple is the easy part. **BUILT (issue #49)**: `RelationTuple.ExpiresOn`, carried by the store's
+journal, the forward and reverse indexes and the role-assignment view. What cost the design was the
+two things the issue named — the consistency token and the cache — and a third it did not, the
+Leopard index. Each is decided below, with the reason.
+
+**The model.** A tuple's expiry is a property of the tuple, not part of its identity: `o#r@s` is one
+tuple whatever its expiry, a second write replaces the expiry (extends it, shortens it, or drops it),
+and a delete removes the tuple whatever it carries. A write whose expiry is not later than now is
+refused, because a grant born expired would grant nothing and sit in storage. **Expiry is applied at
+read time, by the grain that holds the tuple, against the silo's `IClock`**:
+`IObjectRelationsGrain` leaves an expired tuple out of every snapshot and every role-assignment row,
+`ISubjectRelationsGrain` leaves its entry out of every listing, and both from the instant it expires
+— whether or not anything has deleted it yet. `Check` reads tuples from nowhere else, so that one
+filter is what makes an expired grant deny with no write; the evaluator never reads a clock.
+`TupleExpiry.IsLive` is the one comparison: an expiry equal to now has already passed.
+
+⚠ **The consistency token: an expiry is a revision boundary by wall clock, and a token cannot
+express one.** § Consistency's token is a per-tenant version that every *write* moves, and an expiry
+is not a write — a tuple that expires changes what `Check` answers while the version stands still.
+There are two readings of a token minted before an expiry and presented after it. The Zanzibar
+reading — a zookie names a snapshot the check may be evaluated *at* — would keep the tuple live for
+anyone still holding the old token, which is a grant that outlives its end for exactly as long as a
+client keeps a string, and it would need snapshot reads this engine does not have. **The reading
+taken is the other one: a token is a lower bound on the writes an answer reflects and never a point
+in time to read at.** Every check applies expiry at the instant it is evaluated, in every mode, so a
+check made with a token minted while the grant was live, evaluated after the grant ended, is
+satisfied by the current version and denies (`TimeBoundedRelationTests.ATokenMintedBeforeTheExpiryIsSatisfiedAfterItAndReadsTheGrantAsGone`).
+What a caller cannot ask is "as of" an earlier instant; nothing in the platform needs to. The
+version moves when the sweep below deletes the tuple, which changes no answer — the tuple has
+granted nothing since its expiry. Two instants that are not quite one: the object grain filters by
+its silo's clock and the check cache compares by its own, so the boundary is as sharp as the silos'
+clock agreement; and a walk that reads a tuple a moment before its expiry answers allow a moment
+after it, which is the same race a revoke concurrent with a check already has.
+
+⚠ **The cache rule: a memoised allow never outlives the earliest expiry among the tuples that
+proved it, in any mode.** § Caching across requests invalidates on the relation version, and an
+expiry moves none, so without a rule of its own `MinimizeLatency` — "any cached result" — would serve
+an expired grant for ever. `CheckEvaluator` carries, beside every node's value, the instant it may
+change with no write: a true is good until the earliest expiry along the derivation that proved it
+(the matching tuple, every userset and tupleset tuple a hop crossed); a union takes the operand that
+decided it, an intersection the earliest of its operands; a false with no negation beneath it is good
+for ever, because a grant cannot appear by expiring; and an exclusion passes its operand's instant
+through, which is how `A & !B` denied by an expiring `#suspended` un-denies on time. The answer's
+instant is `CheckResult.ValidUntil`; `CheckCacheEntry` stores it, and `CheckGrain` stops serving the
+entry at it. ⚠ **This is not the TTL `CheckGrain`'s remarks refuse**: it is a fact about the answer,
+not a guess about how stale is too stale. ⚠ **The instant is a lower bound and may be early** — a
+union short-circuits on its first true, so a subject holding a permission two ways is told it ends
+when the first way found does, and the cache re-walks then and finds the second
+(`TimeBoundedRelationTests.AnAllowWithALongerLivedSecondDerivationIsReWalkedAtTheExpiryAndStaysAllowed`).
+Early costs a walk; late is a privilege past its grant. `ExpiryPropertyTests` holds every instant to
+"never late" against the reference evaluator, over the live subset of 4 000 generated graphs with an
+expiry on about a third of their tuples, with and without the index, at every instant the answer
+could change.
+
+⚠ **A rewrite that brings an end closer leaves answers behind that no instant retires, so the store
+fences them.** An allow cached while its grant was permanent carries no instant, and a
+`MinimizeLatency` hit compares no version, so a `PUT` that set an end on that grant changed nothing a
+hit looks at, and the allow outlived the end. The review of #49 found it with a probe against the
+real silo, in the mode `ReBacResourceAuthorizer` and `ReBacScopeAuthorizer` ask with. So a write that
+shortens a live tuple — permanent before, or ending later — records a `CacheFence` in the durable
+write that journals it: an answer stamped before the write isn't served from the new end on, in any
+mode that reads the cache. A fence is tenant-wide, because a grant on a group proves answers cached on
+every resource under it, and an unrelated answer it catches is walked again, which costs a walk. A
+replay of a journalled expiring write fences again at the version it lands at, because answers
+cached while it was outstanding rested on the grant it replaces. ⚠ **What keeps the fence off the
+hit path is a notice.** A check grain reads the fences at most once a minute
+(`TupleExpiry.ShorteningNotice`), not on every hit, and the store refuses a shortening that ends
+sooner than a minute from now. It checks the notice and adds the fence in one turn, with no await
+between them, so no fence it accepts after a check grain's read can take effect before that read
+goes stale. A grant that has to end sooner is revoked, which is § Consistency's question and
+answers to its three modes. A fresh grant needs no notice, because no cached answer rests on a tuple
+that wasn't there. (`TimeBoundedRelationTests.AnAllowCachedWhileTheGrantWasPermanentEndsWhenARewriteShortensIt`,
+`…TheFenceIsTenantWideSoAnInheritedAllowAndATokenFromBeforeTheRewriteEndToo`,
+`…AShorteningNeedsANoticeAndOneThatGivesExactlyItEndsOnTime`, and, through the enforcement seam,
+`RoleAssignmentTests.APutThatShortensAGrantEndsItAtTheEnforcementSeamThoughTheSeamCachedItWhilePermanent`.)
+The replay's fence can't enforce the notice — the end was checked when the write was first made — so
+a shortening whose first attempt failed can be honoured up to a minute late once its replay lands.
+
+⚠ **The Leopard index: an expiring tuple is never an edge of the closure.** A closure holds no clock;
+a member recorded through an edge that stops granting on its own would stay a member after the edge
+expired, and the index is read on the check path where its answer is taken without a walk. So the
+closure is over *permanent* edges only, and an expiring edge marks its userset and every userset
+above it **unclosed** (`MembershipIndexSnapshot.Unclosed`) instead. An unclosed closure still says
+"yes" — every member in it got there permanently, so an index "yes" is bounded only by the tuple
+that led to the userset — and never says "no": `MembershipIndexReader` answers "walk it", and the walk
+filters expired tuples at read. A rewrite that changes an indexed edge's expiry is a delete and a
+write to the index: `TupleStoreGrain` runs step 2's recomputation for it before the forward half, so
+shortening a permanent membership takes its members out of every closure before the tuple says it
+will stop granting, and no crash can leave the index more permissive than the tuples
+(`TimeBoundedRelationTests.ShorteningAPermanentMembershipTakesItOutOfTheClosure`;
+`ExpiryPropertyTests.TheIndexClosesOverPermanentEdgesOnlyAndMarksEveryUsersetAboveAnExpiringOne`
+holds the marks and the closure to a brute force after every write, rewrite and delete). On
+`CyberCloudSchema` the only userset the platform forms is `group#member`, and a just-in-time role is
+a tuple on a role relation — never an edge — so the index gives up nothing for the feature it marks
+around; what it gives up is the fast path for a time-bounded *group membership*, which is walked.
+
+**ListObjects** needs nothing of its own: the reverse entries carry the expiry and are filtered where
+the forward tuples are, the index's usersets are permanent-only, and the walk's hops reach an expiring
+membership the index left out (`TimeBoundedRelationTests.ListObjectsDropsAnExpiredGrantAtTheSameInstantACheckDoes`;
+`ExpiryPropertyTests.ListObjectsListsExactlyWhatIsLiveAtTheInstantItRuns`).
+
+**The sweep, and the audit.** The store keeps a register of every tuple it last wrote with an expiry
+(`TupleStoreState.Expiring`) — complete because it is the tenant's one writer, in the same durable
+write that clears the journal entry — and holds a reminder, `sweep-expired-tuples` every five
+minutes, while the register or the journal is non-empty. Each tick replays the journal, then deletes
+every registered tuple whose expiry has passed through the same seven steps a revoke takes, and
+writes the audit event: `AuthorizationLog.ExpiredTupleRemoved` (event 1701) names the tenant, the
+tuple, when the grant ended and when storage caught up. A write with an expiry is audited too (1700),
+and it arms the reminder before anything is journalled, so a silo with no reminder service refuses an
+expiring grant rather than writing one nothing will ever sweep. ⚠ **The reminder is armed off "there
+is something to sweep", never off a deadline**, for § Azure RBAC, expressed in it's argument against a reminder per
+parked resource: a due time equal to an expiry would be a second durable copy of it. And it lives on
+the store rather than on a grain of its own because, unlike a purge, a tuple delete never calls back
+into the grain that holds the reminder. The same `GetReminder` guard as `ExpirySweeperGrain` keeps a
+tenant granting faster than once a period from pushing its own sweep out for ever
+(`TimeBoundedRelationTests.TheSweepReminderIsARowInTheTableAndItsTickSweepsAndDisarms` reads the row
+out of the reminder table and delivers the tick the reminder service would;
+`TimeBoundedRelationTests.AnExpiringWriteThatDiesIsStillArmedAndTheTickReplaysItThenSweepsIt` is the
+write that dies after arming).
+
+⚠ **The journal holds intents, and only a tuple's latest one is ever replayed.** A write that dies
+half-applied stays journalled, and before the sweep had a reminder nothing replayed it on its own;
+once every tick replays the journal, an entry that outlives a later write or delete of the same
+tuple is a hazard. Replayed over the later one, a failed just-in-time write resurrects the grant
+its owner then revoked, and a failed permanent write undoes the rewrite that shortened it — the
+register forgets the tuple, the reminder disarms, and the grant's end is never swept or audited.
+So a write's step 7 drops every older entry for the same tuple with its own, and a replay applies
+only the latest entry per tuple and drops the rest (`SweepReport.Superseded`). Replaying the latest
+alone is enough because a replay runs steps 2 to 6 in full, which undoes whatever an older entry's
+crash left behind. And the sweep leaves a registered tuple alone while an entry for it is still
+outstanding: the register reflects the write before it, and deleting on that would act on the older
+intent. The review of #49 found both cases with a probe; they are
+`TimeBoundedRelationTests.ARevokeAfterAFailedExpiringWriteIsNotUndoneByTheSweep`,
+`TimeBoundedRelationTests.AShortenedGrantIsNotMadePermanentAgainByTheSweep`, and
+`TimeBoundedRelationTests.AReplayOfTwoJournalledEntriesForOneTupleAppliesOnlyTheLater`.
+
+**The surface.** `PUT …/roleAssignments/{name}` takes `expiresOn` — an ISO 8601 instant with an
+explicit offset, later than now — and every rendered assignment carries `properties.expiresOn`, in
+UTC or `null`. A `PUT` without it makes the assignment permanent: a `PUT` states the whole
+assignment. After the instant, `GET` is the canonical `404`, the collection omits the row, and every
+check denies, with no revoke and before any sweep (`RoleAssignmentTests.AJustInTimeGrantReadsBackItsExpiryAndEndsOnItsOwnWithNoRevoke`).
+A `PUT` that brings an end closer must leave at least a minute, or it's a `400`, and its end is kept
+the same way, for answers cached while the grant ran longer too (the fence above).
+The portal's access page takes an optional end as a local date and time, sends the UTC instant it
+names, and shows the served end, or "Permanent", on every row it knows. The resource-graph access column leaves a time-bounded grant out, because the column is recomputed on
+a resource change and on nothing else and would otherwise keep an expired grant's resource in its
+holder's graph query ([08](08-resource-manager.md) § The resource-graph projection).
+
+⚠ **What is owed, precisely.**
+
+- **The eligible → active flow.** Azure's PIM wraps the tuple in an *eligible* assignment a principal
+  *activates* for a bounded time, with a justification, a maximum duration, an optional approval, and
+  an activation audit. [01](01-azure-parity-catalogue.md) describes none of it — its row stops at the
+  tuple — and this document did not either, so none of it is invented here. What a tenant has is an
+  owner granting a role that ends on its own. Building it needs an eligibility record (a second
+  durable thing beside the tuple, which § Azure RBAC's name-is-the-tuple argument says to weigh
+  first), a policy for maximum duration, and a principal-initiated write that `assignRole` does not
+  gate.
+- **No maximum duration.** `expiresOn` may be any later instant; a policy that bounds it is part of
+  the flow above.
+- **The widest-path closure.** Each index member stamped with the latest expiry over every permanent
+  route to it would give time-bounded group memberships the fast path back; the unclosed mark is the
+  correct, slower answer until something measures that a time-bounded membership is common.
+- **The resource-graph access column** carries no expiry, so a just-in-time reader is shown less by
+  the graph query than a check allows; carrying the instant into the row and filtering on it in the
+  query is the fix.
+- **`cyc` and the SDKs.** Neither has a role-assignment command or client to carry `expiresOn` in:
+  the address is still outside the generated document (#63's question, § Azure RBAC), and the SDKs
+  and `cyc` are generated from that document. The portal's hand-written `RoleAssignmentsApi` sends
+  and shows it.
+- **Journal replay has one scheduled caller, and only while it is armed.** The sweep reminder replays
+  the store's journal on every tick; a tenant with nothing expiring holds no reminder, and nothing else
+  in the tree calls `ITupleStoreGrain.SweepAsync` — so the "sweeper replays it" this document leans
+  on in § Storage and § The Leopard index runs for such a tenant only when somebody calls it. Arming
+  on a failed write is the fix; a write that throws, rather than fails, is why it is not a line.
+- **A rewrite that shortens an expiry has § Storage's window on the reverse half.** The forward half
+  lands first, so a crash between the two leaves the reverse entry with the longer expiry, and
+  `ListObjects` can reach the object through it until the journal is replayed — the same window a
+  delete that dies between steps 3 and 5 already leaves, and, per the item above, just as unscheduled.
+- **The process boundary.** Every new wire member carries an `[Id]` under an aliased type
+  (`AuthorizationWireContractTests`), `ExpirySweepReport` is aliased, and no grain method the path
+  calls is generic, which is the shape #39's refused type had. No test drives an expiring `PUT` from
+  a gateway process into a separate silo process: the only topology with one is the AppHost's
+  (`LocalTopology`), whose ports are fixed, and the machine this branch was built on shares them
+  with other runs. `TenantOverHttpTests`' arrangement — the real gateway in the test process, the
+  AppHost's two silos in theirs — is where the case belongs.
+- **The store's register, journal and fences are one row per tenant.** `TupleStoreState.Expiring`
+  lists every tuple the tenant last wrote with an expiry, and the row is rewritten on each tuple
+  write (steps 1 and 7) and walked linearly by the sweep and by the register update. That is
+  affordable while "tuple writes are rare" and a tenant's live just-in-time grants number in the
+  hundreds; a tenant with tens of thousands would pay for them on every write. Splitting the
+  register into its own grain or rows, keyed by expiry, is the fix, and nothing has measured the
+  need yet. The journal replay's latest-entry selection was quadratic in the journal and is linear
+  since the review of #49.
+- **The access page's rows fail axe once one exists.** `aria-required-children` on the `xui-table`
+  rows — the header row's `xui-th`, and the Remove button in a data row. No access-page test gated a
+  page with a row before #49; `pages.spec.ts` gates the form before one exists and says why. The fix
+  belongs in the `xui-table` primitives, not in this page.
+- **The access page doesn't say a closer end needs a minute's notice.** The `400` the platform answers
+  carries the reason, and the page shows it as the call's failure; the hint beside the field doesn't
+  mention it.
+- **The rest of master's `e21006d` "reformat".** It turned `RoleAssignmentService.ListAsync`'s
+  resume filter into a second `OrderBy`, which #49 found through a red test and restored. Nothing
+  else in that commit has been audited for the same kind of change.
+- **Delegation**, the other half of § Effort and sequencing's row, is not touched.
+
 ## The enforcement seam
 
 Exactly one place in the request path calls the engine:
@@ -672,6 +889,9 @@ scattered across twenty providers is twenty places to get it wrong and one place
 | Leopard membership index + rebuilder | 1.2 | M2 |
 | Time-bounded relations (JIT roles), delegation | 0.4 | M3 |
 | **Total** | **4.7** | |
+
+⚠ The time-bounded half of the M3 row landed with issue #49 — § Time-bounded relations says what, and
+what of it is owed. Delegation has not.
 
 M1 ships without the index and without `ListObjects`, and that is viable because M1 tenants are small:
 a walk at depth ≤ 4 over ≤ 100 members is single-digit milliseconds. The index is scheduled for M2

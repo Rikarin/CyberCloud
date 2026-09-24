@@ -124,6 +124,17 @@ segment most needs. The listing is one `read` check on the scope and no per-row 
 collection and is still right. And a grant now checks the principal against the directory — the same
 section — so a `PUT` naming a user this tenant does not have is a `400`, not a tuple.
 
+**A grant can end on its own (issue #49):** a `PUT` body may carry `expiresOn` beside the other three, an
+ISO 8601 instant with an offset and later than now, and every rendered assignment carries
+`properties.expiresOn` — the instant in UTC, or `null` for a permanent grant — so a `GET` sent back as
+a `PUT` sets the same end. A `PUT` without it makes the assignment permanent: the body states the
+whole assignment. From the instant it passes, the assignment is a `404` on `GET`, missing from the
+collection, and denied by every check, before any sweep has run; [07](07-rebac-authorization.md)
+§ Time-bounded relations is where the rest lives. That holds for an end a later `PUT` brought closer,
+too, for an answer a check cached while the grant ran longer. ⚠ Such an end has to be at least a
+minute away, or the `PUT` is a `400`: a grant that must end sooner is revoked, and a revoke is
+07 § Consistency's `MinimizeLatency` question, not this one.
+
 ⚠ **The role assignment API is not in the generated document, and that is #63's question asked a
 third time.** The reserved namespace is exactly what keeps it out of the registry the emitters read,
 and the scope extension #63 added carries a scope, not an address *on* one. So `cyc` and the SDK are

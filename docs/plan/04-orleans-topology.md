@@ -280,8 +280,8 @@ here rather than rewritten so the original argument stays readable.
 
 ## Reminders
 
-Redis reminder service, sharded with the hot tier. Reminders are used for exactly five things — four
-as first written, and a fifth since 2026-09-15 (#32):
+Redis reminder service, sharded with the hot tier. Reminders are used for exactly six things — four
+as first written, a fifth since 2026-09-15 (#32), and a sixth since #49:
 
 ⚠ **This is wired in `OrleansApplication.CreateSilo`, beside the two storage tiers, and it was not
 wired at all until the resource manager was composed.** It reads the hot tier's own connection string —
@@ -317,6 +317,16 @@ key cluster-wide, so one operation grain drives one resource however many silos 
    Orleans' response timeout — `IAlertEvaluatorGrain`'s remarks carry the arithmetic. The rules are
    armed off the grain's own durable state, the way the orphan reaper is, and disarmed when the last
    enabled rule goes.
+6. **Expired-tuple sweep** — one reminder per *tenant*, `sweep-expired-tuples` on `TupleStoreGrain`,
+   every five minutes while the tenant's tuple store has a tuple written with an expiry or a
+   journalled write still unfinished ([07 § Time-bounded relations](07-rebac-authorization.md)).
+   Each tick replays the journal, deletes the tuples whose expiry has passed, and writes the audit
+   event for each end; the grain disarms when both are empty. ⚠ Per tenant and not per tuple, and
+   armed off "there is something to sweep" rather than off a deadline: a due time equal to an expiry
+   would be a second durable copy of it, and the count that scales is tenants using just-in-time
+   roles, not grants. ⚠ The grants still scale something: the register the tick walks is a list in
+   the tenant's one `TupleStoreState` row, rewritten on every tuple write, so a tenant's live
+   just-in-time grants are a row size and a per-write cost. 07's owed list says when that matters.
 
 ⚠ **Reminder count is a real scaling number and it is easy to get wrong.** One reminder per resource
 at hourly drift detection, with 5 000 000 resources, is ~1 400 reminder firings per second across the

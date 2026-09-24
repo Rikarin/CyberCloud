@@ -1313,7 +1313,13 @@ rather than description.** What landed is `CyberCloud.ResourceGraph`, one module
   direction (given a subject, which objects); filling one row from it would mean running it for
   every subject in the tenant. `ProjectionRoundTripTests.ACreatedEventBecomesTheRowWithItsColumnsAndItsReaders`
   writes the three tuples a real create leaves and reads back an inherited owner and a direct
-  userset, and not the user who was granted nothing.
+  userset, and not the user who was granted nothing. ⚠ **A time-bounded assignment (#49) is left
+  out of the column**, because the column has no clock and is recomputed on a resource change and on
+  nothing else: an expiring grant written into it would keep the resource in its holder's graph query
+  long after every check had started denying. The miss is the safe direction, and carrying the expiry
+  into the row is owed ([07 § Time-bounded relations](07-rebac-authorization.md));
+  `ProjectionRoundTripTests.AJustInTimeReaderIsLeftOutOfTheAccessColumnBecauseTheColumnHasNoClock`
+  pins it.
 - **The configuration is `CyberCloud:ResourceGraph`, and Aspire's `ConnectionStrings:nats` fills
   the NATS half.** A gateway with a NATS URL publishes; a silo with a NATS URL and a ClickHouse
   endpoint projects; either without stays on `LoggingResourceChangedSink`, which is the shape every

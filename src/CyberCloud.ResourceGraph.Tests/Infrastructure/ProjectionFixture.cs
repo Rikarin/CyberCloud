@@ -174,9 +174,10 @@ public sealed class ProjectionFixture : IAsyncLifetime {
     /// <summary>Writes one tuple through the tenant's tuple store, the way the write path does.</summary>
     /// <param name="tenant">The tenant.</param>
     /// <param name="tuple">The tuple, spelled <c>type:id#relation@subject</c>.</param>
-    public async Task GrantAsync(Guid tenant, string tuple) {
+    /// <param name="expiresOn">When the grant ends, or <see langword="null" /> for a permanent one.</param>
+    public async Task GrantAsync(Guid tenant, string tuple, DateTimeOffset? expiresOn = null) {
         var store = For(tenant).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant));
-        var written = await store.WriteAsync(RelationTuple.Parse(tuple).GetValueOrThrow());
+        var written = await store.WriteAsync(RelationTuple.Parse(tuple).GetValueOrThrow() with { ExpiresOn = expiresOn });
         written.IsSuccess.ShouldBeTrue(written.Error?.Message);
     }
 
