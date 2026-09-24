@@ -101,6 +101,52 @@ public sealed record UserProfile {
     /// <summary>How many recovery codes are still unburnt. Zero is worth a prompt.</summary>
     [Id(7)]
     public int RemainingRecoveryCodes { get; init; }
+
+    /// <summary>
+    ///     The account this member signs in through, when they joined with an account they already
+    ///     had in another tenant; <see langword="null" /> for a member with credentials of their own.
+    ///     Issue #43.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Set once, by <c>IUserGrain.JoinWithHomeAccountAsync</c>, and never from a request body.
+    ///     A member with one enrolls nothing here: <see cref="EnrolledCredentials" /> is empty, and
+    ///     the identity host opens their sessions from a complete, live sign-in of the home account
+    ///     — <see cref="HomeAccount" />'s remarks.
+    /// </remarks>
+    [Id(8)]
+    public HomeAccount? HomeAccount { get; init; }
+}
+
+/// <summary>
+///     The account a person already had — a user in another tenant — that they joined this tenant
+///     with. docs/plan/11 § Sign-up and tenant creation, the invited path; issue #43.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Two users still, and one sign-in.</b> A user belongs to exactly one tenant, so
+///         joining with an existing account still makes a second user object here, with its own id,
+///         its own tuples and its own sessions. What it doesn't get is credentials: the person signs
+///         into the home tenant as they always have, and the identity host opens a session for the
+///         member here from that sign-in. So an owner here suspends or removes the member as any
+///         other, and the home tenant's own decisions — a suspension, a password change, a sign-out
+///         — decide whether the next session here can be opened.
+///     </para>
+///     <para>
+///         ⚠ <b>No global index.</b> The member is found from the home account through this
+///         tenant's own email index, keyed by the home account's address, and then this record has
+///         to name the home account exactly. Nothing maps a home account to the tenants it joined.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.Identity.HomeAccount")]
+public sealed record HomeAccount {
+    /// <summary>The home account's tenant. Never the member's own.</summary>
+    [Id(0)]
+    public Guid TenantId { get; init; }
+
+    /// <summary>The home account's user id, in <see cref="TenantId" />.</summary>
+    [Id(1)]
+    public Guid UserId { get; init; }
 }
 
 /// <summary>
@@ -587,8 +633,11 @@ public sealed record SignInOutcome {
 ///     audited and revoked in one place. ⚠ <c>[Id(3)]</c> is retired, not free: v0.1.0 published this
 ///     type with <c>Relation</c> at 3 (<c>build/wire/v0.1.0.txt</c>), so a v0.1.0 peer reads that id
 ///     as a string and a new member there would be misread. Dropping it is legal — the Wire
-///     compatibility gate allows a removed member, and a peer skips a field it doesn't know — and it
-///     costs no data, because nothing produced an <see cref="Invitation" /> before
+///     compatibility gate's rule allows a removed member, and a peer skips a field it doesn't know —
+///     but ⚠ that gate compares against <c>build/wire/v0.1.0.txt</c> only once <c>git tag</c> names
+///     v0.1.0, and until then it's vacuous. So the number is held empty by
+///     <c>IdentitySerializationTests.TheInvitationsRetiredRelationNumberIsNeverReused</c>, not by the
+///     gate. Dropping it costs no data, because nothing produced an <see cref="Invitation" /> before
 ///     <see cref="IInvitationGrain" /> (#43): no grain state, stream or call ever carried one. That is
 ///     a different argument from the free window the top of this file describes, which closed with
 ///     the v0.1.0 tag (<c>build/wire/burned.txt</c>).

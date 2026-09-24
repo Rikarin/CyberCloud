@@ -18,7 +18,9 @@ namespace CyberCloud.Identity.Contracts;
 ///         user in <see cref="UserStatus.Invited" />, records the invitation and mails the link
 ///         through <see cref="IInvitationDeliverySeam" />; <see cref="AcceptAsync" /> spends the
 ///         link and hands the name and password to <see cref="IUserGrain.AcceptInvitationAsync" />,
-///         which makes the user <see cref="UserStatus.Active" />. Every one of those is a grain in the same tenant, so
+///         which makes the user <see cref="UserStatus.Active" />, and
+///         <see cref="AcceptWithHomeAccountAsync" /> does the same with an account the person already
+///         has elsewhere in place of the password. Every one of those is a grain in the same tenant, so
 ///         none of them crosses the separation the platform keeps between tenants — and the one
 ///         step that is not here is the <b>check</b>: who may invite is the resource manager's
 ///         question (<c>IInvitationManager</c>, <c>assignRole</c> on the tenant), asked before this
@@ -117,6 +119,20 @@ public interface IInvitationGrain : IGrainWithStringKey {
     ///     the user grain refuses, with the link left unspent so the person can try again.
     /// </returns>
     Task<Result<Invitation>> AcceptAsync(string secret, string displayName, string password);
+
+    /// <summary>
+    ///     Accepts the invitation for a person who already has an account in another tenant: spends
+    ///     the link, then makes the invited user an active member who signs in through that account.
+    /// </summary>
+    /// <param name="secret">The secret from the link.</param>
+    /// <param name="displayName">The home account's name.</param>
+    /// <param name="home">
+    ///     The home account. ⚠ The caller has checked it — a complete, live sign-in, with the
+    ///     invited address — and <see cref="IUserGrain.JoinWithHomeAccountAsync" /> says why this
+    ///     tenant's grains can't.
+    /// </param>
+    /// <returns>The same answers as <see cref="AcceptAsync" />, with a refused home account in place of a refused password.</returns>
+    Task<Result<Invitation>> AcceptWithHomeAccountAsync(string secret, string displayName, HomeAccount home);
 
     /// <summary>The invitation as it stands, for its sender and for a test.</summary>
     Task<Result<Invitation>> GetAsync();

@@ -227,7 +227,12 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
 
         // An empty base means the host's own origin: a same-origin path, which is what the
         // production layout serves.
-        new AuthorizeApi(fixture.Grains, Options.Create(new IdentityHostOptions()), NullLogger<AuthorizeApi>.Instance)
+        new AuthorizeApi(
+                fixture.Grains,
+                Options.Create(new IdentityHostOptions()),
+                fixture.Services.GetRequiredService<HomeAccounts>(),
+                NullLogger<AuthorizeApi>.Instance
+            )
             .SignInLocation("/authorize?state=s")
             .ShouldBe("/signin?returnUrl=" + Uri.EscapeDataString("/authorize?state=s"));
     }
@@ -337,7 +342,7 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
             cookie,
             path,
             ConsentDecision.Deny,
-            Ct
+            cancellationToken: Ct
         );
 
         denied.ShouldBeOfType<AuthorizeDecision.Refuse>().Error.ShouldBe(OpenIddictConstants.Errors.AccessDenied);
@@ -354,7 +359,7 @@ public sealed class AuthorizeHandlerTests(IdentityHostFixture fixture) {
             cookie,
             path,
             ConsentDecision.Allow,
-            Ct
+            cancellationToken: Ct
         );
 
         allowed.ShouldBeOfType<AuthorizeDecision.IssueCode>().Principal.GetPresenters().ShouldBe([clientId]);

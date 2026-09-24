@@ -456,6 +456,10 @@ public sealed class FakeUserGrain : IUserGrain {
         throw OffPath(nameof(AcceptInvitationAsync));
 
     /// <inheritdoc />
+    public Task<Result<UserProfile>> JoinWithHomeAccountAsync(string displayName, HomeAccount home) =>
+        throw OffPath(nameof(JoinWithHomeAccountAsync));
+
+    /// <inheritdoc />
     public Task<Result<bool>> VerifyPasswordAsync(string candidate) => throw OffPath(nameof(VerifyPasswordAsync));
 
     /// <inheritdoc />

@@ -390,22 +390,35 @@ in the grain is its seed.
 **Invited.** An existing tenant owner invites an email into their tenant ~~with a role~~. The invitee
 either signs in (if they already have a user in *another* tenant — see below) or signs up.
 
-⚠ **What shipped with #43, and the two places it departs from that sentence.** An owner `POST`s
+⚠ **What shipped with #43, and the one place it departs from that sentence.** An owner `POST`s
 `{ "email" }` to `/tenants/{t}/providers/CyberCloud.Identity/invitations` at the gateway;
 `InvitationService` in the resource manager checks `assignRole` on the tenant, fully consistent, and
 `IInvitationGrain` (durable, `invite/{id:N}`) claims the address in the tenant's email index, creates
 the user in `Invited`, keeps the SHA-256 of a 256-bit secret and mails a seven-day link —
 `{identity app}/invitation?tenant=…&invitation=…&token=…` — through the platform's own communication
 service (`CommunicationInvitationDelivery`, a template in code, and a refusing seam on a silo with no
-route). The identity app's invitation page describes the link and accepts it: the person chooses a
-name and a password, the link is spent (a second use is told it was used), the user becomes
-`Active`, and they are signed in with a session stamped password + delivered code, because the link
-went to the address and nowhere else. (1) **No role.** The invitation makes a member; what they may
-do is a role assignment — the existing `PUT …/roleAssignments/{name}`, which `GrainPrincipalDirectory`
-now answers for the invited user — so a role is granted, audited and revoked in one place.
-(2) **"Signs in" is not what an existing person does.** Under the one-user-one-tenant rule below, a
-colleague who already has an account elsewhere is still a new user *here*: the same page asks them
-for a name and a password for this organisation and leaves the other account untouched. Re-inviting
+route). The identity app's invitation page describes the link and accepts it in one of the two ways
+the sentence above names. **Signs up:** the person chooses a name and a password, the link is spent
+(a second use is told it was used), the user becomes `Active`, and they are signed in with a session
+stamped password + delivered code, because the link went to the address and nowhere else. **Signs
+in:** the page sends a person who already uses Cyber Cloud to the ordinary sign-in page for their
+own organisation, with the invitation page as the return URL (the sign-in page reads `tenant` only
+off an `/authorize` return URL, so the link's tenant doesn't hijack it). Back on the page, a complete,
+live sign-in whose address is the invited one is offered "join with this account", and accepting
+that way (`IInvitationGrain.AcceptWithHomeAccountAsync`, from the page's origin only) makes the
+invited user `Active` with the home account's name, no credential of its own, and a
+`UserProfile.HomeAccount` naming the account it joined with. That is still two users — the rule
+below holds — and one sign-in: `/authorize` for the member's tenant, with the home account's cookie,
+finds the member through that tenant's own email index, requires its `HomeAccount` to name exactly
+the cookie's user, and opens the member's session there with the home sign-in's `amr` and
+`auth_time` (`HomeAccounts`). The cookie stays the home account's. No global index, and no credential
+shared between two users: the second proof is a sign-in the home tenant already checks. ⚠ The home
+tenant decides whether a session *opens* here — a suspension or a sign-out-everywhere there ends the
+next one — and this tenant decides whether it *lasts*, as it would for any member. A deprovision here
+drops the link with the other credentials. (1) **No role — the departure.** The invitation makes a
+member; what they may do is a role assignment — the existing `PUT …/roleAssignments/{name}`, which
+`GrainPrincipalDirectory` now answers for the invited user — so a role is granted, audited and
+revoked in one place. Re-inviting
 an address whose user is still `Invited` reuses that user, which is how an expired link is replaced;
 inviting a member is a conflict. ⚠ So two links can name one user, and a link outlives a suspension
 or a deprovision of the person it names: a link opens an `Invited` user and nothing else. Once the
@@ -423,17 +436,16 @@ expired one counts: `withdrawn` wins over `expired`, so an invitation that expir
 was removed, or before they joined through another link, reads `withdrawn` and isn't mailed again.
 The first cut asked the user only about a pending invitation, and #41's review traced a fresh link
 mailed to a removed member (`InvitationExpiryTests`). One invitation is mailed at most
-`InvitationPolicy.MaxSendings` (5) times, then the resend is `429 QuotaExceeded`. ⚠ (2) stands as a departure rather than a gap: signing in as the account
-elsewhere would need that account found by address across tenants (the global index this section
-rules out) or a credential shared between two users (`IUserGrain` hands out no hash, by design), and
-cross-tenant identity is the M3 question below. `InvitationThroughTheGatewayTests` (the `POST` through
-the real gateway with a device-flow token), `InvitationsOverHttpTests` (Mailpit) and
-`CyberCloud.Isolation § InvitationTests` pin it. ⚠ **Owed:** a registered Communication template in place of the
+`InvitationPolicy.MaxSendings` (5) times, then the resend is `429 QuotaExceeded`. The first cut shipped the signs-up half only and recorded "signs in" as a departure; the second review of #43 held that it was an asked-for path missing, and it is the path above. `InvitationThroughTheGatewayTests` (the `POST` through the real gateway with a device-flow
+token, then the owner's `PUT` of Reader on one group and the member's read of it over HTTP),
+`InvitationsOverHttpTests` (Mailpit, both halves, and the refusals: another origin, another address,
+a suspended home account), `IdentityHostInItsOwnProcessTests` (the join across a real process
+boundary) and `CyberCloud.Isolation § InvitationTests` pin it. ⚠ **Owed:** a registered Communication template in place of the
 code template ([17 § The outbound carrier](17-communication-and-email.md)); a passkey at acceptance
 (the page takes a password, the sign-up page's passkey ceremony is not reused yet); an idempotency
 key the sender supplies, so a retried `POST` resumes one invitation rather than making a second; a
 per-tenant rate on invitation mail (the per-invitation count bounds a resend, and nothing but the
-invitation list's cap bounds revoking and inviting again); and the welcome mail, which is still [§ the owed paragraph above](#sign-up-and-tenant-creation)'s.
+invitation list's cap bounds revoking and inviting again); the welcome mail, which is still [§ the owed paragraph above](#sign-up-and-tenant-creation)'s; a way back in for a member whose home account is gone (deprovisioned there, they have no credential here and inviting them again is a conflict); the sign-in page offering "continue with the account you're signed in with" by name, which today only `/authorize` does, silently; and a member reading what was granted after a denial was cached — the check cache keeps a denial under `MinimizeLatency` with no TTL, so a colleague who looked before their Reader grant goes on reading `404` until something carries the grant's token ([07 § Consistency](07-rebac-authorization.md#consistency)), which nothing in the gateway does yet.
 ~~Listing and revoking pending invitations~~ and ~~the portal page that sends one~~ landed with #41's
 identity administration pages — [20 § The pages that are not generated](20-portal.md) and the
 administration API below.
@@ -468,7 +480,9 @@ generated OpenAPI document — the reserved namespace keeps it out of the regist
 ⚠ **A user belongs to exactly one tenant.** The same human with accounts in two tenants has two user
 objects with two GUIDs and (probably) the same email. This is Azure's guest-user problem and Azure's
 answer (B2B guests) is complicated. The M1 answer is the simple one: one user, one tenant, and the
-portal's account switcher is a client-side list of tokens. Revisit at M3 if customers actually ask;
+portal's account switcher is a client-side list of tokens. A member who joined with an account
+elsewhere is still a second user; `UserProfile.HomeAccount` says which sign-in opens it, and nothing
+maps a home account to the tenants it joined. Revisit at M3 if customers actually ask;
 committing to cross-tenant identity in M1 would put a global user index on the hot path, which
 [05](05-state-and-storage.md) is specifically arranged to avoid.
 

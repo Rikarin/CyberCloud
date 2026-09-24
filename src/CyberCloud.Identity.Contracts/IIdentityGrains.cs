@@ -94,6 +94,36 @@ public interface IUserGrain : IGrainWithStringKey {
     /// </remarks>
     Task<Result<UserProfile>> AcceptInvitationAsync(string displayName, string password);
 
+    /// <summary>
+    ///     Makes an invited user a member who signs in through an account they already have in
+    ///     another tenant: sets the name and <see cref="UserProfile.HomeAccount" /> and moves them to
+    ///     <see cref="UserStatus.Active" />, in one turn and only from <see cref="UserStatus.Invited" />.
+    ///     Issue #43, step 7.
+    /// </summary>
+    /// <param name="displayName">The name, trimmed — the home account's, as the host read it.</param>
+    /// <param name="home">The account in the other tenant. ⚠ Checked by the caller, not here — see the remarks.</param>
+    /// <returns>
+    ///     The member's profile; <see cref="ErrorCode.InvalidRequestBody" /> for a name that is
+    ///     refused, or a home account that is empty or in this tenant;
+    ///     <see cref="ErrorCode.PreconditionFailed" /> for a user who isn't
+    ///     <see cref="UserStatus.Invited" />, with nothing changed.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>No credential is set.</b> The member's only way in is a sign-in of the home
+    ///         account, so a password here would be a second credential nobody chose.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>This grain can't check the home account, and the identity host does.</b> The
+    ///         home account is in another tenant, and a grain call across tenants is what the
+    ///         tenant separator refuses. The host is an Orleans client outside that filter, and it
+    ///         links only the account behind a complete, live sign-in whose address is the invited
+    ///         one — <c>InvitationApi</c>'s remarks. The same single-turn status check as
+    ///         <see cref="AcceptInvitationAsync" /> applies, for its reason.
+    ///     </para>
+    /// </remarks>
+    Task<Result<UserProfile>> JoinWithHomeAccountAsync(string displayName, HomeAccount home);
+
     // ── Credentials ────────────────────────────────────────────────────────────────────────────
 
     /// <summary>

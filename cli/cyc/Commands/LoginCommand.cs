@@ -1,6 +1,7 @@
 using CyberCloud.Cli.Execution;
 using CyberCloud.Cli.Output;
 using CyberCloud.Cli.VerbTree;
+using System.Buffers.Text;
 using System.CommandLine;
 using System.Security.Cryptography.X509Certificates;
 
@@ -33,6 +34,15 @@ namespace CyberCloud.Cli.Commands;
 ///         owner-only file in the per-user state directory (<c>FileTokenCache</c>, #43), and the
 ///         command says which. <c>NoCredentialLeakTests.NoTokenCacheIsWrittenByTheCli</c> signs in
 ///         against a scripted identity server and asserts the CLI's own state directory is untouched.
+///     </para>
+///     <para>
+///         ⚠ <b>The tenant it reports is the token's, not the flag's.</b> A person signing in picks
+///         the organisation on the sign-in page: the device authorization request carries no tenant
+///         (RFC 8628 has no parameter for one, and the identity host reads none there), and a cached
+///         sign-in is refreshed for whatever tenant it was for. So <c>--tenant</c> is a hint the
+///         browser flow sends and the device flow can't, and the report reads <c>tid</c> off the
+///         access token it got. The review of #43 found <c>cyc login --device-code --tenant X</c>
+///         printing <c>tenant: X</c> for a token in another tenant.
 ///     </para>
 /// </remarks>
 static class LoginCommand {
@@ -86,6 +96,12 @@ static class LoginCommand {
                     )
                     : Interactive(invocation, parse.GetValue(deviceCode));
 
+                if (credential is DeviceCodeCredential && !string.IsNullOrEmpty(parse.GetValue(tenant))) {
+                    invocation.Console.Note(
+                        "--tenant is not sent with a device sign-in: choose the organisation on the sign-in page."
+                    );
+                }
+
                 try {
                     var token = await AuthenticateAsync(
                         invocation,
@@ -104,12 +120,17 @@ static class LoginCommand {
                         );
                     }
 
+                    // ⚠ The token's tenant — the type's remarks. A service principal's token names
+                    // one too, and when a token can't be read the flag is reported only for the one
+                    // grant that sends it to the token endpoint.
+                    var signedInto = TenantOf(token.Token) ?? (parse.GetValue(servicePrincipal) ? tenantId : null);
+
                     invocation.Render(
                         Payload.Object(
                             [
                                 new KeyValuePair<string, Payload>(
                                     "tenant",
-                                    tenantId is null ? Payload.Null : Payload.Text(tenantId)
+                                    signedInto is null ? Payload.Null : Payload.Text(signedInto)
                                 ),
                                 new KeyValuePair<string, Payload>(
                                     "authority",
@@ -287,6 +308,36 @@ static class LoginCommand {
             + "secret in CYC_CLIENT_SECRET. ⚠ cyc does not accept a secret as an argument — an argument "
             + "is in the shell history, in ps output and in every CI log that echoes its command line."
         );
+    }
+
+    /// <summary>
+    ///     The <c>tid</c> claim of an access token, or <see langword="null" /> for a token that isn't a
+    ///     JWT or names no tenant.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Read, not validated. The token came from the authority over TLS a moment ago and this is
+    ///     a report to the person who asked for it; nothing is authorized on what it says. The
+    ///     gateway validates the same token on every call.
+    /// </remarks>
+    internal static string? TenantOf(string accessToken) {
+        var parts = accessToken.Split('.');
+
+        if (parts.Length != 3) {
+            return null;
+        }
+
+        try {
+            using var payload = JsonDocument.Parse(Base64Url.DecodeFromChars(parts[1]));
+
+            return payload.RootElement.ValueKind == JsonValueKind.Object
+                && payload.RootElement.TryGetProperty("tid", out var tid)
+                && tid.ValueKind == JsonValueKind.String
+                && tid.GetString() is { Length: > 0 } value
+                    ? value
+                    : null;
+        } catch (Exception e) when (e is FormatException or JsonException) {
+            return null;
+        }
     }
 
     /// <summary>The identity host — <c>CYC_AUTHORITY_HOST</c>, the profile's <c>authority</c>, or the SDK's default.</summary>

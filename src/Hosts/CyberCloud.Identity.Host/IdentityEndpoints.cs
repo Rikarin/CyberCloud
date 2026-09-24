@@ -322,6 +322,7 @@ public static class IdentityEndpoints {
                     context.User,
                     pathAndQuery,
                     ConsentAnswer(context, request, options.Value),
+                    Describe(context),
                     cancellationToken
                 );
 
@@ -511,16 +512,31 @@ public static class IdentityEndpoints {
     /// </summary>
     /// <param name="app">The host's route builder.</param>
     /// <remarks>
-    ///     Both in the <c>code-verify</c> bucket: the link's secret is a code a caller could guess
-    ///     at, and the rule is every route that takes one. Anonymous, because the person accepting
-    ///     has no session here yet — the accept issues it, through the cookie handler like every
-    ///     other sign-in (<see cref="IssueAsync" />'s remarks).
+    ///     <para>
+    ///         Both in the <c>code-verify</c> bucket: the link's secret is a code a caller could guess
+    ///         at, and the rule is every route that takes one. Anonymous, because the person accepting
+    ///         as somebody new has no session here yet — the accept issues it, through the cookie
+    ///         handler like every other sign-in (<see cref="IssueAsync" />'s remarks).
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Both read the cookie, and only the accept acts on it — from the page's origin
+    ///         only.</b> The description says whose account this browser is signed into, so the page
+    ///         can offer to join with it; the accept that joins with it is the device answer's shape
+    ///         (<see cref="IsFromThePage" />), because a cross-site <c>POST</c> carrying the person's
+    ///         cookie and a link somebody forwarded them would otherwise make the person a member of an
+    ///         organisation they never saw the page for. From anywhere else it is answered "sign in
+    ///         first" and spends nothing.
+    ///     </para>
     /// </remarks>
     static void MapInvitationPage(IEndpointRouteBuilder app) {
         app.MapPost(
             "/api/invitations/describe",
-            async (InvitationLookupRequest? request, InvitationApi api, CancellationToken cancellationToken) =>
-                Results.Ok(await api.DescribeAsync(request, cancellationToken))
+            async (
+                InvitationLookupRequest? request,
+                HttpContext context,
+                InvitationApi api,
+                CancellationToken cancellationToken
+            ) => Results.Ok(await api.DescribeAsync(request, context.User, cancellationToken))
         )
             .RateLimited(IdentityRateLimits.CodeVerify);
 
@@ -530,9 +546,15 @@ public static class IdentityEndpoints {
                 InvitationAcceptRequest? request,
                 HttpContext context,
                 InvitationApi api,
+                IOptions<IdentityHostOptions> options,
                 CancellationToken cancellationToken
             ) => {
-                var result = await api.AcceptAsync(request, Describe(context), cancellationToken);
+                var result = await api.AcceptAsync(
+                    request,
+                    Describe(context),
+                    IsFromThePage(context, options.Value) ? context.User : null,
+                    cancellationToken
+                );
 
                 if (result.Principal is { } principal) {
                     await context.SignInAsync(IdentityHostAuthentication.SchemeName, principal);

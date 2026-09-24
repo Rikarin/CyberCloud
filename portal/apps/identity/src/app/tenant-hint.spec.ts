@@ -125,5 +125,13 @@ describe('the tenant hint', () => {
       expect(tenantOf('/authorize?tenant=%20')).toBeNull();
       expect(tenantOf('/')).toBeNull();
     });
+
+    it('reads the tenant off an /authorize request only', () => {
+      // ⚠ The invitation page's link names the organisation being joined, not the one the person is
+      // about to sign into with the account they already have (#43).
+      expect(tenantOf('/invitation?tenant=contoso&invitation=i&token=t')).toBeNull();
+      expect(tenantOf('/device-code?user_code=BCDF-GHJK&tenant=contoso')).toBeNull();
+      expect(tenantOf('/authorize/else?tenant=contoso')).toBeNull();
+    });
   });
 });
