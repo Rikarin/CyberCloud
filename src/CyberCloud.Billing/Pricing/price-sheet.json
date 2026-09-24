@@ -5,7 +5,7 @@
     "⚠ A version whose effectiveFrom has passed is never edited: a price change is a NEW version with a later date. PriceSheetTests.NoVersionInForceHasBeenEdited pins every version in force by hash.",
     "Every BillingMeter is priced in every version, at zero if it is free; an unpriced meter would be usage nobody is charged for.",
     "Tiers are per subscription, per meter, per calendar month; upTo is the cumulative monthly quantity a tier ends at, and the last tier has none. A first tier at 0.0 is the meter's monthly free tier.",
-    "StorageGbMonths and BackupGbMonths are rated on the DECLARED size — docs/plan/22 § What is owed, storage-is-declared-not-observed."
+    "StorageGbMonths is rated on the DECLARED size — docs/plan/22 § What is owed, storage-is-declared-not-observed. BackupGbMonths is whatever the provider that emits it measured."
   ],
   "versions": [
     {

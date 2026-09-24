@@ -78,6 +78,71 @@ public sealed class CostVisibilityTests(BillingCluster cluster) {
         devUsedTooDaily.Filtered.ShouldBe(onlyProdUsedDaily.Filtered, "a daily answer's flag that moved with dev's usage would draw it day by day");
     }
 
+    /// <summary>
+    ///     ⚠ The review's finding: tiers are climbed per subscription, so prod's 80 GiB of egress cost
+    ///     nothing when prod used the meter first and 3.00 € when dev had used 80 GiB before it. A reader
+    ///     of prod dividing the amount by the quantity learned how much dev used. Priced alone, bob's
+    ///     answer is the same whether dev used anything or not; alice, who may read the subscription,
+    ///     still sees the invoice's allocation.
+    /// </summary>
+    [Fact]
+    public async Task AGroupReadersFiguresDoNotMoveWithAnotherGroupsUsage() {
+        var quiet = await EgressWorldAsync(devFirst: 0m);
+        var busy = await EgressWorldAsync(devFirst: 80m);
+
+        foreach (var world in new[] { quiet, busy }) {
+            await world.GrantGroupAsync("prod", "bob");
+            await world.GrantSubscriptionAsync("alice");
+        }
+
+        var bobQuiet = (await quiet.QueryAsync("bob", CostGrouping.Meter)).GetValueOrThrow();
+        var bobBusy = (await busy.QueryAsync("bob", CostGrouping.Meter)).GetValueOrThrow();
+        var bobDayByDay = (await busy.QueryAsync("bob", CostGrouping.Meter, from: August, to: August.AddDays(1))).GetValueOrThrow();
+        var bobOwnGroup = (await busy.QueryAsync("bob", CostGrouping.Meter, group: "prod")).GetValueOrThrow();
+
+        bobBusy.Rows.ShouldBe(bobQuiet.Rows, "dev's 80 GiB must not move a single figure bob sees");
+        bobBusy.Total.ShouldBe(bobQuiet.Total);
+        bobBusy.Rows.ShouldHaveSingleItem().Quantity.ShouldBe(80m);
+        bobBusy.Rows.Single().Amount.ShouldBe(0m, "prod's 80 GiB, priced alone, are inside the 100 GiB free tier");
+        bobDayByDay.Rows.ShouldBe(bobBusy.Rows, "the period asked for doesn't change whose hours climb the ladder");
+        bobOwnGroup.Rows.ShouldBe(bobBusy.Rows);
+        bobBusy.PricedAlone.ShouldBeTrue();
+        bobOwnGroup.PricedAlone.ShouldBeTrue("bob reads all of prod and still not the subscription's ladder");
+        bobOwnGroup.Filtered.ShouldBeFalse();
+
+        var alice = (await busy.QueryAsync("alice", CostGrouping.ResourceGroup)).GetValueOrThrow();
+        alice.PricedAlone.ShouldBeFalse();
+        alice.Rows.Single(static x => x.Name == "prod").Amount.ShouldBe(60m * 0.050m, "dev took 80 of the 100 free GiB first");
+        alice.Rows.Single(static x => x.Name == "dev").Amount.ShouldBe(0m);
+    }
+
+    /// <summary>
+    ///     ⚠ The review's finding: a rating failure was returned before the 404 was decided, so a caller
+    ///     who may read nothing got a 500 naming another group's resource and meter — and learned the
+    ///     subscription exists. The 404 is decided first, and a partial reader's hours are priced alone,
+    ///     so dev's broken correction is nothing bob's answer can fail on.
+    /// </summary>
+    [Fact]
+    public async Task ABrokenCorrectionInOneGroupTellsAStrangerNothingAndDoesNotFailAnotherGroupsReader() {
+        var world = await WorldAsync();
+        var devHour = (await cluster.Ledger(world.Tenant, world.Subscription).ListAsync()).GetValueOrThrow().First(x => x.ResourceId == world.DevResource);
+        (await cluster.Ledger(world.Tenant, world.Subscription).AppendCorrectionAsync(devHour.EntryId, -5m, "a correction that is itself wrong"))
+            .IsSuccess.ShouldBeTrue();
+
+        await world.GrantSubscriptionAsync("alice");
+        await world.GrantGroupAsync("prod", "bob");
+
+        var stranger = await world.QueryAsync("mallory", CostGrouping.Day);
+        var bob = await world.QueryAsync("bob", CostGrouping.Resource);
+        var alice = await world.QueryAsync("alice", CostGrouping.Resource);
+
+        stranger.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+        stranger.Error.Message.ShouldBe($"'/tenants/{world.Tenant:D}/subscriptions/{world.Subscription:D}' does not exist.");
+        bob.GetValueOrThrow().Rows.ShouldHaveSingleItem().Name.ShouldBe(world.Prod);
+        alice.Error!.Code.ShouldBe(ErrorCode.InternalError, "alice may read dev, so the failure is hers to see");
+        alice.Error.Message.ShouldContain(world.DevResource.ToString("D"));
+    }
+
     [Fact]
     public async Task AReaderOfOneResourceSeesThatResourceOnly() {
         var world = await WorldAsync();
@@ -218,6 +283,25 @@ public sealed class CostVisibilityTests(BillingCluster cluster) {
         await cluster.UseHoursAsync(tenant, subscription, prodResource, prod, BillingMeter.VCpuHours, August, 25, 4m);
         // 62.5 IP-hours at 0.004 = 0.25, over fifty hours from the 2nd.
         await cluster.UseHoursAsync(tenant, subscription, devResource, dev, BillingMeter.PublicIpHours, August.AddDays(1), 50, 1.25m);
+
+        return new(cluster, tenant, subscription, prod, dev, devResource);
+    }
+
+    /// <summary>
+    ///     A subscription whose <c>prod</c> sends 80 GiB of egress at 02:00 on the 1st, after <c>dev</c>
+    ///     sent <paramref name="devFirst" /> GiB at 01:00. The first 100 GiB of a month are free.
+    /// </summary>
+    async Task<World> EgressWorldAsync(decimal devFirst) {
+        var (tenant, subscription) = await cluster.NewSubscriptionAsync("prod", "dev");
+        var devResource = Guid.NewGuid();
+        var prod = BillingCluster.PathOf(tenant, subscription, "prod", "gateway", "CyberCloud.Network/publicIpAddresses");
+        var dev = BillingCluster.PathOf(tenant, subscription, "dev", "gateway", "CyberCloud.Network/publicIpAddresses");
+
+        if (devFirst > 0) {
+            await cluster.UseAsync(tenant, subscription, devResource, dev, BillingMeter.EgressGb, August.AddHours(1), devFirst);
+        }
+
+        await cluster.UseAsync(tenant, subscription, Guid.NewGuid(), prod, BillingMeter.EgressGb, August.AddHours(2), 80m);
 
         return new(cluster, tenant, subscription, prod, dev, devResource);
     }

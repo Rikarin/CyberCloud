@@ -175,12 +175,16 @@ public interface IInvoiceNumberingGrain : IGrainWithStringKey {
     ///     first attempt was given. The same key answers the same number until the document confirms;
     ///     after that the account answers a retry from its own state and never asks again.
     /// </param>
-    Task<Result<string>> AllocateAsync(InvoiceIssuer issuer, DocumentSeries series, string documentKey);
+    /// <returns>
+    ///     The number and the instant it was first allocated at, which the document is dated by — the
+    ///     same instant on every retry, so numbers and dates run in the same order.
+    /// </returns>
+    Task<Result<DocumentNumber>> AllocateAsync(InvoiceIssuer issuer, DocumentSeries series, string documentKey);
 
     /// <summary>Records that the document carrying a number has been written.</summary>
     /// <param name="issuerCode">The issuer's code.</param>
     /// <param name="series">The series.</param>
-    /// <param name="number">A number <see cref="AllocateAsync" /> returned.</param>
+    /// <param name="number">A <see cref="DocumentNumber.Number" /> <see cref="AllocateAsync" /> returned.</param>
     Task<Result> ConfirmAsync(string issuerCode, DocumentSeries series, string number);
 
     /// <summary>How many numbers a series has issued, and which are not yet on a written document.</summary>

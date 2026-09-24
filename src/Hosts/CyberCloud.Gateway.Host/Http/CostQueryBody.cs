@@ -101,6 +101,7 @@ sealed record CostQueryBody(DateTimeOffset From, DateTimeOffset To, CostGrouping
             writer.WriteString("granularity", GranularityValues[(int)answer.Granularity]);
             writer.WriteNumber("total", answer.Total);
             writer.WriteBoolean("filtered", answer.Filtered);
+            writer.WriteBoolean("pricedAlone", answer.PricedAlone);
             writer.WritePropertyName("rows");
             writer.WriteStartArray();
 
