@@ -802,14 +802,20 @@ intent. The review of #49 found both cases with a probe; they are
 **The surface.** `PUT …/roleAssignments/{name}` takes `expiresOn` — an ISO 8601 instant with an
 explicit offset, later than now — and every rendered assignment carries `properties.expiresOn`, in
 UTC or `null`. A `PUT` without it makes the assignment permanent: a `PUT` states the whole
-assignment. After the instant, `GET` is the canonical `404`, the collection omits the row, and every
-check denies, with no revoke and before any sweep (`RoleAssignmentTests.AJustInTimeGrantReadsBackItsExpiryAndEndsOnItsOwnWithNoRevoke`).
-A `PUT` that brings an end closer must leave at least a minute, or it's a `400`, and its end is kept
-the same way, for answers cached while the grant ran longer too (the fence above).
-The portal's access page takes an optional end as a local date and time, sends the UTC instant it
-names, and shows the served end, or "Permanent", on every row it knows. The resource-graph access column leaves a time-bounded grant out, because the column is recomputed on
-a resource change and on nothing else and would otherwise keep an expired grant's resource in its
-holder's graph query ([08](08-resource-manager.md) § The resource-graph projection).
+assignment. ⚠ So the body is read under `properties` when it has one, which is where a `GET` renders
+`expiresOn`: read at the top level only, a `GET` sent back as a `PUT` dropped the end and made the
+grant permanent (`RoleAssignmentTests.AGetSentBackAsAPutKeepsTheEndItRendered`). The envelope's `id`
+and `properties.scope` must name the address it's sent to, or a `GET` from one scope would grant at
+another ([10](10-gateway-and-api.md) § Shape). After the instant, `GET` is the canonical `404`, the
+collection omits the row, and every check denies, with no revoke and before any sweep
+(`RoleAssignmentTests.AJustInTimeGrantReadsBackItsExpiryAndEndsOnItsOwnWithNoRevoke`). A `PUT` that
+brings an end closer must leave at least a minute, or it's a `400`, and its end is kept the same
+way, for answers cached while the grant ran longer too (the fence above). The portal's access page
+takes an optional end as a local date and time, sends the UTC instant it names, and shows the served
+end, or "Permanent", on every row it knows. The resource-graph access column leaves a time-bounded
+grant out, because the column is recomputed on a resource change and on nothing else and would
+otherwise keep an expired grant's resource in its holder's graph query ([08](08-resource-manager.md)
+§ The resource-graph projection).
 
 ⚠ **What is owed, precisely.**
 
@@ -844,11 +850,13 @@ holder's graph query ([08](08-resource-manager.md) § The resource-graph project
   delete that dies between steps 3 and 5 already leaves, and, per the item above, just as unscheduled.
 - **The process boundary.** Every new wire member carries an `[Id]` under an aliased type
   (`AuthorizationWireContractTests`), `ExpirySweepReport` is aliased, and no grain method the path
-  calls is generic, which is the shape #39's refused type had. No test drives an expiring `PUT` from
-  a gateway process into a separate silo process: the only topology with one is the AppHost's
-  (`LocalTopology`), whose ports are fixed, and the machine this branch was built on shares them
-  with other runs. `TenantOverHttpTests`' arrangement — the real gateway in the test process, the
-  AppHost's two silos in theirs — is where the case belongs.
+  calls is generic, which is the shape #39's refused type had. `TenantOverHttpTests`' step 9 drives
+  it over the real hosts: the gateway in the test process, an Orleans client, grants an expiring
+  role, reads it and lists it back, sends the `GET` back as a `PUT`, is refused a shortening inside
+  the notice (by the tuple store, whose message names the notice, not by the gateway's body check),
+  shortens it with an hour's, and revokes it, against the AppHost's two silo processes.
+  What that can't cover is the clock: those silos read the machine's, so the grant ending on time is
+  only proved where a test owns an `IClock` (`test/CyberCloud.Isolation`, the authorization suite).
 - **The store's register, journal and fences are one row per tenant.** `TupleStoreState.Expiring`
   lists every tuple the tenant last wrote with an expiry, and the row is rewritten on each tuple
   write (steps 1 and 7) and walked linearly by the sweep and by the register update. That is

@@ -1,3 +1,4 @@
+using CyberCloud.Core.Contracts;
 using CyberCloud.Providers.Compute.Contracts;
 using CyberCloud.Providers.KeyVault.Contracts;
 
@@ -22,6 +23,13 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///         no data-plane role put the vault's AES-256 root into a machine they own. With the root,
 ///         every secret and private key the vault seals opens without the platform vault.
 ///     </para>
+///     <para>
+///         ⚠ <b>Moving the root out of the prefix closed only the literal spelling.</b> A handle
+///         that starts with the prefix and climbs out with <c>..</c> passed the prefix check and
+///         reached the root, and another tenant's paths, until the parse and the resolver both
+///         refused a path that isn't <c>SecretRef.IsCanonicalPath</c>. The resolver's half is
+///         <c>ResolveFailureTests.ADotSegmentHandleIsRefusedBeforeOpenBaoCollapsesItIntoAnotherPath</c>.
+///     </para>
 /// </remarks>
 public sealed class KeyVaultRootIsOutsideTheTenantPrefixTests {
     static readonly Guid Tenant = Guid.Parse("30303030-0000-4000-8000-0000000000e1");
@@ -36,6 +44,30 @@ public sealed class KeyVaultRootIsOutsideTheTenantPrefixTests {
         parsed.IsFailure.ShouldBeTrue($"a tenant's VM could name its own vault's root '{root.Path}' as cloud-init user data");
         parsed.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
         parsed.Error.Message.ShouldContain(VirtualMachines.TenantVaultPrefix(Tenant));
+    }
+
+    [Theory]
+    [InlineData("../../{root}")]
+    [InlineData("./../../{root}")]
+    [InlineData("x/../../../{root}")]
+    [InlineData("../30303030-0000-4000-8000-0000000000ff/app")]
+    [InlineData("%2e%2e/%2e%2e/{root}")]
+    [InlineData(@"..\..\{root}")]
+    [InlineData("/../{root}")]
+    public void AHandleThatStartsWithTheTenantsPrefixAndClimbsOutOfItIsRefused(string tail) {
+        // ⚠ Every row starts with the tenant's own prefix, so the prefix check alone passes it.
+        // Uri.EscapeDataString leaves '..' alone and System.Uri collapses it, so the first row
+        // reached OpenBao as the root's own path, read with the platform's broad token.
+        var root = KeyVaults.RootRef(Tenant, Vault);
+        var path = VirtualMachines.TenantVaultPrefix(Tenant) + tail.Replace("{root}", root.Path, StringComparison.Ordinal);
+
+        path.ShouldStartWith(VirtualMachines.TenantVaultPrefix(Tenant), Case.Sensitive);
+
+        var parsed = VirtualMachines.ParseCloudInitRef(path + "#" + root.Field, Tenant);
+
+        parsed.IsFailure.ShouldBeTrue($"'{path}' passed the prefix check and names a path outside it");
+        parsed.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+        SecretRef.IsCanonicalPath(path).ShouldBeFalse();
     }
 
     [Fact]

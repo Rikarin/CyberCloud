@@ -124,16 +124,26 @@ segment most needs. The listing is one `read` check on the scope and no per-row 
 collection and is still right. And a grant now checks the principal against the directory — the same
 section — so a `PUT` naming a user this tenant does not have is a `400`, not a tuple.
 
-**A grant can end on its own (issue #49):** a `PUT` body may carry `expiresOn` beside the other three, an
-ISO 8601 instant with an offset and later than now, and every rendered assignment carries
-`properties.expiresOn` — the instant in UTC, or `null` for a permanent grant — so a `GET` sent back as
-a `PUT` sets the same end. A `PUT` without it makes the assignment permanent: the body states the
-whole assignment. From the instant it passes, the assignment is a `404` on `GET`, missing from the
-collection, and denied by every check, before any sweep has run; [07](07-rebac-authorization.md)
-§ Time-bounded relations is where the rest lives. That holds for an end a later `PUT` brought closer,
-too, for an answer a check cached while the grant ran longer. ⚠ Such an end has to be at least a
-minute away, or the `PUT` is a `400`: a grant that must end sooner is revoked, and a revoke is
-07 § Consistency's `MinimizeLatency` question, not this one.
+**A grant can end on its own (issue #49):** a `PUT` body may carry `expiresOn` beside the other
+three, an ISO 8601 instant with an offset and later than now, and every rendered assignment carries
+`properties.expiresOn` — the instant in UTC, or `null` for a permanent grant — so a `GET` sent back
+as a `PUT` sets the same end. ⚠ That holds because a `PUT` body's four properties are read under
+`properties` when the body has one, as the rendered envelope does, and at the top level otherwise.
+Read at the top level only, as they first were, the envelope sent back made a just-in-time grant
+permanent. A body with them in both places is a `400`
+(`RoleAssignmentTests.AGetSentBackAsAPutKeepsTheEndItRendered`), and so is an envelope whose `id` or
+`properties.scope` names another address than the one it's sent to, which would otherwise copy a
+grant from one scope to another without a word
+(`RoleAssignmentTests.AGetFromOneScopeSentAsAPutToAnotherIsRefused`). ⚠ Reading `properties` refuses
+one body the top-level reading let through: an ARM client's `properties.roleDefinitionId`, a path to
+a definition rather than a role name, used to go unread and is now a `400` naming both, as the same
+path at the top level always was. A `PUT` without `expiresOn` makes the assignment permanent: the
+body states the whole assignment. From the instant it passes, the assignment is a `404` on `GET`,
+missing from the collection, and denied by every check, before any sweep has run;
+[07](07-rebac-authorization.md) § Time-bounded relations is where the rest lives. That holds for an
+end a later `PUT` brought closer, too, for an answer a check cached while the grant ran longer. ⚠
+Such an end has to be at least a minute away, or the `PUT` is a `400`: a grant that must end sooner
+is revoked, and a revoke is 07 § Consistency's `MinimizeLatency` question, not this one.
 
 ⚠ **The role assignment API is not in the generated document, and that is #63's question asked a
 third time.** The reserved namespace is exactly what keeps it out of the registry the emitters read,
@@ -210,7 +220,11 @@ the generated document (#39).** `CyberCloud.Resources/deployments` is a register
 answers for a deployment that need not exist, and `ActionAsync` refuses an action on an absent
 resource because `POST` never creates; and it reads every resource the template names *as the
 caller*, which an action handler — handed an `ActionContext` with no caller, by design — cannot. It
-answers `200` with `{ "status", "changes": [ … ] }` and no `Azure-AsyncOperation`. Routing is still
+answers `200` with `{ "status", "creates", "modifies", "noChanges", "changes": [ … ] }` and no
+`Azure-AsyncOperation`: the three typed arrays of resource ids are the verdict the document declares
+(`Deployments.WhatIfResponse`), and `changes` is Azure's array of objects beside them, admitted by an
+open schema because `SchemaKind` can't declare it (the review of #39 found this sentence still giving
+only the last). Routing is still
 not a decision: the entry point runs step 1's ownership checks and the action's permission check
 itself, behind the same seam. ⚠ The gateway never names `IResourceManager.WriteChildAsync`, the
 door a deployment's children go through as their recorded caller —

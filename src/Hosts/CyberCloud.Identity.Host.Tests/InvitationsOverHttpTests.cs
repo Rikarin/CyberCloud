@@ -167,6 +167,122 @@ public sealed partial class InvitationsOverHttpTests(MailpitIdentityHostFixture 
         other.DisplayName.ShouldBe(IdentityHostFixture.DisplayName, "the account in the other organisation was touched");
     }
 
+    /// <summary>
+    ///     The invited path's <i>"signs in"</i>: a person signed into their own organisation opens
+    ///     the link, joins with that account instead of a new name and password, and from then on
+    ///     signs into this organisation through it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The review of #43's second round found this path missing — the page only asked for a
+    ///     second name and password — and the plan's sentence asked for it. Every refusal here is a
+    ///     way the link, the cookie or the address could have been mismatched.
+    /// </remarks>
+    [Fact]
+    public async Task APersonSignedInElsewhereJoinsWithThatAccountAndSignsInHereThroughIt() {
+        var email = $"home-{Guid.NewGuid():N}@grants.example";
+        var home = await fixture.CreatePersonAsync(email, IdentityHostFixture.OtherTenant);
+
+        using var browser = await SignInElsewhereAsync(email);
+
+        var invitationId = Guid.NewGuid();
+        var secret = Secret();
+        var created = await Invite(invitationId, email, secret, fixture.UserId);
+        var query = Link(Tenant, invitationId, secret);
+
+        // ── The page offers the account the browser is signed into, and only to that browser. ──
+        var described = await Describe(browser, query);
+
+        described.GetProperty("account").GetString().ShouldBe(email);
+        described.GetProperty("canJoinWithAccount").GetBoolean().ShouldBeTrue(described.GetRawText());
+
+        using (var anonymous = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri)) {
+            var offered = await Describe(anonymous, query);
+
+            offered.GetProperty("account").GetString().ShouldBeEmpty();
+            offered.GetProperty("canJoinWithAccount").GetBoolean().ShouldBeFalse();
+        }
+
+        // ── From another origin the cookie counts for nothing, and nothing is spent. ───────────
+        var page = browser.Origin;
+        browser.Origin = "https://elsewhere.example";
+
+        using (var foreign = await JoinWithAccount(browser, query)) {
+            var answer = await BrowserClient.JsonAsync(foreign, Ct);
+
+            answer.GetProperty("succeeded").GetBoolean().ShouldBeFalse();
+            answer.GetProperty("message").GetString().ShouldBe(InvitationApi.SignInFirst);
+        }
+
+        browser.Origin = page;
+
+        // ── Somebody signed in with another address is not offered it, and is refused. ────────
+        var strangerEmail = $"stranger-{Guid.NewGuid():N}@grants.example";
+
+        await fixture.CreatePersonAsync(strangerEmail, IdentityHostFixture.OtherTenant);
+
+        using (var stranger = await SignInElsewhereAsync(strangerEmail)) {
+            (await Describe(stranger, query)).GetProperty("canJoinWithAccount").GetBoolean().ShouldBeFalse();
+
+            using var mismatched = await JoinWithAccount(stranger, query);
+            var answer = await BrowserClient.JsonAsync(mismatched, Ct);
+
+            answer.GetProperty("succeeded").GetBoolean().ShouldBeFalse();
+            answer.GetProperty("message").GetString()!.ShouldContain("this invitation is for");
+        }
+
+        (await Describe(browser, query)).GetProperty("status").GetString().ShouldBe("pending", "a refusal spent the link");
+
+        // ── Join: no name, no password, and the home cookie stays. ─────────────────────────────
+        var homeCookie = browser.Cookies[IdentityHostAuthentication.CookieName];
+
+        using (var joined = await JoinWithAccount(browser, query)) {
+            var answer = await BrowserClient.JsonAsync(joined, Ct);
+
+            answer.GetProperty("succeeded").GetBoolean().ShouldBeTrue(answer.GetRawText());
+        }
+
+        browser.Cookies[IdentityHostAuthentication.CookieName].ShouldBe(homeCookie, "joining replaced the home account's cookie");
+
+        var member = (await fixture.For(Tenant).GetGrain<IUserGrain>(GrainKeys.User(created.UserId)).GetAsync())
+            .GetValueOrThrow();
+
+        member.Status.ShouldBe(UserStatus.Active);
+        member.DisplayName.ShouldBe(IdentityHostFixture.DisplayName, "the member takes the home account's name");
+        member.HomeAccount.ShouldBe(new HomeAccount { TenantId = IdentityHostFixture.OtherTenant, UserId = home });
+        member.EnrolledCredentials.ShouldBeEmpty("joining with an account set a credential nobody chose");
+
+        // ── Signing in here is the home account's cookie at /authorize, for this tenant. ────────
+        var (verifier, challenge) = BrowserClient.Pkce();
+        var token = await TokenAsync(browser, challenge, verifier);
+        var claims = BrowserClient.Payload(token);
+
+        claims.GetProperty("sub").GetString().ShouldBe(created.UserId.ToString("N"));
+        claims.GetProperty("tid").GetString().ShouldBe(Tenant.ToString("N"));
+        claims.GetProperty("amr").EnumerateArray().Select(static x => x.GetString()).ShouldBe(["pwd", "otp"]);
+
+        // The member has no password here: the home one is not a credential of this organisation.
+        using (var direct = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri)) {
+            using var password = await direct.PostJsonAsync(
+                "/api/signin/password",
+                new { email, password = IdentityHostFixture.Password, returnUrl = "/", tenant = IdentityHostFixture.Slug },
+                Ct
+            );
+
+            (await BrowserClient.JsonAsync(password, Ct)).GetProperty("succeeded").GetBoolean().ShouldBeFalse();
+        }
+
+        // ── The home tenant's suspension ends the next sign-in here. ───────────────────────────
+        (await fixture.For(IdentityHostFixture.OtherTenant).GetGrain<IUserGrain>(GrainKeys.User(home)).SetStatusAsync(UserStatus.Suspended))
+            .IsSuccess.ShouldBeTrue();
+
+        var (_, again) = BrowserClient.Pkce();
+
+        using var refused = await browser.GetAsync(AuthorizePath(again, "joined-2"), Ct);
+
+        refused.StatusCode.ShouldBe(HttpStatusCode.Redirect);
+        BrowserClient.Location(refused).AbsolutePath.ShouldBe(AuthorizeApi.SignInPagePath, "a suspended home account still opened a session here");
+    }
+
     [Fact]
     public async Task AnExpiredLinkIsRefusedAndInvitingAgainReplacesIt() {
         var email = $"late-{Guid.NewGuid():N}@grants.example";
@@ -281,6 +397,86 @@ public sealed partial class InvitationsOverHttpTests(MailpitIdentityHostFixture 
             },
             Ct
         );
+
+    static Task<HttpResponseMessage> JoinWithAccount(BrowserClient browser, Dictionary<string, string> query) =>
+        browser.PostJsonAsync(
+            "/api/invitations/accept",
+            new { tenant = query["tenant"], invitation = query["invitation"], token = query["token"], withSignedInAccount = true },
+            Ct
+        );
+
+    /// <summary>
+    ///     A tab on the pages' origin, signed into the other organisation as <paramref name="email" />
+    ///     with the password and the delivered code.
+    /// </summary>
+    async Task<BrowserClient> SignInElsewhereAsync(string email) {
+        var browser = new BrowserClient(fixture.BaseAddress, IdentityHostFixture.SignInPageBaseUri);
+
+        using var password = await browser.PostJsonAsync(
+            "/api/signin/password",
+            new { email, password = IdentityHostFixture.Password, returnUrl = "/", tenant = IdentityHostFixture.OtherSlug },
+            Ct
+        );
+
+        (await BrowserClient.JsonAsync(password, Ct)).GetProperty("succeeded").GetBoolean().ShouldBeTrue();
+
+        using var send = await browser.PostJsonAsync("/api/signin/otp/send", new { returnUrl = "/" }, Ct);
+        using var otp = await browser.PostJsonAsync("/api/signin/otp", new { code = fixture.Otp.LastCode, returnUrl = "/" }, Ct);
+
+        (await BrowserClient.JsonAsync(otp, Ct)).GetProperty("secondFactorRequired").GetBoolean().ShouldBeFalse();
+
+        return browser;
+    }
+
+    /// <summary>The portal's code flow for this tenant, from the tab's cookie to an access token.</summary>
+    static async Task<string> TokenAsync(BrowserClient browser, string challenge, string verifier) {
+        using var authorized = await browser.GetAsync(AuthorizePath(challenge, "joined-1"), Ct);
+
+        authorized.StatusCode.ShouldBe(HttpStatusCode.Redirect, await authorized.Content.ReadAsStringAsync(Ct));
+
+        var location = BrowserClient.Location(authorized);
+
+        location.GetLeftPart(UriPartial.Path).ShouldBe(IdentityHostFixture.PortalRedirectUri, "no code: " + location);
+
+        // The portal's own origin, as the portal's callback page posts the exchange from it.
+        var page = browser.Origin;
+        browser.Origin = IdentityHostFixture.PortalOrigin;
+
+        using var exchanged = await browser.PostFormAsync(
+            IdentityHostOpenIddict.TokenPath,
+            new Dictionary<string, string>(StringComparer.Ordinal) {
+                ["grant_type"] = "authorization_code",
+                ["client_id"] = FirstPartyClients.Portal,
+                ["redirect_uri"] = IdentityHostFixture.PortalRedirectUri,
+                ["code"] = BrowserClient.Query(location)["code"],
+                ["code_verifier"] = verifier
+            },
+            Ct
+        );
+        var tokens = await BrowserClient.JsonAsync(exchanged, Ct);
+
+        browser.Origin = page;
+        exchanged.StatusCode.ShouldBe(HttpStatusCode.OK, tokens.GetRawText());
+
+        return tokens.GetProperty("access_token").GetString()!;
+    }
+
+    static string AuthorizePath(string challenge, string state) =>
+        IdentityHostOpenIddict.AuthorizationPath
+        + "?response_type=code&client_id="
+        + FirstPartyClients.Portal
+        + "&redirect_uri="
+        + Uri.EscapeDataString(IdentityHostFixture.PortalRedirectUri)
+        + "&scope="
+        + Uri.EscapeDataString("openid profile offline_access cyc.api")
+        + "&state="
+        + state
+        + "&code_challenge="
+        + challenge
+        + "&code_challenge_method=S256&nonce=n-"
+        + state
+        + "&tenant="
+        + IdentityHostFixture.Slug;
 
     [GeneratedRegex(@"https?://\S+/invitation\?\S+")]
     private static partial Regex LinkPattern();

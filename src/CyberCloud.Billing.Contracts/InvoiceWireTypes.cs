@@ -393,6 +393,24 @@ public sealed record BillingAccountSnapshot {
     public bool Configured { get; init; }
 }
 
+/// <summary>A document's number, and when it was taken — the date the document carries.</summary>
+[GenerateSerializer]
+[Alias("CyberCloud.Billing.DocumentNumber")]
+public sealed record DocumentNumber {
+    /// <summary>The printed number — <c>{prefix}-INV-00000042</c> or <c>{prefix}-CN-00000042</c>.</summary>
+    [Id(0)]
+    public string Number { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     When the number was allocated, by the numbering grain's clock. ⚠ The document is dated by
+    ///     this, not by when it was written: allocations are serialized by the one grain, so a higher
+    ///     number never carries an earlier instant, and a retry after a failed write gets the instant
+    ///     of the first attempt with its number.
+    /// </summary>
+    [Id(1)]
+    public DateTimeOffset AllocatedAt { get; init; }
+}
+
 /// <summary>How the numbering grain accounts for one series.</summary>
 [GenerateSerializer]
 [Alias("CyberCloud.Billing.NumberingAudit")]

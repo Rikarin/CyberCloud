@@ -69,6 +69,13 @@ public sealed class NumberSeriesState {
     /// <summary>Numbers handed out whose document has not confirmed it was written, number → document.</summary>
     [Id(2)]
     public Dictionary<string, string> Unconfirmed { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     When each unconfirmed number was allocated, number → instant, so a retry is dated as its first
+    ///     attempt was. Confirming removes the entry, as it does the document's key.
+    /// </summary>
+    [Id(3)]
+    public Dictionary<string, DateTimeOffset> AllocatedAt { get; set; } = new(StringComparer.Ordinal);
 }
 
 /// <summary>What <c>BudgetGrain</c> persists.</summary>

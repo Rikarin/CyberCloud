@@ -134,6 +134,9 @@ public sealed class KeyVaultGateway : IAsyncLifetime {
     /// <summary>A person granted <c>reader</c> on the group, and no data-plane role.</summary>
     public string Rita { get; } = Guid.Parse("30303030-0000-4000-8000-0000000000d6").ToString("N");
 
+    /// <summary>A person granted both officer roles on one vault, and then revoked.</summary>
+    public string Olga { get; } = Guid.Parse("30303030-0000-4000-8000-0000000000d7").ToString("N");
+
     /// <summary>The client every test sends through.</summary>
     public HttpClient Http { get; private set; } = null!;
 
@@ -201,6 +204,21 @@ public sealed class KeyVaultGateway : IAsyncLifetime {
         );
 
         status.ShouldBeOneOf([200, 201], $"granting {role} failed: {body}");
+    }
+
+    /// <summary>Revokes a role on a scope, over the gateway, as the tenant's owner.</summary>
+    /// <param name="scopePath">The scope the role was granted on.</param>
+    /// <param name="role">The relation.</param>
+    /// <param name="principalType">The principal's type.</param>
+    /// <param name="principalId">The principal's id.</param>
+    public async Task RevokeAsync(string scopePath, string role, string principalType, string principalId) {
+        var (status, body) = await SendAsync(
+            HttpMethod.Delete,
+            $"{scopePath}/providers/CyberCloud.Authorization/roleAssignments/{role}-{principalType}-{principalId}",
+            Token(Owner)
+        );
+
+        status.ShouldBe(204, $"revoking {role} failed: {body}");
     }
 
     /// <summary>Creates a vault over the gateway as the owner, and drives its operation to the end.</summary>
@@ -414,7 +432,7 @@ public sealed class KeyVaultGateway : IAsyncLifetime {
 
         var home = Grains.ForTenant(Tenant.ToString("D", CultureInfo.InvariantCulture));
 
-        foreach (var (id, name) in new[] { (Dana, "Dana"), (Carol, "Carol"), (Rita, "Rita") }) {
+        foreach (var (id, name) in new[] { (Dana, "Dana"), (Carol, "Carol"), (Rita, "Rita"), (Olga, "Olga") }) {
             (await home.GetGrain<IUserGrain>(GrainKeys.User(Guid.ParseExact(id, "N")))
                 .CreateAsync($"{name.ToLowerInvariant()}@key-vault.test", name, UserStatus.Active)).IsSuccess.ShouldBeTrue();
         }

@@ -1,4 +1,5 @@
 using CyberCloud.Core.Contracts;
+using CyberCloud.Core.Time;
 using Orleans.Multitenant;
 using System.Globalization;
 
@@ -15,21 +16,31 @@ namespace CyberCloud.Billing.Grains;
 ///     counter, and the counter moves and the allocation is recorded in one state write.
 ///     <para>
 ///         ⚠ <b>A number is answered only once it's on disk, and a call that threw leaves memory
-///         suspect.</b> The first version moved the counter in memory, wrote, and let a failed write
-///         propagate with memory one ahead of storage. The retry was then answered from
-///         <see cref="NumberSeriesState.ByDocument" /> with a number no storage held, and an
-///         activation reloaded after that gave the same number to the next tenant: two invoices, one
-///         number. <see cref="Invoke" /> now re-reads the state before the first call after one that
-///         threw. ⚠ Re-read, not rolled back: a write that reports failure may have committed (a
-///         connection lost after the commit), and only storage knows which. Rolling memory back over
-///         a committed write would give that number out a second time as well.
-///         <c>InvoicingTests.ANumberWhoseWriteFailedIsNeverAnsweredFromMemory</c> and
+///         suspect.</b> <see cref="AllocateAsync" /> moves the counter in memory before it writes, so a
+///         failed write leaves memory one ahead of storage. Answering the retry from
+///         <see cref="NumberSeriesState.ByDocument" /> would then hand out a number no storage holds,
+///         and the next activation, reloading the lower counter, would give the same number to the
+///         next tenant: two invoices, one number. So <see cref="Invoke" /> re-reads the state before
+///         the first call after one that threw. ⚠ Re-read, not rolled back: a write that reports
+///         failure may have committed (a connection lost after the commit), and only storage knows
+///         which. Rolling memory back over a committed write would give that number out a second time
+///         as well. <c>InvoicingTests.ANumberWhoseWriteFailedIsNeverAnsweredFromMemory</c> and
 ///         <c>InvoicingTests.AWriteThatCommittedBeforeItFailedKeepsItsNumber</c> fail the write each way.
+///     </para>
+///     <para>
+///         ⚠ <b>The number's instant is taken here, with the number, and kept until it's confirmed.</b>
+///         Several member states want invoice dates in the order of their numbers. An account that
+///         dated its invoice by its own clock would read it at a different moment from the
+///         allocation, and a retry after a failed write would read it hours later, after the next
+///         tenant's invoice took the next number. One grain serializes the allocations, so the instant
+///         it records rises with the number, and a retry is given the first attempt's instant back
+///         (<c>InvoicingTests.AnInvoiceRetriedAfterALaterOneKeepsTheDateItsNumberWasTakenAt</c>).
 ///     </para>
 /// </remarks>
 public sealed class InvoiceNumberingGrain(
     [PersistentState("invoice-numbering", StorageTiers.Durable)]
-    IPersistentState<InvoiceNumberingState> state
+    IPersistentState<InvoiceNumberingState> state,
+    IClock clock
 )
     : Grain, IInvoiceNumberingGrain, IIncomingGrainCallFilter {
     bool suspect;
@@ -75,22 +86,22 @@ public sealed class InvoiceNumberingGrain(
     }
 
     /// <inheritdoc />
-    public async Task<Result<string>> AllocateAsync(InvoiceIssuer issuer, DocumentSeries series, string documentKey) {
+    public async Task<Result<DocumentNumber>> AllocateAsync(InvoiceIssuer issuer, DocumentSeries series, string documentKey) {
         ArgumentNullException.ThrowIfNull(issuer);
 
         if (string.IsNullOrWhiteSpace(issuer.Code) || string.IsNullOrWhiteSpace(issuer.NumberPrefix)) {
-            return Result<string>.Failure(
+            return Result<DocumentNumber>.Failure(
                 ErrorCode.InvalidRequestBody,
                 "An issuer needs a code, which keys its sequence, and a number prefix, which every number carries."
             );
         }
 
         if (series == DocumentSeries.Unknown) {
-            return Result<string>.Failure(ErrorCode.InvalidRequestBody, "A number belongs to a series; Unknown is not one.");
+            return Result<DocumentNumber>.Failure(ErrorCode.InvalidRequestBody, "A number belongs to a series; Unknown is not one.");
         }
 
         if (string.IsNullOrWhiteSpace(documentKey)) {
-            return Result<string>.Failure(
+            return Result<DocumentNumber>.Failure(
                 ErrorCode.InvalidRequestBody,
                 "A number is allocated to a document, and an empty document key would give every retry a new "
                 + "number — the gap this grain exists to prevent."
@@ -102,17 +113,21 @@ public sealed class InvoiceNumberingGrain(
         // ⚠ THE RETRY PATH, AND THE REASON THE SEQUENCE HAS NO GAPS. A finalization that timed out after
         // this grain answered asks again with the same document key and gets the same number.
         if (sequence.ByDocument.TryGetValue(documentKey, out var known)) {
-            return Result<string>.Success(known);
+            return Result<DocumentNumber>.Success(
+                new() { Number = known, AllocatedAt = sequence.AllocatedAt.TryGetValue(known, out var at) ? at : clock.UtcNow }
+            );
         }
 
         sequence.Allocated++;
         var number = Format(issuer.NumberPrefix, series, sequence.Allocated);
+        var allocatedAt = clock.UtcNow;
 
         sequence.ByDocument[documentKey] = number;
         sequence.Unconfirmed[number] = documentKey;
+        sequence.AllocatedAt[number] = allocatedAt;
         await state.WriteStateAsync();
 
-        return Result<string>.Success(number);
+        return Result<DocumentNumber>.Success(new() { Number = number, AllocatedAt = allocatedAt });
     }
 
     /// <inheritdoc />
@@ -128,6 +143,7 @@ public sealed class InvoiceNumberingGrain(
 
         if (sequence.Unconfirmed.Remove(number, out var documentKey)) {
             sequence.ByDocument.Remove(documentKey);
+            sequence.AllocatedAt.Remove(number);
             await state.WriteStateAsync();
             return Result.Success;
         }

@@ -40,6 +40,7 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
 
     ResourceManagerService manager = null!;
     PolicyManagerService policies = null!;
+    ServiceProvider actions = null!;
 
     /// <inheritdoc />
     public async ValueTask InitializeAsync() {
@@ -57,23 +58,28 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
         handlers.AddSingleton<RestartHandler>();
         handlers.AddSingleton<ListKeysHandler>();
 
-        manager = new(
-            cluster.Registry,
-            new SwitchableAuthorizer(),
-            new RecordingRelationWriter(),
-            new SwitchableLockResolver(),
-            new CatalogPolicyEvaluator(cluster.Grains, NullLogger<CatalogPolicyEvaluator>.Instance),
-            new RecordingChangeSink(),
-            cluster.Grains,
-            new ActionDispatcher(handlers.BuildServiceProvider(), new NoClusterConnectionFactory(), new UnavailableSecretResolver()),
-            NullLogger<ResourceManagerService>.Instance
-        );
+        actions = handlers.BuildServiceProvider();
+        manager = Manager(new CatalogPolicyEvaluator(cluster.Grains, NullLogger<CatalogPolicyEvaluator>.Instance));
 
         policies = new(new SwitchableScopeAuthorizer(), cluster.Grains, NullLogger<PolicyManagerService>.Instance);
     }
 
+    /// <summary>The manager this class writes through, with <paramref name="evaluator" /> at step 5.</summary>
+    ResourceManagerService Manager(IPolicyEvaluator evaluator) =>
+        new(
+            cluster.Registry,
+            new SwitchableAuthorizer(),
+            new RecordingRelationWriter(),
+            new SwitchableLockResolver(),
+            evaluator,
+            new RecordingChangeSink(),
+            cluster.Grains,
+            new ActionDispatcher(actions, new NoClusterConnectionFactory(), new UnavailableSecretResolver()),
+            NullLogger<ResourceManagerService>.Instance
+        );
+
     /// <inheritdoc />
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync() => actions?.DisposeAsync() ?? ValueTask.CompletedTask;
 
     // ── A provider cannot skip it ──────────────────────────────────────────────────────────────
 
@@ -165,6 +171,124 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
         var deleted = await DeleteAsync(address);
         deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
         deleted.GetValueOrThrow().Trace.Policy.ShouldBeEmpty("a shape rule is not evaluated for a delete");
+    }
+
+    [Fact]
+    public async Task ADenyThatReadsOnlyTheActionFactStopsThatActionAndNoOther() {
+        // ⚠ Found by the third review of #46: "deny when action is restart" was accepted and stored, and
+        // AppliesTo let no action reach it, because only a rule reading 'operation' went past creates
+        // and updates. It reaches the action now, and the other action and the update go through.
+        ResourceManagerCluster.ResetDoubles();
+        RestartHandler.Reset();
+
+        var group = await GroupAsync("action-only");
+        var address = Widget(group, "a");
+
+        var created = await PutAsync(address);
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await ConvergeAsync(created.GetValueOrThrow());
+
+        await DefineAsync(group, "no-restart", """{ "if": { "field": "action", "equals": "restart" }, "then": { "effect": "deny" } }""");
+        await AssignAsync(group, "no-restart", "no-restart");
+
+        var refused = await ActionAsync(address, "restart");
+        refused.Error!.Code.ShouldBe(ErrorCode.PolicyViolation);
+        refused.Error.Message.ShouldContain("no-restart");
+        RestartHandler.Invocations.ShouldBe(0, "a refused action never reached its handler");
+
+        var listed = await ActionAsync(address, "listKeys");
+        listed.IsSuccess.ShouldBeTrue(listed.Error?.Message);
+        listed.GetValueOrThrow().Trace.Policy.ShouldHaveSingleItem().Matched.ShouldBeFalse("evaluated, and not about listKeys");
+
+        (await PutAsync(address, TestingProvider.Body(3))).IsSuccess.ShouldBeTrue("an update carries no action name");
+    }
+
+    [Fact]
+    public async Task TheManagerRefusesAnAuditThatNamesADeleteRatherThanStoreARuleThatNeverRuns() {
+        ResourceManagerCluster.ResetDoubles();
+
+        var put = await policies.PutAsync(
+            Request(
+                PolicyAddress.Definition(ScopeId.Subscription(ResourceManagerCluster.Tenant, PolicySubscription), "audit-deletes").Path,
+                """{ "properties": { "policyRule": { "if": { "allOf": [ { "field": "type", "like": "*" }, { "field": "operation", "equals": "delete" } ] }, "then": { "effect": "audit" } } } }"""
+            ),
+            TestContext.Current.CancellationToken
+        );
+
+        put.Error!.Code.ShouldBe(ErrorCode.InvalidRequestBody);
+        put.Error.Target.ShouldBe("/properties/policyRule/if/allOf/1");
+        put.Error.Message.ShouldContain("names 'delete'");
+    }
+
+    [Fact]
+    public async Task ADeploymentsChildWriteEntersStepFive() {
+        // ⚠ WriteChildAsync reached step 5 only through the merge of #46 with the deployment driver,
+        // and nothing drove it there. A child is a tenant PUT replayed as its caller, so a deny at the
+        // child's group refuses it exactly as it refuses the caller's own PUT.
+        ResourceManagerCluster.ResetDoubles();
+
+        var group = await GroupAsync("child");
+        var address = Widget(group, "c");
+
+        await AssignOperationDenyAsync(group, "create");
+
+        var refused = await ChildPutAsync(address);
+        refused.Error!.Code.ShouldBe(ErrorCode.PolicyViolation, "a child create is refused by a rule about creates");
+        (await cluster.Index(address).GetAsync()).GetValueOrThrow().State.ShouldBe(IndexEntryState.Free, "no name was claimed");
+
+        await UnassignAsync(group, "deny-create");
+
+        var accepted = await ChildPutAsync(address);
+        accepted.IsSuccess.ShouldBeTrue(accepted.Error?.Message);
+        accepted.GetValueOrThrow().Trace.Reached.ShouldContain(WriteStep.Policy);
+    }
+
+    [Fact]
+    public async Task APatchIsNotStoredOverAWriteThatLandedAfterItWasJudged() {
+        // ⚠ Raised by the third review of #46, not reproduced there. Step 5 reads the stored body and
+        // merges the patch onto it, and step 9 sends that merge's tag bag, which replaces the stored
+        // one. A write that lands in between — driven here from inside step 5 itself, and converged so
+        // the grain's in-progress refusal can't be what stops the PATCH — would lose its tags to the
+        // PATCH, stored under a judgement of a body that's gone. The PATCH is conditional on the copy
+        // it judged, and a caller who set no If-Match is told to retry rather than handed a 412.
+        ResourceManagerCluster.ResetDoubles();
+
+        var group = await GroupAsync("race");
+        var address = Widget(group, "r");
+
+        var created = await PutAsync(address, Tagged(TestingProvider.Body(2), ("env", "prod")));
+        created.IsSuccess.ShouldBeTrue(created.Error?.Message);
+        await ConvergeAsync(created.GetValueOrThrow());
+
+        var interleaving = new InterleavingPolicyEvaluator(new CatalogPolicyEvaluator(cluster.Grains, NullLogger<CatalogPolicyEvaluator>.Instance)) {
+            Before = async () => {
+                var landed = await PutAsync(address, Tagged(TestingProvider.Body(2), ("env", "prod"), ("owner", "b")));
+                landed.IsSuccess.ShouldBeTrue(landed.Error?.Message);
+                await ConvergeAsync(landed.GetValueOrThrow());
+            }
+        };
+
+        var patched = await Manager(interleaving).WriteAsync(
+            new() {
+                Path = address.Path,
+                ApiVersion = TestingProvider.V2026,
+                Verb = WriteVerb.Patch,
+                Body = """{"properties":{"label":"z"}}""",
+                Caller = ResourceManagerCluster.Caller()
+            },
+            TestContext.Current.CancellationToken
+        );
+
+        interleaving.Interleaved.ShouldBeTrue("the write was driven between step 5 and step 9");
+        patched.Error!.Code.ShouldBe(ErrorCode.Conflict, patched.Error.Message);
+
+        var stored = await cluster.Resource(ResourceManagerCluster.Tenant, created.GetValueOrThrow().Resource.Id).GetAsync(string.Empty, []);
+        stored.GetValueOrThrow().Tags.OrderBy(static x => x.Key, StringComparer.Ordinal).Select(static x => x.Key + "=" + x.Value)
+            .ShouldBe(["env=prod", "owner=b"], "the write that landed first keeps its tags");
+
+        var retried = await PatchAsync(address, """{"properties":{"label":"z"}}""");
+        retried.IsSuccess.ShouldBeTrue(retried.Error?.Message);
+        retried.GetValueOrThrow().Resource.Tags.Keys.Order(StringComparer.Ordinal).ShouldBe(["env", "owner"]);
     }
 
     // ── Deny ───────────────────────────────────────────────────────────────────────────────────
@@ -578,6 +702,31 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
         accepted.GetValueOrThrow().Trace.Policy.ShouldHaveSingleItem().Matched.ShouldBeFalse();
     }
 
+    [Fact]
+    public void ASecretOnlyAnotherApiVersionDeclaresIsNotVisibleToAConditionEither() {
+        // ⚠ Found by the third review of #46: a PATCH, a DELETE and an action judge the stored superset,
+        // which holds what every version wrote, and the secrets were taken from the request's version
+        // alone. Latent in this suite — TestingProvider's two versions share their one secret — so the
+        // registration here gives each version a secret the other doesn't declare.
+        var registration = new ResourceTypeRegistration {
+            ApiVersions = [
+                new(ApiVersion.Parse(TestingProvider.V2026), ResourceSchema.Of([new("/properties/old", SchemaKind.Text, Secret: true)])),
+                new(ApiVersion.Parse(TestingProvider.V2027), ResourceSchema.Of([new("/properties/new", SchemaKind.Text, Secret: true)]))
+            ]
+        };
+        var stored = (JsonObject)JsonNode.Parse("""{"properties":{"old":"a","new":"b","label":"x"}}""")!;
+
+        PolicyDocuments.Evaluated(stored, registration).ShouldBe("""{"properties":{"label":"x"}}""");
+
+        var rewrite = PolicyDocuments.Apply(
+            [new() { AssignmentPath = "/a", Operation = "replace", Field = "/properties/new", Value = "\"c\"" }],
+            (JsonObject)stored.DeepClone(),
+            (JsonObject)stored.DeepClone(),
+            registration
+        );
+        rewrite.Error!.Code.ShouldBe(ErrorCode.PolicyViolation, "a modify can't write another version's secret either");
+    }
+
     // ── Inheritance, exclusion, isolation ───────────────────────────────────────────────────────
 
     [Fact]
@@ -907,6 +1056,19 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
             TestContext.Current.CancellationToken
         );
 
+    Task<Result<WriteAccepted>> ChildPutAsync(ResourceId address) =>
+        manager.WriteChildAsync(
+            Guid.NewGuid(),
+            new() {
+                Path = address.Path,
+                ApiVersion = TestingProvider.V2026,
+                Verb = WriteVerb.Put,
+                Body = TestingProvider.Body(),
+                Caller = ResourceManagerCluster.Caller(address.TenantId)
+            },
+            TestContext.Current.CancellationToken
+        );
+
     Task<Result<WriteAccepted>> PatchAsync(ResourceId address, string body) =>
         manager.WriteAsync(
             new() {
@@ -952,4 +1114,34 @@ public sealed class PolicyEnforcementTests(ResourceManagerCluster cluster) : IAs
             }
         }
     }
+}
+
+/// <summary>
+///     The real evaluator, with a write driven once inside the first update it judges — between step
+///     5's read of the stored body and step 9's write of the result.
+/// </summary>
+sealed class InterleavingPolicyEvaluator(IPolicyEvaluator inner) : IPolicyEvaluator {
+    /// <summary>What runs inside step 5 of the first update, after the stored body was read.</summary>
+    public Func<Task> Before { get; init; } = static () => Task.CompletedTask;
+
+    /// <summary>Whether <see cref="Before" /> ran.</summary>
+    public bool Interleaved { get; private set; }
+
+    /// <inheritdoc />
+    public async Task<PolicyDecision> EvaluateAsync(PolicyEvaluationRequest request, CancellationToken cancellationToken = default) {
+        if (!Interleaved && request.Operation == Core.Policy.PolicyOperations.Update) {
+            Interleaved = true;
+            await Before();
+        }
+
+        return await inner.EvaluateAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<Result> RecordComplianceAsync(ResourceId id, PolicyDecision decision, CancellationToken cancellationToken = default) =>
+        inner.RecordComplianceAsync(id, decision, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<Result> ForgetAsync(ResourceId id, CancellationToken cancellationToken = default) =>
+        inner.ForgetAsync(id, cancellationToken);
 }

@@ -12,7 +12,7 @@ import axe from 'axe-core';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { appRoutes } from '../../app/app.routes';
-import { CONFIRM_ROWS } from './log-search';
+import { CONFIRM_ROWS, localTime } from './log-search';
 import { timeRanges } from './time-range';
 
 /**
@@ -324,6 +324,22 @@ describe('the explorers, signed in', () => {
       note: ''
     };
 
+    it("shows a record's nanosecond timestamp as the viewer's local time to the millisecond", () => {
+      const expected = new Intl.DateTimeFormat(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        fractionalSecondDigits: 3
+      }).format(Date.UTC(2026, 8, 23, 11, 47, 0, 123));
+
+      expect(localTime('2026-09-23T11:47:00.123456789Z')).toBe(expected);
+      expect(localTime('2026-09-23T11:47:00.123Z')).toBe(expected);
+      expect(localTime('not a time')).toBe('not a time');
+    });
+
     it('turns the query box into the structured body, expands a row, and narrows to a clicked bar', async () => {
       await open(`${PAGE}/logs`);
 
@@ -344,9 +360,16 @@ describe('the explorers, signed in', () => {
       search.flush(answer);
       await settle();
 
-      expect(
-        [...host().querySelectorAll('[data-row]')].map(r => r.querySelector('span:last-child')?.textContent)
-      ).toEqual(['upstream timed out', 'request served']);
+      expect([...host().querySelectorAll('[data-row]')].map(r => r.querySelector('[data-body]')?.textContent)).toEqual([
+        'upstream timed out',
+        'request served'
+      ]);
+      expect(host().querySelectorAll('[data-rows] [role="columnheader"]')).toHaveLength(4);
+
+      // The time is the viewer's, to the millisecond; the store's nine digits stay on the element.
+      const time = host().querySelector('[data-row="0"] time');
+      expect(time?.getAttribute('datetime')).toBe('2026-09-23T11:47:00.123000000Z');
+      expect(time?.textContent).toBe(localTime('2026-09-23T11:47:00.123000000Z'));
       expect(host().querySelector('[data-truncated]')).not.toBeNull();
       expect(host().querySelector('[data-statistics]')?.textContent).toContain('2 records in the window');
 
@@ -358,6 +381,7 @@ describe('the explorers, signed in', () => {
       expect(detail).toContain('resource.deployment.environment');
       expect(detail).toContain('0af7651916cd43dd8448eb211c80319c');
       expect(detail).not.toContain('spanId');
+      expect(detail).toContain('2026-09-23T11:47:00.123000000Z');
 
       // The histogram was handed both buckets, stacked by severity.
       const chart = charts.at(-1);
