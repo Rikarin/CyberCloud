@@ -263,13 +263,19 @@ public static class CyberCloudSchema {
                     Permissions.Purge,
                     Rel(Relations.Owner) & !Rel(Relations.Suspended)
                 )
+                // ⚠ AND THE SAME DEFECT STANDS FOR FIVE MORE: listKeys, listCredentials,
+                // listInstallCommand, connect (cloud consoles) and url (Grafana) are checked by other
+                // types' actions and declared nowhere here, so each of those actions answers 404 to
+                // everybody. Owed as docs/plan/07's `action-permissions-are-undeclared`, and
+                // HostCompositionTests.EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed
+                // pins the undeclared set to exactly those five.
                 // ⚠ THE KEY-VAULT DATA PLANE — docs/plan/18 § CyberCloud.KeyVault/vaults. On
                 // `resource` only, because an action is checked on the resource it is posted to, and
                 // defined in terms of the four data-plane roles and NEVER of owner, contributor or
                 // reader: the tenant's owner can create a vault and cannot read what is in it until
                 // somebody — the owner included, through assignRole — grants a data-plane role.
-                // KeyVaultOverTheGatewayTests.TheOwnerOfTheVaultIsRefusedEveryDataPlaneAction drives
-                // the refusal through the real gateway.
+                // KeyVaultOverTheGatewayTests.AControlPlaneRoleIsRefusedEveryDataPlaneAction drives
+                // the refusal through the real gateway, for owner, contributor and reader.
                 //
                 // ⚠ The two purges carry the deny row, as `purge` does: a `suspended` tuple removes the
                 // one irreversible verb and leaves the rest of the role standing.

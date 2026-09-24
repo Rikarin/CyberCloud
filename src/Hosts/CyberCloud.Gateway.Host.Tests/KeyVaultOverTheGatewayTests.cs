@@ -1,6 +1,8 @@
 using CyberCloud.Authorization.Contracts;
 using CyberCloud.Providers.KeyVault;
 using CyberCloud.Providers.KeyVault.Contracts;
+using CyberCloud.ResourceManager.Contracts.Registry;
+using CyberCloud.ResourceManager.Registry;
 using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math;
@@ -22,7 +24,9 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///         every data-plane action checks one of the six data-plane permissions, none of which is
 ///         rewritten from a control-plane role — so the owner gets <c>403</c> (they can read the vault,
 ///         so the refusal is honest rather than an oracle) until they grant a data-plane role, which
-///         <c>assignRole</c> lets them do. Dana holds data-plane roles and nothing on the control plane.
+///         <c>assignRole</c> lets them do. Carol holds <c>contributor</c> and Rita <c>reader</c> on the
+///         group, and both are refused the same way. Dana holds data-plane roles and nothing on the
+///         control plane.
 ///     </para>
 ///     <para>
 ///         ⚠ Tests share the fixture's vaults and use their own item names, so they are
@@ -58,6 +62,10 @@ public sealed class KeyVaultOverTheGatewayTests(KeyVaultGateway gateway) : IClas
             // The workload: Secrets User on one vault, and nothing else anywhere.
             await gateway.GrantAsync(KeyVaultGateway.VaultPath(Vault), Relations.KeyVaultSecretsUser, SubjectTypes.ManagedIdentity, gateway.Workload);
 
+            // Carol and Rita: the two lesser control-plane roles, on the group, and nothing on the data plane.
+            await gateway.GrantAsync(KeyVaultGateway.GroupPath, Relations.Contributor, SubjectTypes.User, gateway.Carol);
+            await gateway.GrantAsync(KeyVaultGateway.GroupPath, Relations.Reader, SubjectTypes.User, gateway.Rita);
+
             seeded = true;
         } finally {
             Seeding.Release();
@@ -69,25 +77,69 @@ public sealed class KeyVaultOverTheGatewayTests(KeyVaultGateway gateway) : IClas
 
     string Dana => gateway.Token(gateway.Dana);
 
-    [Fact]
-    public async Task TheOwnerOfTheVaultIsRefusedEveryDataPlaneAction() {
-        var owner = gateway.Token(gateway.Owner);
+    /// <summary>
+    ///     A body each of the 25 actions accepts, so a refusal is the permission's and not the body
+    ///     validator's. The resource manager validates an action's body before it authorizes.
+    /// </summary>
+    static readonly Dictionary<string, object> ValidBodies = new(StringComparer.Ordinal) {
+        [KeyVaults.SetSecretAction] = new { secretName = "control-plane-try", value = "x" },
+        [KeyVaults.GetSecretAction] = new { secretName = "db-password" },
+        [KeyVaults.UpdateSecretAction] = new { secretName = "db-password", enabled = false },
+        [KeyVaults.ListSecretsAction] = new { },
+        [KeyVaults.ListSecretVersionsAction] = new { secretName = "db-password" },
+        [KeyVaults.DeleteSecretAction] = new { secretName = "db-password" },
+        [KeyVaults.ListDeletedSecretsAction] = new { },
+        [KeyVaults.RecoverDeletedSecretAction] = new { secretName = "db-password" },
+        [KeyVaults.PurgeDeletedSecretAction] = new { secretName = "db-password" },
+        [KeyVaults.CreateKeyAction] = new { keyName = "control-plane-key", kty = "EC" },
+        [KeyVaults.ImportKeyAction] = new { keyName = "control-plane-key", pkcs8 = "AAAA" },
+        [KeyVaults.GetKeyAction] = new { keyName = "kek" },
+        [KeyVaults.UpdateKeyAction] = new { keyName = "kek", enabled = false },
+        [KeyVaults.ListKeysAction] = new { },
+        [KeyVaults.ListKeyVersionsAction] = new { keyName = "kek" },
+        [KeyVaults.DeleteKeyAction] = new { keyName = "kek" },
+        [KeyVaults.ListDeletedKeysAction] = new { },
+        [KeyVaults.RecoverDeletedKeyAction] = new { keyName = "kek" },
+        [KeyVaults.PurgeDeletedKeyAction] = new { keyName = "kek" },
+        [KeyVaults.EncryptAction] = new { keyName = "kek", alg = "RSA-OAEP-256", value = "AAAA" },
+        [KeyVaults.DecryptAction] = new { keyName = "kek", alg = "RSA-OAEP-256", value = "AAAA" },
+        [KeyVaults.WrapKeyAction] = new { keyName = "kek", alg = "RSA-OAEP-256", value = "AAAA" },
+        [KeyVaults.UnwrapKeyAction] = new { keyName = "kek", alg = "RSA-OAEP-256", value = "AAAA" },
+        [KeyVaults.SignAction] = new { keyName = "kek", alg = "ES256", digest = VaultCrypto.Encode(new byte[32]) },
+        [KeyVaults.VerifyAction] = new {
+            keyName = "kek", alg = "ES256", digest = VaultCrypto.Encode(new byte[32]), signature = "AAAA"
+        }
+    };
 
-        // ⚠ The owner can READ the vault — the control plane is theirs — which is what makes 403 the
-        // honest answer rather than the enumeration oracle (docs/plan/07 § The enforcement seam).
-        (await gateway.SendAsync(HttpMethod.Get, KeyVaultGateway.VaultPath(Vault), owner)).Status.ShouldBe(200);
+    [Theory]
+    [InlineData(Relations.Owner)]
+    [InlineData(Relations.Contributor)]
+    [InlineData(Relations.Reader)]
+    public async Task AControlPlaneRoleIsRefusedEveryDataPlaneAction(string role) {
+        var caller = gateway.Token(
+            role switch {
+                Relations.Owner => gateway.Owner,
+                Relations.Contributor => gateway.Carol,
+                _ => gateway.Rita
+            }
+        );
 
-        foreach (var (action, body) in new (string, object)[] {
-                     (KeyVaults.SetSecretAction, new { secretName = "owner-try", value = "x" }),
-                     (KeyVaults.GetSecretAction, new { secretName = "anything" }),
-                     (KeyVaults.ListSecretsAction, new { }),
-                     (KeyVaults.CreateKeyAction, new { keyName = "owner-key", kty = "EC" }),
-                     (KeyVaults.SignAction, new { keyName = "anything", alg = "ES256", digest = VaultCrypto.Encode(new byte[32]) })
-                 }) {
-            var (status, response) = await gateway.ActionAsync(Vault, action, owner, body);
+        // Every declared action, read off the registry, so a 26th can't be added without a body here.
+        ProviderRegistry.Build([new KeyVaultProvider()]).TryGetType(KeyVaults.Type, out var registration).ShouldBeTrue();
+        registration.Actions.Select(static x => x.Name)
+            .Where(static x => !SoftDeletePolicy.IsReserved(x))
+            .Order(StringComparer.Ordinal)
+            .ShouldBe(ValidBodies.Keys.Order(StringComparer.Ordinal));
 
-            status.ShouldBe(403, $"the vault's owner reached {action} with no data-plane role: {response}");
-            response.GetProperty("error").GetProperty("code").GetString().ShouldBe("AuthorizationFailed");
+        // ⚠ Every control-plane role can READ the vault, which is what makes 403 the honest answer
+        // rather than the enumeration oracle (docs/plan/07 § The enforcement seam).
+        (await gateway.SendAsync(HttpMethod.Get, KeyVaultGateway.VaultPath(Vault), caller)).Status.ShouldBe(200);
+
+        foreach (var (action, body) in ValidBodies) {
+            var (status, response) = await gateway.ActionAsync(Vault, action, caller, body);
+
+            status.ShouldBe(403, $"{role} reached {action} with no data-plane role: {response}");
+            response.GetProperty("error").GetProperty("code").GetString().ShouldBe("AuthorizationFailed", action);
         }
     }
 
@@ -142,7 +194,7 @@ public sealed class KeyVaultOverTheGatewayTests(KeyVaultGateway gateway) : IClas
     }
 
     [Fact]
-    public async Task AKeyWrapsAndUnwrapsADataKeyAndBouncyCastleOpensNothingItShouldNot() {
+    public async Task AKeyWrapsAndUnwrapsADataKeyAndATamperedWrapIsRefused() {
         await Ok(Vault, KeyVaults.CreateKeyAction, new { keyName = "kek", kty = "RSA", keySize = 2048 });
         var dataKey = RandomNumberGenerator.GetBytes(32);
 

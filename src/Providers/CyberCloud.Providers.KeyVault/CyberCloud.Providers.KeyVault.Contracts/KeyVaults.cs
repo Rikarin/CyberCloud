@@ -209,7 +209,7 @@ public static class KeyVaults {
     /// <remarks>
     ///     ⚠ The schema's <c>maxLength</c> counts characters, which is what JSON Schema can say. The
     ///     grain counts the UTF-8 bytes it seals, so a value of 25,600 characters that are three bytes
-    ///     each isn't 75 KB of durable state. The #30 review found the count was characters only.
+    ///     each isn't 75 KB of durable state.
     /// </remarks>
     public const int MaxSecretLength = 25_600;
 
@@ -273,19 +273,46 @@ public static class KeyVaults {
     ///         carries only the ciphertext. A copy of the durable tier without OpenBao opens nothing.
     ///     </para>
     ///     <para>
-    ///         ⚠ The path is the five-segment family shape the other types' credentials use —
-    ///         <c>tenants/{tenantId}/{provider}/{type}/{id}</c> — so a tenant's vault paths stay
-    ///         under one prefix a policy can scope.
+    ///         ⚠
+    ///         <b>
+    ///             UNDER <see cref="RootPrefix" />, AND NEVER UNDER <c>tenants/{tenantId}/</c>, BECAUSE
+    ///             A TENANT CAN SPELL A PATH UNDER THAT PREFIX AND HAVE THE PLATFORM RESOLVE IT.
+    ///         </b> <c>VirtualMachines.ParseCloudInitRef</c> accepts any handle under
+    ///         <c>VirtualMachines.TenantVaultPrefix</c>. The VM reconciler resolves it with the
+    ///         platform's one broad token and writes the value into a Secret the guest mounts. That
+    ///         prefix holds only what the tenant is already handed, such as a cache's
+    ///         <c>listKeys</c> password. A vault's root is not handed to anyone. A Contributor who
+    ///         knew the vault's GUID could have put it in a guest's cloud-init with no data-plane
+    ///         role at all, and then every secret and private key the vault seals would open
+    ///         without the platform vault.
+    ///         Neither family may reference the other, so <c>KeyVaultRootIsOutsideTheTenantPrefixTests</c>
+    ///         holds the two to it from <c>CyberCloud.Gateway.Host.Tests</c>, which can see both.
+    ///     </para>
+    ///     <para>
+    ///         The tenant is still in the path, so one tenant's roots stay under one prefix a policy
+    ///         can scope.
     ///     </para>
     /// </remarks>
     public static SecretRef RootRef(Guid tenantId, Guid vaultId) =>
         new() { Path = RootPath(tenantId, vaultId), Field = RootField };
 
-    /// <summary>The path half of <see cref="RootRef" />.</summary>
+    /// <summary>
+    ///     The platform-only prefix every vault's root is under: <c>platform/CyberCloud.KeyVault/vaults/</c>.
+    /// </summary>
+    /// <remarks>
+    ///     Outside every tenant's <c>tenants/{tenantId}/</c>, which is the whole point — see
+    ///     <see cref="RootRef" />.
+    /// </remarks>
+    public const string RootPrefix = "platform/" + ProviderNamespace + "/" + TypePath + "/";
+
+    /// <summary>
+    ///     The path half of <see cref="RootRef" />:
+    ///     <c>platform/CyberCloud.KeyVault/vaults/{tenantId}/{vaultId}</c>.
+    /// </summary>
     /// <param name="tenantId">The vault's tenant.</param>
     /// <param name="vaultId">The vault's resource GUID.</param>
     public static string RootPath(Guid tenantId, Guid vaultId) =>
-        string.Create(CultureInfo.InvariantCulture, $"tenants/{tenantId:D}/{ProviderNamespace}/{TypePath}/{vaultId:D}");
+        string.Create(CultureInfo.InvariantCulture, $"{RootPrefix}{tenantId:D}/{vaultId:D}");
 
     // ── The resource body ──────────────────────────────────────────────────────────────────────
 
@@ -480,10 +507,11 @@ public static class KeyVaults {
 
     /// <summary>What encrypt and wrapKey take: plaintext, so marked secret.</summary>
     /// <remarks>
-    ///     ⚠ <b>Secret because a wrapKey's input is a data key.</b> Until the #30 review this shared one
-    ///     schema with decrypt, and its <c>/value</c> was ordinary text. So the plaintext a caller
-    ///     wrapped reached OpenAPI without <c>writeOnly</c> and the portal's form without masking, while
-    ///     the same bytes coming back out of decrypt were marked.
+    ///     ⚠ <b>Secret because a wrapKey's input is a data key</b>, and separate from
+    ///     <see cref="CiphertextRequest" /> for that reason. One schema for both directions would mark
+    ///     both <c>/value</c>s or neither. Unmarked, the plaintext a caller wraps reaches OpenAPI without
+    ///     <c>writeOnly</c> and the portal's form without masking, while the same bytes coming back out
+    ///     of decrypt are marked.
     /// </remarks>
     public static ResourceSchema PlaintextRequest { get; } =
         ResourceSchema.Of(

@@ -201,6 +201,63 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
+    ///     ⚠ Every permission the gateway's registry checks is one <c>CyberCloudSchema</c> declares
+    ///     on <c>resource</c>, except the five owed ones, which are pinned by name.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A permission the schema does not declare can only evaluate false, and the
+    ///         enforcement seam turns a false into the canonical 404</b> — to every caller, the owner
+    ///         included. That is how <c>purge</c> shipped broken (docs/plan/07 § Azure RBAC, expressed
+    ///         in it). A provider spells its permissions without referencing the schema, so nothing
+    ///         in the compiler sees the drift. This host is where every provider and the schema meet.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The five names below are a known defect, pinned rather than fixed.</b>
+    ///         <c>listKeys</c>, <c>listCredentials</c>, <c>listInstallCommand</c>, the cloud console's
+    ///         <c>connect</c> and Grafana's <c>url</c> are checked by other types' actions and declared
+    ///         nowhere, so every one of those actions answers 404 on a real silo. Declaring them is a
+    ///         <c>SchemaVersion</c> bump and a decision about which role holds each, which is not
+    ///         #30's. docs/plan/07 records it as owed row <c>action-permissions-are-undeclared</c>. The
+    ///         list is exact in both directions: a sixth undeclared name fails here, and so does
+    ///         declaring one of the five without removing it from this list.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed() {
+        await using var gateway = await BuildGatewayAsync();
+
+        var registry = gateway.Services.GetRequiredService<IProviderRegistry>();
+        var resource = CyberCloud.Authorization.CyberCloudSchema.Instance.Type(CyberCloud.Authorization.Contracts.ObjectTypes.Resource)
+            .ShouldNotBeNull();
+
+        var checkedBy = registry.Types
+            .SelectMany(static type => new[] {
+                        (type.ReadPermission, $"{type.Type} read"), (type.WritePermission, $"{type.Type} write"),
+                        (type.DeletePermission, $"{type.Type} delete"), (type.PurgePermission, $"{type.Type} purge")
+                    }
+                    .Concat(type.Actions.Select(action => (action.Permission, $"{type.Type}/{action.Name}")))
+            )
+            .Where(static x => x.Item1.Length > 0)
+            .ToList();
+
+        checkedBy.Count.ShouldBeGreaterThan(100, "the registry lost its providers, so this test would pass vacuously");
+
+        var undeclared = checkedBy
+            .Where(x => resource.Member(x.Item1) is not { IsPermission: true })
+            .GroupBy(static x => x.Item1, StringComparer.Ordinal)
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
+            .ToList();
+
+        undeclared.Select(static x => x.Key)
+            .ShouldBe(
+                ["connect", "listCredentials", "listInstallCommand", "listKeys", "url"],
+                "undeclared, and so answering 404 to everybody: "
+                + string.Join("; ", undeclared.Select(static x => $"{x.Key} ← {string.Join(", ", x.Select(static y => y.Item2))}"))
+            );
+    }
+
+    /// <summary>
     ///     ⚠ A container with the resource manager and no provider refuses to produce a registry.
     /// </summary>
     /// <remarks>

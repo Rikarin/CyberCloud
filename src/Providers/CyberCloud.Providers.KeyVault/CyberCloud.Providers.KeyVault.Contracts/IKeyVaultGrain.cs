@@ -105,9 +105,9 @@ public sealed record VaultCall {
     /// <summary>Names the action, the body's length and the trace, and never the body itself.</summary>
     /// <remarks>
     ///     ⚠ <b>Overridden because a record prints every property.</b> The compiler's
-    ///     <c>ToString</c> put <see cref="Body" /> into any log line, assertion message or Orleans
-    ///     diagnostic that formatted a call. So "never logged" was a promise nothing kept until the
-    ///     #30 review. <c>KeyVaultDeclarationTests.AVaultCallNeverPrintsItsBody</c> holds it.
+    ///     <c>ToString</c> would put <see cref="Body" /> into any log line, assertion message or
+    ///     Orleans diagnostic that formatted a call, and "never logged" would be a promise nothing
+    ///     kept. <c>KeyVaultDeclarationTests.AVaultCallNeverPrintsItsBody</c> holds it.
     /// </remarks>
     /// <returns>For example <c>VaultCall { Action = setSecret, Body = 41 chars, TraceId = none }</c>.</returns>
     public override string ToString() =>

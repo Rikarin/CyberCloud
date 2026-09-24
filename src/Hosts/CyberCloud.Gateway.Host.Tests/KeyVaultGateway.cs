@@ -128,6 +128,12 @@ public sealed class KeyVaultGateway : IAsyncLifetime {
     /// <summary>A workload's managed identity, granted Key Vault Secrets User on one vault.</summary>
     public string Workload { get; } = Guid.Parse("30303030-0000-4000-8000-0000000000d4").ToString("N");
 
+    /// <summary>A person granted <c>contributor</c> on the group, and no data-plane role.</summary>
+    public string Carol { get; } = Guid.Parse("30303030-0000-4000-8000-0000000000d5").ToString("N");
+
+    /// <summary>A person granted <c>reader</c> on the group, and no data-plane role.</summary>
+    public string Rita { get; } = Guid.Parse("30303030-0000-4000-8000-0000000000d6").ToString("N");
+
     /// <summary>The client every test sends through.</summary>
     public HttpClient Http { get; private set; } = null!;
 
@@ -142,6 +148,9 @@ public sealed class KeyVaultGateway : IAsyncLifetime {
     /// <param name="tenant">The tenant, when it is not <see cref="Tenant" />.</param>
     public static string VaultPath(string name, Guid? tenant = null) =>
         $"/tenants/{tenant ?? Tenant:D}/subscriptions/{Subscription:D}/resourceGroups/{Group}/providers/CyberCloud.KeyVault/vaults/{name}";
+
+    /// <summary>The path of the group the vaults are in, in <see cref="Tenant" />.</summary>
+    public static string GroupPath { get; } = $"/tenants/{Tenant:D}/subscriptions/{Subscription:D}/resourceGroups/{Group}";
 
     /// <summary>A bearer token for a subject of <see cref="Tenant" />.</summary>
     /// <param name="subject">The subject's id.</param>
@@ -403,8 +412,10 @@ public sealed class KeyVaultGateway : IAsyncLifetime {
 
         var home = Grains.ForTenant(Tenant.ToString("D", CultureInfo.InvariantCulture));
 
-        (await home.GetGrain<IUserGrain>(GrainKeys.User(Guid.ParseExact(Dana, "N")))
-            .CreateAsync("dana@key-vault.test", "Dana", UserStatus.Active)).IsSuccess.ShouldBeTrue();
+        foreach (var (id, name) in new[] { (Dana, "Dana"), (Carol, "Carol"), (Rita, "Rita") }) {
+            (await home.GetGrain<IUserGrain>(GrainKeys.User(Guid.ParseExact(id, "N")))
+                .CreateAsync($"{name.ToLowerInvariant()}@key-vault.test", name, UserStatus.Active)).IsSuccess.ShouldBeTrue();
+        }
         (await home.GetGrain<IManagedIdentityGrain>(GrainKeys.ManagedIdentity(Guid.ParseExact(Workload, "N")))
             .CreateAsync("build-workload")).IsSuccess.ShouldBeTrue();
     }

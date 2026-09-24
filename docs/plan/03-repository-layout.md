@@ -169,7 +169,7 @@ src/Providers/
 ├── CyberCloud.Providers.Storage/           # accounts, blob (S3), fileShares (15)
 ├── CyberCloud.Providers.Data/              # postgres, valkey, mongo, clickhouse, opensearch, qdrant (12)
 ├── CyberCloud.Providers.Messaging/         # nats, kafka, rabbitmq (12)
-├── CyberCloud.Providers.KeyVault/          # vaults, secrets, keys, certificates (18)
+├── CyberCloud.Providers.KeyVault/          # vaults; secrets and keys as its actions, certificates owed (18)
 ├── CyberCloud.Providers.Security/          # scanners, assessments (18)
 ├── CyberCloud.Providers.Monitor/           # workspaces, collectors, alerts, grafanas (16)
 ├── CyberCloud.Providers.Communication/     # sms, whatsapp, email-send, chat (17)

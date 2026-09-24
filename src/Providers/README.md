@@ -2337,9 +2337,11 @@ holds. What it measured:
   new grantable roles on every scope — `keyVaultSecretsOfficer/User`, `keyVaultCryptoOfficer/User` —
   and of nothing `owner` reaches. The provider spells the six without referencing the schema
   (docs/plan/07 § The enforcement seam), so `KeyVaultDeclarationTests.TheSixPermissionsAreTheSchemasAndNoControlPlaneRoleHoldsThem`
-  pins the two spellings, and `KeyVaultOverTheGatewayTests.TheOwnerOfTheVaultIsRefusedEveryDataPlaneAction`
-  drives the refusal over HTTP; widening `readSecrets` to `owner` turned it red (`403` expected, `404`
-  — the owner reached the grain — found).
+  pins the two spellings and walks each permission's rewrite for a control-plane role, and
+  `KeyVaultOverTheGatewayTests.AControlPlaneRoleIsRefusedEveryDataPlaneAction` drives the refusal over
+  HTTP for `owner`, `contributor` and `reader` across all 25 actions. Widening `readSecrets` to
+  `reader` turned the walk red and all three HTTP rows red (`403` expected, the grain's `404`
+  found). The first pass had seen the same when it widened `readSecrets` to `owner`.
 - **⚠ THE THIRD PROVIDER GRAIN, AND THE FIRST WHOSE STATE IS CIPHERTEXT BY CONSTRUCTION.**
   `KeyVaultGrain` holds every version of every item AES-256-GCM-sealed under a root minted into
   OpenBao through `ISecretWriter` and read back through `ISecretResolver` — the platform vault seam,

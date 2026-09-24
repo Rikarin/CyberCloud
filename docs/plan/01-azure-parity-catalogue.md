@@ -182,7 +182,7 @@ wholesale. Details, versions and per-service topology in [12](12-managed-data-se
 
 | Azure | Cyber Cloud | Verdict | How | EM |
 |---|---|---|---|---|
-| Key Vault | `CyberCloud.KeyVault/vaults` | **M1** | OpenBao (the Apache-2.0 fork of Vault; ⚠ Vault itself is BUSL since 2023 and cannot be offered as a service). Per-tenant namespace, transit engine for envelope encryption, managed-identity auth. [18](18-security-vault-and-malware-scan.md) | 2.0 |
+| Key Vault | `CyberCloud.KeyVault/vaults` | **M1** | OpenBao (the Apache-2.0 fork of Vault; ⚠ Vault itself is BUSL since 2023 and cannot be offered as a service). Per-tenant namespace, transit engine for envelope encryption, managed-identity auth. ⚠ *As built (#30): one platform namespace and `kv-v2` only; each vault's AES-256 root is in OpenBao and secrets and keys are sealed under it in the grain; managed identities reach the data plane through ReBAC role assignments, not OpenBao auth. The namespace, `transit` and auth rows are owed (`openbao-topology`).* [18](18-security-vault-and-malware-scan.md) | 2.0 |
 | Key Vault — managed HSM / Cloud HSM | — | **✗** | Hardware |
 | Microsoft Defender for Cloud | `CyberCloud.Security/assessments` | **M3** | Trivy + kube-bench + our own resource-shape rules, surfaced as a score. A thin version of this is worth more than nothing |
 | Microsoft Sentinel (SIEM) | — | **P1** | The audit and flow logs land in ClickHouse anyway; SIEM is the query layer and the content |

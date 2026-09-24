@@ -210,6 +210,19 @@ owed:
       selectors live at once — publish the new record, switch the signer, retire the old — and this
       platform cannot hold two live credentials for one resource, which is the same constraint that
       keeps regenerateKeys undeclared across the whole catalogue.
+  - id: the-credentials-sit-inside-the-tenant-vault-prefix
+    says: >
+      MailDomains.SecretPath is tenants/{tenantId}/CyberCloud.Mail/domains/{id}, and neither field
+      filed there is tenant-visible — the DKIM private key and the Dovecot master password, which
+      opens every mailbox on the domain. But VirtualMachines.ParseCloudInitRef accepts any
+      cloudInit.userData handle under tenants/{tenantId}/ and the VM reconciler resolves it with the
+      platform's token into a Secret the guest mounts. So a Contributor on the domain's subscription
+      who knew its GUID could put the master password into a machine they own and read mail they
+      hold no mailbox for. Found by #30's second review, which moved the key vault's root to
+      platform/ for the same reason (docs/plan/18 § What landed, and what is owed). The fix is the
+      same move, platform/CyberCloud.Mail/domains/{tenantId}/{id}, with a test beside
+      KeyVaultRootIsOutsideTheTenantPrefixTests; it was not made in #30 because it changes where a
+      family #30 does not own keeps the only copy of its DKIM key.
   - id: version-pins-are-unverified
     says: >
       Every version in MailDomains — the Dovecot minors and the three image tags — was written from

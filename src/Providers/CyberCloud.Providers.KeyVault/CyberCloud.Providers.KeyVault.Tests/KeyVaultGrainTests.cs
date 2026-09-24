@@ -263,7 +263,8 @@ public sealed class KeyVaultGrainTests(VaultSilo silo) : IClassFixture<VaultSilo
 
     [Fact]
     public async Task AnUpdateThatMovesOneEndOfTheWindowPastTheOtherIsRefused() {
-        // ⚠ The #30 review: Times checked a body carrying both ends, and an update may carry one.
+        // ⚠ An update may carry one end of the window, and the check is against the window the version
+        // will have, not only the one the body spells.
         var (_, vault) = await silo.OpenVaultAsync();
         var now = VaultSilo.Clock.UtcNow;
 

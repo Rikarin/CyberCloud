@@ -52,8 +52,8 @@ public sealed class KeyVaultDeclarationTests {
     [InlineData(KeyVaults.UnwrapKeyAction, "/value", false)]
     public void AnInputThatCarriesAPlaintextIsMarkedSecret(string name, string field, bool secret) {
         // ⚠ Field-level Secret is what gives the input writeOnly in OpenAPI and a masked field in the
-        // portal and cyc. encrypt and wrapKey were ordinary text until the #30 review, while the same
-        // plaintext coming back out of decrypt was marked.
+        // portal and cyc. A plaintext going into encrypt or wrapKey is as secret as the one coming back
+        // out of decrypt or unwrapKey, and the ciphertext going the other way is not.
         Registration.TryGetAction(name, out var action).ShouldBeTrue();
 
         action.Request.ShouldNotBeNull()
@@ -99,6 +99,80 @@ public sealed class KeyVaultDeclarationTests {
         foreach (var permission in KeyVaults.DataPlanePermissions) {
             var member = resource.Member(permission).ShouldNotBeNull($"'{permission}' is not defined on resource");
             member.IsPermission.ShouldBeTrue();
+
+            // ⚠ The second half of the name: walk every relation the permission can reach, on this
+            // type and up the parent chain, and none may be a control-plane role. A Rel(owner) or a
+            // From(parent, contributor) anywhere under it would hand the vault's contents to whoever
+            // manages it.
+            var reached = Reachable(permission);
+
+            foreach (var controlPlane in new[] { Relations.Owner, Relations.Contributor, Relations.Reader }) {
+                reached.ShouldNotContain(controlPlane, $"'{permission}' is reachable from '{controlPlane}': {string.Join(", ", reached)}");
+            }
+        }
+    }
+
+    [Fact]
+    public void TheWalkThatProvesNoControlPlaneRoleHoldsThemSeesOneThatDoes() {
+        // Without this the test above could pass because the walk finds nothing. `write` is
+        // Rel(contributor), which is Rel(owner) in turn.
+        var reached = Reachable(Permissions.Write);
+
+        reached.ShouldContain(Relations.Contributor);
+        reached.ShouldContain(Relations.Owner);
+    }
+
+    /// <summary>
+    ///     Every relation name a member of <c>resource</c> can be computed from, followed through
+    ///     <c>Rel</c> on the same type and <c>From(parent, …)</c> onto every scope type above it.
+    /// </summary>
+    /// <remarks>
+    ///     A negated operand is not followed: <c>!suspended</c> takes a permission away and never
+    ///     grants one.
+    /// </remarks>
+    static SortedSet<string> Reachable(string permission) {
+        var schema = CyberCloudSchema.Instance;
+        var reached = new SortedSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<(string Type, string Name)>([(ObjectTypes.Resource, permission)]);
+        var seen = new HashSet<(string, string)>();
+
+        while (pending.TryPop(out var next)) {
+            if (!seen.Add(next) || schema.Member(next.Type, next.Name) is not { } member) {
+                continue;
+            }
+
+            reached.Add(next.Name);
+
+            foreach (var expression in Granting(member.Expression)) {
+                switch (expression) {
+                    case RelationRefExpression relation:
+                        pending.Push((next.Type, relation.Relation));
+                        break;
+
+                    case TuplesetExpression from:
+                        foreach (var parent in schema.TypeNames.Where(x => schema.Member(x, from.Computed) is not null)) {
+                            pending.Push((parent, from.Computed));
+                        }
+
+                        break;
+                }
+            }
+        }
+
+        return reached;
+    }
+
+    static IEnumerable<RelationExpression> Granting(RelationExpression expression) {
+        if (expression is ExclusionExpression) {
+            yield break;
+        }
+
+        yield return expression;
+
+        foreach (var child in expression.Children) {
+            foreach (var granting in Granting(child)) {
+                yield return granting;
+            }
         }
     }
 

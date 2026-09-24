@@ -554,6 +554,18 @@ public static class VirtualMachines {
     ///         <c>VirtualMachineReconcilerTests.AHandleOutsideTheTenantsOwnVaultPrefixIsRefusedBeforeItIsResolved</c>
     ///         holds a seeded vault to that.
     ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The invariant runs the other way too: nothing the tenant is not handed may live
+    ///         inside the prefix.</b> A path under it is one the tenant can have a guest read. So
+    ///         platform-held material that happens to belong to a tenant is minted under
+    ///         <c>platform/</c> instead. A key vault's root is at
+    ///         <c>platform/CyberCloud.KeyVault/vaults/{tenantId}/{id}</c> for exactly this reason.
+    ///         <c>KeyVaultRootIsOutsideTheTenantPrefixTests</c> in <c>CyberCloud.Gateway.Host.Tests</c>
+    ///         holds the two families to it, since neither may reference the other. ⚠ One family
+    ///         still breaks it: <c>MailDomains.SecretPath</c> files the Dovecot master password
+    ///         here, which no action hands the tenant. <c>charts/managed/mail/conformance.yaml
+    ///         § owed</c>, <c>the-credentials-sit-inside-the-tenant-vault-prefix</c>.
+    ///     </para>
     /// </remarks>
     public static string TenantVaultPrefix(Guid tenantId) =>
         string.Create(CultureInfo.InvariantCulture, $"tenants/{tenantId:D}/");

@@ -833,8 +833,9 @@ public sealed class KeyVaultGrain(
         var (_, item, version) = found.GetValueOrThrow();
 
         // ⚠ THE WINDOW THE VERSION WILL HAVE, NOT THE ONE THE BODY SPELLS. Times checks a body that
-        // carries both ends, and an update may carry one: moving expiresOn before the stored
-        // notBefore, or the reverse, left a version no call could ever use. Found by the #30 review.
+        // carries both ends, and an update may carry one. Checking only the body would let an update
+        // move expiresOn before the stored notBefore, or the reverse, and leave a version no call
+        // could ever use.
         var notBefore = body.TryGetProperty("notBefore", out _) ? Stamp(body, "notBefore") : version.NotBefore;
         var expiresOn = body.TryGetProperty("expiresOn", out _) ? Stamp(body, "expiresOn") : version.ExpiresOn;
 
