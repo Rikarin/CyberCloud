@@ -308,21 +308,25 @@ public interface IBudgetControlPlane {
     Task<Result<bool>> IsArmedAsync(Guid tenantId, Guid budgetId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Whether a caller may read a subscription, checked fully consistent. A check that could not be
-    ///     answered is a no.
+    ///     Whether a caller may read what a budget covers—its resource group, or with
+    ///     <see cref="BudgetScope.Subscription" /> its subscription—checked fully consistent. A check
+    ///     that couldn't be answered is a no.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>What <c>showStatus</c> asks before it shows a subscription budget's figures</b>, which are
-    ///     the subscription's spend. Fully consistent for the reason <c>IInvoiceQueryGrain</c>'s check
-    ///     is: a revoked reader must stop seeing the figures at the revoke, not at the next evaluation.
+    ///     ⚠ <b>What <c>showStatus</c> asks before it shows a budget's figures</b>, which are the spend of
+    ///     the scope the budget covers. <c>read</c> on the budget isn't <c>read</c> on its group: a
+    ///     reader granted on the budget resource alone is someone the cost query answers with only the
+    ///     rows they may read. A reader of the subscription reads every group in it through the group's
+    ///     parent. Fully consistent for the reason <c>IInvoiceQueryGrain</c>'s check is: a revoked
+    ///     reader must stop seeing the figures at the revoke, not at the next evaluation.
     /// </remarks>
     /// <param name="tenantId">The tenant.</param>
-    /// <param name="subscriptionId">The subscription.</param>
-    /// <param name="caller">Who is asking.</param>
+    /// <param name="spec">The budget as held. Its scope, subscription, and group name the object checked.</param>
+    /// <param name="caller">Who is asking. An empty subject is nobody, and nobody reads anything.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
-    Task<bool> MayReadSubscriptionAsync(
+    Task<bool> MayReadScopeAsync(
         Guid tenantId,
-        Guid subscriptionId,
+        BudgetSpec spec,
         CostCaller caller,
         CancellationToken cancellationToken = default
     );

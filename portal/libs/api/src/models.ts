@@ -346,7 +346,7 @@ export interface BillingBudgetsData {
     };
     /** How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year. */
     period?: BillingBudgetsPeriod;
-    /** What the figure covers: this resource group, or the whole subscription. A resource group's usage is priced on its own, as if it were the subscription's only usage, so that its figure says nothing about the other groups' use of a tiered price. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. Its figures are the subscription's spend, so showStatus shows them only to a caller who may read the subscription. */
+    /** What the figure covers: this resource group, or the whole subscription. A resource group's usage is priced on its own, as if it were the subscription's only usage, so that its figure says nothing about the other groups' use of a tiered price. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. A budget's figures are the spend of what it covers, so showStatus shows them only to a caller who may read that resource group or subscription, not only the budget. */
     scope?: BillingBudgetsScope;
     /** Percentages of the amount that alert, each at most once per period. */
     thresholds?: {

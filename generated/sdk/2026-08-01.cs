@@ -412,7 +412,7 @@ public sealed partial class BudgetData {
         [JsonPropertyName("period")]
         public BudgetPeriod? Period { get; set; }
 
-        /// <summary>What the figure covers: this resource group, or the whole subscription. A resource group's usage is priced on its own, as if it were the subscription's only usage, so that its figure says nothing about the other groups' use of a tiered price. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. Its figures are the subscription's spend, so showStatus shows them only to a caller who may read the subscription.</summary>
+        /// <summary>What the figure covers: this resource group, or the whole subscription. A resource group's usage is priced on its own, as if it were the subscription's only usage, so that its figure says nothing about the other groups' use of a tiered price. A subscription budget is evaluated only once the budget itself has been granted reader on the subscription — a role assignment named reader-resource-{the budget's GUID, 32 hex digits} at the subscription, which only an owner of the subscription can make. A budget's figures are the spend of what it covers, so showStatus shows them only to a caller who may read that resource group or subscription, not only the budget.</summary>
         /// <remarks>Defaults to "resourceGroup" when left unset.</remarks>
         [JsonPropertyName("scope")]
         public BudgetScope? Scope { get; set; }

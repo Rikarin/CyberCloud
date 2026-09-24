@@ -69,10 +69,10 @@ public readonly record struct ActionContext(
     /// </summary>
     /// <remarks>
     ///     ⚠ <b>For a handler whose answer depends on more than the resource.</b> The manager has checked
-    ///     the declared permission on the resource and nothing else. <c>showStatus</c> on a budget that
-    ///     covers its subscription returns the subscription's spend, and a reader of the budget's group
-    ///     may not read that — so the handler asks again, about the subscription, for this caller. A
-    ///     handler that asks must refuse when this is empty rather than answer as nobody in particular.
+    ///     the declared permission on the resource and nothing else. <c>showStatus</c> on a budget returns
+    ///     the spend of the group or subscription it covers, and a reader of the budget may not read
+    ///     that, so the handler asks again, about that scope, for this caller. A handler that asks must
+    ///     refuse when this is empty rather than answer as nobody in particular.
     /// </remarks>
     public CallerContext Caller { get; init; } = new();
 

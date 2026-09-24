@@ -38,8 +38,9 @@ public sealed class BudgetStatusHandlerTests(BudgetSilo silo) {
         var subscription = Guid.NewGuid();
         var id = Budget(subscription);
         await ReconcileAsync(id, Budgets.Body(Service(subscription), ["finance@example.com"], 1.50m, actual: [50m, 100m]));
+        await GrantAsync(Group(subscription), User("gina"));
 
-        using var status = Parsed(await StatusAsync(id));
+        using var status = Parsed(await StatusAsync(id, "gina"));
         var root = status.RootElement;
 
         root.GetProperty("evaluated").GetBoolean().ShouldBeFalse();
@@ -61,7 +62,8 @@ public sealed class BudgetStatusHandlerTests(BudgetSilo silo) {
         var evaluated = (await silo.Plane.EvaluateAsync(Tenant, id.Id, TestContext.Current.CancellationToken)).GetValueOrThrow();
         evaluated.Fired.ShouldBe(1);
 
-        using var status = Parsed(await StatusAsync(id));
+        await GrantAsync(Group(subscription), User("gina"));
+        using var status = Parsed(await StatusAsync(id, "gina"));
         var root = status.RootElement;
 
         root.GetProperty("evaluated").GetBoolean().ShouldBeTrue();
@@ -88,7 +90,7 @@ public sealed class BudgetStatusHandlerTests(BudgetSilo silo) {
 
         var onTheSubscription = ObjectRef.Of(ObjectTypes.Subscription, subscription);
         await GrantAsync(onTheSubscription, SubjectRef.Of(ObjectTypes.Resource, id.Id));
-        await GrantAsync(ObjectRef.Of(ObjectTypes.ResourceGroup, subscription.ToString("N", CultureInfo.InvariantCulture) + "-prod"), User("bob"));
+        await GrantAsync(Group(subscription), User("bob"));
         await GrantAsync(onTheSubscription, User("alice"));
 
         await UseAsync(subscription, 40m);
@@ -108,15 +110,41 @@ public sealed class BudgetStatusHandlerTests(BudgetSilo silo) {
         (await StatusAsync(id, "alice")).Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed, "checked fully consistent, at the revoke");
     }
 
-    /// <summary>A group budget's figures are the group's, and <c>read</c> on the budget is enough.</summary>
+    /// <summary>
+    ///     ⚠ A group budget's figures are the group's spend. A reader granted on the budget resource
+    ///     alone, whom the cost query answers on the group with <c>filtered</c>, doesn't get them from
+    ///     the budget either. A reader of the group does, and so does a reader of the subscription,
+    ///     through the group's parent. The revoke takes them at once.
+    /// </summary>
     [Fact]
-    public async Task AGroupBudgetAsksNothingMoreThanTheManagerAsked() {
+    public async Task AGroupBudgetsFiguresAreShownOnlyToAReaderOfTheGroup() {
         var subscription = Guid.NewGuid();
         var id = Budget(subscription);
         await ReconcileAsync(id, Budgets.Body(Service(subscription), ["finance@example.com"], 1.50m, actual: [50m]));
 
-        using var status = Parsed(await StatusAsync(id, "bob"));
-        status.RootElement.GetProperty("amount").GetDecimal().ShouldBe(1.50m);
+        await GrantAsync(ObjectRef.Of(ObjectTypes.Resource, id.Id), User("carol"));
+        await GrantAsync(Group(subscription), User("gina"));
+        await WriteAsync(Group(subscription), Relations.Parent, SubjectRef.Of(ObjectTypes.Subscription, subscription), grant: true);
+        await GrantAsync(ObjectRef.Of(ObjectTypes.Subscription, subscription), User("sam"));
+
+        await UseAsync(subscription, 40m);
+        (await silo.Plane.EvaluateAsync(Tenant, id.Id, TestContext.Current.CancellationToken)).GetValueOrThrow().Fired.ShouldBe(1);
+
+        var budgetReader = await StatusAsync(id, "carol");
+        budgetReader.IsFailure.ShouldBeTrue("a reader of the budget alone was shown the group's spend");
+        budgetReader.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
+        budgetReader.Error.Message.ShouldContain("read on the group");
+        budgetReader.Error.Message.ShouldNotContain("1.00", Case.Sensitive, "the refusal carries no figure");
+
+        (await StatusAsync(id)).Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed, "a call with no caller is nobody's, and nobody reads the group");
+
+        foreach (var reader in new[] { "gina", "sam" }) {
+            using var status = Parsed(await StatusAsync(id, reader));
+            status.RootElement.GetProperty("actual").GetDecimal().ShouldBe(1.00m, reader);
+        }
+
+        await RevokeAsync(Group(subscription), User("gina"));
+        (await StatusAsync(id, "gina")).Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed, "checked fully consistent, at the revoke");
     }
 
     // ── Plumbing ──────────────────────────────────────────────────────────────────────────────────
@@ -174,12 +202,16 @@ public sealed class BudgetStatusHandlerTests(BudgetSilo silo) {
 
     static SubjectRef User(string id) => SubjectRef.Of(ObjectTypes.User, id);
 
-    Task GrantAsync(ObjectRef on, SubjectRef subject) => WriteAsync(on, subject, grant: true);
+    /// <summary>The budgets' group, <c>prod</c>, by the ReBAC id the manager writes for it.</summary>
+    static ObjectRef Group(Guid subscription) =>
+        ObjectRef.Of(ObjectTypes.ResourceGroup, subscription.ToString("N", CultureInfo.InvariantCulture) + "-prod");
 
-    Task RevokeAsync(ObjectRef on, SubjectRef subject) => WriteAsync(on, subject, grant: false);
+    Task GrantAsync(ObjectRef on, SubjectRef subject) => WriteAsync(on, Relations.Reader, subject, grant: true);
 
-    async Task WriteAsync(ObjectRef on, SubjectRef subject, bool grant) {
-        var tuple = RelationTuple.Create(on, Relations.Reader, subject).GetValueOrThrow();
+    Task RevokeAsync(ObjectRef on, SubjectRef subject) => WriteAsync(on, Relations.Reader, subject, grant: false);
+
+    async Task WriteAsync(ObjectRef on, string relation, SubjectRef subject, bool grant) {
+        var tuple = RelationTuple.Create(on, relation, subject).GetValueOrThrow();
         var store = silo.Grains.ForTenant(Tenant.ToString("D", CultureInfo.InvariantCulture)).GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(Tenant));
 
         var written = grant ? await store.WriteAsync(tuple) : await store.DeleteAsync(tuple);

@@ -46,12 +46,18 @@ public sealed class GrainBudgetControlPlane(IGrainFactory grains) : IBudgetContr
         Budget(tenantId, budgetId).IsArmedAsync();
 
     /// <inheritdoc />
-    public async Task<bool> MayReadSubscriptionAsync(
+    /// <remarks>
+    ///     The group's ReBAC id is <c>{subscription:N}-{group}</c>, the one <c>ReBacResourceAuthorizer.GroupObjectId</c>
+    ///     writes and <c>CostQueryGrain</c> asks. ⚠ Any scope but <see cref="BudgetScope.ResourceGroup" />
+    ///     asks about the subscription, so a spec with no scope gets the stricter question.
+    /// </remarks>
+    public async Task<bool> MayReadScopeAsync(
         Guid tenantId,
-        Guid subscriptionId,
+        BudgetSpec spec,
         CostCaller caller,
         CancellationToken cancellationToken = default
     ) {
+        ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(caller);
 
         var subject = SubjectRef.Create(caller.SubjectType, caller.SubjectId);
@@ -59,8 +65,13 @@ public sealed class GrainBudgetControlPlane(IGrainFactory grains) : IBudgetContr
             return false;
         }
 
+        var subscription = spec.SubscriptionId.ToString("N", CultureInfo.InvariantCulture);
+        var (objectType, objectId) = spec.Scope == BudgetScope.ResourceGroup
+            ? (ObjectTypes.ResourceGroup, subscription + "-" + spec.ResourceGroup)
+            : (ObjectTypes.Subscription, subscription);
+
         var checkedRead = await grains.ForTenant(tenantId.ToString("D", CultureInfo.InvariantCulture))
-            .GetGrain<ICheckGrain>(GrainKeys.CheckCache(ObjectTypes.Subscription, subscriptionId.ToString("N", CultureInfo.InvariantCulture)))
+            .GetGrain<ICheckGrain>(GrainKeys.CheckCache(objectType, objectId))
             .CheckAsync(Permissions.Read, subject.GetValueOrThrow(), Consistency.FullyConsistent);
 
         return checkedRead.TryGetValue(out var answer) && answer.Allowed;

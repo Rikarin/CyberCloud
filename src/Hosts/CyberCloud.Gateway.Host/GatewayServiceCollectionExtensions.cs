@@ -151,7 +151,7 @@ static class GatewayServiceCollectionExtensions {
         // because the budget reconciler is registered in this container as well as the silo's (the
         // registry is built the same way in both), and a type whose reconciler cannot be constructed
         // here would fail the first resolve. It is also what showStatus reads a budget through, and
-        // what asks whether the caller may read the subscription a budget covers (#41).
+        // what asks whether the caller may read the group or subscription a budget covers (#41).
         services.AddCyberCloudBillingClient();
 
         // ── SignalR. docs/plan/10 § SignalR — no backplane product, by design. ──
