@@ -601,6 +601,21 @@ public sealed class TenantOverHttpTests(LocalTopology topology) : IAsyncLifetime
             "an end closer than TupleExpiry.ShorteningNotice was accepted: " + tooSoon.Body
         );
 
+        // ⚠ The code alone doesn't say whose refusal this is: the gateway refuses a body's shape with
+        // the same one. Only the tuple store names the notice, so the message is what places it in
+        // the silo.
+        var notice = Json(tooSoon.Body).GetProperty("error");
+        notice.GetProperty("code").GetString().ShouldBe(CyberCloud.Core.ErrorCode.InvalidRequestBody.Value);
+        notice.GetProperty("message")
+            .GetString()
+            .ShouldNotBeNull()
+            .ShouldContain(
+                "less than "
+                + TupleExpiry.ShorteningNotice.TotalSeconds.ToString(CultureInfo.InvariantCulture)
+                + " seconds from now",
+                Case.Sensitive,
+                "the 400 is not the tuple store's shortening refusal. Body: " + tooSoon.Body
+            );
 
         var shortened = await PutAsync(assignment.Path, ExpiresOnBody(oneHour), cancellationToken);
 

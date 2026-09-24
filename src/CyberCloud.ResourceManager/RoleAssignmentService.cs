@@ -624,11 +624,19 @@ public sealed class RoleAssignmentService(
     ///     Whether the body, when it says anything, says what the address says.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Every property is optional and a present one must agree — see
-    ///     <see cref="RoleAssignmentBodyProperties" />. The comparison is ordinal on all three,
-    ///     because all three are matched ordinally by the tuple store, and a body that said
-    ///     <c>Reader</c> for an address that said <c>reader</c> is a client that has two spellings
-    ///     of one thing and is about to have a worse day elsewhere.
+    ///     <para>
+    ///         ⚠ Every property is optional and a present one must agree — see
+    ///         <see cref="RoleAssignmentBodyProperties" />. The comparison is ordinal on all three,
+    ///         because all three are matched ordinally by the tuple store, and a body that said
+    ///         <c>Reader</c> for an address that said <c>reader</c> is a client that has two
+    ///         spellings of one thing and is about to have a worse day elsewhere.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The envelope's <c>id</c> and <c>scope</c> must agree too.</b> They name the address
+    ///         the <c>GET</c> went to, so without them a <c>GET</c> from one scope, sent as a
+    ///         <c>PUT</c> to another, would grant at the second without a word. Both are ordinal,
+    ///         because scope names are: two resource groups can differ only in case.
+    ///     </para>
     /// </remarks>
     static Result<AssignmentBody> BodyAgrees(string body, RoleAssignmentId assignment, DateTimeOffset now) {
         JsonDocument document;
@@ -663,9 +671,11 @@ public sealed class RoleAssignmentService(
             var read = properties.GetValueOrThrow();
             var name = assignment.Name;
 
-            var disagreement = Agree(read, RoleAssignmentBodyProperties.RoleDefinitionId, name.Role)
-                ?? Agree(read, RoleAssignmentBodyProperties.PrincipalType, name.PrincipalType)
-                ?? Agree(read, RoleAssignmentBodyProperties.PrincipalId, name.PrincipalId);
+            var disagreement = Agree(read, RoleAssignmentBodyProperties.RoleDefinitionId, name.Role, NameAgrees)
+                ?? Agree(read, RoleAssignmentBodyProperties.PrincipalType, name.PrincipalType, NameAgrees)
+                ?? Agree(read, RoleAssignmentBodyProperties.PrincipalId, name.PrincipalId, NameAgrees)
+                ?? Agree(document.RootElement, "id", assignment.Path, AddressAgrees)
+                ?? Agree(read, "scope", assignment.ScopePath, AddressAgrees);
 
             if (disagreement is { } refused) {
                 return Result<AssignmentBody>.Failure(refused.Error!);
@@ -680,11 +690,11 @@ public sealed class RoleAssignmentService(
     ///     envelope a <c>GET</c> renders, at the top level otherwise.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>Both shapes, because a <c>GET</c> sent back as a <c>PUT</c> is the envelope.</b>
-    ///     This read the top level only, so the envelope's <c>properties.expiresOn</c> was never seen
-    ///     and the <c>PUT</c> made a just-in-time grant permanent, the opposite of what it sent. A body
-    ///     with the four in both places is refused, because either reading would ignore half of what
-    ///     the caller wrote.
+    ///     ⚠ <b>Both shapes, because a <c>GET</c> sent back as a <c>PUT</c> is the envelope.</b> Read
+    ///     at the top level alone, the envelope's <c>properties.expiresOn</c> goes unseen and the
+    ///     <c>PUT</c> makes a just-in-time grant permanent, the opposite of what it sent. A body with
+    ///     the four in both places is refused, because either reading would ignore half of what the
+    ///     caller wrote.
     /// </remarks>
     static Result<JsonElement> Properties(JsonElement body) {
         if (!body.TryGetProperty("properties", out var properties)) {
@@ -784,7 +794,17 @@ public sealed class RoleAssignmentService(
     /// <param name="ExpiresOn">When the grant ends, in UTC, or <see langword="null" /> for a permanent grant.</param>
     readonly record struct AssignmentBody(DateTimeOffset? ExpiresOn);
 
-    static Result? Agree(JsonElement body, string property, string expected) {
+    const string NameAgrees =
+        "The address is the assignment — '{role}-{principalType}-{principalId}' — so a body property is "
+        + "optional and, when present, must agree with it; trusting either one silently would grant "
+        + "something the caller did not spell.";
+
+    const string AddressAgrees =
+        "It names the address a GET was sent to, and this PUT is to another one; granting here on a body "
+        + "read from there would grant somewhere the caller did not spell. Leave it out, or send the PUT "
+        + "to the address it names.";
+
+    static Result? Agree(JsonElement body, string property, string expected, string why) {
         if (!body.TryGetProperty(property, out var value)) {
             return null;
         }
@@ -796,10 +816,8 @@ public sealed class RoleAssignmentService(
             : Result.Failure(
                 ErrorCode.InvalidRequestBody,
                 $"The body's '{property}' is '{actual ?? value.ValueKind.ToString().ToLowerInvariant()}' and "
-                + $"the address says '{expected}'. The address is the assignment — "
-                + "'{role}-{principalType}-{principalId}' — so a body property is optional and, when "
-                + "present, must agree with it; trusting either one silently would grant something "
-                + "the caller did not spell."
+                + $"the address says '{expected}'. "
+                + why
             );
     }
 
