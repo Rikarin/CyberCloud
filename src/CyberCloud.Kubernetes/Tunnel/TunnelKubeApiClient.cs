@@ -179,6 +179,29 @@ public sealed class TunnelKubeApiClient(Guid clusterId, ITunnelRoute route) : IK
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>Refused by name, for the watch's reason.</b> An attach is a stream both ways for as
+    ///     long as somebody types, and the tunnel carries one response per request. A cloud terminal
+    ///     on an agent-connected cluster needs a stream frame in <c>TunnelFrame</c> and a pump in the
+    ///     agent — <c>charts/managed/cloud-shell/conformance.yaml § owed</c>,
+    ///     <c>no-terminal-over-the-agent-tunnel</c>.
+    /// </remarks>
+    public Task<Result<IKubeTerminal>> AttachAsync(
+        ObjectRef pod,
+        string container,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<IKubeTerminal>.Failure(
+                ErrorCode.PreconditionFailed,
+                $"Cluster {clusterId:D} is reached through an agent tunnel, and a terminal on '{pod}' "
+                + "cannot cross it: the tunnel carries one response per request and a terminal is a "
+                + "stream both ways. charts/managed/cloud-shell/conformance.yaml § owed, "
+                + "no-terminal-over-the-agent-tunnel."
+            )
+        );
+
+    /// <inheritdoc />
     public void Dispose() {
         // The route is the grain's or the test's; nothing here owns a socket.
     }

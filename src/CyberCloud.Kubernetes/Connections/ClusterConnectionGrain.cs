@@ -477,6 +477,40 @@ public sealed class ClusterConnectionGrain : Grain, IClusterConnectionGrain {
     }
 
     /// <inheritdoc />
+    public Task<Result<ClusterConnectionDescriptor>> AuthorizeAttachAsync(ObjectRef pod) {
+        var allowed = EnsureCallerMayReach(nameof(AuthorizeAttachAsync));
+        if (allowed.IsFailure) {
+            return Task.FromResult(Refused<ClusterConnectionDescriptor>(allowed));
+        }
+
+        // ⚠ A Pod and nothing else. pods/attach is the one subresource this answers for; a caller
+        // that asked about a Deployment would be asking a question the dialer cannot act on, and an
+        // allow for it would read as an allow for whatever the dialer's next version grows.
+        if (pod is null
+            || pod.Name.Length == 0
+            || pod.IsClusterScoped
+            || pod.Kind.Group.Length != 0
+            || !string.Equals(pod.Kind.Kind, "Pod", StringComparison.Ordinal)) {
+            return Task.FromResult(
+                Result<ClusterConnectionDescriptor>.Failure(
+                    ErrorCode.InvalidRequestBody,
+                    $"An attach on cluster {clusterId:D} was asked for against '{pod}', which is not a "
+                    + "core v1 Pod in a namespace."
+                )
+            );
+        }
+
+        if (health.Current.State == ClusterHealthState.Degraded) {
+            // The delete's rule: a shell on an unreachable cluster is a retry, not a refusal.
+            return Task.FromResult(
+                Result<ClusterConnectionDescriptor>.Failure(ErrorCode.OperationInProgress, health.Current.Message)
+            );
+        }
+
+        return Task.FromResult(Result<ClusterConnectionDescriptor>.Success(state.State.Descriptor!));
+    }
+
+    /// <inheritdoc />
     public async Task<Result<InformerLease>> WatchAsync(GroupVersionKind kind, string labelSelector) {
         ArgumentNullException.ThrowIfNull(kind);
 

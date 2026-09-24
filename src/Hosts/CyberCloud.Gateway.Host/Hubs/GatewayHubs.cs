@@ -157,77 +157,244 @@ public sealed class MetricsHub(IGrainFactory grains, IConcurrencyLimiter limiter
 ///     <para>
 ///         ⚠ <b>No interest set and no connection grain, deliberately.</b> A terminal is one caller
 ///         and one session, so there is nothing to fan out and an interest set would be a subscription
-///         of size one with an authorization re-check attached. The session grain is docs/plan/19's
-///         and does not exist yet; what is here is the hub's shape and its authorization seam, so that
-///         wiring the session grain is an implementation rather than a redesign.
+///         of size one with an authorization re-check attached. Each method goes straight to
+///         <see cref="ITerminalSessionGrain" />, tenant-qualified from the token, and the pane's
+///         output comes back through a grain observer (<see cref="TerminalPane" />) — not an Orleans
+///         stream. <see cref="ITerminalViewer" />'s remarks say why: one producer, one consumer, and a
+///         terminal needs order, backpressure and a delivery that fails at once when the pod holding
+///         the socket is gone.
 ///     </para>
 ///     <para>
-///         ⚠ <b>The shape is now the whole client contract, and the portal is written against it.</b>
-///         Three methods a client invokes — <see cref="Attach" />, <see cref="Send" /> and
-///         <see cref="Resize" /> — and one it receives, <see cref="TerminalProtocol.Output" />. The
-///         portal's terminal blade opens the socket with a <c>HubTickets</c> ticket, calls
-///         <c>Attach</c> with the <c>sessionId</c> the console's <c>connect</c> action returned and the
-///         pane's size, pumps keystrokes through <c>Send</c>, and paints every <c>Output</c>. Every
-///         method throws the same <see cref="HubException" /> today, naming the grain that is owed,
-///         and the portal shows that message in the pane — which is the honest state of the row, and
-///         a better one than a pane that looks connected to nothing.
-///         <c>TerminalHubTests.TheWireNamesAreTheFourThePortalSpeaks</c> and the portal's
-///         <c>terminal-session.spec.ts</c> both pin the names below, so the two sides cannot drift
-///         apart while the middle is being built.
+///         ⚠ <b>The hub authorizes nothing, and the gateway still cannot name the engine.</b> The
+///         session grain checks that the caller is the person who opened the session and re-checks the
+///         <c>connect</c> permission through the manager's <c>IResourceAuthorizer</c> — in a silo.
+///         <c>GatewayIsolationTests.TheGatewayBindsNoTypeFromTheAuthorizationAssemblies</c> is still
+///         true of this file.
+///     </para>
+///     <para>
+///         ⚠ <b>The contract is the portal's.</b> Three methods a client invokes — <see cref="Attach" />,
+///         <see cref="Send" /> and <see cref="Resize" /> — and two it receives,
+///         <see cref="TerminalProtocol.Output" /> and <see cref="TerminalProtocol.Ended" />.
+///         <c>TerminalHubTests.TheWireNamesAreTheFiveThePortalSpeaks</c> and the portal's
+///         <c>terminal-session.spec.ts</c> pin the names from both sides.
 ///     </para>
 /// </remarks>
-public sealed class TerminalHub : Hub {
+/// <param name="grains">The gateway's Orleans client. Every reference goes through <c>ForTenant</c>.</param>
+/// <param name="limiter">The per-tenant connection cap the interest hubs share — docs/plan/10 § Rate limiting.</param>
+/// <param name="panes">Where a pane's output is sent from outside a hub invocation.</param>
+public sealed class TerminalHub(
+    IGrainFactory grains,
+    IConcurrencyLimiter limiter,
+    IHubContext<TerminalHub> panes
+) : Hub {
+    const string PaneKey = "cybercloud.terminal.pane";
+    const string HeldSlot = "cybercloud.terminal.slot";
+
+    /// <inheritdoc />
+    public override async Task OnConnectedAsync() {
+        if (!limiter.TryAcquireConnection(Caller().TenantId)) {
+            // Aborted rather than thrown, for InterestHub's reason: a client over the cap should back
+            // off and reconnect, not read a hub exception.
+            Context.Abort();
+            return;
+        }
+
+        // Marks the slot as held, so a connection aborted above does not release one it never took.
+        Context.Items[HeldSlot] = true;
+        await base.OnConnectedAsync();
+    }
+
+    /// <inheritdoc />
+    public override async Task OnDisconnectedAsync(Exception? exception) {
+        if (Context.Items.ContainsKey(HeldSlot)) {
+            limiter.ReleaseConnection(Caller().TenantId);
+        }
+
+        // ⚠ The shell keeps running. A dropped socket is exactly what reconnect is for; ending the
+        // session here would turn a Wi-Fi blip into a lost shell, the one thing docs/plan/19
+        // § Architecture says the ring buffer exists to prevent.
+        await DetachAsync();
+        await base.OnDisconnectedAsync(exception);
+    }
+
     /// <summary>
     ///     Joins a session: replays its output ring buffer, then streams live output as
-    ///     <see cref="TerminalProtocol.Output" /> until the socket closes. docs/plan/19 § Architecture.
+    ///     <see cref="TerminalProtocol.Output" /> until the socket closes or the session ends.
     /// </summary>
     /// <param name="sessionId">The session <c>connect</c> returned — the shell pod's own UID.</param>
     /// <param name="columns">The pane's width in cells, so the first frame is laid out for the pane it lands in.</param>
     /// <param name="rows">The pane's height in cells.</param>
-    /// <exception cref="HubException">Always, until docs/plan/19's session grain exists — see <see cref="Send" />.</exception>
+    /// <exception cref="HubException">
+    ///     The session grain refused: no such session for this caller, the caller no longer holds
+    ///     <c>connect</c>, or the shell has ended. The message is the grain's, and the portal shows it.
+    /// </exception>
     [HubMethodName(TerminalProtocol.Attach)]
-    public Task Attach(string sessionId, int columns, int rows) {
-        _ = sessionId;
-        _ = columns;
-        _ = rows;
+    public async Task Attach(string sessionId, int columns, int rows) {
+        var session = Session(sessionId);
 
-        throw Owed();
+        // One pane per socket. A second Attach on the same socket — the portal never sends one, a
+        // hand-written client might — replaces the first rather than leaking its observer.
+        await DetachAsync();
+
+        var pane = new TerminalPane(panes, Context);
+        var reference = grains.CreateObjectReference<ITerminalViewer>(pane);
+        pane.Attached(session, reference, grains);
+
+        // ⚠ Parked BEFORE the grain call: the replay is delivered to the pane during AttachAsync, and
+        // Orleans holds an observer only weakly — see TerminalPane.
+        Context.Items[PaneKey] = pane;
+
+        var attached = await session.AttachAsync(Caller(), reference, columns, rows);
+
+        if (attached.TryGetError(out var refusal)) {
+            Context.Items.Remove(PaneKey);
+            pane.Release();
+            throw new HubException(refusal.Message);
+        }
     }
 
     /// <summary>Sends a chunk of input to the session. Binary, unbuffered.</summary>
     /// <param name="sessionId">The terminal session.</param>
     /// <param name="data">The bytes the user typed.</param>
     /// <exception cref="HubException">
-    ///     Always, until docs/plan/19's session grain exists. ⚠ Failing loudly rather than accepting
-    ///     and dropping: a terminal that silently swallows input is worse than one that is closed.
+    ///     The session grain refused. ⚠ Failing loudly rather than accepting and dropping: a terminal
+    ///     that silently swallows input is worse than one that is closed.
     /// </exception>
     [HubMethodName(TerminalProtocol.Send)]
-    public Task Send(string sessionId, byte[] data) {
-        _ = sessionId;
-        _ = data;
+    public async Task Send(string sessionId, byte[] data) {
+        var sent = await Session(sessionId).SendAsync(Caller(), data);
 
-        throw Owed();
+        if (sent.TryGetError(out var refusal)) {
+            throw new HubException(refusal.Message);
+        }
     }
 
     /// <summary>Tells the shell its window changed size, so a full-screen program redraws for it.</summary>
     /// <param name="sessionId">The terminal session.</param>
     /// <param name="columns">The new width in cells.</param>
     /// <param name="rows">The new height in cells.</param>
-    /// <exception cref="HubException">Always, until docs/plan/19's session grain exists — see <see cref="Send" />.</exception>
+    /// <exception cref="HubException">The session grain refused — see <see cref="Send" />.</exception>
     [HubMethodName(TerminalProtocol.Resize)]
-    public Task Resize(string sessionId, int columns, int rows) {
-        _ = sessionId;
-        _ = columns;
-        _ = rows;
+    public async Task Resize(string sessionId, int columns, int rows) {
+        var resized = await Session(sessionId).ResizeAsync(Caller(), columns, rows);
 
-        throw Owed();
+        if (resized.TryGetError(out var refusal)) {
+            throw new HubException(refusal.Message);
+        }
     }
 
-    static HubException Owed() =>
-        new(
-            "The cloud terminal's session grain is docs/plan/19 and is not implemented. The hub is "
-            + "mapped so the route and its authorization seam exist; the data plane is owed."
+    async Task DetachAsync() {
+        if (Context.Items.Remove(PaneKey, out var held) && held is TerminalPane pane) {
+            await pane.DetachAsync();
+        }
+    }
+
+    /// <summary>The session grain, tenant-qualified from the token.</summary>
+    /// <exception cref="HubException">The id is not a session id — refused before any grain is addressed.</exception>
+    /// <remarks>
+    ///     ⚠ <c>ForTenant</c>, and CC1006 fails the build on anything else. The session id is the one
+    ///     caller-supplied part of the key and it is checked for a UID's shape first, so a crafted id
+    ///     cannot add a segment; the tenant part comes from the token and cannot be supplied at all.
+    /// </remarks>
+    ITerminalSessionGrain Session(string sessionId) {
+        if (!TerminalSessionKeys.IsSessionId(sessionId)) {
+            throw new HubException(
+                $"'{sessionId}' is not a session id. Call connect on the console and use the sessionId it returns."
+            );
+        }
+
+        return grains
+            .ForTenant(Caller().TenantId.ToString("D", CultureInfo.InvariantCulture))
+            .GetGrain<ITerminalSessionGrain>(TerminalSessionKeys.Session(sessionId));
+    }
+
+    /// <summary>The caller the pipeline established for this connection — see <see cref="InterestHub" />.</summary>
+    CallerContext Caller() =>
+        Context.GetHttpContext()?.Items[GatewayCallerFeature.ItemKey] as CallerContext
+        ?? throw new HubException(
+            "This connection has no caller context. A hub endpoint must be mapped behind the gateway "
+            + "pipeline — docs/plan/10 § Request pipeline."
         );
+}
+
+/// <summary>
+///     One terminal pane's socket, as the session grain sees it — the grain observer the hub hands
+///     to <see cref="ITerminalSessionGrain.AttachAsync" />.
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Held by the connection, because Orleans holds an observer weakly.</b> The runtime keeps
+///         only a weak reference to the object behind <c>CreateObjectReference</c>; a pane nothing else
+///         referenced would be collected mid-session and the grain's next delivery would fail as though
+///         the socket had gone. The hub parks it in the connection's items for exactly the socket's
+///         lifetime.
+///     </para>
+///     <para>
+///         ⚠ <b>Output goes through <see cref="IHubContext{THub}" />, not the hub.</b> A hub instance
+///         lives for one invocation; the grain calls this whenever the shell prints.
+///     </para>
+/// </remarks>
+/// <param name="panes">The hub context, for sending to this one connection.</param>
+/// <param name="connection">The connection, for its id and so an ended session can close it.</param>
+sealed class TerminalPane(IHubContext<TerminalHub> panes, HubCallerContext connection) : ITerminalViewer {
+    ITerminalSessionGrain? session;
+    ITerminalViewer? reference;
+    IGrainFactory? grains;
+
+    /// <summary>Records what this pane is attached to, so it can detach itself.</summary>
+    /// <param name="session">The session grain.</param>
+    /// <param name="reference">The observer reference the grain was given for this pane.</param>
+    /// <param name="grains">The factory the reference was created on, which is where it is released.</param>
+    public void Attached(ITerminalSessionGrain session, ITerminalViewer reference, IGrainFactory grains) {
+        this.session = session;
+        this.reference = reference;
+        this.grains = grains;
+    }
+
+    /// <inheritdoc />
+    public Task OutputAsync(byte[] data) =>
+        panes.Clients.Client(connection.ConnectionId).SendAsync(TerminalProtocol.Output, data);
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     Tells the pane, then closes the socket. ⚠ The pane must not treat the close as a dropped
+    ///     connection and reconnect — a reconnect is <c>connect</c>, and <c>connect</c> after an idle
+    ///     reclaim starts the pod the reclaim just stopped. <see cref="TerminalProtocol.Ended" /> is the
+    ///     portal's cue to stop.
+    /// </remarks>
+    public async Task EndedAsync(string reason) {
+        await panes.Clients.Client(connection.ConnectionId).SendAsync(TerminalProtocol.Ended, reason);
+        connection.Abort();
+    }
+
+    /// <summary>Leaves the session and releases the observer.</summary>
+    public async Task DetachAsync() {
+        if (session is not null && reference is not null) {
+            try {
+                await session.DetachAsync(reference);
+            } catch (Exception ex) when (ex is not OutOfMemoryException) {
+                // The silo is gone or the grain with it; the observer is released below either way.
+            }
+        }
+
+        Release();
+    }
+
+    /// <summary>Releases the observer without telling the grain — for an attach the grain refused.</summary>
+    public void Release() {
+        if (grains is not null && reference is not null) {
+            try {
+                // ⚠ The REFERENCE, not this object — AgentTunnelRelay's lesson: Orleans indexes a
+                // registration by the reference it handed out.
+                grains.DeleteObjectReference<ITerminalViewer>(reference);
+            } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
+                // Already released.
+            }
+        }
+
+        reference = null;
+        session = null;
+    }
 }
 
 /// <summary>
@@ -251,4 +418,15 @@ public static class TerminalProtocol {
 
     /// <summary>Hub → client: bytes the shell printed, as one <c>byte[]</c> argument.</summary>
     public const string Output = "Output";
+
+    /// <summary>
+    ///     Hub → client: the session is over — exited, reclaimed after sitting idle, stopped at its
+    ///     hard cap, or terminated — with one sentence saying which. The socket closes after it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Its own callback so the pane can tell it from a dropped socket.</b> A dropped socket is
+    ///     reconnected, and the portal's reconnect is <c>connect</c> — which, after an idle reclaim,
+    ///     would start the very pod the reclaim stopped, for a tab nobody is looking at.
+    /// </remarks>
+    public const string Ended = "Ended";
 }

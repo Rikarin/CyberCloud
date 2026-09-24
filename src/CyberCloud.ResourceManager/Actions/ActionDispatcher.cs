@@ -60,11 +60,23 @@ namespace CyberCloud.ResourceManager.Actions;
 ///     the refusing default — every dispatcher built by a test, and the right answer for a host that
 ///     serves no connected cluster.
 /// </param>
+/// <param name="terminals">
+///     Where <c>connect</c> registers the terminal session it starts, or <see langword="null" /> for
+///     the refusing default. <c>AddCyberCloudResourceManager</c> registers the grain-backed one.
+/// </param>
+/// <param name="relay">
+///     Where an action goes when its type declares <c>RequiresCluster</c> and
+///     <paramref name="clusters" /> has no connection for it: <see cref="GrainClusterActionRelay" /> in
+///     the gateway, <see langword="null" /> everywhere else. ⚠ Only the gateway registers one. It
+///     can't reach a cluster and a silo can; <see cref="IClusterActionGrain" /> says why.
+/// </param>
 public sealed class ActionDispatcher(
     IServiceProvider services,
     IClusterConnectionFactory clusters,
     ISecretResolver secrets,
-    IAgentTunnels? agents = null
+    IAgentTunnels? agents = null,
+    ITerminalSessions? terminals = null,
+    IClusterActionRelay? relay = null
 ) {
     /// <summary>Runs one action and returns its response body.</summary>
     /// <param name="id">The resource, with its GUID resolved.</param>
@@ -74,16 +86,21 @@ public sealed class ActionDispatcher(
     /// <param name="body">The validated <c>POST</c> body.</param>
     /// <param name="creator">
     ///     The caller-bound creator a handler may use, or <see langword="null" /> for the refusing
-    ///     default — see <see cref="IResourceCreator" />.
+    ///     default — see <see cref="IResourceCreator" />. ⚠ An action that's relayed doesn't carry
+    ///     this object, which is bound to this process's manager; the silo builds its own for the same
+    ///     caller — see <see cref="IClusterActionGrain" />.
     /// </param>
-    /// <param name="caller">Who invoked it, handed to the handler as <see cref="ActionContext.Caller" />.</param>
+    /// <param name="caller">
+    ///     Who invoked it, handed to the handler as <see cref="ActionContext.Caller" />. Empty when the
+    ///     caller of this dispatcher has nobody to give.
+    /// </param>
     /// <param name="parent">
     ///     The resource's parent with its GUID resolved, or <see langword="null" /> — see
     ///     <see cref="ActionContext.Parent" />.
     /// </param>
     /// <param name="cancellationToken">Cancels the invocation.</param>
     /// <returns>The response JSON, or a failure.</returns>
-    public async Task<Result<string>> InvokeAsync(
+    public Task<Result<string>> InvokeAsync(
         ResourceId id,
         ResourceTypeRegistration registration,
         ActionRegistration action,
@@ -93,6 +110,50 @@ public sealed class ActionDispatcher(
         CallerContext? caller = null,
         ResourceId? parent = null,
         CancellationToken cancellationToken = default
+    ) =>
+        InvokeCoreAsync(id, registration, action, input, body, creator, caller, parent, relay, cancellationToken);
+
+    /// <summary>
+    ///     Runs one action in this process and never relays it, which is what
+    ///     <see cref="ClusterActionGrain" /> does with an action the gateway relayed.
+    /// </summary>
+    /// <param name="id">The resource, with its GUID resolved.</param>
+    /// <param name="registration">The resource type, for the cluster requirement.</param>
+    /// <param name="action">The action, which names the handler and the response shape.</param>
+    /// <param name="input">The resource as stored.</param>
+    /// <param name="body">The validated <c>POST</c> body.</param>
+    /// <param name="creator">
+    ///     The creator the silo built for the relayed action's caller, or <see langword="null" /> for
+    ///     the refusing default.
+    /// </param>
+    /// <param name="caller">Who asked, handed to the handler as <see cref="ActionContext.Caller" />.</param>
+    /// <param name="parent">The resource's parent with its GUID resolved, or <see langword="null" />.</param>
+    /// <param name="cancellationToken">Cancels the invocation.</param>
+    /// <returns>The response JSON, or a failure.</returns>
+    public Task<Result<string>> InvokeHereAsync(
+        ResourceId id,
+        ResourceTypeRegistration registration,
+        ActionRegistration action,
+        ReconcileInput input,
+        JsonElement body,
+        IResourceCreator? creator = null,
+        CallerContext? caller = null,
+        ResourceId? parent = null,
+        CancellationToken cancellationToken = default
+    ) =>
+        InvokeCoreAsync(id, registration, action, input, body, creator, caller, parent, null, cancellationToken);
+
+    async Task<Result<string>> InvokeCoreAsync(
+        ResourceId id,
+        ResourceTypeRegistration registration,
+        ActionRegistration action,
+        ReconcileInput input,
+        JsonElement body,
+        IResourceCreator? creator,
+        CallerContext? caller,
+        ResourceId? parent,
+        IClusterActionRelay? elsewhere,
+        CancellationToken cancellationToken
     ) {
         ArgumentNullException.ThrowIfNull(registration);
         ArgumentNullException.ThrowIfNull(input);
@@ -155,6 +216,26 @@ public sealed class ActionDispatcher(
 
         var connection = clusters.Connect(input.ClusterId);
 
+        if (registration.RequiresCluster && connection is null && elsewhere is not null) {
+            // ⚠ The gateway's case. The handler was still resolved and checked above, so a gateway
+            // composed without it fails by name here; it then runs on a silo, where the connection is,
+            // and the silo's dispatcher checks the response against the declared shape.
+            // ⚠ THE CREATOR DOESN'T CROSS, AND WHETHER THERE WAS ONE DOES. It's an object bound to this
+            // process's manager; the silo builds its own for the same caller, the same resource and the
+            // same write path. Dropping it instead would hand a relayed `recover` on a RequiresCluster
+            // vault the refusing default, and the restore would fail on the silo by name.
+            return await elsewhere.InvokeAsync(
+                id,
+                action.Name,
+                input,
+                body,
+                caller ?? new(),
+                parent,
+                creator is not null and not RefusingResourceCreator,
+                cancellationToken
+            );
+        }
+
         if (registration.RequiresCluster && connection is null) {
             return Result<string>.Failure(
                 ErrorCode.InternalError,
@@ -179,6 +260,7 @@ public sealed class ActionDispatcher(
                 // without one — which every test double does, and which is the right answer for a
                 // dispatcher that serves no connected cluster.
                 Agents = agents ?? new UnavailableAgentTunnels(),
+                Terminals = terminals ?? new UnavailableTerminalSessions(),
                 Creator = creator ?? new RefusingResourceCreator(),
                 Caller = caller ?? new(),
                 Parent = parent

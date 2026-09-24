@@ -14,9 +14,11 @@
       ⚠ THAT MECHANICAL GUARANTEE COSTS THIS PROVIDER SOMETHING NO EARLIER ONE PAID, AND IT IS WORTH
       NAMING WHERE THE REFERENCE SET IS DECLARED. A console is a credential path — docs/plan/19
       § Auditing exists for that reason — and the `connect` action would like to refuse a caller who is
-      not the console's own principal. It cannot: ActionContext carries no CallerContext, and this
-      assembly could not name one usefully if it did. The permission check that DOES happen is the
-      registry's, above this assembly, and the residual gap is
+      not the console's own principal. It does not: the principal names a managed identity rather than
+      a person. Since issue #22 ActionContext carries the caller and `connect` BINDS the session to it
+      (through ActionContext.Terminals — the session grain is the platform's, because rule 8 keeps the
+      ReBAC seam and cluster streams out of this assembly), so a shell belongs to the person who opened
+      it. The permission check is still the registry's, above this assembly, and what is left is
       charts/managed/cloud-shell/conformance.yaml § owed, `connect-cannot-see-its-caller`.
 
       ⚠ NO KubernetesClient. docs/plan/03 § Assembly graph rules, rule 3: nothing above

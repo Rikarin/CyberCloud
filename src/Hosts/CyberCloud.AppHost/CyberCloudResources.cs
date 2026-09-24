@@ -78,6 +78,21 @@ public static class CyberCloudResources {
     /// </remarks>
     public const int K3sApiPort = 6443;
 
+    /// <summary>
+    ///     The cloud shell's image on this topology, pinned by digest — <c>CyberCloud:Terminal:Images:Default</c>
+    ///     on both silos.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>A stand-in, not the cloud-shell image.</b> No pipeline builds the image docs/plan/19
+    ///     § The image describes (<c>charts/managed/cloud-shell/conformance.yaml § owed</c>,
+    ///     <c>no-image-pipeline</c>), and without a configured image <c>connect</c> starts a pod on a
+    ///     placeholder digest that never pulls. This is the image
+    ///     <c>CyberCloud.Gateway.Host.Cluster.Conformance</c>'s terminal suite runs: it has
+    ///     <c>bash</c>, <c>stty</c> and <c>psql</c>, and neither <c>cyc</c> nor <c>kubectl</c>.
+    /// </remarks>
+    public const string ShellImage =
+        "docker.io/library/postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24";
+
     // ── The hosts a user reaches ──────────────────────────────────────────────────────────────
 
     /// <summary>The REST + SignalR gateway — an Orleans client, docs/plan/03 § Hosts.</summary>

@@ -4,8 +4,8 @@ import { InjectionToken } from '@angular/core';
  * The names on the wire between the terminal pane and the gateway's `TerminalHub` — the C# side's
  * `TerminalProtocol`, spelled once here. SignalR binds by string, so a rename on either side is a
  * method the other cannot find; `terminal-session.spec.ts` pins these and
- * `TerminalHubTests.TheWireNamesAreTheFourThePortalSpeaks` reads the C# ones off the hub itself,
- * against the same four words.
+ * `TerminalHubTests.TheWireNamesAreTheFiveThePortalSpeaks` reads the C# ones off the hub itself,
+ * against the same five words.
  */
 export const terminalProtocol = {
   /** Client → hub: join a session and start receiving `Output`. */
@@ -15,7 +15,13 @@ export const terminalProtocol = {
   /** Client → hub: the pane changed size. */
   resize: 'Resize',
   /** Hub → client: bytes the shell printed. */
-  output: 'Output'
+  output: 'Output',
+  /**
+   * Hub → client: the session is over — exited, reclaimed after sitting idle, or terminated — with
+   * one sentence saying which. The socket closes after it, and the pane must NOT reconnect: a
+   * reconnect is `connect`, which would start the pod an idle reclaim just stopped.
+   */
+  ended: 'Ended'
 } as const;
 
 /**

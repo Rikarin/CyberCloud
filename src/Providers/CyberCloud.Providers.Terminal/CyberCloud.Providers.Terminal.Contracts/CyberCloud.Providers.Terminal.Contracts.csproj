@@ -12,6 +12,10 @@
       state is held by CyberCloud.ResourceManager's ResourceGrain like every other resource, and the
       SESSION — an exec stream, a resize channel, an output ring buffer — is not a resource at all and
       is not declared here. See CloudConsoles' remarks, § What is a resource and what is a session.
+      ⚠ Since issue #22 the session grain exists and it is declared in
+      CyberCloud.ResourceManager.Contracts (TerminalSessions.cs), not here: it asks the ReBAC seam and
+      opens cluster streams, which rule 8 of docs/plan/03 § Assembly graph rules forbids a provider to
+      name. This assembly contributes the pod and the permission the session is registered with.
 
       ⚠ ITS REFERENCE SET IS CyberCloud.ResourceManager.Contracts AND CyberCloud.Kubernetes.Contracts,
       and nothing else. Rule 2 of docs/plan/03 § Assembly graph rules forbids a Providers.* assembly

@@ -1231,11 +1231,13 @@ that single sentence is what every finding below is downstream of.
   columns, over a type the shared suite cannot see the product of. The suite was not touched.
 
 **What landed:** the resource, its four rendered objects, the `connect` and `terminate` actions, the
-chart and the auditing surface. **What is owed** is led by `the-session-grain-does-not-exist`:
-docs/plan/19's exec stream, resize channel, ring buffer and idle timer are not built, `TerminalHub`
-still refuses by name — now to a real pane: the portal's cloud shell (#22) reaches it with a gateway
-ticket and shows the refusal where the prompt would be — and **nothing in this repository builds the
-shell image** —
+chart and the auditing surface — and since #22's second half, **a session it registers but does not
+own**: `TerminalSessionGrain`, docs/plan/19's session, attached to the pod over `pods/attach` with a
+replay ring, a resize channel, an idle reclaim and a per-tenant cap, reached by the gateway's
+`TerminalHub` and owned by whoever called `connect`. ⚠ It lives in `CyberCloud.ResourceManager`, not
+here, and the Architecture gate put it there: it asks the ReBAC seam and opens cluster streams, which
+rule 8 keeps out of a provider, so `connect` reaches it through `ActionContext.Terminals`. **What is owed** is led by the image: **nothing in this repository
+builds the shell image** (the platform takes its digest as a deployment input) —
 `build/Build.Images.cs` publishes .NET hosts and its header forbids a Dockerfile, and this is the
 first image in the tree that is not a .NET application. All of it is at
 `charts/managed/cloud-shell/conformance.yaml § owed`.

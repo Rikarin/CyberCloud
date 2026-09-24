@@ -67,8 +67,40 @@ assertions:
   - id: a-shell-opens-and-echoes
     says: >
       A connect against a converged console produces a running pod, and bytes written to the terminal
-      hub for the returned sessionId come back as terminal output. ⚠ THE SECOND HALF IS NOT DRIVEN BY
-      ANYTHING — see `the-session-grain-does-not-exist`.
+      hub for the returned sessionId come back as terminal output; a resize reaches the terminal
+      (`stty size` reads it back) and a reconnect is replayed the session's output ring. Driven over
+      the gateway's stages and a resource manager composed as the gateway's is (no cluster
+      connection: connect is relayed to IClusterActionGrain on the silo), a real silo reaching the
+      cluster through the cluster connection grain, and a real kubelet, by
+      CyberCloud.Gateway.Host.Cluster.Conformance § TerminalOverTheGatewayTests; at the stream layer
+      alone by CyberCloud.Kubernetes.Tests § PodAttachTests; and the session's failure branches (a
+      refused attach, a cluster that stops answering, a stream that keeps dropping, an exit) against
+      a scripted pod by CyberCloud.ResourceManager.Tests § TerminalSessionGrainTests. The gateway and
+      the silo share one process in that suite; CyberCloud.AppHost.Tests § TerminalOverTheRealHostsTests
+      runs the same connect, attach, keystrokes, output and terminate from a gateway process into the
+      AppHost's silo processes — `the-session-grain-has-not-crossed-a-process-boundary`.
+  - id: a-session-belongs-to-the-person-who-opened-it
+    says: >
+      The caller of connect owns the session. Another person in the same tenant — even one holding
+      `connect` on the same console — gets 409 from connect and "no terminal session" from the hub;
+      another tenant's token names a different grain altogether; and the owner, once their `connect`
+      permission is revoked, is refused on the next attach because the session grain asks the ReBAC
+      seam again, fully consistent. Driven by TerminalOverTheGatewayTests, against the harness's
+      restrictable authorizer, and through the real engine by TerminalOverTheRealHostsTests (two
+      owners of the tenant, the second refused 409) and
+      RoleAssignmentTests.AContributorMayOpenAConsolesShellAndAReaderMayNot. ⚠ `connect` is
+      Rel(contributor) in CyberCloudSchema since the second review of #22; until then the schema
+      declared no `connect`, so the real engine answered every connect and terminate with 404, the
+      owner's included, and every suite that passed had a doubled authorizer. ⚠ The owner outlives the grain's activation (second review
+      of #22: it lived only in memory, so after a silo restart, a rolling deploy or a rebalance the
+      next colleague to call connect was bound to the still-running shell). It is hot-tier state
+      (TerminalSessionState), and the pod carries it too, as cybercloud.io/session-owner, stamped when
+      connect creates the pod and never rewritten; a grain with no record reads the stamp before it
+      binds anybody. TerminalSessionGrainTests.ALostActivationKeepsTheSessionsOwner deactivates the
+      grain between two connects; WithItsRecordGoneTheGrainTakesTheOwnerFromThePod is the hot tier
+      lost; ConsoleSessionTests.ThePodKeepsTheOwnerItWasCreatedForWhoeverConnectsNext is the stamp
+      surviving a colleague's connect. What neither closes is
+      `the-owner-has-two-homes-and-one-race`.
   - id: reconnect-rejoins-rather-than-restarts
     says: >
       A second connect while a shell is running returns the SAME sessionId and does not restart the
@@ -91,7 +123,23 @@ assertions:
   - id: an-idle-shell-goes-away
     says: >
       A shell with no input for idleTimeoutMinutes is deleted and its home volume is not. The next
-      connect starts a new pod that finds the same $HOME. ⚠ Not driven — see `no-idle-reaper`.
+      connect starts a new pod that finds the same $HOME. Driven by TerminalOverTheGatewayTests on the
+      injected clock: the pane is told the session ended, the pod goes, the claim stays, and the next
+      connect answers a different sessionId. ⚠ Only while the session grain is activated — see
+      `no-idle-sweep-without-an-activation`.
+  - id: a-tenant-has-a-cap-on-live-shells
+    says: >
+      A tenant may have at most TerminalSessionLimits.LiveSessionsPerTenant shells running at once;
+      the next connect is refused 429 and the pod it started is removed — only a pod that connect
+      CREATED, since one that was already there is somebody's shell (the second review of #22 found
+      the owner's own pod deleted when they reconnected at the cap). Slots are leased, so a session
+      grain lost with its silo frees its slot one lease later. ⚠ Driven in two halves, and neither is
+      the whole: the cap and the lease against the real limit grain on a real silo by
+      TerminalOverTheGatewayTests.ATenantIsCappedAtItsLiveSessionsAndALapsedLeaseFreesItsSlot, which
+      calls the grain directly; the refusal's effect on the pod against a recording cluster by
+      ConsoleSessionTests.OverTheTenantsCapThePodThisConnectStartedIsRemoved and
+      OverTheCapAPodThatWasAlreadyThereIsLeftRunning. No test fills a tenant with ten real shells and
+      connects an eleventh.
   - id: a-shell-stops-at-its-hard-cap
     says: >
       A shell running for maxDurationHours is stopped whether or not it is busy, and whether or not
@@ -128,38 +176,127 @@ meters:
 owed:
   - id: the-session-grain-does-not-exist
     says: >
-      docs/plan/19 § Architecture's ITerminalSessionGrain — the exec stream, the resize channel, the
-      output ring buffer for reconnect and the idle timer — is NOT BUILT, and it is the largest single
-      thing this row owes. What exists today is everything on either side of it: this provider's
-      connect action starts the pod and returns the sessionId and hub path; the gateway maps
-      /hubs/terminal, mints the short-lived ticket a browser opens it with (POST /hubs/{hub}/ticket —
-      HubTickets, docs/plan/10 § SignalR) and declares the hub's whole client contract (TerminalHub:
-      Attach, Send, Resize, and Output back), every method of which throws by name; and the portal's
-      terminal blade (issue #22) lists a group's consoles or creates one, calls connect, mints the
-      ticket, opens the socket, attaches an xterm.js pane, and reconnects with a fresh ticket when the
-      socket drops — showing the hub's refusal in the pane. So a person can reach a running shell's
-      address from the portal and be told, where the prompt would be, that the data plane is owed.
-      ⚠ THE REFUSAL IS DELIBERATE AND IS BETTER THAN THE ALTERNATIVE — that hub's own remarks say "a
-      terminal that silently swallows input is worse than one that is closed" — but it means
-      docs/plan/24's M1 exit story step 6 is not passable end to end. Closing it is a grain that speaks
-      the Kubernetes exec protocol (SPDY/WebSocket) through the cluster connection, and the three hub
-      methods pumping into it. ⚠ WHAT THE GRAIN WILL FIND WAITING: the portal sends and expects byte[]
-      as base64 on the JSON hub protocol, calls Attach with the pane's size, and treats a different
-      sessionId on reconnect as a reclaimed pod — the three assumptions to keep when the middle lands.
-      IKubeClusterConnection has no exec surface today, and adding one — over the agent tunnel for an
-      AgentInitiated cluster — is the first thing the grain needs.
+      ⚠ CLOSED (issue #22, 2026-09-23), and kept under its old name so a reader following an old
+      citation lands here. docs/plan/19 § Architecture's ITerminalSessionGrain exists —
+      CyberCloud.ResourceManager § TerminalSessionGrain (the platform's, not the provider's: rule 8 of
+      docs/plan/03 § Assembly graph rules keeps the ReBAC seam and cluster connections out of a
+      provider, so connect registers through ActionContext.Terminals) — one activation per session, keyed
+      terminal/{podUid} and tenant-qualified: connect registers it (the console, the pod, the idle
+      timeout and the CALLER), the gateway's TerminalHub reaches it with Attach, Send and Resize, and
+      output goes back through a grain OBSERVER rather than an Orleans stream (ITerminalViewer's
+      remarks: one producer, one consumer, and a terminal needs order, backpressure and a delivery
+      that fails at once when the gateway pod holding the socket is gone). The grain attaches to the
+      pod's own process over pods/attach — IKubeClusterConnection.AttachAsync, the exec surface this
+      row said was missing, v4.channel.k8s.io because that is what KubernetesClient 19.0.2 dials —
+      keeps a 64 KiB replay ring, applies resizes, and reclaims the pod after idleTimeoutMinutes with no
+      input. The portal's pane needed one addition and got it: an `Ended` callback, so a session the
+      platform ended is not "reconnected" into a new pod. ⚠ WHAT REMAINS is named in the rows below
+      rather than here: `no-terminal-over-the-agent-tunnel`, `no-idle-sweep-without-an-activation`,
+      `the-session-grain-has-not-crossed-a-process-boundary`, `keystrokes-are-not-rechecked` and
+      `the-shell-identity-cannot-reach-postgres`.
   - id: connect-cannot-see-its-caller
     says: >
-      A console's whole security argument is "the shell runs as YOU", and nothing checks that the
-      caller of connect is properties.identity.principalId. ActionContext carries no CallerContext —
-      deliberately, per its own remarks, because an action reads facts about a resource rather than
-      making an authorization decision — so a handler cannot compare them and this provider's
-      assembly could not name a CallerContext if it wanted to. What DOES hold is the `connect`
-      permission through ReBAC, which is a separate permission from `read` for exactly this reason. So
-      the honest posture is: ANYONE WHO MAY CONNECT TO A CONSOLE GETS A SHELL HOLDING THAT CONSOLE'S
-      IDENTITY. Two routes close it: a CallerContext on ActionContext (a manager change, which
-      docs/plan/25 § R1 counts), or a policy at the enforcement seam that reads the body's principal —
-      which is where docs/plan/07 says such a check belongs anyway.
+      ⚠ HALF CLOSED. ActionContext now carries the caller (ActionContext.Caller, set by
+      ActionDispatcher from the request) — as a FACT to bind to, never as an allow-or-deny — and
+      connect binds the session to it: the person who called connect owns the shell, and the session
+      grain refuses everyone else (`a-session-belongs-to-the-person-who-opened-it`). So "anyone who may
+      connect gets a shell" is now "anyone who may connect STARTS a shell only if nobody else holds it,
+      and types only into their own". ⚠ WHAT IS STILL TRUE: nothing compares the caller with
+      properties.identity.principalId, because that names a MANAGED IDENTITY and not a person — the
+      shell acts as whatever identity the console was created with, and whoever owns the session
+      holds it. Tightening that is a policy question (which people may hold which identity) for the
+      enforcement seam docs/plan/07 describes, not a comparison this handler could make. ⚠ The
+      owner was held only in the grain's memory until the second review of #22, so a lost activation
+      re-bound the running shell to whoever called connect next. It is written down twice now —
+      `a-session-belongs-to-the-person-who-opened-it` says where.
+  - id: the-owner-has-two-homes-and-one-race
+    says: >
+      The session's owner is the hot-tier record first and the pod's cybercloud.io/session-owner stamp
+      second, and the stamp is only read by a grain with no record. Two gaps are left, both needing two
+      failures at once. (1) Two FIRST connects to a console with no pod both find none, both apply,
+      and the second apply's stamp wins; the grain binds whoever registers first. The record and the
+      stamp then disagree, which matters only if the hot tier later loses that record. Closing it is a
+      create that fails when the pod exists — an apply cannot, and IKubeClusterConnection has no
+      create. (2) A session that ended and whose pod could not be deleted keeps its record, so the
+      next activation still refuses to re-open it; connect then deletes the pod and starts another,
+      and nothing clears the old record. A hot-tier key per such session, bounded by failed deletes.
+      And the whole of it rests on docs/plan/05 § Hot's `maxmemory-policy noeviction`: a hot tier
+      that evicts is a correctness bug there before it is one here.
+  - id: no-terminal-over-the-agent-tunnel
+    says: >
+      A console on an AgentInitiated cluster opens a pod and cannot be typed into:
+      TunnelKubeApiClient.AttachAsync refuses by name, because the agent tunnel carries one response
+      per request and an attach is a stream both ways — the same wall as charts/agent's
+      informers-do-not-cross-the-tunnel. Closing it is a stream frame kind in TunnelFrame and a pump
+      in the agent that opens pods/attach on the tenant's side.
+  - id: no-idle-sweep-without-an-activation
+    says: >
+      The idle clock is the session grain's timer, KeepAlive while the session lives, so an idle
+      shell is reclaimed only while its grain is activated. A silo that dies takes the clock with it:
+      the pod runs on — to the next connect, which re-registers the session and restarts the clock,
+      or to its hard cap (activeDeadlineSeconds, the kubelet's, which holds regardless). docs/plan/19
+      § Shared machinery's second item — "a reminder-driven sweeper that deletes compute and keeps
+      state" — is what closes it: a reminder, or a sweep over pods carrying the
+      cybercloud.io/idle-timeout-seconds annotation this provider has rendered since the row landed.
+      The per-tenant cap has the same shape and is already safe: its slots are leased and lapse.
+  - id: the-session-grain-has-not-crossed-a-process-boundary
+    says: >
+      ⚠ CLOSED by the second review of #22, and kept under its old name. Every other test of the
+      session grain and of the action relay runs the gateway's Orleans client and the silo in one
+      process (TestCluster), which shares one type manifest and hides a missing [Alias] — the defect
+      #39's shard-map confirmation shipped with. CyberCloud.AppHost.Tests §
+      TerminalOverTheRealHostsTests crosses it: the gateway GatewayComposition builds, in the test's
+      process, creates a console through the write path, relays connect to IClusterActionGrain in the
+      AppHost's silo processes (a colleague's connect relayed the same way comes back 409), sends a
+      TerminalSessionSpec to ITerminalSessionGrain.OpenAsync, attaches with an ITerminalViewer
+      observer from its own Orleans client, types, reads the shell's output back through the
+      observer, and relays terminate and receives EndedAsync. Its first run found what no in-process
+      suite could: the real engine answered connect with 404, because CyberCloudSchema declared no
+      `connect` (see `a-session-belongs-to-the-person-who-opened-it`). The serializer half is
+      ResourceManagerSerializationTests: the alias check over every type and enum, and since the same
+      review a round trip of TerminalSessionSpec, TerminalSessionStatus, each TerminalSessionPhase on
+      its own, and IClusterActionGrain.InvokeAsync's arguments (the resource, a parent and a null
+      one, the caller, the stored input), plus an [Alias] on each of the four interfaces and every
+      one of their methods — which the type check never reached. ⚠ The alias check is what
+      caught TerminalSessionPhase shipping without one in the first review — the claim "every new wire
+      type carries an alias" had been made without running it. ⚠ It needed two changes to the
+      topology, both to CyberCloud.AppHost: its silos run the cloud shell on
+      CyberCloudResources.ShellImage (the same stand-in as the cluster lane, `no-image-pipeline`), and
+      its k3s is started with the kubelet disk thresholds the cluster lane's drop-in sets, because its
+      node had tainted itself DiskPressure on this machine and no pod had ever been asked of it.
+  - id: a-relayed-action-reads-the-silos-vault
+    says: >
+      The gateway relays every synchronous action on a RequiresCluster type to IClusterActionGrain on
+      a silo (review of #22: a deployed gateway composes no cluster connection, and the connection
+      grain refuses a client caller, so every such action — connect included — was refused there by
+      name). The handler then runs with the SILO's seams, and the one that differs between the two
+      hosts is ISecretResolver: the gateway registers OpenBao when CyberCloud:Vault is configured and
+      the silo never does. So a `listKeys` on a RequiresCluster type that reads a vault path is now
+      refused by UnavailableSecretResolver's own message on the silo rather than by the dispatcher's
+      "no connection" message in the gateway — refused before and after, but for a new reason.
+      connect reads no secret. Closing it is the vault registered on the silo too, which is a
+      deployment decision about where OpenBao credentials may live.
+  - id: keystrokes-are-not-rechecked
+    says: >
+      Attach asks ReBAC, fully consistent, every time; Send and Resize check only that the caller is
+      the session's owner. A person whose `connect` is revoked keeps typing into an already-attached
+      pane until that socket drops — the interest hubs' bound, and docs/plan/10 § SignalR's reason for
+      a relation-version re-check that neither hub has yet.
+  - id: the-shell-identity-cannot-reach-postgres
+    says: >
+      docs/plan/24's M1 step 6 is "open the cloud terminal and psql into it USING A MANAGED IDENTITY".
+      The terminal half is built; the identity half is not buildable yet, and precisely because of
+      four missing pieces, none of them in this row's gift alone. (1) The shell pod has no token to
+      exchange: automountServiceAccountToken is false and no projected serviceAccountToken volume with
+      the identity host's audience is rendered. (2) Nothing binds the console's
+      properties.identity.principalId to (cluster, namespace, {name}-shell) — the WorkloadBinding
+      docs/plan/11 § Managed identity step 2 describes — and a provider cannot write one: the binding
+      is an identity-module grain this assembly may not name. (3) `cyc` has no token-exchange login
+      (`grant_type=token-exchange` against the identity host's /token) and no `postgres connect`.
+      (4) A DBforPostgreSQL server authenticates with the password listKeys returns, not with a
+      platform token, so the route is cyc → exchange → listKeys (a role the tenant grants the managed
+      identity) → psql, and every hop after the first needs (3). psql itself is in the image the
+      cluster-backed suite runs — which is a stand-in; see `no-image-pipeline`.
   - id: namespaces-are-not-labelled
     says: >
       ⚠ CLOSED for the reason it was owed, and the residue is named below rather than the item being
@@ -246,9 +383,31 @@ owed:
       or a declarative builder (apko/melange, buildpacks) that is not a Dockerfile and satisfies it as
       written. ⚠ Two consequences follow and neither is checkable until it exists: the terraform BUSL
       question docs/plan/19 flags is unanswerable without an image to license, and nobody has confirmed
-      the tools work under readOnlyRootFilesystem with only $HOME and /tmp writable.
+      the tools work under readOnlyRootFilesystem with only $HOME and /tmp writable. ⚠ WHAT CHANGED
+      WITH ISSUE #22: the image is now a DEPLOYMENT INPUT — CyberCloud:Terminal:Images:Default (and
+      :Minimal, falling back to Default) in the gateway's and the silo's configuration,
+      CloudShellImageOptions — handed over exactly as the host images' digests are handed to
+      bootstrap.sh, and refused at connect unless it ends in @sha256:<64 hex>. Unconfigured, the
+      placeholders stand and the pod fails to pull by name. The cluster-backed suite runs
+      postgres:17-alpine by digest through that setting — bash, BusyBox stty and psql, and no kubectl
+      and no cyc — which proves the session machinery and says nothing about docs/plan/19's image.
+      The three tools issue #22 asks the image to carry (psql, cyc, kubectl) are therefore still owed
+      here, with this environment's reason on record: no registry to push to, no syft, no cosign
+      (build/Build.Images.cs' three preconditions), and the Dockerfile rule above. ⚠ Declined a
+      second time in the second review of #22, for the same reasons read off the code rather than the
+      machine: the SDK's container tooling, the one build route the rule allows, layers a published
+      .NET output onto a base image and runs nothing — so it could put `cyc` on top of an image that
+      already has psql, and it cannot add kubectl, which is neither .NET nor in any base image the
+      tree pins. What changed instead: CyberCloud.AppHost's silos run the same stand-in by digest
+      (CyberCloudResources.ShellImage), so `connect` on a dev run gives a shell with psql in it
+      rather than a pod that never pulls.
   - id: no-idle-reaper
     says: >
+      ⚠ CLOSED (issue #22) as far as a live session goes: TerminalSessionGrain reads the idle clock
+      every fifteen seconds and, past idleTimeoutMinutes with no keystroke, tells the pane, deletes the
+      pod through the same KubeCommand delete `terminate` uses, and keeps the home volume — driven by
+      `an-idle-shell-goes-away`. The residue is `no-idle-sweep-without-an-activation`. What follows
+      is the row as it stood before, kept because its argument is why the grain holds the clock.
       docs/plan/19's twenty-minute idle timeout has NO ENFORCER. The number is validated, stored,
       returned on connect and rendered onto the pod as cybercloud.io/idle-timeout-seconds — carried on
       the OBJECT rather than looked up, so that whatever eventually sweeps needs only kubectl and not
@@ -299,7 +458,10 @@ owed:
       pod carries cybercloud.io/session-recording, so an operator with kubectl can see whose shell a
       pod is and whether it is recorded without resolving a resource id through an API they may not
       have. The platform-side record belongs with the session grain, because duration is a fact only
-      it holds.
+      it holds. ⚠ Since issue #22 the grain holds it and writes it to the SILO LOG — opened for whom,
+      on which console and cluster, ended why — which is an operator's record and not the tenant's
+      audit: no event type, no sink, no retention, and "from where" (the client address) never reaches
+      the grain, because the hub does not pass it.
   - id: session-hours-are-not-a-state-meter
     says: >
       This type declares QuotaMeter.StorageGb and QuotaMeter.Resources and deliberately NOT Vcpu or
@@ -313,8 +475,10 @@ owed:
       three are registry gaps. This one is a case where the registry's shape is right and the
       resource's is not. What a console actually burns is attached-session hours, which is
       BillingMeter.VCpuHours driven from a usage event the session grain emits — docs/plan/22's usage
-      pipeline, MeterKind.EventBased — and is therefore a fourth thing
-      `the-session-grain-does-not-exist` blocks.
+      pipeline, MeterKind.EventBased. ⚠ The grain now exists and knows when a session opened and ended;
+      what is missing is the usage-event pipeline to send it to. Until then the per-tenant cap
+      (TerminalSessionLimits.LiveSessionsPerTenant, a constant) is the only bound on what a tenant's
+      shells cost, and it is a count, not a meter.
   - id: converged-is-not-attachable
     says: >
       Converged on this type means the three durable objects read back carrying the desired spec. It
@@ -348,7 +512,9 @@ owed:
       into the result — because ProviderConformanceCase describes only the durable half and the
       product is the other one. Every claim about the pod is a hand-written test in
       CyberCloud.Providers.Terminal.Tests instead, and those tests assert what is RENDERED, which is
-      one layer short of what happens.
+      one layer short of what happens. ⚠ The layer that HAPPENS is now covered by a suite of its own,
+      outside the shared one: CyberCloud.Gateway.Host.Cluster.Conformance starts a shell and types
+      into it (`a-shell-opens-and-echoes`). What neither suite shows is still the policy's effect.
   - id: the-chart-cannot-render-the-product
     says: >
       charts/managed/cloud-shell renders the three durable objects and not the pod, for the same

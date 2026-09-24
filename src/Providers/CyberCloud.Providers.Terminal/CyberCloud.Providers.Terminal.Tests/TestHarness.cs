@@ -23,6 +23,8 @@ namespace CyberCloud.Providers.Terminal.Tests;
 ///     </para>
 /// </remarks>
 sealed class RecordingConnection : IKubeClusterConnection {
+    readonly Dictionary<string, int> generations = new(StringComparer.Ordinal);
+
     /// <summary>What is in the "cluster", keyed by kind, namespace and name.</summary>
     public ConcurrentDictionary<string, string> Objects { get; } = new(StringComparer.Ordinal);
 
@@ -96,12 +98,18 @@ sealed class RecordingConnection : IKubeClusterConnection {
             );
         }
 
+        // Created only the first time, as a real API server answers: connect removes a pod over the
+        // tenant's cap only when its own apply created it.
+        var existed = Objects.ContainsKey(Key(command.Target));
+
         if (!SwallowApplies) {
             Objects[Key(command.Target)] = Accept(command);
         }
 
         return Task.FromResult(
-            Result<ApplyOutcome>.Success(new() { Result = ApplyResult.Created, Target = command.Target })
+            Result<ApplyOutcome>.Success(
+                new() { Result = existed ? ApplyResult.Updated : ApplyResult.Created, Target = command.Target }
+            )
         );
     }
 
@@ -120,8 +128,12 @@ sealed class RecordingConnection : IKubeClusterConnection {
             }
 
             // Deterministic, so a re-apply of the same object keeps the same uid — which is what makes
-            // "reconnect returns the same session id" a real assertion rather than a coincidence.
-            metadata["uid"] = "uid-" + Key(command.Target);
+            // "reconnect returns the same session id" a real assertion rather than a coincidence. An
+            // object applied again after a delete is a new object, and a real API server gives it a
+            // new uid; the generation is what does that here.
+            var key = Key(command.Target);
+            var generation = generations.GetValueOrDefault(key);
+            metadata["uid"] = generation == 0 ? "uid-" + key : $"uid-{key}-{generation}";
         }
 
         if (PodPhase.Length > 0 && command.Target.Kind.Kind == "Pod") {
@@ -152,6 +164,7 @@ sealed class RecordingConnection : IKubeClusterConnection {
         var removed = Objects.TryRemove(Key(command.Target), out _);
 
         if (removed) {
+            generations[Key(command.Target)] = generations.GetValueOrDefault(Key(command.Target)) + 1;
             Deleted.Add(command.Target);
             Cascades.Add(policy);
         }
@@ -217,4 +230,26 @@ sealed class ReconcilerWithAReadonlyCache : IResourceReconciler {
         CancellationToken cancellationToken = default
     ) =>
         Task.FromResult(ObservedState.Absent);
+}
+
+/// <summary>A session registry that records what <c>connect</c> registered, and can refuse.</summary>
+/// <remarks>
+///     The handler's seam, not the grain's: what the session grain does with a registration is
+///     proven against a real grain and a real kubelet in
+///     <c>CyberCloud.Providers.Terminal.Cluster.Conformance</c>.
+/// </remarks>
+sealed class RecordingSessions : ITerminalSessions {
+    /// <summary>Every registration, in order.</summary>
+    public List<(TerminalSessionSpec Spec, CallerContext Owner)> Opened { get; } = [];
+
+    /// <summary>What every registration answers — success unless a test says otherwise.</summary>
+    public Result Answer { get; init; } = Result.Success;
+
+    /// <summary>Answers for the first registrations, in order, before <see cref="Answer" /> takes over.</summary>
+    public Queue<Result> First { get; init; } = [];
+
+    public Task<Result> OpenAsync(TerminalSessionSpec spec, CallerContext owner, CancellationToken cancellationToken = default) {
+        Opened.Add((spec, owner));
+        return Task.FromResult(First.TryDequeue(out var next) ? next : Answer);
+    }
 }

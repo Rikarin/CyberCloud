@@ -3,6 +3,7 @@
 // `Orleans.ErrorCode` this import would otherwise put back in play.
 
 using CyberCloud.Core;
+using Microsoft.Extensions.Options;
 using System.Text.Json.Nodes;
 
 namespace CyberCloud.Providers.Terminal;
@@ -47,30 +48,38 @@ namespace CyberCloud.Providers.Terminal;
 ///         manager holds and this handler cannot see.
 ///     </para>
 ///     <para>
-///         ⚠ <b>WHAT IT CANNOT DO IS CHECK WHO IS ASKING.</b> <see cref="ActionContext" /> carries no
-///         <c>CallerContext</c> — deliberately, because an action reads facts about a resource — so a
-///         handler cannot compare the caller against
-///         <see cref="CloudConsoles.PrincipalIdPointer" />. The permission check that does happen is
-///         the registry's <c>connect</c> permission through ReBAC, one layer up. The gap that leaves
-///         is real and is named:
-///         <b>
-///             anyone who may connect to a console gets a shell holding that
-///             console's identity
-///         </b>, whether or not they are that identity.
+///         ⚠ <b>IT BINDS THE SESSION TO WHOEVER ASKED, AND DECIDES NOTHING ABOUT THEM.</b> The
+///         permission check is the registry's <c>connect</c> permission through ReBAC, one layer up.
+///         What this handler adds is ownership: <see cref="ActionContext.Caller" /> is handed to
+///         <see cref="ITerminalSessionGrain.OpenAsync" />, and from then on the session grain refuses
+///         every other person — a second person with <c>connect</c> on the same console gets a
+///         <c>409</c> here and a <c>404</c> on the hub. The pod carries the owner too, as
+///         <see cref="CloudConsoles.OwnerAnnotation" />, stamped when it's created and never rewritten,
+///         for the session grain to read when its own record is gone. ⚠ What is still NOT checked is that the
+///         caller is <see cref="CloudConsoles.PrincipalIdPointer" />: that names a managed identity,
+///         not a person, and whoever owns the session holds it.
 ///         <c>charts/managed/cloud-shell/conformance.yaml § owed</c>,
-///         <c>connect-cannot-see-its-caller</c>.
+///         <c>connect-cannot-see-its-caller</c>, records what closed and what did not.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>AND WHAT IT RETURNS IS NOT A SESSION — IT IS THE ADDRESS OF ONE.</b> The bytes flow
-///         over <c>/hubs/terminal</c> to docs/plan/19's session grain, which does not exist: every
-///         method on <c>TerminalHub</c> — <c>Attach</c>, <c>Send</c>, <c>Resize</c> — throws by name
-///         today. So a client that calls <c>connect</c> gets a running pod and a hub that refuses it.
-///         The panel exists now — the portal's terminal blade, which opens the hub with a gateway
-///         ticket and shows this refusal in the pane — so the honest state is visible where a person
-///         would look for a prompt, and closing it is the grain and nothing on either side of it.
+///         over <c>/hubs/terminal</c> to <see cref="ITerminalSessionGrain" />, keyed by the pod's UID
+///         that this handler returns as <c>sessionId</c>. The handler registers the session before it
+///         answers, so the id a client holds always names a grain that knows its console, its pod and
+///         its owner.
 ///     </para>
 /// </remarks>
 public sealed class CloudConsoleSessionHandler : IResourceActionHandler {
+    readonly CloudShellImageOptions images;
+
+    /// <summary>Creates the handler.</summary>
+    /// <param name="images">
+    ///     The deployment's shell image, or <see langword="null" /> where nothing configured one — the
+    ///     placeholder digests then stand and the pod fails to pull by name.
+    /// </param>
+    public CloudConsoleSessionHandler(IOptions<CloudShellImageOptions>? images = null) =>
+        this.images = images?.Value ?? new();
+
     /// <inheritdoc />
     public ResourceTypeName Type => CloudConsoles.Type;
 
@@ -98,7 +107,7 @@ public sealed class CloudConsoleSessionHandler : IResourceActionHandler {
     }
 
     /// <summary>Starts the shell if it is not running, and describes it either way.</summary>
-    static async Task<Result<string>> ConnectAsync(
+    async Task<Result<string>> ConnectAsync(
         ActionContext context,
         IKubeClusterConnection cluster,
         CancellationToken cancellationToken
@@ -131,6 +140,22 @@ public sealed class CloudConsoleSessionHandler : IResourceActionHandler {
             }
         }
 
+        // ⚠ THE SESSION IS BOUND TO WHOEVER CALLED connect, AND A HANDLER WITHOUT A CALLER REFUSES.
+        // The manager hands one over (ActionContext.Caller); a dispatcher composed without one leaves
+        // it empty, which is a composition bug, and a session with no owner would be a shell anybody
+        // holding its id could type into — the one outcome the grain exists to prevent. Checked
+        // before anything is applied, because the pod carries its owner from the moment it exists.
+        var caller = context.Caller;
+
+        if (string.IsNullOrEmpty(caller.SubjectId)) {
+            return Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"'{context.Id.Path}' was connected to with no caller on the action context, so the "
+                + "session has nobody to belong to. The resource manager passes the request's caller "
+                + "to ActionDispatcher.InvokeAsync; a dispatcher composed without it cannot open a shell."
+            );
+        }
+
         // ⚠ AN APPLY RATHER THAN A CREATE, WHICH IS WHAT MAKES RECONNECT AND CONNECT THE SAME CALL.
         // The pod's name is derived from the console's, so a second browser tab applies the same
         // object and gets it back unchanged. A create would answer 409 for the ordinary case of
@@ -140,44 +165,70 @@ public sealed class CloudConsoleSessionHandler : IResourceActionHandler {
         // ADR-013's seven labels and both annotations — including cybercloud.io/resource-type, which
         // is the label the console's OWN NetworkPolicy selects on. A pod applied by any other route
         // would be a shell no policy governs.
-        var applied = await KubeCommand.For(cluster)
-            .WithTenantId(context.Id.TenantId)
-            .WithResourceId(context.Id)
-            .InNamespace(context.Namespace)
-            .WithKind(CloudConsoles.PodKind)
-            .WithApiVersion(context.ApiVersion)
-            .ObjectJson(CloudConsoles.PodJson(name, context.Desired))
-            .ApplyAsync(cancellationToken);
+        var applied = await ApplyShellAsync(context, cluster, caller, cancellationToken);
 
-        if (applied.TryGetError(out var applyError)) {
-            return Result<string>.Failure(applyError);
-        }
-
-        var read = await cluster.GetAsync(CloudConsoles.PodRef(context.Namespace, name), cancellationToken);
-
-        if (read.TryGetError(out var readError)) {
+        if (applied.TryGetError(out var readError)) {
             return Result<string>.Failure(readError);
         }
 
-        var pod = Document(read.GetValueOrThrow().Json);
+        var (pod, created) = applied.GetValueOrThrow();
 
-        // ⚠ THE SESSION ID IS THE POD'S UID AND NOT A GUID THIS HANDLER INVENTS. A handler holds no
-        // state and runs once per call, so an invented id would differ between two connects to the
-        // same live shell — and a client would treat the second as a new session and throw away a
-        // replay buffer that was still valid. The UID is the cluster's own answer to "is this the
-        // same shell", it survives a reconnect, and it CHANGES when an idle reclaim re-creates the
-        // pod, which is exactly when a client's buffer has stopped meaning anything.
-        var sessionId = pod?["metadata"]?["uid"]?.GetValue<string>() ?? string.Empty;
+        // ⚠ A FINISHED SHELL IS DELETED AND APPLIED AGAIN, BECAUSE AN APPLY CANNOT RESTART IT. With
+        // restartPolicy: Never a pod whose shell exited stays Succeeded, and applying the same spec
+        // over it changes nothing — so without this, a console whose person typed `exit` while the
+        // session grain was not there to clean up would answer "Starting" to every connect, forever.
+        if (pod?["status"]?["phase"]?.GetValue<string>() is "Succeeded" or "Failed") {
+            var replaced = await ReplaceShellAsync(context, cluster, caller, cancellationToken);
 
+            if (replaced.TryGetError(out var replaceError)) {
+                return Result<string>.Failure(replaceError);
+            }
+
+            (pod, created) = replaced.GetValueOrThrow();
+        }
+
+        var sessionId = SessionId(pod);
         if (sessionId.Length == 0) {
-            // Reachable against a fake that echoes an apply back without a uid, and against a real
-            // API server never. Refusing rather than substituting: a session id a client cannot name
-            // on the hub is worse than an error it can retry.
-            return Result<string>.Failure(
-                ErrorCode.InternalError,
-                $"the shell pod of '{context.Id.Path}' was applied and read back with no "
-                + "metadata.uid, so there is no session to name on the terminal hub."
-            );
+            return NoUid(context);
+        }
+
+        var registered = await RegisterAsync(context, cluster, sessionId, caller, cancellationToken);
+
+        // ⚠ A SESSION THAT HAS ENDED OVER A POD THAT HASN'T IS REPLACED, OR THE CONSOLE IS LOCKED OUT.
+        // The grain answers PreconditionFailed once its session is over, and the session id is the
+        // pod's UID, so while that pod stands every connect would name the same ended grain and get
+        // the same refusal. A session ends and leaves its pod when the idle reclaim or the start budget
+        // couldn't delete it (a cluster that stopped answering), or when the grain's activation
+        // outlived the pod's replacement by another route. The pod belongs to a session that is over,
+        // so it goes the way a finished one does, and the next shell has the same home directory.
+        if (registered.TryGetError(out var endedError) && endedError.Code == ErrorCode.PreconditionFailed) {
+            var replaced = await ReplaceShellAsync(context, cluster, caller, cancellationToken);
+
+            if (replaced.TryGetError(out var replaceError)) {
+                return Result<string>.Failure(replaceError);
+            }
+
+            (pod, created) = replaced.GetValueOrThrow();
+            sessionId = SessionId(pod);
+
+            if (sessionId.Length == 0) {
+                return NoUid(context);
+            }
+
+            registered = await RegisterAsync(context, cluster, sessionId, caller, cancellationToken);
+        }
+
+        if (registered.TryGetError(out var sessionError)) {
+            // ⚠ Over the tenant's cap, a pod this call started belongs to nobody and is removed — a
+            // refused connect that left a running shell behind would be the cost the cap exists to
+            // stop. ONLY a pod this call created: one that was already there is somebody's shell,
+            // for example its owner's after the session grain lost its activation, and a Conflict
+            // means it's another person's live shell.
+            if (sessionError.Code == ErrorCode.QuotaExceeded && created) {
+                await DeleteShellAsync(cluster, context.Id, context.Namespace, context.ApiVersion, cancellationToken);
+            }
+
+            return Result<string>.Failure(sessionError);
         }
 
         var phase = pod?["status"]?["phase"]?.GetValue<string>();
@@ -209,22 +260,13 @@ public sealed class CloudConsoleSessionHandler : IResourceActionHandler {
         IKubeClusterConnection cluster,
         CancellationToken cancellationToken
     ) {
-        var deleted = await KubeCommand.For(cluster)
-            .WithTenantId(context.Id.TenantId)
-            .WithResourceId(context.Id)
-            .InNamespace(context.Namespace)
-            .WithKind(CloudConsoles.PodKind)
-            .WithApiVersion(context.ApiVersion)
-            .ObjectJson(
-                new JsonObject {
-                    ["metadata"] = new JsonObject { ["name"] = CloudConsoles.ShellName(context.Id.Name) }
-                }.ToJsonString()
-            )
-            // ⚠ Foreground, so this call does not return until the container is actually gone. A
-            // terminate that answered while the shell was still printing would be a stop button that
-            // does not stop anything, which on a resource holding an identity is the one control a
-            // person has to be able to trust.
-                .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
+        var deleted = await DeleteShellAsync(
+            cluster,
+            context.Id,
+            context.Namespace,
+            context.ApiVersion,
+            cancellationToken
+        );
 
         if (deleted.TryGetError(out var deleteError)) {
             // ⚠ NOT-FOUND IS A SUCCESS CARRYING `false`, not a 404. The caller's goal is that no shell
@@ -238,6 +280,193 @@ public sealed class CloudConsoleSessionHandler : IResourceActionHandler {
 
         return Answer(true);
     }
+
+    /// <summary>
+    ///     Deletes a console's shell pod and nothing else — what <c>terminate</c>, the idle reclaim and a
+    ///     finished shell all come down to.
+    /// </summary>
+    /// <param name="cluster">The console's cluster.</param>
+    /// <param name="console">The console, for the command's tenant and resource labels.</param>
+    /// <param name="ns">The console's namespace.</param>
+    /// <param name="apiVersion">The api-version the command is labeled with.</param>
+    /// <param name="cancellationToken">Stops the delete.</param>
+    /// <returns>Success, or <see cref="ErrorCode.ResourceNotFound" /> when no shell was running.</returns>
+    /// <remarks>
+    ///     ⚠ Through <see cref="KubeCommand" />, which is what keeps the delete labeled for the tenant
+    ///     it is made on behalf of — the spelling the session grain's idle reclaim uses too, from the
+    ///     pod and api-version this handler registered with it.
+    /// </remarks>
+    static Task<Result> DeleteShellAsync(
+        IKubeClusterConnection cluster,
+        ResourceId console,
+        string ns,
+        string apiVersion,
+        CancellationToken cancellationToken
+    ) =>
+        KubeCommand.For(cluster)
+            .WithTenantId(console.TenantId)
+            .WithResourceId(console)
+            .InNamespace(ns)
+            .WithKind(CloudConsoles.PodKind)
+            .WithApiVersion(apiVersion)
+            .ObjectJson(
+                new JsonObject {
+                    ["metadata"] = new JsonObject { ["name"] = CloudConsoles.ShellName(console.Name) }
+                }.ToJsonString()
+            )
+            // ⚠ Foreground, so this call does not return until the container is actually gone. A
+            // terminate that answered while the shell was still printing would be a stop button that
+            // does not stop anything, which on a resource holding an identity is the one control a
+            // person has to be able to trust.
+            .DeleteAsync(CascadePolicy.Foreground, cancellationToken);
+
+    /// <summary>
+    ///     Deletes a shell that can't be re-joined and applies a new one for <paramref name="caller" />.
+    /// </summary>
+    /// <returns>The new pod, read back, and whether this call created it.</returns>
+    async Task<Result<(JsonObject? Pod, bool Created)>> ReplaceShellAsync(
+        ActionContext context,
+        IKubeClusterConnection cluster,
+        CallerContext caller,
+        CancellationToken cancellationToken
+    ) {
+        var cleared = await DeleteShellAsync(cluster, context.Id, context.Namespace, context.ApiVersion, cancellationToken);
+
+        if (cleared.TryGetError(out var clearError) && clearError.Code != ErrorCode.ResourceNotFound) {
+            return Result<(JsonObject? Pod, bool Created)>.Failure(clearError);
+        }
+
+        return await ApplyShellAsync(context, cluster, caller, cancellationToken);
+    }
+
+    /// <summary>Applies the shell pod, stamped with its owner, and reads it back.</summary>
+    /// <param name="context">The action.</param>
+    /// <param name="cluster">The console's cluster.</param>
+    /// <param name="caller">Who called <c>connect</c> — the owner a new pod is stamped with.</param>
+    /// <param name="cancellationToken">Stops the apply.</param>
+    /// <returns>The pod as the API server has it, and whether this apply created it.</returns>
+    /// <remarks>
+    ///     ⚠ <b>A pod that's already there keeps the owner it was created with.</b> The stamp is read
+    ///     first and applied back unchanged. An apply is this handler's field manager writing every
+    ///     field it names, so stamping the caller would rewrite the owner to whoever asked last,
+    ///     including a colleague the session grain is about to refuse. The session grain's hot-tier
+    ///     record is the first answer to whose shell this is, and this stamp is the answer when that
+    ///     record is gone. ⚠ Two first connects that both find no pod both create it, and the second
+    ///     apply's stamp wins. The grain binds whoever registers first. The two disagree only in that
+    ///     race, and the stamp is only read when the record has been lost as well.
+    /// </remarks>
+    async Task<Result<(JsonObject? Pod, bool Created)>> ApplyShellAsync(
+        ActionContext context,
+        IKubeClusterConnection cluster,
+        CallerContext caller,
+        CancellationToken cancellationToken
+    ) {
+        var image = images.For(CloudConsoles.ImageVariant(context.Desired), CloudConsoles.Image(context.Desired));
+
+        if (!CloudConsoles.IsPinned(image)) {
+            return Result<(JsonObject? Pod, bool Created)>.Failure(
+                ErrorCode.InternalError,
+                $"The shell image '{image}' is not pinned by digest, so no shell was started. Set "
+                + $"{CloudShellImageOptions.SectionName} to a reference ending in @sha256:<digest> — "
+                + "docs/plan/18 § Platform security: a pinned digest, never a tag."
+            );
+        }
+
+        var target = CloudConsoles.PodRef(context.Namespace, context.Id.Name);
+        var existing = await cluster.GetAsync(target, cancellationToken);
+        var owner = TerminalSessionKeys.OwnerStamp(caller);
+
+        if (existing.TryGetError(out var existingError)) {
+            if (existingError.Code != ErrorCode.ResourceNotFound) {
+                return Result<(JsonObject? Pod, bool Created)>.Failure(existingError);
+            }
+        } else if (Document(existing.GetValueOrThrow().Json)?["metadata"]?["annotations"]?[CloudConsoles.OwnerAnnotation]
+                   ?.GetValue<string>() is { Length: > 0 } stamped) {
+            owner = stamped;
+        }
+
+        var applied = await KubeCommand.For(cluster)
+            .WithTenantId(context.Id.TenantId)
+            .WithResourceId(context.Id)
+            .InNamespace(context.Namespace)
+            .WithKind(CloudConsoles.PodKind)
+            .WithApiVersion(context.ApiVersion)
+            .ObjectJson(CloudConsoles.PodJson(context.Id.Name, context.Desired, image, owner))
+            .ApplyAsync(cancellationToken);
+
+        if (applied.TryGetError(out var applyError)) {
+            return Result<(JsonObject? Pod, bool Created)>.Failure(applyError);
+        }
+
+        var created = applied.GetValueOrThrow().Result == ApplyResult.Created;
+        var read = await cluster.GetAsync(target, cancellationToken);
+
+        return read.TryGetError(out var readError)
+            ? Result<(JsonObject? Pod, bool Created)>.Failure(readError)
+            : Document(read.GetValueOrThrow().Json) is { } pod
+                ? Result<(JsonObject? Pod, bool Created)>.Success((pod, created))
+                : Result<(JsonObject? Pod, bool Created)>.Failure(
+                    ErrorCode.InternalError,
+                    $"the shell pod of '{context.Id.Path}' read back as something that is not a JSON object."
+                );
+    }
+
+    /// <summary>Registers the session for the pod just applied, bound to the caller.</summary>
+    /// <remarks>
+    ///     ⚠ Through the context's seam, because the session grain is the platform's: it re-asks ReBAC
+    ///     and holds a cluster stream, the two things docs/plan/03 § Assembly graph rules, rule 8,
+    ///     keeps out of a provider. What the provider contributes is the spec — which pod, which
+    ///     container, and which permission a person needs to attach.
+    /// </remarks>
+    static Task<Result> RegisterAsync(
+        ActionContext context,
+        IKubeClusterConnection cluster,
+        string sessionId,
+        CallerContext caller,
+        CancellationToken cancellationToken
+    ) =>
+        context.Terminals.OpenAsync(
+            new() {
+                Resource = context.Id,
+                ApiVersion = context.ApiVersion,
+                ClusterId = cluster.ClusterId,
+                Pod = CloudConsoles.PodRef(context.Namespace, context.Id.Name),
+                Container = CloudConsoles.ShellContainer,
+                PodUid = sessionId,
+                IdleTimeoutSeconds = CloudConsoles.IdleTimeoutSeconds(context.Desired),
+                Permission = CloudConsoles.ConnectPermission,
+                ReadPermission = "read",
+                OwnerAnnotation = CloudConsoles.OwnerAnnotation
+            },
+            caller,
+            cancellationToken
+        );
+
+    /// <summary>The session id for a shell pod: its UID, or empty when it has none.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The pod's UID and not a GUID this handler invents.</b> A handler holds no state and runs
+    ///     once per call, so an invented id would differ between two connects to the same live shell —
+    ///     and a client would treat the second as a new session and throw away a replay buffer that
+    ///     was still valid. The UID is the cluster's own answer to "is this the same shell", it
+    ///     survives a reconnect, and it changes when the pod is re-created, which is exactly when a
+    ///     client's buffer has stopped meaning anything.
+    /// </remarks>
+    static string SessionId(JsonObject? pod) => pod?["metadata"]?["uid"]?.GetValue<string>() ?? string.Empty;
+
+    /// <summary>
+    ///     The refusal for a pod read back with no UID — reachable against a fake that echoes an apply
+    ///     back without one, and against a real API server never.
+    /// </summary>
+    /// <remarks>
+    ///     Refusing rather than substituting: a session id a client can't name on the hub is worse than
+    ///     an error it can retry.
+    /// </remarks>
+    static Result<string> NoUid(ActionContext context) =>
+        Result<string>.Failure(
+            ErrorCode.InternalError,
+            $"the shell pod of '{context.Id.Path}' was applied and read back with no "
+            + "metadata.uid, so there is no session to name on the terminal hub."
+        );
 
     static Result<string> Answer(bool terminated) =>
         Result<string>.Success(new JsonObject { ["terminated"] = terminated }.ToJsonString());

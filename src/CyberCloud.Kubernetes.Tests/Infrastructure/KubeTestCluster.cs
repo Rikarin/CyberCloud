@@ -148,6 +148,9 @@ public interface IKubeReacherGrain : IGrainWithStringKey {
     [Alias("Ping")]
     Task<string> ReachPingAsync(Guid clusterId);
 
+    [Alias("Terminal")]
+    Task<string> ReachTerminalAsync(Guid clusterId);
+
     /// <summary>Calls <c>ApplyAsync</c> and returns the outcome's message.</summary>
     /// <param name="clusterId">The cluster.</param>
     /// <param name="command">The command.</param>
@@ -231,6 +234,35 @@ public sealed class KubeReacherGrain : Grain, IKubeReacherGrain {
             );
 
         return outcome.IsSuccess ? outcome.GetValueOrThrow().LabelSelector : $"<{outcome.Error!.Code}>";
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     Through the production handle and the production dialer, from inside a tenant grain's turn —
+    ///     the one place the connection grain's tenancy check can see a tenant.
+    /// </remarks>
+    public async Task<string> ReachTerminalAsync(Guid clusterId) {
+        var handle = new ClusterConnectionHandle(
+            GrainFactory,
+            clusterId,
+            ServiceProvider.GetRequiredService<IKubeAttachDialer>()
+        );
+
+        var outcome = await handle.AttachAsync(
+            new ObjectRef {
+                Kind = new() { Group = "", Version = "v1", Kind = "Pod", Plural = "pods" },
+                Namespace = "ns",
+                Name = "main-shell"
+            },
+            "shell"
+        );
+
+        if (outcome.IsSuccess) {
+            await outcome.GetValueOrThrow().DisposeAsync();
+            return "attached";
+        }
+
+        return $"<{outcome.Error!.Code}> {outcome.Error.Message}";
     }
 
     /// <inheritdoc />

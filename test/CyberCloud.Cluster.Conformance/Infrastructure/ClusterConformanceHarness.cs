@@ -6,6 +6,7 @@ using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
+using CyberCloud.ResourceManager.Terminals;
 using CyberCloud.ServiceDefaults.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -459,7 +460,11 @@ public sealed class ClusterConformanceHarness<TSource> : IAsyncDisposable
             new ActionDispatcher(
                 harness.Handlers(),
                 new RealClusterConnectionFactory(harness.Connection),
-                ClusterConformanceState<TSource>.Vault
+                ClusterConformanceState<TSource>.Vault,
+                // ⚠ The real session seam, as AddCyberCloudResourceManager registers it: a `connect` on
+                // this harness registers a live TerminalSessionGrain in its silo rather than being
+                // refused by the default.
+                terminals: new GrainTerminalSessions(harness.cluster.GrainFactory)
             ),
             NullLogger<ResourceManagerService>.Instance
         );

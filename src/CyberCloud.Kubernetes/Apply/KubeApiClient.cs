@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Runtime.CompilerServices;
 using System.Security.Authentication;
 using System.Text.Json;
@@ -751,6 +752,73 @@ public sealed class KubeApiClient(
     public void Dispose() {
         if (ownsClient) {
             client.Dispose();
+        }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b><c>v4.channel.k8s.io</c>, because it is what the pinned client dials.</b>
+    ///         KubernetesClient 19.0.2 offers the v4 binary and base64 protocols and no v5. What v5
+    ///         adds is a close frame for standard input, so an exec can see end-of-file while it still
+    ///         prints; a terminal session never needs it, because a shell ends when its process does
+    ///         and not when its input closes.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>stderr: false</c> is required, not chosen.</b> With a TTY the kernel merges the
+    ///         two streams onto the one terminal, and the API server refuses an attach that asks for
+    ///         both a TTY and a separate standard error.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The client's <c>StreamDemuxer</c> is not used.</b> Its <c>MuxedStream</c> reads
+    ///         synchronously, so every open shell would hold a thread-pool thread blocked on a read for
+    ///         as long as it lived. <see cref="WebSocketTerminal" /> reads the socket asynchronously and
+    ///         demultiplexes the one byte of channel itself.
+    ///     </para>
+    /// </remarks>
+    public async Task<Result<IKubeTerminal>> AttachAsync(
+        ObjectRef pod,
+        string container,
+        CancellationToken cancellationToken = default
+    ) {
+        ArgumentNullException.ThrowIfNull(pod);
+        ArgumentException.ThrowIfNullOrEmpty(container);
+
+        try {
+            var socket = await client.WebSocketNamespacedPodAttachAsync(
+                    pod.Name,
+                    pod.Namespace,
+                    container,
+                    stderr: false,
+                    stdin: true,
+                    stdout: true,
+                    tty: true,
+                    webSocketSubProtocol: WebSocketProtocol.V4BinaryWebsocketProtocol,
+                    cancellationToken: cancellationToken
+                )
+                .ConfigureAwait(false);
+
+            return Result<IKubeTerminal>.Success(new WebSocketTerminal(socket));
+        } catch (HttpOperationException ex) {
+            return Refuse<IKubeTerminal>(ex, pod, "attach to");
+        } catch (Exception ex) when (IsTransport(ex)) {
+            return Result<IKubeTerminal>.Failure(Unreachable(ex));
+        } catch (WebSocketException ex) {
+            // ⚠ The handshake's refusals arrive here rather than as an HttpOperationException: a pod
+            // that is not Running, a container name the pod does not have, a 403 from the API
+            // server's own RBAC. The API server's text is the only description of which, and it names
+            // nothing of the platform's, so it is passed on.
+            logger?.LogWarning(
+                ex,
+                "Attaching to {Pod} on cluster {Cluster} was refused at the handshake.",
+                pod,
+                clusterId
+            );
+
+            return Result<IKubeTerminal>.Failure(
+                ErrorCode.PreconditionFailed,
+                $"The cluster refused to attach to '{pod}': {ex.Message}"
+            );
         }
     }
 

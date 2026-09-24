@@ -115,7 +115,7 @@ public static class CyberCloudTopology {
         //
         // ADR-001 makes the Kubernetes API a data plane, and ADR-014 puts a k3s for it in this file.
         //
-        // ⚠ FOUR THINGS ARE LOAD-BEARING AND NONE OF THEM IS AN ASPIRE CONCEPT:
+        // ⚠ FIVE THINGS ARE LOAD-BEARING AND NONE OF THEM IS AN ASPIRE CONCEPT:
         //
         //  1. `--privileged`, `--tmpfs /run`, `--tmpfs /var/run` — k3s runs containerd, which needs a real
         //     mount namespace and a writable non-overlay /run. Without the tmpfs mounts containerd starts
@@ -141,6 +141,15 @@ public static class CyberCloudTopology {
         //     the arguments after `k3s` (its $0); Aspire passes the array to Docker unparsed. Measured
         //     the same day on a throwaway container: /proc/self/mountinfo shows `/var/run … shared`,
         //     /run stays private, and "k3s is up and running" is logged five seconds in.
+        //  5. THE KUBELET'S DISK THRESHOLDS, OR NO POD SCHEDULES ON A FULL DOCKER DISK. The node's disk is
+        //     the Docker Desktop VM's, shared with every image and volume on the machine, and the default
+        //     `imagefs.available<15%` put this k3s at DiskPressure with a NoSchedule taint on 2026-09-24,
+        //     read off a running topology. Nothing noticed, because until #22 nothing here ran a pod: a
+        //     widget is a ConfigMap. A cloud shell is a pod. These are ClusterInfrastructure.KubeletDropIn's
+        //     values, as `--kubelet-arg` because this k3s has no file to drop in, and a throwaway
+        //     v1.32.5 container started with them reported DiskPressure=False on the same machine.
+        //     ⚠ `evictionHard` replaces the kubelet's whole default map, so memory and inodes are
+        //     restated at their defaults.
         var kubeconfigDirectory = Path.Combine(builder.AppHostDirectory, ".k3s");
         Directory.CreateDirectory(kubeconfigDirectory);
 
@@ -159,7 +168,10 @@ public static class CyberCloudTopology {
                 "--tls-san=127.0.0.1",
                 "--tls-san=host.docker.internal",
                 "--write-kubeconfig=/output/kubeconfig.yaml",
-                "--write-kubeconfig-mode=666"
+                "--write-kubeconfig-mode=666",
+                "--kubelet-arg=eviction-hard=memory.available<100Mi,nodefs.available<1%,nodefs.inodesFree<5%,imagefs.available<1%",
+                "--kubelet-arg=image-gc-high-threshold=99",
+                "--kubelet-arg=image-gc-low-threshold=98"
             )
             .WithBindMount(kubeconfigDirectory, "/output")
             .WithEndpoint(
@@ -356,6 +368,9 @@ public static class CyberCloudTopology {
             .WithObjectStore()
             .WithDevelopmentMailRelay()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
+            // The cloud shell's image: a stand-in by digest until an image pipeline exists — see
+            // CyberCloudResources.ShellImage. Both silos, because a relayed connect runs on either.
+            .WithEnvironment("CyberCloud__Terminal__Images__Default", CyberCloudResources.ShellImage)
             // ⚠ Self-serve sign-up is a decision three processes have to agree on, and this is the first
             // of the three. On a silo it makes PlatformBootstrapTask write the platform:root#operator
             // grant sign-up creates tenants under; on the identity host it opens /api/signup/*. Both
@@ -389,6 +404,9 @@ public static class CyberCloudTopology {
             .WithObjectStore()
             .WithDevelopmentMailRelay()
             .WithEnvironment("CyberCloud__Silo__KubeconfigRoot", kubeconfigRoot)
+            // The cloud shell's image: a stand-in by digest until an image pipeline exists — see
+            // CyberCloudResources.ShellImage. Both silos, because a relayed connect runs on either.
+            .WithEnvironment("CyberCloud__Terminal__Images__Default", CyberCloudResources.ShellImage)
             .WithEnvironment(SelfServeSignUpVariable, "true")
             .WithOrleansPorts(CyberCloudResources.SiloTwoPort, CyberCloudResources.SiloTwoGatewayPort)
             .WithEnvironment(

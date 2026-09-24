@@ -6,6 +6,7 @@ using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Registry.Feeds.Host;
 using CyberCloud.ResourceManager;
+using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Contracts;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Grains;
@@ -296,18 +297,19 @@ public sealed class HostCompositionTests {
     ///         in the compiler sees the drift. This host is where every provider and the schema meet.
     ///     </para>
     ///     <para>
-    ///         ⚠ <b>The five names below are a known defect, pinned rather than fixed.</b>
-    ///         <c>listKeys</c>, <c>listCredentials</c>, <c>listInstallCommand</c>, the cloud console's
-    ///         <c>connect</c> and Grafana's <c>url</c> are checked by other types' actions and declared
-    ///         nowhere, so every one of those actions answers 404 on a real silo. Declaring them is a
-    ///         <c>SchemaVersion</c> bump and a decision about which role holds each, which is not
-    ///         #30's. docs/plan/07 records it as owed row <c>action-permissions-are-undeclared</c>. The
-    ///         list is exact in both directions: a sixth undeclared name fails here, and so does
-    ///         declaring one of the five without removing it from this list.
+    ///         ⚠ <b>The four names below are a known defect, pinned rather than fixed.</b>
+    ///         <c>listKeys</c>, <c>listCredentials</c>, <c>listInstallCommand</c> and Grafana's
+    ///         <c>url</c> are checked by other types' actions and declared nowhere, so every one of
+    ///         those actions answers 404 on a real silo. Declaring them is a <c>SchemaVersion</c> bump
+    ///         and a decision about which role holds each, which is not #30's. docs/plan/07 records it
+    ///         as owed row <c>action-permissions-are-undeclared</c>. The list is exact in both
+    ///         directions: a fifth undeclared name fails here, and so does declaring one of the four
+    ///         without removing it from this list. The cloud console's <c>connect</c> was the fifth
+    ///         until the second review of #22 declared it, as <c>Rel(contributor)</c>.
     ///     </para>
     /// </remarks>
     [Fact]
-    public async Task EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed() {
+    public async Task EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFourOwed() {
         await using var gateway = await BuildGatewayAsync();
 
         var registry = gateway.Services.GetRequiredService<IProviderRegistry>();
@@ -334,7 +336,7 @@ public sealed class HostCompositionTests {
 
         undeclared.Select(static x => x.Key)
             .ShouldBe(
-                ["connect", "listCredentials", "listInstallCommand", "listKeys", "url"],
+                ["listCredentials", "listInstallCommand", "listKeys", "url"],
                 "undeclared, and so answering 404 to everybody: "
                 + string.Join("; ", undeclared.Select(static x => $"{x.Key} ← {string.Join(", ", x.Select(static y => y.Item2))}"))
             );
@@ -589,6 +591,33 @@ public sealed class HostCompositionTests {
         silo.Services
             .GetRequiredService<IClusterConnectionRegistrar>()
             .ShouldBeOfType<GrainClusterConnectionRegistrar>();
+    }
+
+    /// <summary>
+    ///     ⚠ The gateway relays an action that needs a cluster to a silo, and the silo runs it itself.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         <b>Found by the review of #22.</b> The gateway runs a synchronous action in its own
+    ///         process and composes <c>NoClusterConnectionFactory</c>, so every action on a type
+    ///         declaring <c>RequiresCluster</c> — the cloud console's <c>connect</c> among them — was
+    ///         refused before its handler ran. The terminal's cluster lane composed its gateway with a
+    ///         direct connection and never saw it. The relay is the fix, and it only works if the two
+    ///         hosts disagree in exactly this way: a silo with a relay would send an action it can
+    ///         serve itself to another worker.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task TheGatewayRelaysAClusterActionAndTheSiloRunsItItself() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        gateway.Services
+            .GetRequiredService<IClusterConnectionFactory>()
+            .ShouldBeOfType<NoClusterConnectionFactory>("the gateway can't reach a cluster and must not pretend to");
+
+        gateway.Services.GetRequiredService<IClusterActionRelay>().ShouldBeOfType<GrainClusterActionRelay>();
+        silo.Services.GetService<IClusterActionRelay>().ShouldBeNull();
     }
 
     // ── The principal directory: a grant has to be checkable ─────────────────────────────────────

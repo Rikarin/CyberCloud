@@ -60,11 +60,12 @@ type Outcome = { readonly kind: 'terminated' | 'wasIdle' } | { readonly kind: 'f
  * § Auditing says the portal must be, and `connect` carries the flag so the pane can be before the
  * first byte.
  *
- * ⚠ **The pane will say the data plane is owed, and that is the truth today.** Every method on
- * the gateway's `TerminalHub` throws by name until docs/plan/19's session grain exists;
- * `charts/managed/cloud-shell/conformance.yaml § owed` carries the item. The pane shows the hub's
- * own message, in the pane, so the state of the row is visible where a person would look for a
- * prompt. Everything before that point — the console, the ticket, the socket — is real.
+ * ⚠ **A refusal from the hub is shown where the prompt would be.** `TerminalHub` reaches
+ * docs/plan/19's session grain, which refuses a session that belongs to another person or a caller
+ * who has lost `connect` on the console; the pane shows the grain's own sentence rather than a
+ * pane that looks connected to nothing. When the hub says the shell has **ended** — it exited,
+ * sat idle past its timeout, or was terminated — the pane stops rather than reconnecting, because
+ * a reconnect is `connect` and `connect` would start the pod an idle reclaim just stopped.
  *
  * ⚠ **`terminate` is two clicks and `connect` is none — and none is a decision, because a
  * navigation can start a pod.** `connect` applies the shell pod rather than creating it, so
@@ -378,7 +379,7 @@ export class TerminalBlade {
 
   protected readonly canReconnect = computed(() => {
     const kind = this.session.state().kind;
-    return kind === 'closed' || kind === 'refused' || kind === 'failed';
+    return kind === 'closed' || kind === 'refused' || kind === 'failed' || kind === 'ended';
   });
   protected readonly canDisconnect = computed(() => {
     const kind = this.session.state().kind;
@@ -402,6 +403,8 @@ export class TerminalBlade {
         return $localize`:@@terminal.state.reconnecting:Connection lost — retrying in ${Math.round(state.inMs / 1000)}:seconds: s (attempt ${state.attempt}:attempt: of 5)`;
       case 'refused':
         return $localize`:@@terminal.state.refused:The hub refused the session`;
+      case 'ended':
+        return $localize`:@@terminal.state.ended:The shell has ended`;
       case 'failed':
         return $localize`:@@terminal.state.failed:Could not connect`;
       case 'closed':
@@ -418,7 +421,13 @@ export class TerminalBlade {
       case 'refused':
         return {
           color: 'warning',
-          title: $localize`:@@terminal.problem.refusedTitle:The platform's terminal data plane is not built yet`,
+          title: $localize`:@@terminal.problem.refusedTitle:The terminal session was refused`,
+          message: state.message
+        };
+      case 'ended':
+        return {
+          color: 'warning',
+          title: $localize`:@@terminal.problem.endedTitle:The shell has ended — Reconnect starts a new one with the same home directory`,
           message: state.message
         };
       case 'failed':

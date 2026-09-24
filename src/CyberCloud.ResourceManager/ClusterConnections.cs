@@ -76,10 +76,17 @@ public sealed class GrainClusterConnectionRegistrar(IGrainFactory grains) : IClu
 ///     </para>
 /// </remarks>
 /// <param name="grains">The grain factory the handles forward through.</param>
-public sealed class GrainClusterConnectionFactory(IGrainFactory grains) : IClusterConnectionFactory {
+/// <param name="attach">
+///     Opens a terminal once the connection grain has allowed it — <c>ClusterAttachDialer</c>, which
+///     <c>AddCyberCloudKubernetes</c> registers on a silo. ⚠ Optional, so a process that composes this
+///     factory for requests only needs no dialer; a connection built without one refuses an attach by
+///     name rather than pretending.
+/// </param>
+public sealed class GrainClusterConnectionFactory(IGrainFactory grains, IKubeAttachDialer? attach = null)
+    : IClusterConnectionFactory {
     /// <inheritdoc />
     public IKubeClusterConnection? Connect(Guid clusterId) =>
-        clusterId == Guid.Empty ? null : new GrainClusterConnection(grains, clusterId);
+        clusterId == Guid.Empty ? null : new GrainClusterConnection(grains, clusterId, attach);
 }
 
 /// <summary>
@@ -111,7 +118,9 @@ public sealed class GrainClusterConnectionFactory(IGrainFactory grains) : IClust
 /// </remarks>
 /// <param name="grains">The grain factory.</param>
 /// <param name="clusterId">The cluster this handle addresses.</param>
-sealed class GrainClusterConnection(IGrainFactory grains, Guid clusterId) : IKubeClusterConnection {
+/// <param name="attach">The dialer an attach goes through, or <see langword="null" /> to refuse one.</param>
+sealed class GrainClusterConnection(IGrainFactory grains, Guid clusterId, IKubeAttachDialer? attach)
+    : IKubeClusterConnection {
     /// <inheritdoc />
     public Guid ClusterId => clusterId;
 
@@ -159,4 +168,28 @@ sealed class GrainClusterConnection(IGrainFactory grains, Guid clusterId) : IKub
         CancellationToken cancellationToken = default
     ) =>
         Grain.SetOwnerAsync(target, owner);
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ Overridden for the reason the three members above are: the interface's default refuses,
+    ///     and leaving it would make the cloud terminal work in every harness whose connection is a
+    ///     direct client and fail only here, in production. The grain authorizes and the dialer
+    ///     opens the socket in this process — <c>IClusterConnectionGrain.AuthorizeAttachAsync</c>'s
+    ///     remarks say why the socket cannot live in the grain.
+    /// </remarks>
+    public Task<Result<IKubeTerminal>> AttachAsync(
+        ObjectRef pod,
+        string container,
+        CancellationToken cancellationToken = default
+    ) =>
+        attach is null
+            ? Task.FromResult(
+                Result<IKubeTerminal>.Failure(
+                    ErrorCode.InternalError,
+                    $"This process composed its cluster connections without an IKubeAttachDialer, so "
+                    + $"'{pod}' on cluster {clusterId:D} cannot be attached to from here. A silo gets "
+                    + "one from AddCyberCloudKubernetes."
+                )
+            )
+            : attach.AttachAsync(clusterId, pod, container, cancellationToken);
 }

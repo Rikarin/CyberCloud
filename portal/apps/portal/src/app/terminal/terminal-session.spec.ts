@@ -85,6 +85,12 @@ class FakeHub implements TerminalHubConnection {
     this.handlers.get(terminalProtocol.output)?.(toBase64(bytes));
   }
 
+  /** The hub says the session is over, then closes the socket — `TerminalPane.EndedAsync`'s order. */
+  end(reason: string): void {
+    this.handlers.get(terminalProtocol.ended)?.(reason);
+    this.closeHandler?.(undefined);
+  }
+
   /** The socket drops. */
   drop(): void {
     this.closeHandler?.(new Error('gone'));
@@ -186,7 +192,13 @@ describe('TerminalSession', () => {
       { method: 'Resize', args: ['pod-uid-1', 100, 30] }
     ]);
     // The words on the wire are the C# side's TerminalProtocol constants.
-    expect(terminalProtocol).toEqual({ attach: 'Attach', send: 'Send', resize: 'Resize', output: 'Output' });
+    expect(terminalProtocol).toEqual({
+      attach: 'Attach',
+      send: 'Send',
+      resize: 'Resize',
+      output: 'Output',
+      ended: 'Ended'
+    });
   });
 
   it('drops keystrokes typed before Attach has been answered rather than queuing them', async () => {
@@ -198,15 +210,17 @@ describe('TerminalSession', () => {
     expect(hubs[0].invocations.map(i => i.method)).toEqual(['Attach']);
   });
 
-  it('shows the hub refusing the session — the owed data plane — and does not retry on its own', async () => {
-    nextScript = { refuse: "The cloud terminal's session grain is docs/plan/19 and is not implemented." };
+  it('shows the hub refusing the session — the grain declining this caller — and does not retry on its own', async () => {
+    nextScript = {
+      refuse: "There is no terminal session 'pod-uid-1' for this caller. Call connect on the console for a session id."
+    };
     session.open(ADDRESS, { cols: 80, rows: 24 }, sink);
 
     await answerConnect();
 
     expect(session.state()).toEqual({
       kind: 'refused',
-      message: "The cloud terminal's session grain is docs/plan/19 and is not implemented."
+      message: "There is no terminal session 'pod-uid-1' for this caller. Call connect on the console for a session id."
     });
     expect(hubs[0].stopped).toBe(true);
 
@@ -234,6 +248,24 @@ describe('TerminalSession', () => {
       message: 'cannot be attached to yet'
     });
     expect(hubs).toHaveLength(0);
+  });
+
+  it('stops when the hub says the shell ended, and does not reconnect into a new pod', async () => {
+    // ⚠ The one close that must NOT be a reconnect. After an idle reclaim a reconnect is `connect`,
+    // and `connect` starts the pod the reclaim just stopped — for a tab nobody is looking at.
+    session.open(ADDRESS, { cols: 80, rows: 24 }, sink);
+    await answerConnect();
+
+    const reason = 'the shell was reclaimed after 20 minutes with no input; the home directory is kept';
+    hubs[0].end(reason);
+
+    expect(session.state()).toEqual({ kind: 'ended', message: reason });
+    expect(sink.notices).toEqual([reason]);
+    expect(hubs[0].stopped).toBe(true);
+
+    await new Promise(resolve => setTimeout(resolve, 60));
+    expect(hubs).toHaveLength(1);
+    // http.verify() in afterEach: no second connect was sent.
   });
 
   it('reconnects when the socket drops: a new connect, a new ticket, and the same session rejoined', async () => {

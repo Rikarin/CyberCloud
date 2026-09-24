@@ -1169,11 +1169,12 @@ describe('the portal pages, signed in', () => {
     });
 
     it('shows the hub refusing the session in place, with Reconnect, and retries nothing on its own', async () => {
-      hubRefusal = "The cloud terminal's session grain is docs/plan/19 and is not implemented.";
+      hubRefusal =
+        "There is no terminal session 'pod-uid-1' for this caller. Call connect on the console for a session id.";
       await openWith([aConsole('shell')]);
 
       expect(sessionState()).toBe('refused');
-      expect(host().querySelector('[data-problem]')?.textContent).toContain('session grain is docs/plan/19');
+      expect(host().querySelector('[data-problem]')?.textContent).toContain('no terminal session');
       expect(hubs[0].stopped).toBe(true);
       expect([...host().querySelectorAll('button')].map(b => b.textContent?.trim())).toContain('Reconnect');
 

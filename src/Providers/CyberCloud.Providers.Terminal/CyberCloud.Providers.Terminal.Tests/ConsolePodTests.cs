@@ -261,9 +261,9 @@ public sealed class ConsolePodTests {
 
     [Fact]
     public void TheHardCapIsOnThePodSoItHoldsWithNothingOfThisPlatformRunning() {
-        // ⚠ THE ONLY HALF OF docs/plan/19's SESSION POLICY THAT ANYTHING ENFORCES TODAY, AND IT IS
+        // ⚠ THE HALF OF docs/plan/19's SESSION POLICY THAT NEEDS NOTHING OF THIS PLATFORM, AND IT IS
         // ENFORCED BY THE KUBELET. activeDeadlineSeconds is checked by the node, so a console whose
-        // session grain died, whose silo moved, or whose reaper was never written still stops burning
+        // session grain died or whose silo moved — and whose idle clock went with it — still stops burning
         // CPU at the cap.
         Pod()["spec"]!["activeDeadlineSeconds"]!.GetValue<int>().ShouldBe(8 * 3600);
 
@@ -275,11 +275,11 @@ public sealed class ConsolePodTests {
 
     [Fact]
     public void TheIdleTimeoutIsCarriedOnTheObjectRatherThanLookedUp() {
-        // ⚠ THE HALF NOTHING ENFORCES, AND THE ANNOTATION IS WHAT MAKES THAT SURVIVABLE. A sweeper
+        // ⚠ THE HALF A LOST ACTIVATION TAKES WITH IT, AND THE ANNOTATION IS WHAT MAKES THAT SURVIVABLE. A sweeper
         // that had to resolve every pod back to a resource body to learn its timeout would be a
         // sweeper that cannot run without the resource manager; carrying the number on the object
         // makes the reclaim decision readable by kubectl and by whatever eventually sweeps.
-        // conformance.yaml § owed, `no-idle-reaper`.
+        // conformance.yaml § owed, `no-idle-sweep-without-an-activation`.
         Pod()["metadata"]!["annotations"]![CloudConsoles.IdleTimeoutAnnotation]!
             .GetValue<string>()
             .ShouldBe("1200");

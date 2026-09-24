@@ -64,15 +64,30 @@ public readonly record struct ActionContext(
     public IAgentTunnels Agents { get; init; } = new UnavailableAgentTunnels();
 
     /// <summary>
+    ///     The terminal-session seam — where <c>connect</c> registers the shell it started. Defaults to
+    ///     <see cref="UnavailableTerminalSessions" />; <c>ActionDispatcher</c> supplies the host's.
+    /// </summary>
+    public ITerminalSessions Terminals { get; init; } = new UnavailableTerminalSessions();
+
+    /// <summary>
     ///     Who invoked the action, as the manager checked the action's permission for. Empty when the
     ///     dispatcher was built without one, as every test double's is.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>For a handler whose answer depends on more than the resource.</b> The manager has checked
-    ///     the declared permission on the resource and nothing else. <c>showStatus</c> on a budget returns
-    ///     the spend of the group or subscription it covers, and a reader of the budget may not read
-    ///     that, so the handler asks again, about that scope, for this caller. A handler that asks must
-    ///     refuse when this is empty rather than answer as nobody in particular.
+    ///     <para>
+    ///         ⚠ <b>For a handler whose answer depends on more than the resource.</b> The manager has checked
+    ///         the declared permission on the resource and nothing else. <c>showStatus</c> on a budget returns
+    ///         the spend of the group or subscription it covers, and a reader of the budget may not read
+    ///         that, so the handler asks again, about that scope, for this caller. A handler that asks must
+    ///         refuse when this is empty rather than answer as nobody in particular.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>And for one that binds something to a person, which is the cloud terminal's
+    ///         <c>connect</c>.</b> A shell belongs to the person who opened it: <c>connect</c> binds its
+    ///         session to this caller, and the session grain then refuses every other person. That use
+    ///         is a fact to bind to, not an allow-or-deny, and a <c>connect</c> handed an empty caller
+    ///         refuses rather than open a session nobody owns.
+    ///     </para>
     /// </remarks>
     public CallerContext Caller { get; init; } = new();
 

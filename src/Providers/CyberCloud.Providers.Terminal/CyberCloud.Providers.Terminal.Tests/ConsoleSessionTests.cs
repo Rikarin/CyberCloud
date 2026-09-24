@@ -241,6 +241,213 @@ public sealed class ConsoleSessionTests {
             .ShouldBe(CloudConsoles.TerminateResponse.Properties.Select(static x => x.JsonPointer[1..]));
     }
 
+    [Fact]
+    public async Task ConnectBindsTheSessionItStartedToItsCaller() {
+        // ⚠ THE OWNERSHIP HALF OF ISSUE #22. The session grain refuses every person but the one bound
+        // here, so what is registered — the console, the pod, the idle timeout and the caller — is the
+        // whole of what the grain will ever know about who may type into this shell.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions();
+        var caller = new CallerContext {
+            TenantId = ConsoleReconcilerTests.TenantA, SubjectType = "user", SubjectId = "person-a"
+        };
+
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(
+            connection,
+            desired.RootElement,
+            sessions: sessions,
+            caller: caller
+        );
+
+        var (spec, owner) = sessions.Opened.ShouldHaveSingleItem();
+
+        owner.ShouldBe(caller);
+        spec.PodUid.ShouldBe(Session(connected));
+        spec.Resource.Name.ShouldBe("observed");
+        spec.Resource.TenantId.ShouldBe(ConsoleReconcilerTests.TenantA);
+        spec.Container.ShouldBe(CloudConsoles.ShellContainer);
+        spec.Permission.ShouldBe(CloudConsoles.ConnectPermission);
+        spec.ClusterId.ShouldBe(connection.ClusterId);
+        spec.IdleTimeoutSeconds.ShouldBe(1200);
+        spec.Pod.ShouldBe(CloudConsoles.PodRef(ConsoleReconcilerTests.Namespace, "observed"));
+    }
+
+    [Fact]
+    public async Task ConnectWithNoCallerStartsNoSession() {
+        // A session with no owner is a shell anybody holding its id could type into. The manager
+        // always hands the caller over; a dispatcher composed without one is refused by name.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions();
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(
+            connection,
+            desired.RootElement,
+            sessions: sessions,
+            withoutCaller: true
+        );
+
+        connected.IsSuccess.ShouldBeFalse();
+        connected.Error!.Message.ShouldContain("no caller");
+        sessions.Opened.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ASessionAnotherPersonHoldsIsAConflictAndNoSessionId() {
+        // The second person holds `connect` on the console — the manager checked — so the console is
+        // no secret to them; the session is. They get the grain's 409 and never the id.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            Answer = Result.Failure(ErrorCode.Conflict, "The shell is open for another person.")
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+
+        connected.IsSuccess.ShouldBeFalse();
+        connected.Error!.Code.ShouldBe(ErrorCode.Conflict);
+    }
+
+    [Fact]
+    public async Task AFinishedShellIsDeletedAndStartedAgainRatherThanReportedStartingForever() {
+        // ⚠ restartPolicy: Never leaves a pod whose shell exited in Succeeded, and an apply of the same
+        // spec over it changes nothing. Without the delete, `exit` would make a console answer
+        // "Starting" to every connect until the pod's hard cap.
+        var connection = new RecordingConnection { PodPhase = "Succeeded" };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        await ConsoleReconcilerTests.Connect(connection, desired.RootElement);
+
+        connection.Deleted.ShouldContain(x => x.Kind.Kind == "Pod");
+        connection.Applied.Count(static x => x.Target.Kind.Kind == "Pod").ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task AnEndedSessionOverAPodThatStillStandsIsReplacedRatherThanLockingTheConsoleOut() {
+        // ⚠ Found by the review of #22. The session id is the pod's UID, so while an ended session's
+        // pod stands every connect names the same ended grain, and the grain refuses an ended session
+        // with PreconditionFailed. Before this, that was the answer to every connect until somebody
+        // called terminate: an idle reclaim whose delete didn't reach the cluster locked the console.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            First = new([Result.Failure(ErrorCode.PreconditionFailed, "This shell has ended (reclaimed).")])
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+        connected.IsSuccess.ShouldBeTrue(connected.Error?.Message);
+
+        sessions.Opened.Count.ShouldBe(2);
+        var (ended, replacement) = (sessions.Opened[0].Spec, sessions.Opened[1].Spec);
+
+        replacement.PodUid.ShouldNotBe(ended.PodUid, "the replacement is a new pod, so a new session");
+        Session(connected).ShouldBe(replacement.PodUid);
+        connection.Deleted.ShouldContain(x => x.Kind.Kind == "Pod");
+        connection.Objects.Keys.Count(static x => x.StartsWith("Pod/", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task OverTheTenantsCapThePodThisConnectStartedIsRemoved() {
+        // A refused connect that left a running shell behind would be the cost the cap exists to stop.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            Answer = Result.Failure(ErrorCode.QuotaExceeded, "This tenant already has 10 cloud shells running.")
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        var connected = await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+
+        connected.IsSuccess.ShouldBeFalse();
+        connected.Error!.Code.ShouldBe(ErrorCode.QuotaExceeded);
+        connection.Objects.Keys.ShouldNotContain(x => x.StartsWith("Pod/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task OverTheCapAPodThatWasAlreadyThereIsLeftRunning() {
+        // ⚠ Found by the second review of #22: a QuotaExceeded deleted the pod whether or not this
+        // connect had started it. A pod that was already there is somebody's shell, for example the
+        // owner's own after the session grain lost its activation.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            First = new([Result.Success]),
+            Answer = Result.Failure(ErrorCode.QuotaExceeded, "This tenant already has 10 cloud shells running.")
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        (await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions)).IsSuccess.ShouldBeTrue();
+
+        var again = await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+
+        again.Error!.Code.ShouldBe(ErrorCode.QuotaExceeded);
+        connection.Deleted.ShouldBeEmpty("a refused connect deleted a shell it didn't start");
+        connection.Objects.Keys.Count(static x => x.StartsWith("Pod/", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ThePodKeepsTheOwnerItWasCreatedForWhoeverConnectsNext() {
+        // The session grain's hot-tier record says whose shell this is; the stamp says it again for the
+        // day that record is gone. A connect that stamped its own caller would make the pod name
+        // whoever asked last — including the colleague the grain is about to refuse.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions();
+        var alice = new CallerContext { TenantId = ConsoleReconcilerTests.TenantA, SubjectType = "user", SubjectId = "alice" };
+        var bob = alice with { SubjectId = "bob" };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+
+        (await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions, caller: alice)).IsSuccess.ShouldBeTrue();
+        await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions, caller: bob);
+
+        Stamp(connection).ShouldBe("user:alice");
+        sessions.Opened.ShouldAllBe(static x => x.Spec.OwnerAnnotation == CloudConsoles.OwnerAnnotation);
+
+        // A shell that's over gets a new pod, stamped for whoever started it.
+        connection.Objects.TryRemove(
+            RecordingConnection.Key(CloudConsoles.PodRef(ConsoleReconcilerTests.Namespace, "observed")),
+            out _
+        ).ShouldBeTrue();
+
+        await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions, caller: bob);
+        Stamp(connection).ShouldBe("user:bob");
+    }
+
+    static string? Stamp(RecordingConnection connection) =>
+        JsonNode.Parse(connection.Objects[RecordingConnection.Key(CloudConsoles.PodRef(ConsoleReconcilerTests.Namespace, "observed"))])?
+            ["metadata"]?["annotations"]?[CloudConsoles.OwnerAnnotation]?.GetValue<string>();
+
+    [Fact]
+    public async Task AConflictLeavesTheOtherPersonsShellRunning() {
+        // The other half of the cap's rule: a 409 means the pod is somebody's live shell.
+        var connection = new RecordingConnection();
+        var sessions = new RecordingSessions {
+            Answer = Result.Failure(ErrorCode.Conflict, "The shell is open for another person.")
+        };
+        using var desired = JsonDocument.Parse(CloudConsoles.Body(ConsoleReconcilerTests.ClusterId));
+
+        await ConsoleReconcilerTests.Reconcile(connection, desired.RootElement);
+        await ConsoleReconcilerTests.Connect(connection, desired.RootElement, sessions: sessions);
+
+        connection.Deleted.ShouldBeEmpty();
+        connection.Objects.Keys.Count(static x => x.StartsWith("Pod/", StringComparison.Ordinal)).ShouldBe(1);
+    }
+
     static string Session(Result<string> connected) =>
         JsonNode.Parse(connected.GetValueOrThrow())![CloudConsoles.SessionIdField]!.GetValue<string>();
 }

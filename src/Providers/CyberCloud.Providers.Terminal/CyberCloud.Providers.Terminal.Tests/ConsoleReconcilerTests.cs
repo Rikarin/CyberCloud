@@ -388,7 +388,10 @@ public sealed class ConsoleReconcilerTests {
     internal static async Task<Result<string>> Connect(
         RecordingConnection connection,
         JsonElement desired,
-        string action = CloudConsoles.ConnectAction
+        string action = CloudConsoles.ConnectAction,
+        RecordingSessions? sessions = null,
+        CallerContext? caller = null,
+        bool withoutCaller = false
     ) {
         var address = Address("observed", TenantA, SubscriptionA);
 
@@ -404,7 +407,12 @@ public sealed class ConsoleReconcilerTests {
                 ReconcileDriver.NamespaceFor(address),
                 connection,
                 new UnavailableSecretResolver()
-            ),
+            ) {
+                Terminals = sessions ?? new RecordingSessions(),
+                Caller = withoutCaller
+                    ? new()
+                    : caller ?? new CallerContext { TenantId = TenantA, SubjectType = "user", SubjectId = "person-a" }
+            },
             TestContext.Current.CancellationToken
         );
     }

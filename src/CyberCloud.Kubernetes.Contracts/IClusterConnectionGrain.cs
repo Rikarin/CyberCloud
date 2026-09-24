@@ -146,6 +146,39 @@ public interface IClusterConnectionGrain : IGrainWithStringKey {
     Task<Result> SetOwnerAsync(ObjectRef target, OwnerRef? owner);
 
     /// <summary>
+    ///     Decides whether the caller may attach to a pod's terminal on this cluster, and says how to
+    ///     reach the cluster when it may.
+    /// </summary>
+    /// <param name="pod">The core <c>v1</c> <c>Pod</c> to attach to, in a namespace.</param>
+    /// <returns>
+    ///     The descriptor the calling process dials with, or the refusal — the same tenancy check
+    ///     every other method makes, then <see cref="ErrorCode.OperationInProgress" /> while the
+    ///     cluster is <see cref="ClusterHealthState.Degraded" /> — retry, as a delete does.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             THE ONE METHOD HERE THAT DOES NOT DO THE WORK ITSELF, BECAUSE THE WORK IS A SOCKET.
+    ///         </b> An attach lives for as long as somebody types, and a grain method returns
+    ///         a message; routing every keystroke of every shell on a cluster through this one
+    ///         activation would also make it the bottleneck docs/plan/06 § Grain keys' "exactly one
+    ///         per cluster" never meant it to be. So the socket is opened by
+    ///         <see cref="IKubeAttachDialer" /> in the process that holds the session, and what stays
+    ///         here is the decision.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The descriptor carries a credential REFERENCE, never a credential.</b>
+    ///         <see cref="ClusterConnectionDescriptor.CredentialRef" /> is resolved by the dialing
+    ///         process's own <c>IKubeApiClientFactory</c>, which is the same resolver this grain's
+    ///         own client came from — so nothing crosses the wire that the caller's silo could not
+    ///         already resolve.
+    ///     </para>
+    /// </remarks>
+    [Alias("AuthorizeAttach")]
+    Task<Result<ClusterConnectionDescriptor>> AuthorizeAttachAsync(ObjectRef pod);
+
+    /// <summary>
     ///     Establishes (or joins) the shared informer for a kind, filtered by
     ///     <see cref="KubeLabels.ManagedBySelector" />.
     /// </summary>

@@ -7,6 +7,7 @@ using CyberCloud.ResourceManager.Actions;
 using CyberCloud.ResourceManager.Conformance;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ResourceManager.Registry;
+using CyberCloud.ResourceManager.Terminals;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -684,7 +685,8 @@ public class ProviderTestCluster<TSource> : IAsyncLifetime
                 Handlers(),
                 new FakeClusterConnectionFactory(World),
                 Vault,
-                ConformanceState<TSource>.Agents
+                ConformanceState<TSource>.Agents,
+                new GrainTerminalSessions(Grains)
             ),
             NullLogger<ResourceManagerService>.Instance
         );

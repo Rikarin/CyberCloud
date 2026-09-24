@@ -425,6 +425,31 @@ public sealed class RoleAssignmentTests(IsolationCluster cluster) {
         refused.Error!.Code.ShouldBe(ErrorCode.AuthorizationFailed);
     }
 
+    [Fact]
+    public async Task AContributorMayOpenAConsolesShellAndAReaderMayNot() {
+        // ⚠ Found by the second review of #22: CyberCloudSchema declared no `connect`, so every cloud
+        // console's connect and terminate answered 404 through this engine, the owner's included, and
+        // every terminal suite had run against a doubled authorizer. Contributor, because whoever may
+        // write the console may already change the identity its shell acts as.
+        var subscription = Guid.Parse("88888888-0000-4000-8000-0000000000c2");
+        var resource = await SeedAsync(subscription);
+        var cora = await UserAsync("cora-shell");
+        var rita = await UserAsync("rita-shell");
+
+        foreach (var (relation, person) in new[] { (Relations.Contributor, cora), (Relations.Reader, rita) }) {
+            (await Assign(
+                    RoleAssignmentId.OnScope(ScopeId.Group(Grant, subscription, Group), new(relation, SubjectTypes.User, person)),
+                    Owner
+                )).IsSuccess.ShouldBeTrue();
+        }
+
+        (await AllowedAsync(resource, Permissions.Connect, Owner)).ShouldBeTrue("the owner may open a shell");
+        (await AllowedAsync(resource, Permissions.Connect, cora)).ShouldBeTrue("a contributor may open a shell");
+        (await AllowedAsync(resource, Permissions.Connect, rita)).ShouldBeFalse(
+            "a reader of the group inherited a terminal holding the console's identity"
+        );
+    }
+
     // ── The other scopes and the other principals ──────────────────────────────────────────────
 
     [Fact]

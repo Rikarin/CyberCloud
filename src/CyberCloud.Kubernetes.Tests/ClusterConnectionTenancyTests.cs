@@ -267,7 +267,7 @@ public sealed class ClusterConnectionTenancyTests(KubeTestCluster cluster) {
         typeof(IClusterConnectionGrain)
             .GetMethods(BindingFlags.Public | BindingFlags.Instance)
             .Length
-            .ShouldBe(11, "the interface has eleven methods; the probe covers whatever is there.");
+            .ShouldBe(12, "the interface has twelve methods; the probe covers whatever is there.");
 
         var unchecked_ = await cluster.Reacher(TenantB)
             .ProbeUncheckedMethodsAsync(
@@ -281,6 +281,24 @@ public sealed class ClusterConnectionTenancyTests(KubeTestCluster cluster) {
             + string.Join(", ", unchecked_)
             + ". docs/plan/06 § Grain keys makes that check the reason this grain type exists."
         );
+    }
+
+    [Fact]
+    public async Task AnAttachIsDecidedByTheOwnersCheckAndDialedByTheCaller() {
+        // ⚠ The one member whose socket is not the grain's. AuthorizeAttachAsync makes the owner check
+        // and ClusterAttachDialer opens the stream in the calling silo — so the check has to run
+        // before any client is built, and the caller's tenant has to survive the hop from a tenant
+        // grain's turn through the dialer. Tenant B is refused by the check; tenant A gets past it and
+        // reaches the API client the silo's factory built, whose refusal here is the recording
+        // double's "no stream" — which is the evidence the dial happened.
+        var clusterId = await AttachedToAsync(TenantA);
+
+        var mine = await cluster.Reacher(TenantA).ReachTerminalAsync(clusterId);
+        mine.ShouldContain(nameof(RecordingApiClient), Case.Sensitive, "tenant A's attach reached the dialed client");
+
+        var theirs = await cluster.Reacher(TenantB).ReachTerminalAsync(clusterId);
+        theirs.ShouldStartWith($"<{ErrorCode.ResourceNotFound}>");
+        theirs.ShouldNotContain(nameof(RecordingApiClient));
     }
 
     static Guid NewClusterId() =>

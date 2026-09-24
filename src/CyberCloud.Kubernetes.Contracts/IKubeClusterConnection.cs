@@ -269,4 +269,47 @@ public interface IKubeClusterConnection {
                 + "reported detached and was not is garbage-collected with its owner."
             )
         );
+
+    /// <summary>
+    ///     Attaches to the process a container is running, with its terminal — the Kubernetes
+    ///     <c>pods/attach</c> stream.
+    /// </summary>
+    /// <param name="pod">The pod. A core <c>v1</c> <c>Pod</c> in a namespace.</param>
+    /// <param name="container">The container whose process to join.</param>
+    /// <param name="cancellationToken">Stops the dial. Dispose the terminal to close the stream.</param>
+    /// <returns>
+    ///     The open terminal, or the failure. ⚠ The caller owns the result and must dispose it; an
+    ///     undisposed terminal is an open socket to the API server.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             THE FIRST MEMBER HERE THAT IS A STREAM RATHER THAN A REQUEST, ADDED BY THE ONE
+    ///             CALLER THAT IS A STREAM.
+    ///         </b> docs/plan/19's session grain speaks the attach protocol through the cluster
+    ///         connection; before this there was nothing to speak it through, and
+    ///         <c>charts/managed/cloud-shell/conformance.yaml § owed</c> named that as the first thing
+    ///         the grain would need.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Fails by default, for the reason the listing members do.</b> A double that answered
+    ///         with a terminal nobody is behind would be a shell that accepts keystrokes into nothing —
+    ///         the failure <c>TerminalHub</c> refused to ship. The production connections override it
+    ///         through <see cref="IKubeAttachDialer" />.
+    ///     </para>
+    /// </remarks>
+    Task<Result<IKubeTerminal>> AttachAsync(
+        ObjectRef pod,
+        string container,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<IKubeTerminal>.Failure(
+                ErrorCode.InternalError,
+                $"This cluster connection ({GetType().Name}) cannot attach to '{pod}' on cluster "
+                + $"{ClusterId:D}. It fails rather than handing back a terminal nobody is behind: a "
+                + "shell that accepts keystrokes into nothing is worse than one that is closed."
+            )
+        );
 }

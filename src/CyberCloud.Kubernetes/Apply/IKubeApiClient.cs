@@ -196,4 +196,29 @@ public interface IKubeApiClient : IDisposable {
         string resourceVersion,
         CancellationToken cancellationToken = default
     );
+
+    /// <summary>
+    ///     Opens the <c>pods/attach</c> stream to a container's terminal: standard input, standard
+    ///     output and the resize channel.
+    /// </summary>
+    /// <param name="pod">The pod.</param>
+    /// <param name="container">The container whose process to join.</param>
+    /// <param name="cancellationToken">Stops the handshake.</param>
+    /// <returns>The open terminal, which the caller disposes, or the API server's refusal.</returns>
+    /// <remarks>
+    ///     ⚠ <b>Refuses by default.</b> Only a client with a socket to an API server can attach; the
+    ///     agent tunnel carries request frames and has no stream frame yet, and the recording doubles
+    ///     have nothing to attach to. A default that answered would be a terminal wired to nothing.
+    /// </remarks>
+    Task<Result<IKubeTerminal>> AttachAsync(
+        ObjectRef pod,
+        string container,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            Result<IKubeTerminal>.Failure(
+                ErrorCode.InternalError,
+                $"{GetType().Name} cannot attach to '{pod}': it has no stream to an API server."
+            )
+        );
 }

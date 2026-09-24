@@ -55,6 +55,11 @@ public static class KubernetesSiloBuilderExtensions {
                     )
                 );
 
+                // ⚠ The socket half of IKubeClusterConnection.AttachAsync. The connection grain
+                // authorizes an attach and this opens it in the calling process, because a terminal
+                // is a stream and a grain method returns a message. See ClusterAttachDialer.
+                services.TryAddSingleton<IKubeAttachDialer, ClusterAttachDialer>();
+
                 services.AddOptions<KubernetesOptions>()
                     .BindConfiguration(KubernetesOptions.SectionName);
             }

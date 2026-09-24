@@ -358,6 +358,131 @@ public sealed class ResourceManagerSerializationTests : IDisposable {
     }
 
     [Fact]
+    public void ATerminalSessionSpecRoundTripsWithItsResourceItsPodAndItsOwnerAnnotation() {
+        // ⚠ It crosses the gateway→silo boundary on every connect — the relayed action's handler
+        // registers it — and the alias test alone never put one through the bytes.
+        var value = new TerminalSessionSpec {
+            Resource = new(
+                Guid.Parse("a0a0a0a0-0000-4000-8000-000000000022"),
+                Guid.Parse("b0b0b0b0-0000-4000-8000-000000000022"),
+                "prod",
+                new("CyberCloud.Terminal", "consoles"),
+                "ops",
+                Guid.Parse("c0c0c0c0-0000-4000-8000-000000000022")
+            ),
+            ApiVersion = "2026-08-01",
+            ClusterId = Guid.Parse("d0d0d0d0-0000-4000-8000-000000000022"),
+            Pod = new() {
+                Kind = new() { Group = "", Version = "v1", Kind = "Pod", Plural = "pods" },
+                Namespace = "cc-t-a0a0",
+                Name = "ops-shell"
+            },
+            Container = "shell",
+            PodUid = "e0e0e0e0-0000-4000-8000-000000000022",
+            IdleTimeoutSeconds = 1200,
+            Permission = "connect",
+            ReadPermission = "read",
+            OwnerAnnotation = "cybercloud.io/session-owner"
+        };
+
+        var round = RoundTrip(value);
+
+        round.ShouldBe(value);
+        round.Resource.Id.ShouldBe(value.Resource.Id, "the GUID is what the attach's ReBAC check is made on");
+        round.Pod.Kind.Kind.ShouldBe("Pod");
+    }
+
+    [Fact]
+    public void ATerminalSessionStatusRoundTripsWithItsPhase() {
+        var value = new TerminalSessionStatus {
+            Phase = TerminalSessionPhase.Ended,
+            Owner = "user:alice",
+            Viewers = 2,
+            Buffered = 4096,
+            EndedBecause = "the shell exited"
+        };
+
+        RoundTrip(value).ShouldBe(value);
+    }
+
+    [Theory]
+    [InlineData(TerminalSessionPhase.Unknown)]
+    [InlineData(TerminalSessionPhase.Registered)]
+    [InlineData(TerminalSessionPhase.Open)]
+    [InlineData(TerminalSessionPhase.Ended)]
+    public void EveryTerminalSessionPhaseRoundTripsOnItsOwn(TerminalSessionPhase phase) =>
+        // The enum that shipped without its alias in the first review of #22: through the bytes by
+        // itself, and not only as a member of the status that carries it.
+        RoundTrip(phase).ShouldBe(phase);
+
+    [Fact]
+    public void TheArgumentsARelayedActionCrossesWithRoundTrip() {
+        // ⚠ IClusterActionGrain.InvokeAsync's arguments, each through the bytes: the gateway sends
+        // them to a silo process on every RequiresCluster action. The parent and createsAsCaller are
+        // what the merge with #30's creator added, and a parent that came back null would give a
+        // child's action ActionContext.Parent = null on the silo alone.
+        var id = new ResourceId(
+            Guid.Parse("a0a0a0a0-0000-4000-8000-000000000022"),
+            Guid.Parse("b0b0b0b0-0000-4000-8000-000000000022"),
+            "prod",
+            new("CyberCloud.Terminal", "consoles"),
+            "ops",
+            Guid.Parse("c0c0c0c0-0000-4000-8000-000000000022")
+        );
+        var parent = id with { Type = new("CyberCloud.RecoveryServices", "vaults"), Name = "vault", Id = Guid.Parse("f0f0f0f0-0000-4000-8000-000000000022") };
+        var caller = new CallerContext {
+            TenantId = id.TenantId,
+            SubjectType = "user",
+            SubjectId = "alice",
+            CorrelationId = "c-22"
+        };
+        var input = new ReconcileInput {
+            Path = id.Path,
+            ResourceId = id.Id,
+            ApiVersion = "2026-08-01",
+            Desired = """{"properties":{"clusterId":"d0d0d0d0-0000-4000-8000-000000000022"}}""",
+            ClusterId = Guid.Parse("d0d0d0d0-0000-4000-8000-000000000022"),
+            ProvisioningState = ProvisioningState.Succeeded,
+            OperationId = Guid.Parse("e0e0e0e0-0000-4000-8000-000000000022")
+        };
+
+        RoundTrip(id).ShouldBe(id);
+        RoundTrip<ResourceId?>(parent).ShouldBe(parent, "the parent is how a child's action finds what it belongs to");
+        RoundTrip<ResourceId?>(null).ShouldBeNull();
+        RoundTrip(caller).ShouldBe(caller, "the relayed creator is rebuilt for exactly this caller");
+        RoundTrip(true).ShouldBeTrue();
+
+        var round = RoundTrip(input);
+        round.Path.ShouldBe(input.Path);
+        round.ResourceId.ShouldBe(input.ResourceId);
+        round.ApiVersion.ShouldBe(input.ApiVersion);
+        round.Desired.ShouldBe(input.Desired);
+        round.Observed.ShouldBeNull();
+        round.ClusterId.ShouldBe(input.ClusterId);
+        round.ProvisioningState.ShouldBe(input.ProvisioningState);
+        round.OperationId.ShouldBe(input.OperationId);
+        round.PendingChanges.IsDefault.ShouldBeFalse("a default ImmutableArray throws on the silo's first enumeration");
+    }
+
+    [Theory]
+    [InlineData(typeof(IClusterActionGrain))]
+    [InlineData(typeof(ITerminalSessionGrain))]
+    [InlineData(typeof(ITerminalSessionLimitGrain))]
+    [InlineData(typeof(ITerminalViewer))]
+    public void EveryGrainCallIssue22SendsAcrossAProcessCarriesAnAlias(Type contract) {
+        // ⚠ The interfaces and their methods, which EveryWireTypeInThisAssemblyCarriesAStableAlias
+        // doesn't reach. An in-process TestCluster shares one manifest and resolves a call with no
+        // alias; a silo in another process looks it up by the alias — #39's shard-map confirmation
+        // shipped with exactly that omission.
+        contract.GetCustomAttributes(typeof(AliasAttribute), false).ShouldNotBeEmpty($"{contract.Name} has no [Alias]");
+
+        contract.GetMethods()
+            .Where(static x => x.GetCustomAttributes(typeof(AliasAttribute), false).Length == 0)
+            .Select(static x => x.Name)
+            .ShouldBeEmpty($"{contract.Name}'s methods without an [Alias]");
+    }
+
+    [Fact]
     public void AnObservedStateRoundTrips() {
         var value = new ObservedState {
             Exists = true,

@@ -27,7 +27,14 @@ namespace CyberCloud.Kubernetes.Connections;
 ///         exists to make loud for the other two platform grains.
 ///     </para>
 /// </remarks>
-public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId) : IKubeClusterConnection {
+/// <param name="grains">The grain factory the handle forwards through.</param>
+/// <param name="clusterId">The cluster this handle addresses.</param>
+/// <param name="attach">
+///     Opens a terminal once the grain has allowed it, or <see langword="null" /> for a handle that
+///     serves requests only — which refuses <see cref="AttachAsync" /> by name.
+/// </param>
+public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId, IKubeAttachDialer? attach = null)
+    : IKubeClusterConnection {
     /// <inheritdoc />
     public Guid ClusterId => clusterId;
 
@@ -77,4 +84,20 @@ public sealed class ClusterConnectionHandle(IGrainFactory grains, Guid clusterId
         CancellationToken cancellationToken = default
     ) =>
         Grain.SetOwnerAsync(target, owner);
+
+    /// <inheritdoc />
+    public Task<Result<IKubeTerminal>> AttachAsync(
+        ObjectRef pod,
+        string container,
+        CancellationToken cancellationToken = default
+    ) =>
+        attach is null
+            ? Task.FromResult(
+                Result<IKubeTerminal>.Failure(
+                    ErrorCode.InternalError,
+                    $"This handle to cluster {clusterId:D} was built without an IKubeAttachDialer, so "
+                    + $"it cannot attach to '{pod}'. AddCyberCloudKubernetes registers one."
+                )
+            )
+            : attach.AttachAsync(clusterId, pod, container, cancellationToken);
 }

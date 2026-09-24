@@ -962,6 +962,16 @@ public sealed class ResourceManagerCluster : IAsyncLifetime {
                     // a report becomes an attach only after the pass converges.
                     services.AddSingleton<IClusterConnectionRegistrar, RecordingClusterRegistrar>();
 
+                    // ⚠ One scripted cluster for the terminal session grain to attach to, and the
+                    // refusing default's null for every other cluster id, which is what the rest of
+                    // the suite had. TerminalSessionGrainTests drives it.
+                    services.AddSingleton<IClusterConnectionFactory, ScriptedShellClusters>();
+
+                    // The handlers a relayed action runs on this silo — ClusterActionRelayTests. The
+                    // clone is the one that creates as its caller, through the creator the silo builds.
+                    services.AddSingleton<RestartHandler>();
+                    services.AddSingleton<CloneHandler>();
+
                     // A cap of two, so the interest limit is reachable in a test rather than after
                     // 200 subscribes. docs/plan/10 § Rate limiting.
                     services.AddSingleton(new ConnectionLimits { StreamsPerConnection = 2 });

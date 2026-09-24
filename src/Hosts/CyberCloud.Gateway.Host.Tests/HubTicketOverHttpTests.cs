@@ -1,5 +1,6 @@
 using CyberCloud.Gateway.Host.Hubs;
 using CyberCloud.Gateway.Host.Tests.Infrastructure;
+using NSubstitute;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text.Json;
@@ -15,8 +16,9 @@ namespace CyberCloud.Gateway.Host.Tests;
 ///         <c>HubTicketTests</c> proves what the pipeline decides. This proves what the listener does
 ///         with the decision: that an upgrade carrying nothing but <c>?ticket=</c> is admitted by the
 ///         composed host, completes the JSON protocol's handshake, and reaches
-///         <see cref="TerminalHub" /> — whose every method throws by name today, so the completion
-///         that comes back names the owed grain, which is the assertion. And that the same socket
+///         <see cref="TerminalHub" /> — whose <c>Attach</c> refuses a session id that is not a pod UID
+///         before any grain is addressed, so the completion that comes back is the hub's own sentence,
+///         which is the assertion. And that the same socket
 ///         opened again with the same ticket, or with the bearer token where the ticket goes, is a
 ///         <c>401</c> at the upgrade.
 ///     </para>
@@ -73,10 +75,11 @@ public sealed class HubTicketOverHttpTests {
         }
 
         completion.GetProperty("invocationId").GetString().ShouldBe("1");
-        // A HubException's message travels to the client verbatim, which is the point of throwing one.
-        completion.GetProperty("error")
-            .GetString()!
-            .ShouldContain("session grain is docs/plan/19 and is not implemented");
+        // A HubException's message travels to the client, which is the point of throwing one. `sess-1`
+        // is not a pod UID, so the hub refuses it on its shape — before any grain is addressed, which
+        // this harness's grain factory (a substitute nothing may call) makes a hard requirement.
+        completion.GetProperty("error").GetString()!.ShouldContain("is not a session id");
+        gateway.Harness.Grains.ReceivedCalls().ShouldBeEmpty();
 
         await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None);
     }
