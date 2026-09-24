@@ -1,6 +1,7 @@
 using CyberCloud.Core.Resources;
 using CyberCloud.Gateway.Host;
 using CyberCloud.Gateway.Host.Principals;
+using CyberCloud.Identity.Seams;
 using CyberCloud.Kubernetes.Connections;
 using CyberCloud.Kubernetes.Contracts;
 using CyberCloud.Registry.Feeds.Host;
@@ -10,6 +11,7 @@ using CyberCloud.ResourceManager.Contracts.Registry;
 using CyberCloud.ResourceManager.Grains;
 using CyberCloud.ResourceManager.Reconcile;
 using CyberCloud.ServiceDefaults;
+using CyberCloud.Tenancy.Contracts;
 using CyberCloud.Silo.Host;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
@@ -648,6 +650,43 @@ public sealed class HostCompositionTests {
             .ShouldBeOfType<UnavailablePrincipalDirectory>(
                 "a silo never serves a grant and must keep the manager's refusing default; the real "
                 + "directory resolving here means it became the default for every host"
+            );
+    }
+
+    /// <summary>
+    ///     ⚠ The mirror image of the directory above: the silo, which runs deployments, asks the identity
+    ///     grains whether a child's recorded creator may still act, and the gateway, which never writes a
+    ///     child, keeps the refusal.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <c>AddCyberCloudIdentity</c> <c>Replace</c>s <see cref="UnavailablePrincipalStanding" />,
+    ///     and the silo calls it before <c>AddCyberCloudResourceManager</c> — the order in which a
+    ///     <c>TryAdd</c> would also have won. So this is the assertion that holds when somebody moves the
+    ///     lines: with the refusal left in place every deployment on the silo fails at its first child,
+    ///     and nothing below the composed host would notice, because every harness registers its own.
+    /// </remarks>
+    [Fact]
+    public async Task TheSiloWiresPrincipalStandingAndTheGatewayKeepsTheRefusal() {
+        await using var gateway = await BuildGatewayAsync();
+        await using var silo = await BuildSiloAsync();
+
+        silo.Services
+            .GetRequiredService<IPrincipalStanding>()
+            .ShouldBeOfType<GrainPrincipalStanding>(
+                "the composed silo must ask the identity grains whether a deployment's creator may still "
+                + "act; the refusing default here fails every deployment at its first child"
+            );
+
+        silo.Services
+            .GetServices<IPrincipalStanding>()
+            .Count()
+            .ShouldBe(1, "the silo should hold one IPrincipalStanding, not the real one stacked on the refusal");
+
+        gateway.Services
+            .GetRequiredService<IPrincipalStanding>()
+            .ShouldBeOfType<UnavailablePrincipalStanding>(
+                "the gateway never writes a child, and the real standing resolving here means it became "
+                + "the manager's default for every host"
             );
     }
 

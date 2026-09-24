@@ -48,8 +48,13 @@ A deployment's body is a template — a program the schema vocabulary cannot des
 passes, `IResourceBodyValidator` evaluates it, and a template that does not deploy is a `400` at the
 same step as any schema failure. And the twelve steps are also entered through
 `IResourceManager.WriteChildAsync`, by a deployment's parent operation writing one of its resources as
-the deployment's creator; nothing is skipped on that door, and the one difference is that step 10's
-operation records its parent. § Long-running operations, *Nested operations*, has both.
+the deployment's creator. All twelve steps run on that door, and it differs in three ways: before
+step 1 it asks again what the gateway's stages would have refused a direct request — the tenant's
+status, the principal's own status, impersonation — and refuses a child carrying a secret property;
+step 3 runs `FullyConsistent`; and step 10's operation records its parent. ⚠ This sentence used to say
+"nothing is skipped on that door, and the one difference is" the last of those, and both halves were
+false: the gateway's stages *were* skipped, which is the review of #39's finding, and step 3's mode was
+already a second difference. § Long-running operations, *Nested operations*, has all of it.
 
 **Step 1 checks two things the caller supplied and does it before anything else.** The tenant in the
 path must be the caller's, and the subscription must be one that tenant has. Both refuse with `404`
@@ -550,8 +555,12 @@ places the paragraph it replaces said otherwise:
 - **A child's failure is the parent's, named.** A child that fails, or is cancelled by its own
   confirmation, fails the deployment with `ProvisioningFailed` whose message carries the child's path,
   its operation id and its own reason, and whose `target` is the child's path; a child the write path
-  refuses — `404`, `403`, `409`, `429` — does the same with the refusal's code. Nothing after it is
-  written. `DeploymentTests.AChildsFailureIsVisibleOnTheParentAndWhatWasCreatedBeforeItIsLeftAndRecorded`.
+  refuses — `400`, `403`, `404`, `429`, or a `409` other than `OperationInProgress` — does the same with
+  the refusal's code. Nothing after it is written. ⚠ `OperationInProgress` is the one refusal that
+  doesn't: another operation is driving that resource (somebody's update, or this deployment's own
+  child from a pass whose record a silo loss took), so the step waits for it and the `PUT` is retried.
+  This bullet named every `409` as fatal until the review of #39.
+  `DeploymentTests.AChildsFailureIsVisibleOnTheParentAndWhatWasCreatedBeforeItIsLeftAndRecorded`.
 - **Cancellation reaches the child in flight and stops there.** `CancelAsync` on the parent tells the
   running child at once and again on the next pass; the child's cancellation completes rather than
   abandons, as a single resource's does; nothing further starts; the parent reports `Canceled` only
@@ -566,7 +575,23 @@ places the paragraph it replaces said otherwise:
 interface.** A child is written long after the request that asked for it has returned, from a
 reminder, with no token anywhere; what the parent carries is the `CallerContext` the gateway built
 when the deployment's own `PUT` passed step 3, persisted in `OperationSpec.Caller` and never
-re-derived. Writing as that caller is safe for three reasons that are properties of the method: every
+re-derived. Writing as that caller is safe for four reasons that are properties of the method. The
+first is that **what the gateway would have refused before step 3 is asked again, before step 1**:
+a direct request meets `ResolveTenantStage`, which refuses a suspended tenant's writes, and needs a
+token, which a suspended user can't renew once `IUserGrain.SetStatusAsync` has revoked their sessions;
+a child meets neither, so a tenant suspended by billing, or an
+account an administrator suspended, went on creating a running template's remaining resources as
+itself — the review of #39 found this argument covering ReBAC alone. Each child now reads the tenant's
+status from `ITenantDirectoryGrain` (the record `ResolveTenantStage` reads a mirror of) and is refused
+`TenantSuspended` unless it is `Active` or `Warned`; asks `IPrincipalStanding` whether the principal may
+still act — an active user, an enabled service principal, a bound managed identity, read from their own
+grains by identity's `GrainPrincipalStanding`, because a suspension leaves the role tuples and step 3
+alone still allows them; and is refused outright under impersonation, whose sixty-minute box
+([06 § Platform administration](06-tenancy-and-resource-model.md)) is the operator's grant and not in
+any spec (`DeploymentTests.ATenantSuspendedBetweenTwoChildrenStopsTheDeploymentAtTheSecond`,
+`DeploymentTests.AnImpersonatedDeploymentWritesNoChild`,
+`DeploymentAuthorizationTests.ACreatorSuspendedBetweenTwoChildrenIsRefusedAtTheSecond`). The rate
+limiter is the one stage not repeated, and the owed list says why. The second: every
 child runs the whole write path, so step 3 checks that subject *at the child's own address, at the
 moment it is written, against the durable rows* — a deployment grants nothing its creator lacks at each
 child, and a revocation between two children is honoured at the second. ⚠ The last clause was written
@@ -620,6 +645,28 @@ provider whose every type renders nothing, which keeps the property the reservat
   secure parameters (refused — the template and its parameters are the body, in plain text), nested
   deployments (refused at evaluation and again by `WriteChildAsync`), and `Complete` mode, which would
   delete what the template no longer names.
+- ⚠ **A deployment may not set a child's secret property, however the value is spelled.** Refusing
+  `securestring` covered one spelling; a literal, or a plain `string` parameter feeding the property,
+  was stored in the deployment's `template` or `parameters` and read back by anyone who can read the
+  deployment, though the child's own `GET` withholds it (the review of #39). `DeploymentSecrets` checks
+  the raw template structurally at step 2 (no parameters needed, so a partial `PATCH` too), the
+  evaluated plan whenever step 2 has one, and every child at `WriteChildAsync`
+  (`DeploymentTemplateTests.ATemplateThatSetsASecretPropertyIsRefusedAtStepTwoWhereverItsValueComesFrom`,
+  `DeploymentTests.ASecretStepTwoCouldNotSeeIsRefusedAtTheChildsDoor`). Owed: the one case that is
+  refused only at the child — a partial `PATCH` whose template names the child's type or api-version by
+  expression — still stores the template, because evaluating it at step 2 would take stored parameters
+  before step 3 has authorized the caller to read them.
+- **Children aren't charged to the rate limiter.** It charged the deployment's own `PUT`; a child can't
+  multiply that without bound — `DeploymentLimits.MaxResources` is a hundred, children are written one
+  at a time and each waits for its predecessor's operation — and quota, the budget for what a child
+  creates, is step 6 of every child. Charging them is owed: the counters are
+  `CyberCloud.ServiceDefaults`', which `module-layering.txt` gives this module no edge to.
+- ⚠ **Every update of a deployment is a run, a `PATCH` included — a tags-only merge patch too**
+  (`OperationGrain.IsDeploymentRun`). It re-runs the merged template as the `PATCH`'s caller and
+  replaces the run record, so a caller who may write the deployment but not its resources turns a tags
+  edit into a failed deployment, though every child the run can write is a no-op. It's the rule because
+  nothing can tell which edits leave the plan alone, and ARM has no `PATCH` on a deployment; a patch
+  that changes only the envelope skipping the run is owed.
 - **A performed rollback** — Azure's `onErrorDeployment` — and **parallel children** for independent
   resources; both change what "stopped at the first failure" means and neither is started.
 - **The what-if does not compare secret properties.** A read withholds them, so the current side never
