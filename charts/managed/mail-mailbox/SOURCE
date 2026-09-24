@@ -1,0 +1,46 @@
+# Provenance — charts/README.md § `SOURCE` is required, including when nothing was forked.
+#
+# Nothing was forked. A mailbox is a slice of the domain's Secret read by the images
+# charts/managed/mail runs, and `vendored: none` is an answer to "where did this come from" where a
+# missing file is not.
+
+vendored: none
+upstream: https://github.com/dovecot/core
+
+Dovecot and Postfix — what was read, where, and on what date.
+
+⚠ EVERY SETTING THE SLICE DEPENDS ON WAS RUN AGAINST THE REAL IMAGE BEFORE IT WAS WRITTEN DOWN, on
+2026-09-23: docker.io/dovecot/dovecot:2.4.5 and :2.3.21.1, and Debian 13's postfix 3.10.13 in
+deploy/images/mail-postfix. MailDataPlaneTests keeps the Dovecot half; MailDeliveryOnK3sTests the rest.
+
+── passwd-file ──────────────────────────────────────────────────────────────────────────────────
+
+  user:password:uid:gid:gecos:home:shell:extra_fields
+
+Six colons after the password. An EMPTY password field means no password check (Dovecot's
+passwd-file documentation); `{CRYPT}!` is a hash no input produces, and `nologin=y` in the extra
+fields refuses the login outright. Both are rendered for a mailbox with no passwordRef.
+
+Per-mailbox quota, read back with `doveadm quota get -u` against each image:
+
+  2.4.5     userdb_quota_storage_size=100M      — honoured ONLY when the domain's default is the
+                                                  top-level quota_storage_size, not a setting inside
+                                                  the quota "User quota" { } filter
+  2.3.21.1  userdb_quota_rule=*:storage=100M
+
+Each major ignores the other's field, so a mailbox writes both without knowing its domain's version.
+
+── The password scheme ──────────────────────────────────────────────────────────────────────────
+
+  {SHA512-CRYPT}$6$rounds=100000$<16-char salt>$<86-char hash>
+
+Verified by Dovecot 2.4.5 and 2.3.21.1 accepting a login against a hash Sha512Crypt produced, and by
+OpenSSL 3.5.5's `openssl passwd -6` reproducing the specification's vectors.
+
+── Postfix maps ─────────────────────────────────────────────────────────────────────────────────
+
+  virtual_mailbox_maps = texthash:/etc/postfix/mailboxes   — "{local}@{domain} OK" per *.passwd
+  virtual_alias_maps   = texthash:/etc/postfix/virtual     — every *.virtual, then the catch-all
+
+texthash needs no postmap and is read once per process, which is why the start script reloads on a
+checksum change of the mounted files.

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the third of the five projects: "ABP application services the gateway
+      routes to". The ABP module and no application service: every data-plane action is a generic
+      POST {vault}/{action} the gateway routes from the provider registry (ADR-012).
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="Volo.Abp.Ddd.Application"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.KeyVault.Contracts/CyberCloud.Providers.KeyVault.Contracts.csproj"/>
+        <ProjectReference Include="../CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.csproj"/>
+        <!-- AddCyberCloudProvider — see CyberCloud.Providers.ContainerRegistry.Application.csproj. -->
+        <ProjectReference Include="../../../CyberCloud.ResourceManager/CyberCloud.ResourceManager.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Label="CyberCloud.Analyzers — see CyberCloud.Core.csproj for why this is not a reference">
+        <ProjectReference Include="../../../CyberCloud.Analyzers/CyberCloud.Analyzers.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>

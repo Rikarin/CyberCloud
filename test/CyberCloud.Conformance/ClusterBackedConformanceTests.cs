@@ -27,7 +27,13 @@ namespace CyberCloud.Conformance;
 ///     </para>
 /// </remarks>
 /// <param name="case">The provider under test — named in the message so the output is useful.</param>
-public abstract class ClusterBackedConformanceTests(ProviderConformanceCase @case) {
+/// <param name="coverage">
+///     What of the five actually runs for this type, when it is not all five — or <see langword="null" />
+///     for the ordinary sentence. ⚠ A co-writer (a peering, a mailbox) runs only the silo kill there,
+///     because the lifecycle class presumes the type owns its objects; the #34 review found the
+///     ordinary sentence telling a Docker-free reader that all five ran for the mailbox.
+/// </param>
+public abstract class ClusterBackedConformanceTests(ProviderConformanceCase @case, string? coverage = null) {
     /// <summary>The provider under test.</summary>
     protected ProviderConformanceCase Case { get; } = @case;
 
@@ -35,14 +41,16 @@ public abstract class ClusterBackedConformanceTests(ProviderConformanceCase @cas
     [Trait("Requires", "cluster")]
     public void TheClusterBackedHalfOfThisSuiteRunsInItsOwnProject() {
         Assert.Skip(
-            $"SKIPPED HERE, AND NOT SKIPPED — {Case.DisplayName}'s five cluster-backed criteria run "
-            + "in CyberCloud.Cluster.Conformance (and, for a provider, in its own "
-            + "<Provider>.Cluster.Conformance project), against a real k3s API server, a real "
-            + "PostgreSQL durable tier and a real Redis reminder table. They are: the lifecycle "
-            + "against a real API server; drift corrected after a real kubectl delete; a field "
-            + "conflict with another manager becoming a named DriftEvent; desired state surviving a "
-            + "real serialization round trip; and killing the silo mid-create still converging — "
-            + "docs/plan/24 § Phase 1's exit criterion 3. "
+            (coverage is null
+                ? $"SKIPPED HERE, AND NOT SKIPPED — {Case.DisplayName}'s five cluster-backed criteria run "
+                + "in CyberCloud.Cluster.Conformance (and, for a provider, in its own "
+                + "<Provider>.Cluster.Conformance project), against a real k3s API server, a real "
+                + "PostgreSQL durable tier and a real Redis reminder table. They are: the lifecycle "
+                + "against a real API server; drift corrected after a real kubectl delete; a field "
+                + "conflict with another manager becoming a named DriftEvent; desired state surviving a "
+                + "real serialization round trip; and killing the silo mid-create still converging — "
+                + "docs/plan/24 § Phase 1's exit criterion 3. "
+                : $"SKIPPED HERE — {Case.DisplayName}: {coverage} ")
             + "This project deliberately references no Testcontainers package, because a package "
             + "reference here would make THIS suite — the per-PR gate for every provider change — "
             + "refuse to run without a Docker daemon. That is the whole reason the two halves are two "

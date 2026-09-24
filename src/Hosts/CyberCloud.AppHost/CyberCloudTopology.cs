@@ -487,6 +487,9 @@ public static class CyberCloudTopology {
             // the silos project into. Same section as the silos' — a gateway with the endpoint queries
             // and still runs no projector (GatewayComposition's remarks).
             .WithResourceGraph()
+            // The log search's store (#41): the same ClickHouse, where a workspace's ws_{guid} database
+            // lives. The metrics half has no VictoriaMetrics on this run and refuses by name.
+            .WithMonitorLogSearch()
             .WithEnvironment("CyberCloud__Gateway__Identity__Issuer", CyberCloudResources.IdentityIssuer)
             // ⚠ PublicBaseUri is what the gateway tells OTHERS about itself — the agent tunnel address a
             // connected cluster's install command carries (#36), among other things. The shipped default

@@ -1,3 +1,4 @@
+using CyberCloud.Billing;
 using CyberCloud.Communication;
 using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Authentication;
@@ -123,6 +124,14 @@ static class GatewayServiceCollectionExtensions {
         // write — its remarks say why it is here and not in either module.
         services.Replace(ServiceDescriptor.Singleton<IPrincipalDirectory, GrainPrincipalDirectory>());
 
+        // #43: the invitation issuer, Replace for the directory's reason — the manager TryAdds a
+        // refusing one, and an invite on a gateway that kept it would be checked and then refused.
+        services.Replace(ServiceDescriptor.Singleton<IInvitationIssuer, GrainInvitationIssuer>());
+
+        // #41: the identity directory behind the administration API, Replace for the same reason —
+        // the manager TryAdds a refusing one, and every page would be checked and then refused.
+        services.Replace(ServiceDescriptor.Singleton<IIdentityDirectory, GrainIdentityDirectory>());
+
         // ⚠ THE SEAMS CyberCloud.Communication/services' SYNCHRONOUS ACTIONS HOLD, AND THIS HOST IS
         // WHERE THEY RUN. A synchronous action is served inside ResourceManagerService.ActionAsync,
         // in this process; `send`, `status`, `checkSuppression` and `listSuppressions` reach the
@@ -141,6 +150,19 @@ static class GatewayServiceCollectionExtensions {
         // it, `connect` on a cloud console and `start` on a virtual machine are refused here by name
         // before their handlers run. HostCompositionTests pins the composed result.
         services.TryAddSingleton<IClusterActionRelay, GrainClusterActionRelay>();
+
+        // ── The cost query, docs/plan/22 § Cost visibility (#38). ──
+        //
+        // ⚠ DISPATCH HOLDS ICostQuery AND IInvoiceReader AND NOTHING ELSE OF BILLING. The grain behind the
+        // first prices the subscription's usage and filters every row by ReBAC on the silo; this host
+        // copies the caller across and renders what comes back, and checks nothing — docs/plan/10
+        // § Request pipeline's one enforcement seam. The second's grain asks whether the caller may read
+        // the tenant before it reads the billing account (#41). IBudgetControlPlane comes with them
+        // because the budget reconciler is registered in this container as well as the silo's (the
+        // registry is built the same way in both), and a type whose reconciler cannot be constructed
+        // here would fail the first resolve. It is also what showStatus reads a budget through, and
+        // what asks whether the caller may read the subscription a budget covers (#41).
+        services.AddCyberCloudBillingClient();
 
         // ── SignalR. docs/plan/10 § SignalR — no backplane product, by design. ──
         //

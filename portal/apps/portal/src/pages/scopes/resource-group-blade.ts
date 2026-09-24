@@ -49,6 +49,9 @@ import { NeedsTenant, PageStatus, activeTenantId, load, pageState } from '../sha
           <a xuiButton variant="outline" size="sm" [routerLink]="terminalLink()" i18n="@@resourceGroupBlade.terminal"
             >Cloud shell</a
           >
+          <a xuiButton variant="outline" size="sm" [routerLink]="costLink()" i18n="@@resourceGroupBlade.cost"
+            >Cost analysis</a
+          >
         </div>
       </div>
 
@@ -116,6 +119,7 @@ export class ResourceGroupBlade {
     links.resourceGroupAccess(this.subscriptionId(), this.resourceGroup())
   );
   protected readonly terminalLink = computed(() => links.terminal(this.subscriptionId(), this.resourceGroup()));
+  protected readonly costLink = computed(() => links.cost(this.subscriptionId(), this.resourceGroup()));
 
   protected readonly overviewTitle = $localize`:@@resourceGroupBlade.overview:Overview`;
   protected readonly labels = {

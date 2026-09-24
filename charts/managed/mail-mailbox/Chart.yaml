@@ -1,0 +1,37 @@
+# A mailbox of a managed mail domain — docs/plan/17 § Resource model, `mailboxes/{local}`.
+#
+# ⚠ THIS CHART INSTALLS NOTHING, AND THAT IS THE TYPE. A mailbox is four keys of its domain's mailbox
+# Secret, written by the reconciler as a second writer on an object the domain owns (docs/plan/09
+# § A second writer on an object). Helm has no such mode: a chart that rendered the Secret with only
+# these keys would replace the domain's object. templates/fragments.yaml documents the slice; the
+# shape charts/managed/kube-ovn-vpc-peering established.
+apiVersion: v2
+name: mail-mailbox
+description: One address of a mail domain — a password from your vault, a quota, aliases and forwarding — written into the domain's back end.
+type: application
+
+# The chart's own version. Bumped on every change to this directory.
+version: 0.1.0
+
+# The Dovecot the slice is read by, matching charts/managed/mail's default.
+appVersion: "2.4"
+
+kubeVersion: ">=1.31.0-0"
+
+keywords:
+  - mail
+  - mailbox
+  - imap
+  - dovecot
+
+home: https://www.dovecot.org
+sources:
+  - https://github.com/dovecot/core
+
+maintainers:
+  - name: Cyber Cloud Platform
+
+annotations:
+  cybercloud.io/resource-type: CyberCloud.Mail/domains/mailboxes
+  cybercloud.io/api-version: "2026-08-01"
+  cybercloud.io/operator: none

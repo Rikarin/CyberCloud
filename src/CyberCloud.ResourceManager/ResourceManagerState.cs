@@ -125,6 +125,21 @@ public sealed class ResourceState {
     [Id(19)]
     public int ChangesDropped { get; set; }
 
+    /// <summary>
+    ///     The last <see cref="OperationKind.Refresh" /> this grain's periodic reminder started, or
+    ///     <see cref="Guid.Empty" />. Read on the next tick, so a pass that is still running is not
+    ///     joined by a second one.
+    /// </summary>
+    [Id(20)]
+    public Guid PassOperationId { get; set; }
+
+    /// <summary>
+    ///     When <see cref="PassOperationId" /> was started. A pass older than an operation's ceiling
+    ///     (<see cref="ReconcileSchedule.Timeout" />) has ended whether or not it said so.
+    /// </summary>
+    [Id(21)]
+    public DateTimeOffset PassStartedAt { get; set; }
+
     /// <summary>Whether anything has ever been written here.</summary>
     public bool Exists => Path.Length > 0;
 }
@@ -253,6 +268,101 @@ public sealed class OperationGrainState {
     /// </remarks>
     [Id(15)]
     public bool IndexConfirmed { get; set; }
+
+    /// <summary>
+    ///     The run of a deployment — its plan, its cursor and its children — or <see langword="null" />
+    ///     for every operation that is not a deployment's.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>The step cursor docs/plan/08 § Long-running operations names, for the first operation
+    ///     with steps.</b> A re-drive after a silo loss resumes at the step this records rather than
+    ///     re-planning, so a child already accepted is polled rather than written a second time.
+    ///     Appended at 16; <see langword="null" /> is "as before" for every operation a peer that
+    ///     predates it started, and the durable tier is JSON, so the property name is the contract.
+    /// </remarks>
+    [Id(16)]
+    public DeploymentRunState? Deployment { get; set; }
+}
+
+/// <summary>
+///     A deployment's run, held by its parent operation — docs/plan/08 § Long-running operations,
+///     "Nested operations".
+/// </summary>
+/// <remarks>
+///     ⚠ <b>Everything a re-drive needs and cannot recompute.</b> The plan could be recomputed from the
+///     desired body, and is not, because the child operation ids and each step's outcome could not:
+///     a re-plan that forgot a child was accepted would write it again. The collections are
+///     <c>{ get; set; }</c> for the reason given on <see cref="ResourceState" />.
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.State.DeploymentRun")]
+public sealed class DeploymentRunState {
+    /// <summary>The template's resources, in dependency order.</summary>
+    [Id(0)]
+    public List<DeploymentStepState> Steps { get; set; } = [];
+
+    /// <summary>The step being driven; equal to the step count once every step has succeeded.</summary>
+    [Id(1)]
+    public int Cursor { get; set; }
+
+    /// <summary>
+    ///     When the step at <see cref="Cursor" /> began — the start the sixty-minute ceiling counts
+    ///     from for a step whose child has not been accepted yet.
+    /// </summary>
+    [Id(2)]
+    public DateTimeOffset StepStartedAt { get; set; }
+}
+
+/// <summary>One template resource as its parent operation tracks it.</summary>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.State.DeploymentStep")]
+public sealed class DeploymentStepState {
+    /// <summary>The resource's address.</summary>
+    [Id(0)]
+    public string ResourcePath { get; set; } = string.Empty;
+
+    /// <summary>The api-version the template writes it at.</summary>
+    [Id(1)]
+    public string ApiVersion { get; set; } = string.Empty;
+
+    /// <summary>The evaluated body the <c>PUT</c> carries, as JSON text.</summary>
+    [Id(2)]
+    public string Body { get; set; } = "{}";
+
+    /// <summary>Where the step is.</summary>
+    [Id(3)]
+    public DeploymentStepStatus Status { get; set; } = DeploymentStepStatus.Pending;
+
+    /// <summary>The child operation, once the write path accepted the <c>PUT</c>; empty before and for a no-op.</summary>
+    [Id(4)]
+    public Guid ChildOperationId { get; set; }
+
+    /// <summary>Whether the child created the resource rather than updating one that was there.</summary>
+    [Id(5)]
+    public bool Created { get; set; }
+
+    /// <summary>What happened, for the history line: a refusal, a child's failure, or "no change".</summary>
+    [Id(6)]
+    public string Detail { get; set; } = string.Empty;
+}
+
+/// <summary>Where one deployment step is.</summary>
+[Alias("CyberCloud.ResourceManager.State.DeploymentStepStatus")]
+public enum DeploymentStepStatus {
+    /// <summary>Not written yet.</summary>
+    Pending = 0,
+
+    /// <summary>Its child operation was accepted and has not ended.</summary>
+    Running = 1,
+
+    /// <summary>Its child succeeded, or the write changed nothing.</summary>
+    Succeeded = 2,
+
+    /// <summary>The write path refused it, or its child failed.</summary>
+    Failed = 3,
+
+    /// <summary>Its child was cancelled — by the deployment's own cancellation or by the child itself.</summary>
+    Canceled = 4
 }
 
 /// <summary>
@@ -307,4 +417,39 @@ public sealed class ResourceWatchState {
     /// <summary>The watchers, by resource id.</summary>
     [Id(0)]
     public Dictionary<Guid, ResourceWatcher> Watchers { get; set; } = [];
+}
+
+/// <summary>
+///     The durable state of an <c>IPolicyCatalogGrain</c> — a tenant's policy definitions, its
+///     assignments, and the compliance its audits recorded (docs/plan/08 § Policy, issue #46).
+/// </summary>
+/// <remarks>
+///     <para>
+///         ⚠ <b>Every collection is <c>{ get; set; }</c></b>, for the reason <see cref="ResourceState" />
+///         gives: a get-only collection deserializes empty through System.Text.Json, and a catalog that
+///         came back empty would be a tenant whose deny rules silently stopped applying.
+///     </para>
+///     <para>
+///         ⚠ <b>The states grow with the tenant's audited resources, and that is the bound to watch.</b>
+///         One row per resource per audit assignment that reaches it, dropped when the resource's
+///         delete is accepted, when its assignment is deleted or replaced, and when its definition's rule
+///         changes. A tenant with a hundred thousand audited resources holds a hundred thousand rows in
+///         one activation; docs/plan/08 § Policy records moving them beside the resource-graph
+///         projection as what is owed past that size.
+///     </para>
+/// </remarks>
+[GenerateSerializer]
+[Alias("CyberCloud.ResourceManager.State.PolicyCatalog")]
+public sealed class PolicyCatalogState {
+    /// <summary>The definitions, by canonical address.</summary>
+    [Id(0)]
+    public Dictionary<string, PolicyDefinitionRecord> Definitions { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>The assignments, by canonical address.</summary>
+    [Id(1)]
+    public Dictionary<string, PolicyAssignmentRecord> Assignments { get; set; } = new(StringComparer.Ordinal);
+
+    /// <summary>The audit verdicts, by resource canonical path, each list ordered by assignment.</summary>
+    [Id(2)]
+    public Dictionary<string, List<PolicyStateRecord>> States { get; set; } = new(StringComparer.Ordinal);
 }

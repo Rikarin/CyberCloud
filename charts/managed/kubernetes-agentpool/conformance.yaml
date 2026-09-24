@@ -222,3 +222,17 @@ owed:
       FIFTH SIGHTING of charts/managed/nats' item of the same name. Everything worth showing about a
       node pool — node pressure, allocatable versus requested, pods per node — is inside the cluster
       this platform cannot reach.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.ContainerService/managedClusters/agentPools. OWED, AND ADDED BY THE #30 REVIEW.
+      THE ENGINE STEP is charts/managed/disk's: a node is a KubeVirt machine whose root disk is a
+      block volume CDI populates, so a customer key belongs below the claim (LINSTOR's LUKS layer or an
+      encrypting CSI driver) with a per-disk passphrase the platform wraps. Nothing in the bundle
+      encrypts a block volume today. Azure's disk encryption set on a node pool is the shape.
+      What every family still needs is docs/plan/18 § What customer-managed keys still need: (1) a
+      key-use seam — the grant is expressible today, `keyVaultCryptoUser` with principalType
+      `resource` on a CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and
+      wrapKey/unwrapKey are actions, so no reconciler can call them; (2) an `encryption.keyUri`
+      property on a NEW api-version of this type; (3) revocation — a disabled key taking the data
+      offline, which needs a re-unwrap on a schedule nothing runs. The key's home is no longer the
+      blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.

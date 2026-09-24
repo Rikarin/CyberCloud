@@ -113,6 +113,21 @@ public static class CliEmitter {
             groups[ScopeGroupName] = scopes;
         }
 
+        // ⚠ THE SCOPE-OBJECT GROUPS — issue #46's policy, the third source that comes from no
+        // provider. Added last for the scope group's reason: a provider or the scope group taking the
+        // same key must collide here rather than merge.
+        foreach (var (name, group) in ScopeObjectGroups(document, version)) {
+            if (groups.ContainsKey(name)) {
+                throw new InvalidOperationException(
+                    $"The CLI group '{name}' is taken twice: the scope objects under a reserved namespace "
+                    + "take it, and so does a provider namespace or the scope group. One set of commands "
+                    + "would be unreachable — docs/plan/21 § Grammar."
+                );
+            }
+
+            groups[name] = group;
+        }
+
         // ⚠ THE SECOND WAY ONE TOKEN COMES TO MEAN TWO THINGS, AND THE CHECK ABOVE CANNOT SEE IT. A
         // command name lands in a JsonObject key, so a duplicate is visible there; a SHORT NAME lands
         // in an `alias` member on a command of a different name, so two of them — or one of them and
@@ -667,6 +682,231 @@ public static class CliEmitter {
         }
     ];
 
+    // ── The scope-object groups, which come from no provider either ────────────────────────────
+
+    /// <summary>
+    ///     One group per namespace of objects addressed on a scope — <c>cyc policy</c> — keyed by its
+    ///     name.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>One command per object and scope — <c>subscription-definitions</c>,
+    ///         <c>resource-group-assignments</c> — because the path is one per pair.</b> The verb tree is
+    ///         group, command, verb, and a host that picked the scope from whichever flag was given
+    ///         would be a second router in the CLI, deciding what the gateway's grammar already decides.
+    ///         The namespace's own word is stripped from the command — <c>policy-definitions</c> under
+    ///         <c>policy</c> is said twice.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b><c>create</c> writes the object whole and nothing here is long-running.</b> One
+    ///         catalog write converges before the call returns, so there is no <c>--wait</c> — the
+    ///         scope verbs' rule, for the same reason.
+    ///     </para>
+    /// </remarks>
+    static IEnumerable<(string Name, JsonObject Group)> ScopeObjectGroups(JsonObject document, string version) {
+        foreach (var family in DocumentReader.ScopeObjectsOf(document)
+                     .GroupBy(static x => x.ProviderNamespace, StringComparer.Ordinal)
+                     .OrderBy(static x => x.Key, StringComparer.Ordinal)) {
+            var name = CliTokens.GroupOf(family.Key);
+            var commands = new JsonObject();
+
+            foreach (var scoped in family) {
+                var command = ScopeObjectCommandName(scoped, name);
+
+                if (commands.ContainsKey(command)) {
+                    throw new InvalidOperationException(
+                        $"'{name} {command}' is the command name of two scope objects — '{scoped.Type}' on a "
+                        + $"{scoped.Scope} is the second. One would silently replace the other."
+                    );
+                }
+
+                commands.Add(command, ScopeObjectCommand(scoped, version));
+            }
+
+            yield return (
+                name,
+                new JsonObject {
+                    ["name"] = name,
+                    ["summary"] =
+                        "Objects addressed on a scope under "
+                        + family.Key
+                        + " — docs/plan/08 § Policy. ⚠ Not resources: a write converges before the call "
+                        + "returns, so there is nothing to wait for and no --wait.",
+                    ["commands"] = Sorted(commands)
+                }
+            );
+        }
+    }
+
+    /// <summary>
+    ///     A scope object's command: its scope, then its type with the group's own word taken off —
+    ///     <c>subscription-definitions</c>.
+    /// </summary>
+    /// <param name="scoped">The object on its scope.</param>
+    /// <param name="group">The group it sits in.</param>
+    public static string ScopeObjectCommandName(DocumentScopeObject scoped, string group) {
+        ArgumentNullException.ThrowIfNull(scoped);
+        ArgumentNullException.ThrowIfNull(group);
+
+        var type = Kebab(scoped.TypePath);
+
+        if (type.StartsWith(group + "-", StringComparison.Ordinal)) {
+            type = type[(group.Length + 1)..];
+        }
+
+        return Kebab(scoped.Scope) + "-" + type;
+    }
+
+    static JsonObject ScopeObjectCommand(DocumentScopeObject scoped, string version) {
+        var verbs = new JsonObject();
+        var scopeFlags = ScopeObjectScopeFlags(scoped);
+        var what = scoped.DisplayName.ToLowerInvariant() + " on a " + Words(scoped.Scope);
+
+        if (scoped.Path.Length > 0) {
+            var address = scopeFlags.Add(
+                new(
+                    "--name",
+                    "string",
+                    "The "
+                    + scoped.DisplayName.ToLowerInvariant()
+                    + "'s own name. ⚠ Required, and never taken from the profile.",
+                    true
+                ) { PathPlaceholder = scoped.NamePlaceholder }
+            );
+
+            verbs["show"] = ScopeObjectVerb("show", "Read a " + what + ".", "GET", scoped.Path, scoped, version, address, []);
+
+            if (scoped.Writable) {
+                verbs["create"] = ScopeObjectVerb(
+                    "create",
+                    "Create or replace a " + what + ". The object is written whole; repeating it changes nothing.",
+                    "PUT",
+                    scoped.Path,
+                    scoped,
+                    version,
+                    address,
+                    [.. FlagsOf(scoped.Content, string.Empty, address).Where(static x => !x.ReadOnly)]
+                );
+
+                verbs["delete"] = ScopeObjectVerb(
+                    "delete",
+                    "Delete a " + what + ". An object already gone is a success.",
+                    "DELETE",
+                    scoped.Path,
+                    scoped,
+                    version,
+                    address,
+                    []
+                );
+            }
+        }
+
+        var list = ScopeObjectVerb(
+            "list",
+            "List the "
+            + scoped.DisplayPlural.ToLowerInvariant()
+            + " on a "
+            + Words(scoped.Scope)
+            + """. ⚠ A short page never means "that is all there is".""",
+            "GET",
+            scoped.CollectionPath,
+            scoped,
+            version,
+            scopeFlags,
+            PageFlags(scoped.CollectionQuery)
+        );
+
+        list["paged"] = true;
+        list["pageFlags"] = new JsonArray { "--all" };
+        verbs["list"] = list;
+
+        return new() {
+            ["name"] = ScopeObjectCommandName(scoped, CliTokens.GroupOf(scoped.ProviderNamespace)),
+            // ⚠ The Azure-shaped type string, as a scope command's scopeType is: it answers what the
+            // command is about, and nothing routes on it.
+            ["objectType"] = scoped.Type,
+            ["scope"] = scoped.Scope,
+            ["title"] = scoped.DisplayName,
+            ["plural"] = scoped.DisplayPlural,
+            ["summary"] = scoped.Summary,
+            ["verbs"] = Sorted(verbs)
+        };
+    }
+
+    static JsonObject ScopeObjectVerb(
+        string name,
+        string summary,
+        string method,
+        string path,
+        DocumentScopeObject scoped,
+        string version,
+        ImmutableArray<CliFlag> address,
+        ImmutableArray<CliFlag> body
+    ) {
+        var flags = new JsonArray();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var flag in address.AddRange(body).OrderBy(static x => x.Name, StringComparer.Ordinal)) {
+            if (!seen.Add(flag.Name)) {
+                throw new InvalidOperationException(
+                    $"'{flag.Name}' is the name of two flags on '{scoped.Type}' on a {scoped.Scope} '{name}'. A "
+                    + "verb's flags are a JSON array, so both would be emitted and the host would bind one of "
+                    + "them — docs/plan/21 § Grammar."
+                );
+            }
+
+            flags.Add(flag.ToJson());
+        }
+
+        return new() {
+            ["name"] = name,
+            ["summary"] = summary,
+            ["method"] = method,
+            ["path"] = path,
+            ["apiVersion"] = version,
+            ["longRunning"] = false,
+            ["flags"] = flags
+        };
+    }
+
+    /// <summary>
+    ///     The flags that address the scope an object sits on: the profile-backed three where the path
+    ///     has them, and <c>--management-group</c>, which no profile holds.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b><c>--management-group</c> is required and never remembered</b>, for the reason a scope's
+    ///     own name is: a policy written at the wrong level of the tree applies to everything beneath
+    ///     that level, and a group taken silently from a profile is the wrong level waiting to happen.
+    /// </remarks>
+    static ImmutableArray<CliFlag> ScopeObjectScopeFlags(DocumentScopeObject scoped) {
+        var flags = ImmutableArray.CreateBuilder<CliFlag>();
+
+        foreach (var placeholder in DocumentReader.PlaceholdersOf(scoped.CollectionPath)) {
+            if (string.Equals(placeholder, ManagementGroupPlaceholder, StringComparison.Ordinal)) {
+                flags.Add(
+                    new(
+                        "--management-group",
+                        "string",
+                        "The management group, by name. docs/plan/06 § The hierarchy.",
+                        true
+                    ) { PathPlaceholder = placeholder }
+                );
+
+                continue;
+            }
+
+            flags.Add(ProfileFlag(placeholder));
+        }
+
+        return flags.ToImmutable();
+    }
+
+    /// <summary>The management group's placeholder — the one scope placeholder no profile fills.</summary>
+    const string ManagementGroupPlaceholder = "managementGroupName";
+
+    /// <summary>A camel-cased kind as words — <c>resourceGroup</c> as <c>resource group</c>.</summary>
+    static string Words(string kind) => Kebab(kind).Replace('-', ' ');
+
     // ── Flags ──────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -918,6 +1158,12 @@ public static class CliEmitter {
     ///     What a flag's value is, in the vocabulary a command-line parser understands.
     /// </summary>
     static string CliType(JsonObject schema) {
+        // ⚠ Before the object branch, which would read a policy rule as the tag bag's key=value
+        // pairs. A `json` flag takes one JSON value — the host's FlagBinding.
+        if (DocumentReader.IsJsonValue(schema)) {
+            return "json";
+        }
+
         var type = DocumentReader.TypeOf(schema);
 
         return type switch {

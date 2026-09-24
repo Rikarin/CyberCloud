@@ -3,6 +3,7 @@
 
 using CyberCloud.Core;
 using CyberCloud.Core.Time;
+using CyberCloud.Providers.Mail.Dns;
 using System.Collections.Immutable;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -10,8 +11,9 @@ using System.Text.Json.Nodes;
 namespace CyberCloud.Providers.Mail;
 
 /// <summary>
-///     Converges one mail domain onto the five objects it is: a <c>Secret</c>, a <c>ConfigMap</c>, a
-///     <c>Service</c>, a <c>StatefulSet</c> and a <c>PodMonitor</c>.
+///     Converges one mail domain onto the six objects it is — two <c>Secret</c>s, a <c>ConfigMap</c>,
+///     a <c>Service</c>, a <c>StatefulSet</c> and a <c>PodMonitor</c> — with its sending gate decided
+///     from the public DNS.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -23,8 +25,8 @@ namespace CyberCloud.Providers.Mail;
 ///         run daemons on the internet and not one has a Kubernetes controller worth depending on —
 ///         so every object here is a core kind this provider names itself, the shape
 ///         <see cref="MailDomains" /> shares with <c>charts/managed/nats</c> after
-///         <c>nats-operator</c> was archived. The cost is visible in this file: five applies and
-///         five reads where the RabbitMQ row has one of each.
+///         <c>nats-operator</c> was archived. The cost is visible in this file: six applies and
+///         six reads where the RabbitMQ row has one of each.
 ///     </para>
 ///     <para>
 ///         The four clauses of docs/plan/08 § The reconcile loop, and where each is satisfied:
@@ -47,16 +49,16 @@ namespace CyberCloud.Providers.Mail;
 ///             in different orders render the same Postfix configuration.
 ///         </item>
 ///         <item>
-///             <b>No hidden state.</b> The only field is the primary constructor's
-///             <see cref="IClock" />, which is a dependency rather than a memory. ⚠ A reconciler is
+///             <b>No hidden state.</b> The primary constructor's <see cref="IClock" />, resolver and
+///             platform options are dependencies rather than memories. ⚠ A reconciler is
 ///             registered <b>as a singleton, by concrete type</b>, so one instance serves every
 ///             tenant in the process — a field caching a resolved DKIM key would hand tenant B
 ///             tenant A's signing identity, which is the worst instance of this failure class the
 ///             catalogue has.
 ///         </item>
 ///         <item>
-///             <b>Bounded.</b> One mint, two resolves, five applies and five reads, all on the
-///             caller's token. ⚠ There is no wait for Dovecot to be <i>serving</i> — the mail store
+///             <b>Bounded.</b> One mint, two resolves, seven DNS questions asked at once, a read of
+///             the running gate, six applies and six reads, all on the caller's token. ⚠ There is no wait for Dovecot to be <i>serving</i> — the mail store
 ///             is opened and indexed on first start and clause 3's budget is thirty seconds, so
 ///             readiness is <see cref="ReconcileOutcome.InProgress" /> and the reminder comes back.
 ///         </item>
@@ -78,13 +80,24 @@ namespace CyberCloud.Providers.Mail;
 ///     <para>
 ///         ⚠
 ///         <b>
-///             Converged here means "the five objects are applied and read back", not "mail is
+///             Converged here means "the six objects are applied and read back", not "mail is
 ///             flowing".
-///         </b> The honest stronger check is an LMTP conversation with the back end, and it
-///         is not made because nothing in this repository can hold one: the Docker-free harness is a
-///         dictionary and the cluster-backed harness runs a bare k3s with no mail images. That is
-///         written down as owed in <c>charts/managed/mail/conformance.yaml</c> rather than left for
-///         somebody to discover.
+///         </b> Whether mail flows is <c>MailDeliveryOnK3sTests</c>' question — submission with
+///         <c>AUTH</c>, delivery over LMTP, an IMAP fetch and a DKIM signature verified against the
+///         published key, on a real k3s with the real images. A reconcile pass does not hold an SMTP
+///         conversation: clause 3's thirty seconds is not enough for Dovecot's first start, and
+///         readiness is the pod's to report.
+///     </para>
+///     <para>
+///         ⚠ <b>THE SENDING GATE IS DECIDED ON EVERY PASS, AND A DNS FAILURE NEVER FAILS ONE.</b>
+///         <see cref="MailDeliverability" /> resolves the seven records and renders the answer into
+///         <c>main.cf</c>. A zone the tenant has not published, a resolver that times out, a region
+///         whose hosts are not configured: each renders <see cref="MailSending.Held" /> and the domain
+///         converges, because receiving mail does not wait on the DNS. ⚠ Except that an UNANSWERED
+///         question never closes a gate that is open — <see cref="MailDeliverability.Settle" />.
+///         ⚠ A converged domain is not reconciled again by itself, so a tenant who publishes their
+///         records later opens the gate with <c>verify</c>, which decides the same way and re-applies
+///         the <c>ConfigMap</c>.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -96,7 +109,10 @@ namespace CyberCloud.Providers.Mail;
 ///     </para>
 /// </remarks>
 /// <param name="clock">Stamps <see cref="ObservedState.ObservedAt" />.</param>
-public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
+/// <param name="dns">Where the sending gate reads the public DNS.</param>
+/// <param name="platform">The platform's mail hosts and the abuse desk's suspensions.</param>
+public sealed class MailDomainReconciler(IClock clock, IMailDnsResolver dns, MailPlatformOptions platform)
+    : IResourceReconciler {
     /// <inheritdoc />
     public ResourceTypeName Type => MailDomains.Type;
 
@@ -139,32 +155,46 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
 
         var secrets = credentials.GetValueOrThrow();
 
-        // ── The five applies, in dependency order ──────────────────────────────────────────────
+        // ── The gate, before the ConfigMap that carries it ─────────────────────────────────────
+        context.Log.Report("verifying", $"resolving the DNS records of '{MailDomains.Domain(context.Desired)}'", 15);
+
+        var decision = await MailDeliverability.DecideAsync(
+            context.Id.TenantId,
+            MailDomains.Domain(context.Desired),
+            secrets[MailDomains.DkimPrivateKeyField],
+            platform,
+            dns,
+            cancellationToken
+        );
+
+        // ⚠ AN UNANSWERED DNS DOES NOT CLOSE A GATE A PREVIOUS ANSWER OPENED. The running ConfigMap
+        // says what the gate is now; MailDeliverability.Settle keeps it open when the only thing this
+        // pass learned is that the resolver did not answer. A read that fails leaves `running` null,
+        // which is the fail-closed reading.
+        var live = await cluster.GetAsync(MailDomains.ConfigMapRef(context.Namespace, name), cancellationToken);
+        var running = live.IsSuccess ? MailDomains.RunningGate(live.GetValueOrThrow().Json, MailDomains.Domain(context.Desired)) : null;
+        var sending = MailDeliverability.Settle(decision, running);
+
+        context.Log.Report(
+            "verifying",
+            sending == decision.Sending
+                ? $"outbound mail is {sending.ToString().ToLowerInvariant()}: {decision.Reason}"
+                : $"outbound mail stays open: the DNS did not answer ({decision.Reason}), and an unanswered question is not a withdrawn record"
+        );
+
+        // ── The six applies, in dependency order ───────────────────────────────────────────────
         var percent = 20;
 
-        foreach (var (target, body) in Documents(context.Namespace, name, context.Desired, secrets)) {
+        foreach (var (target, body) in Documents(context.Namespace, name, context.Desired, secrets, sending)) {
             context.Log.Report(
                 "applying",
                 $"applying {target.Kind.Kind} '{target.Name}' to {context.Namespace}",
                 percent
             );
 
-            percent = Math.Min(percent + 12, 85);
+            percent = Math.Min(percent + 10, 85);
 
-            var applied = await KubeCommand.For(cluster)
-                .WithTenantId(context.Id.TenantId)
-                .WithResourceId(context.Id)
-                .InNamespace(context.Namespace)
-                .WithKind(target.Kind)
-                .WithApiVersion(context.ApiVersion)
-                // ⚠ Not the seven, and not the object's own labels. This puts the six
-                // lifetime-stable labels into the claim template so that the PersistentVolumeClaim
-                // the StatefulSet controller makes is findable by selector — see
-                // MailDomains.ClaimTemplatePath. It is a no-op on the four objects that have no
-                // template at that path.
-                    .WithTemplateLabels(MailDomains.ClaimTemplatePath)
-                    .ObjectJson(body)
-                    .ApplyAsync(cancellationToken);
+            var applied = await ApplyAsync(cluster, context.Id, context.Namespace, context.ApiVersion, target, body, cancellationToken);
 
             if (applied.TryGetError(out var applyError)) {
                 // ⚠ The code decides, not this call site. An apply that could not reach the cluster
@@ -182,8 +212,8 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
         // ── Clause 4. Everything above this line is a claim; these are the readings. ───────────
         //
         // ⚠ EVERY OBJECT, BECAUSE EVERY OBJECT WAS APPLIED. An object applied and never read back is
-        // one this loop reports Converged without having observed, and four right ones make the
-        // fifth invisible.
+        // one this loop reports Converged without having observed, and five right ones make the
+        // sixth invisible.
         foreach (var target in Targets(context.Namespace, name)) {
             var read = await cluster.GetAsync(target, cancellationToken);
 
@@ -296,7 +326,7 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
             return ObservedState.Absent;
         }
 
-        // ⚠ The StatefulSet alone, and not the five. A mail domain IS its back end: the ConfigMap
+        // ⚠ The StatefulSet alone, and not the six. A mail domain IS its back end: the ConfigMap
         // and the Secret are how it is configured and the Service is how it is reached, and any of
         // them present without the StatefulSet is configuration for a domain that does not exist.
         var read = await cluster.GetAsync(
@@ -376,7 +406,7 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
     }
 
     /// <summary>
-    ///     The five objects a domain is, in dependency order.
+    ///     The six objects a domain is, in dependency order.
     /// </summary>
     /// <remarks>
     ///     ⚠ <b><see cref="MailDomains.Objects" /> and not a second list.</b> The conformance case
@@ -386,16 +416,57 @@ public sealed class MailDomainReconciler(IClock clock) : IResourceReconciler {
     /// </remarks>
     static ImmutableArray<ObjectRef> Targets(string ns, string name) => MailDomains.Objects(ns, name);
 
-    /// <summary>The five documents, paired with where each goes, in the same order.</summary>
+    /// <summary>
+    ///     Applies one of this domain's objects under its own identity — the reconciler's path, and
+    ///     <c>verify</c>'s when it moves the gate.
+    /// </summary>
+    /// <param name="cluster">The domain's cluster.</param>
+    /// <param name="id">The domain.</param>
+    /// <param name="ns">Its namespace.</param>
+    /// <param name="apiVersion">The api-version the resource was written at.</param>
+    /// <param name="target">Which object.</param>
+    /// <param name="body">The rendered document.</param>
+    /// <param name="cancellationToken">The caller's token.</param>
+    /// <remarks>
+    ///     ⚠ <b>One builder chain for both callers</b>, so an action cannot apply the domain's
+    ///     <c>ConfigMap</c> with a different field manager, label set or template path than the
+    ///     reconciler does — which would make the next pass a <c>Conflict</c> with itself.
+    /// </remarks>
+    internal static Task<Result<ApplyOutcome>> ApplyAsync(
+        IKubeClusterConnection cluster,
+        ResourceId id,
+        string ns,
+        string apiVersion,
+        ObjectRef target,
+        string body,
+        CancellationToken cancellationToken
+    ) =>
+        KubeCommand.For(cluster)
+            .WithTenantId(id.TenantId)
+            .WithResourceId(id)
+            .InNamespace(ns)
+            .WithKind(target.Kind)
+            .WithApiVersion(apiVersion)
+            // ⚠ Not the seven, and not the object's own labels. This puts the six lifetime-stable
+            // labels into the claim template so that the PersistentVolumeClaim the StatefulSet
+            // controller makes is findable by selector — see MailDomains.ClaimTemplatePath. It is a
+            // no-op on the five objects that have no template at that path.
+            .WithTemplateLabels(MailDomains.ClaimTemplatePath)
+            .ObjectJson(body)
+            .ApplyAsync(cancellationToken);
+
+    /// <summary>The six documents, paired with where each goes, in the same order.</summary>
     static ImmutableArray<(ObjectRef Target, string Body)> Documents(
         string ns,
         string name,
         JsonElement desired,
-        IReadOnlyDictionary<string, string> secrets
+        IReadOnlyDictionary<string, string> secrets,
+        MailSending sending
     ) =>
         [
             (MailDomains.CredentialsSecretRef(ns, name), MailDomains.CredentialsSecretJson(name, secrets)),
-            (MailDomains.ConfigMapRef(ns, name), MailDomains.ConfigMapJson(name, desired)),
+            (MailDomains.UsersSecretRef(ns, name), MailDomains.UsersSecretJson(name, desired)),
+            (MailDomains.ConfigMapRef(ns, name), MailDomains.ConfigMapJson(name, desired, sending)),
             (MailDomains.ServiceRef(ns, name), MailDomains.ServiceJson(name, desired)),
             (MailDomains.SetRef(ns, name), MailDomains.StatefulSetJson(name, desired)),
             (MailDomains.PodMonitorRef(ns, name), MailDomains.PodMonitorJson(name))

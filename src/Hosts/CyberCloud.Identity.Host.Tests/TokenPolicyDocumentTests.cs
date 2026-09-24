@@ -143,10 +143,14 @@ public sealed class TokenPolicyDocumentTests {
         // own challenge answers 401 for a bad one), and /authorize and /logout are navigations by
         // definition — a person arrives at them by redirect, and a 302 to the sign-in page is
         // exactly what an unauthenticated /authorize answers.
+        //
+        // /device/verify (#43) is the fifth passthrough and a navigation too: it is the
+        // verification_uri a device prints, a person opens it, and it answers a redirect to the
+        // device page whoever is or is not signed in.
         var navigable = new[] {
             "/health/live", "/.well-known/cybercloud-token-policy", IdentityHostOpenIddict.TokenPath,
             IdentityHostOpenIddict.UserInfoPath, IdentityHostOpenIddict.AuthorizationPath,
-            IdentityHostOpenIddict.EndSessionPath
+            IdentityHostOpenIddict.EndSessionPath, IdentityHostOpenIddict.EndUserVerificationPath
         };
 
         var mapped = Endpoints()
@@ -262,12 +266,21 @@ public sealed class TokenPolicyDocumentTests {
                 ["/api/signup/verify"] = IdentityRateLimits.CodeVerify.Name,
                 ["/api/signin/otp"] = IdentityRateLimits.CodeVerify.Name,
                 ["/api/signin/totp"] = IdentityRateLimits.CodeVerify.Name,
-                ["/api/signin/recovery-code"] = IdentityRateLimits.CodeVerify.Name
+                ["/api/signin/recovery-code"] = IdentityRateLimits.CodeVerify.Name,
+                // #43: the device page's lookup takes a typed code, and its answer names one.
+                ["/api/device/lookup"] = IdentityRateLimits.CodeVerify.Name,
+                ["/api/device/decision"] = IdentityRateLimits.CodeVerify.Name,
+                // #43: an invitation link carries a secret, and both routes check one.
+                ["/api/invitations/describe"] = IdentityRateLimits.CodeVerify.Name,
+                ["/api/invitations/accept"] = IdentityRateLimits.CodeVerify.Name
             },
             true
         );
 
-        IdentityRateLimits.All.Select(static x => x.Name).ShouldBe(["signup-begin", "code-verify"]);
+        // ⚠ The third bucket counts OpenIddict's /device, which is not a mapped route and so is not
+        // in the dictionary above — DegradedModeHandlers.ValidateDeviceAuthorizationRequest counts it,
+        // and DeviceFlowOverHttpTests.ThePerIpLimitOnStartingADeviceSignInTripsAndRecovers pins it.
+        IdentityRateLimits.All.Select(static x => x.Name).ShouldBe(["signup-begin", "code-verify", "device-authorization"]);
     }
 
     [Fact]

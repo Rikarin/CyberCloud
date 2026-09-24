@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      docs/plan/03 § Providers — the fifth project: "the shared provider conformance suite,
+      parameterised". CyberCloud.Billing/budgets through the clusterless half the Communication family
+      taught the suite: BudgetModule answers the five questions — is it there, does it match, remove it,
+      corrupt it, host it — of CyberCloud.Billing's budget grain.
+
+      ⚠ IT REFERENCES THE MODULES THE HARNESS SILO HOSTS — Billing, and Metering, Communication and
+      Authorization behind it — which a test project may (rule 7 reads shipping assemblies only).
+
+      ⚠ Counted by the Labels architecture gate, which reads "no object was applied" on a clusterless
+      family rather than "every object is labelled".
+    -->
+
+    <ItemGroup>
+        <PackageReference Include="xunit.v3"/>
+        <PackageReference Include="Shouldly"/>
+    </ItemGroup>
+
+    <ItemGroup Label="Global usings">
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Billing/CyberCloud.Billing.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Metering/CyberCloud.Metering.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <ProjectReference Include="../../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <ProjectReference Include="../../../../test/CyberCloud.Conformance/CyberCloud.Conformance.csproj"/>
+    </ItemGroup>
+
+</Project>

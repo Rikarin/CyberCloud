@@ -46,7 +46,10 @@ namespace CyberCloud.Identity.Host.Tests.Infrastructure;
 ///         <c>OrleansApplication.CreateClient</c>, and it connects the way a deployed one does — over
 ///         TCP to the primary silo's gateway port, which is not <c>Options.BaseGatewayPort</c> but
 ///         the port that silo actually bound. <c>CyberCloud.Registry.Feeds.Host.Tests</c>'
-///         <c>FeedsHostFixture</c> found both.
+///         <c>FeedsHostFixture</c> found both. ⚠ Real sockets, but one process: the silos and this
+///         host share a type manifest, which hides a type Orleans refuses between two processes.
+///         <see cref="IdentityHostProcess" /> runs the host's executable against this cluster for
+///         that.
 ///     </para>
 ///     <para>
 ///         The tenant is registered in the platform directory the way <c>CreateTenantAsync</c>
@@ -79,7 +82,7 @@ namespace CyberCloud.Identity.Host.Tests.Infrastructure;
 ///         minds because nothing compares the host's clock to the silo's.
 ///     </para>
 /// </remarks>
-public sealed class IdentityHostFixture : IAsyncLifetime {
+public class IdentityHostFixture : IAsyncLifetime {
     /// <summary>The one tenant in the directory.</summary>
     public static Guid Tenant { get; } = Guid.Parse("7a11e0aa-0000-4000-8000-00000000a001");
 
@@ -141,6 +144,18 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
     /// <summary>The host's clock — see the type's remarks.</summary>
     public ShiftableClock Clock { get; } = new();
 
+    /// <summary>
+    ///     The silo's clock — what every grain reads as <see cref="IClock" />. Forward only, like
+    ///     <see cref="Clock" />, and for the same kind of reason: RFC 8628's polling interval and a
+    ///     device code's ten minutes are measured by <c>IDeviceAuthorizationGrain</c>, and a test
+    ///     cannot wait either out. ⚠ A separate instance from the host's, so a test that moves one
+    ///     does not move the other, and nothing may compare the two: the grain measures a device
+    ///     code's ten minutes from its own clock (<c>DeviceAuthorizationRequest.Lifetime</c>), never
+    ///     against an instant the host stamped. It once did, and moving this clock past one code's
+    ///     expiry made every later device sign-in in the collection a <c>server_error</c>.
+    /// </summary>
+    public ShiftableClock SiloClock { get; } = new();
+
     /// <summary>Every code the silo delivered, newest last.</summary>
     public CapturingOtpDelivery Otp { get; } = new();
 
@@ -162,14 +177,21 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
 
     /// <inheritdoc />
     public async ValueTask InitializeAsync() {
+        await StartDependenciesAsync();
+
         var builder = new TestClusterBuilder(1);
-        builder.Options.ClusterId = "cybercloud-identity-host-tests";
-        builder.Options.ServiceId = "cybercloud-identity-host-tests";
+        builder.Options.ClusterId = ClusterName;
+        builder.Options.ServiceId = ClusterName;
         builder.Options.ConnectionTransport = ConnectionTransportType.TcpSocket;
         builder.AddSiloBuilderConfigurator<SiloConfigurator>();
-        Instance = this;
+        // ⚠ Keyed, not a single static: two fixtures deriving from this one start in parallel (the
+        // Mailpit suite is its own collection), and a silo reading the last fixture to initialise
+        // would take the other one's seams.
+        builder.Properties[FixtureKeyProperty] = fixtureKey;
+        Fixtures[fixtureKey] = this;
         cluster = builder.Build();
         await cluster.DeployAsync();
+        await AfterClusterAsync();
 
         await RegisterTenantAsync(Tenant, Slug);
         await RegisterTenantAsync(OtherTenant, OtherSlug);
@@ -190,6 +212,11 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
             await cluster.StopAllSilosAsync();
             await cluster.DisposeAsync();
         }
+
+        Fixtures.TryRemove(fixtureKey, out _);
+        await StopDependenciesAsync();
+
+        GC.SuppressFinalize(this);
 
         try {
             Directory.Delete(KeyDirectory, true);
@@ -229,9 +256,7 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
                 // issuer that minted it — so a restart onto a fresh random port would refuse every
                 // token for the wrong reason. The AppHost pins 5101 for the same reason.
                 "--urls", BaseAddress?.GetLeftPart(UriPartial.Authority) ?? "http://127.0.0.1:0",
-                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={cluster.Primary!.GatewayAddress.Endpoint.Port}",
-                $"--{CyberCloudClusterOptions.SectionName}:ClusterId={cluster.Options.ClusterId}",
-                $"--{CyberCloudClusterOptions.SectionName}:ServiceId={cluster.Options.ServiceId}",
+                .. ClusterClientSettings(),
                 $"--{IdentityHostOptions.SectionName}:DevelopmentKeyDirectory={KeyDirectory}",
                 $"--{IdentityHostOptions.SectionName}:SignInPageBaseUri={SignInPageBaseUri}"
             ],
@@ -259,6 +284,21 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
         return started;
     }
 
+    /// <summary>
+    ///     The command-line settings an Orleans client needs to join this fixture's cluster — what
+    ///     the identity host is started with, and what a second host beside it is given.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ The gateway port is the one the primary silo bound, not <c>Options.BaseGatewayPort</c>;
+    ///     the type's remarks say why.
+    /// </remarks>
+    public string[] ClusterClientSettings() =>
+        [
+            $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={cluster.Primary!.GatewayAddress.Endpoint.Port}",
+            $"--{CyberCloudClusterOptions.SectionName}:ClusterId={cluster.Options.ClusterId}",
+            $"--{CyberCloudClusterOptions.SectionName}:ServiceId={cluster.Options.ServiceId}"
+        ];
+
     async Task RegisterTenantAsync(Guid tenant, string slug) {
         var registered = await Grains
             .GetGrain<ITenantDirectoryGrain>(GrainKeys.TenantDirectory())
@@ -283,19 +323,60 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
     ///     fifteen minutes gets no fresh code and its second factor fails uniformly. Each sign-in
     ///     that needs a code signs in somebody new.
     /// </remarks>
-    public async Task<Guid> CreatePersonAsync(string email) {
+    /// <param name="tenant">The tenant to create them in — <see cref="Tenant" /> unless a test says otherwise.</param>
+    public async Task<Guid> CreatePersonAsync(string email, Guid? tenant = null) {
+        var tenantId = tenant ?? Tenant;
         var userId = Guid.NewGuid();
-        var index = For(Tenant).GetGrain<IEmailIndexGrain>(GrainKeys.EmailIndex(Tenant, email));
+        var index = For(tenantId).GetGrain<IEmailIndexGrain>(GrainKeys.EmailIndex(tenantId, email));
 
         (await index.TryClaimAsync(email, userId)).IsSuccess.ShouldBeTrue();
 
-        var user = For(Tenant).GetGrain<IUserGrain>(GrainKeys.User(userId));
+        var user = For(tenantId).GetGrain<IUserGrain>(GrainKeys.User(userId));
 
         (await user.CreateAsync(email, DisplayName, UserStatus.Active)).IsSuccess.ShouldBeTrue();
         (await index.ConfirmAsync(userId)).IsSuccess.ShouldBeTrue();
         (await user.SetPasswordAsync(Password)).IsSuccess.ShouldBeTrue();
 
         return userId;
+    }
+
+    /// <summary>
+    ///     A tab on <paramref name="origin" />, signed in with the password and the delivered code as
+    ///     a fresh person — <see cref="CreatePersonAsync(string)" /> says why a fresh one.
+    /// </summary>
+    /// <param name="origin">The origin the tab's pages live on.</param>
+    /// <param name="host">
+    ///     The identity host to sign in at. Leave it out for this fixture's own. An
+    ///     <see cref="IdentityHostProcess" /> passes its address.
+    /// </param>
+    /// <returns>The tab, the person and their address.</returns>
+    public async Task<(BrowserClient Browser, Guid UserId, string Email)> SignInFreshPersonAsync(string origin, Uri? host = null) {
+        var ct = TestContext.Current.CancellationToken;
+        var browser = new BrowserClient(host ?? BaseAddress, origin);
+        var email = $"person-{Guid.NewGuid():N}@grants.example";
+        var userId = await CreatePersonAsync(email);
+
+        using var password = await browser.PostJsonAsync(
+            "/api/signin/password",
+            new { email, password = Password, returnUrl = "/", tenant = Slug },
+            ct
+        );
+
+        (await BrowserClient.JsonAsync(password, ct)).GetProperty("succeeded").GetBoolean().ShouldBeTrue();
+
+        using var send = await browser.PostJsonAsync("/api/signin/otp/send", new { returnUrl = "/" }, ct);
+
+        var code = Otp.LastCode;
+        code.ShouldNotBeNull("the silo delivered no code through IOtpDeliverySeam");
+
+        using var otp = await browser.PostJsonAsync("/api/signin/otp", new { code, returnUrl = "/" }, ct);
+
+        var second = await BrowserClient.JsonAsync(otp, ct);
+
+        second.GetProperty("succeeded").GetBoolean().ShouldBeTrue(second.GetRawText());
+        second.GetProperty("secondFactorRequired").GetBoolean().ShouldBeFalse();
+
+        return (browser, userId, email);
     }
 
     async Task CreateTenantClientsAsync() {
@@ -335,14 +416,39 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
         confidential.IsSuccess.ShouldBeTrue(confidential.Error?.Message);
     }
 
+    // ── The seams a derived fixture fills ──────────────────────────────────────────────────────
+
+    /// <summary>The cluster's id and service id — distinct per fixture type, so two can run side by side.</summary>
+    protected virtual string ClusterName => "cybercloud-identity-host-tests";
+
+    /// <summary>Starts what the silo needs before it exists — a container, say.</summary>
+    protected virtual Task StartDependenciesAsync() => Task.CompletedTask;
+
+    /// <summary>Runs once the cluster is up and before the host starts — seeding a grain, say.</summary>
+    protected virtual Task AfterClusterAsync() => Task.CompletedTask;
+
+    /// <summary>Adds to the silo, after the identity module and the ReBAC engine are composed.</summary>
+    /// <param name="silo">The silo being built.</param>
+    protected virtual void ConfigureSilo(ISiloBuilder silo) { }
+
+    /// <summary>Stops what <see cref="StartDependenciesAsync" /> started.</summary>
+    protected virtual ValueTask StopDependenciesAsync() => ValueTask.CompletedTask;
+
+    const string FixtureKeyProperty = "CyberCloud:IdentityHostTests:Fixture";
+
+    static readonly ConcurrentDictionary<string, IdentityHostFixture> Fixtures = new(StringComparer.Ordinal);
+
+    readonly string fixtureKey = Guid.NewGuid().ToString("N");
+
     /// <summary>Cheap Argon2id, for the reason <c>CyberCloud.Identity.Tests</c> gives.</summary>
     static Argon2idOptions CheapArgon2 { get; } = new() { MemoryKibibytes = 8_192, Iterations = 1, Parallelism = 1 };
 
-    /// <summary>The fixture the silo configurator reads its seam from — TestCluster constructs the configurator itself.</summary>
-    static IdentityHostFixture? Instance { get; set; }
-
     sealed class SiloConfigurator : ISiloConfigurator {
         public void Configure(ISiloBuilder silo) {
+            // The fixture this silo belongs to — TestCluster constructs the configurator itself, so
+            // it is found by the key the builder handed the silo's configuration.
+            var instance = Fixtures[silo.Configuration[FixtureKeyProperty]!];
+
             silo.AddMemoryGrainStorage(StorageTiers.Durable);
             silo.AddMemoryGrainStorage(StorageTiers.Hot);
 
@@ -351,9 +457,10 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
             // has UseRedisReminderService; this is its in-memory stand-in.
             silo.UseInMemoryReminderService();
 
-            silo.ConfigureServices(static services => {
+            silo.ConfigureServices(services => {
                     // FIRST, so the module's TryAdd keeps them.
-                    services.AddSingleton<IOtpDeliverySeam>(Instance!.Otp);
+                    services.AddSingleton<IOtpDeliverySeam>(instance.Otp);
+                    services.AddSingleton<IClock>(instance.SiloClock);
                     services.AddSingleton<IPasswordHasher>(new Argon2idPasswordHasher(CheapArgon2));
                     services.TryAddSingleton<ILoggerFactory>(static _ => NullLoggerFactory.Instance);
                 }
@@ -361,6 +468,8 @@ public sealed class IdentityHostFixture : IAsyncLifetime {
 
             silo.AddCyberCloudIdentity(options: CheapArgon2);
             silo.AddCyberCloudAuthorization();
+
+            instance.ConfigureSilo(silo);
         }
     }
 }

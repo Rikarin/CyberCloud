@@ -128,6 +128,36 @@ public static class VaultFailures {
         };
     }
 
+    /// <summary>
+    ///     A handle whose path has an empty, <c>.</c> or <c>..</c> segment — an address that is not
+    ///     the one it spells.
+    /// </summary>
+    /// <param name="reference">The handle.</param>
+    /// <remarks>
+    ///     ⚠ <b>Refused without a network call, and as a provider bug.</b> Every type that lets a
+    ///     tenant spell a path confines it with <see cref="SecretRef.IsConfinedTo" /> first, so a
+    ///     handle reaching here with a dot segment got past a parser that should have refused it. The
+    ///     resolver refuses it anyway because it is the last place that can: its HTTP client collapses
+    ///     <c>..</c> before OpenBao sees the path, and the platform's one broad token would then read
+    ///     whatever the collapsed path names — <see cref="SecretRef.IsCanonical" /> has the #34
+    ///     review's probe.
+    /// </remarks>
+    public static VaultRefusal NonCanonicalPath(SecretRef reference) {
+        ArgumentNullException.ThrowIfNull(reference);
+
+        return new() {
+            Code = ErrorCode.InternalError,
+            TenantMessage =
+                "A credential this resource needs was requested with a malformed handle. " + Escalation,
+            OperatorDetail =
+                $"A SecretRef whose path has an empty, '.' or '..' segment reached the resolver: "
+                + $"path='{reference.Path}', field='{reference.Field}'. Nothing was asked of OpenBao — the "
+                + "HTTP client would have collapsed the dot segments into a different path. The handle "
+                + "came from the resource's desired state, so the parser that should have refused it with "
+                + "SecretRef.IsConfinedTo is where to look."
+        };
+    }
+
     /// <summary>The platform could not authenticate to OpenBao at all.</summary>
     /// <param name="detail">What the login attempt actually produced. Never a token.</param>
     /// <remarks>

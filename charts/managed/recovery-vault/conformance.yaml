@@ -87,13 +87,40 @@ assertions:
       count 0 when the cluster cannot be listed. ⚠ NEEDS A CLOUDNATIVEPG IN THE CLUSTER HARNESS to
       produce a real point; the Docker-free suite plants one the way the controller would, and the
       k3s lane with charts/bundle/cloudnative-pg installed is where a real one appears.
-  - id: recover-creates-a-new-cluster-and-never-overwrites
+  - id: recover-creates-a-new-server-resource-and-never-overwrites
     says: >
-      recover bootstraps a NEW CloudNativePG Cluster from a completed recovery point of THIS vault,
-      sized like the source when the source is still there and with defaults when it is not, carrying
-      no backup section of its own — and refuses by name a point that is not completed, a point another
-      vault's schedule made (with the same 404 as an absent one), and a target name a cluster already
-      holds. docs/plan/15 § Backup as a service: "Restore always creates a new resource."
+      recover creates a NEW CyberCloud.DBforPostgreSQL/servers resource — through the whole write path,
+      as the caller of recover, via ActionContext.Creator — whose /properties/restore/recoveryPoint
+      makes the server's own reconciler bootstrap its Cluster from a completed recovery point of THIS
+      vault (bootstrap.recovery.backup.name), sized like the source when the source is still there and
+      with the schema's defaults when it is not, and archiving to a bucket of its own GUID rather than
+      the source's. It refuses by name a point that is not completed, a point another vault's schedule
+      made (with the same 404 as an absent one), a target name a cluster already holds, and — the write
+      path's own refusal — a name a resource already holds or a caller who may not write servers.
+      docs/plan/15 § Backup as a service: "Restore always creates a new resource."
+      RecoverThroughTheWritePathTests (Docker-free, the shipping manager and both families'
+      reconcilers) and RecoveryVaultAgainstCloudNativePg (a real operator and a real SeaweedFS).
+  - id: backup-now-is-a-point-of-the-schedule
+    says: >
+      backupNow applies a CloudNativePG Backup of one protected item, owned by that item's
+      ScheduledBackup and labelled cnpg.io/scheduled-backup with its name — so listRecoveryPoints
+      lists it, recover accepts it as this vault's, retention prunes it and the vault's teardown takes
+      it — and answers with the point's name at once; an item the vault has not scheduled is a 404 at
+      /item. RecoveryVaultActionHandlerTests; against the real operator the point reaches `completed`
+      with its base backup and WAL in the server's bucket, RecoveryVaultAgainstCloudNativePg.
+  - id: the-round-trip-restores-the-row
+    says: >
+      End to end on a real k3s with CloudNativePG from charts/bundle/install.sh and the platform's
+      SeaweedFS beside it: a server with backups on archives to its own bucket with a key the store's
+      IAM API issued and the vault holds; a row is written; a vault protects the server; backupNow
+      completes; recover creates a new server resource; and the restored database holds the row.
+      ⚠ The restore is from the point CloudNativePG's ScheduledBackup controller took (`immediate:
+      true`), found by the controller's own cnpg.io/scheduled-backup label and owned by the schedule.
+      #30's review found the first rewrite of this lane restoring only from backupNow's hand-labelled
+      point, which proved nothing about the join listRecoveryPoints, recover and retention make. The
+      same run asserts the point records status.majorVersion, and that a caller's own PUT of a server
+      naming the point is refused at /properties/restore/recoveryPoint.
+      RecoveryVaultAgainstCloudNativePg.AProtectedServerIsBackedUpAndRestoredIntoANewServerWithItsRow.
   - id: deleting-the-vault-leaves-restored-clusters-standing
     says: >
       Deleting a vault removes its ScheduledBackups — and, through their owner references, the Backups
@@ -105,6 +132,17 @@ assertions:
       timestamp) is older than policy.retentionDays, keeps the younger ones and the ones still running,
       and never touches another vault's points.
       RecoveryVaultReconcilerTests.RecoveryPointsOlderThanTheRetentionArePrunedAndYoungerOnesKept.
+  - id: a-converged-vault-is-passed-over-hourly
+    says: >
+      The type declares PassEvery(1h), so a converged vault holds a `periodic-pass` reminder on its
+      resource grain — armed when a write converges, jittered into the second half of the period by
+      the vault's GUID, removed when a delete begins — and each tick starts an OperationKind.Refresh
+      that runs the ordinary ReconcileAsync, which is what enforces retention with nobody writing to
+      the vault. A vault that converged before the pass existed, or whose reminder row was lost, is
+      armed by PeriodicPassBackfill at silo start, and a write or delete that begins while a pass runs
+      stops that pass before it applies anything (#30's review). docs/plan/08 § The manager-started
+      pass; ManagerStartedPassTests (the mechanism) and the reminder row
+      RecoveryVaultAgainstCloudNativePg reads out of the real Redis table.
 
 # Meters the type must emit — docs/plan/15 § Metering for the unit.
 #
@@ -140,28 +178,29 @@ owed:
   - id: the-store-is-the-servers
     says: >
       A ScheduledBackup names a cluster, a cron and a method and nothing about where the bytes go; the
-      store is the server's spec.backup.barmanObjectStore, which charts/managed/postgres renders with
-      `destinationPath: ""` and no credentials by default — nothing fills the empty destination in,
-      and CloudNativePG's real definition refuses the result at admission, empty or filled in
-      ("missing credentials"), so NO SERVER WITH BACKUPS ON EXISTS ON A REAL CLUSTER TODAY
-      (charts/managed/postgres/conformance.yaml § owed, `the-default-bucket-is-not-filled-in`, recorded
-      by this type's operator lane). The only server the operator admits has backups off, and the
-      vault refuses that one at its pointer — which is what the operator lane asserts, and the honest
-      answer to "what can a vault protect on this platform": nothing, until the server's store is
-      rendered with credentials the operator accepts. Given such a server, every point the vault
-      schedules is barman's to complete or fail, and listRecoveryPoints says which per point rather
-      than hiding it. The vault owns the schedule, the recovery-point record and the recover;
-      the bytes are the server's, by the seam's design — the view cannot write a destination into a
-      resource it reads — and the fix is on the server: a real bucket, credentials, and a
-      destinationPath that names them.
+      store is the server's spec.backup.barmanObjectStore. ✅ SINCE #30 THAT STORE IS REAL: the server's
+      reconciler gives it a bucket of its own GUID on the platform's SeaweedFS and a key scoped to
+      that bucket, issued by the store's IAM API, minted into the vault at
+      platform/{type}/{tenant}/{id}/objectstore and rendered into {name}-backup-s3 — and
+      RecoveryVaultAgainstCloudNativePg completes a point there and restores from it. WHAT REMAINS
+      OWED IS THE SECOND COPY: every point of every server lives in one bucket on one store, in one
+      failure domain, so a vault is a retention policy and a restore primitive and not yet an
+      off-site backup. docs/plan/15 § Backup as a service does not promise geo-redundancy for M3, and
+      the move is a replica of the bucket to a second store — SeaweedFS's `filer.remote.sync` or
+      bucket replication — scheduled by the same manager-started pass, with the restore reading
+      whichever copy answers.
   - id: retention-is-enforced-on-passes
     says: >
-      policy.retentionDays prunes Backups older than the window on every reconcile pass — a PUT, a
-      recover, the drift scan — and a converged vault has no pass of its own: docs/plan/08 § What the
-      resource manager deliberately does not do records the manager-started pass as owed, so a
-      recovery point can outlive its retention by however long the vault goes untouched. The BYTES are
-      bounded regardless, by the server's own backup.retentionDays, which the vault refuses to exceed.
-      Closing it is the manager-started pass, or a reminder of the vault's own once clause 2 allows one.
+      policy.retentionDays prunes Backups older than the window on every reconcile pass. ✅ #30 GAVE A
+      CONVERGED VAULT A PASS OF ITS OWN — `a-converged-vault-is-passed-over-hourly` above — so a point
+      outlives its window by at most RecoveryVaults.PassPeriod rather than by however long the vault
+      goes untouched. WHAT REMAINS: a periodic pass that FAILS — the protected server's cluster
+      unreachable, the vault's read on an item revoked — records its reason on its own
+      OperationKind.Refresh operation and nowhere a tenant looks, because the pass deliberately leaves
+      the resource Succeeded (docs/plan/08 § The manager-started pass). Until the resource grows a
+      "last pass" status a portal blade renders, a vault whose retention has silently stopped reads as
+      healthy. The BYTES are bounded regardless, by the server's own backup.retentionDays, which barman
+      enforces in the bucket and the vault refuses to exceed.
   - id: items-in-other-resource-groups
     says: >
       A protected item must be in the vault's own resource group. Azure requires the vault's region;
@@ -174,31 +213,51 @@ owed:
   - id: recover-is-gated-by-the-vault-alone
     says: >
       `recover` is authorised the way every action is: ResourceManagerService.ActionAsync asks the
-      authorizer for the action's permission — `write` — on the VAULT, and nothing asks for anything on
-      the protected server whose bytes come back. The vault itself needs only `read` on the server to
-      schedule it. So a caller with `write` on a vault, and no permission at all on the server it
-      protects, can materialise the server's data as a new Cluster in the group's namespace, with a
-      fresh operator-generated superuser secret, and connect to it — a key export by another name.
-      The handler cannot check today: ActionContext carries no caller and no authorizer, by the same
-      design that keeps a view off it (`items-in-other-resource-groups`), and rule 8 keeps the
-      provider from reaching the manager's. Closing it is one of two things, and the first is the
-      honest one: `a-restore-is-not-yet-a-resource` — once a restore is a PUT of a
-      CyberCloud.DBforPostgreSQL/servers resource with a `restoreFrom`, the manager gates it with
-      `write` on THAT type in the caller's own resource group and this handler's apply goes away.
-      Until then, the shorter closing move is a `relatedTo` on the action's declaration — the
-      pointer(s) to the resources the action reads — and one more authorizer call in ActionAsync per
-      pointer, which is the manager's to make and not this provider's. Recorded by the review of the
-      first cut; nothing in the seven promises above asserts it.
+      authorizer for the action's permission — `write` — on the VAULT. ✅ #30 NARROWED IT: the server
+      the restore creates is now the caller's own PUT through ActionContext.Creator, so the manager
+      also asks for CyberCloud.DBforPostgreSQL/servers' `write` in the group, as that caller
+      (ActionCreatesAsTheCallerTests.ACallerWhoMayActButMayNotWriteIsRefusedTheCreate, and
+      TheCreateIsAuthorisedForTheCreatedTypeAndNotForTheActionsOwn for the type the permission is
+      asked on). ⚠ AND RECOVER IS NOW THE ONLY WAY IN, which it was not: #30's review found
+      /properties/restore/recoveryPoint writable by any caller's own PUT of a server, so `write` on
+      servers alone restored any Backup in the group's namespace — no vault permission, no ownership
+      check, no phase check. The server type declares it SetOnlyByAnAction, and the write path refuses
+      a caller's own PUT or PATCH that sets it to anything but the value the server already holds
+      (ActionCreatesAsTheCallerTests.APropertyOnlyAnActionMaySetIsRefusedOnACallersOwnWrite; against
+      the real hosts, RecoveryVaultAgainstCloudNativePg). WHAT IS STILL
+      NOT ASKED is whether the caller may READ the protected server whose bytes come back: a caller
+      with `write` on the vault and `write` on servers in the group, and nothing on the one server the
+      point was taken of, can materialise its data as a new server of their own — a key export by
+      another name, narrower than before. The closing move is the manager's, not this provider's: a
+      `relatedTo` on the action's declaration — the pointer to the resource the action reads (here,
+      the point's source, which the handler resolves) — and one more authorizer call in ActionAsync
+      for `read` on it.
   - id: a-restore-is-not-yet-a-resource
     says: >
-      recover creates a CloudNativePG Cluster object — reachable from the tenant's pods, carrying the
-      vault's labels and recoveryservices.cybercloud.io/role: restore — and not a
-      CyberCloud.DBforPostgreSQL/servers resource: nothing meters it, no listKeys knows it, and the
-      drift scan attributes it to the vault, which after the vault is deleted is an object whose
-      resource-id names nothing. The vault cannot PUT a server (the seam has no member that writes,
-      by design) and that type has no property that says "bootstrap me from this recovery point".
-      Closing it is a `restoreFrom` bootstrap on a new api-version of the server, at which point
-      recover asks the tenant to PUT one and this handler's apply goes away.
+      ✅ CLOSED BY #30. recover creates a CyberCloud.DBforPostgreSQL/servers resource — metered,
+      listKeys-able, its Cluster attributed to itself by the drift scan — through the caller's write
+      path (`recover-creates-a-new-server-resource-and-never-overwrites`), using the server's new
+      /properties/restore/recoveryPoint, which 2026-08-01 gained as an optional property (an addition
+      the compatibility gate allows). WHAT REMAINS OF THE ROW is where a restore can land and what it
+      reads: (1) only into the vault's own resource group, because the Backup objects and the source's
+      {name}-backup-s3 Secret that bootstrap.recovery reads live in that group's namespace — a restore
+      into another group, or of a server whose group was deleted (its namespace reclaimed with the
+      Secret), needs the point's store coordinates carried in the body instead of a Backup name,
+      which is CloudNativePG's externalClusters form; (2) a point-in-time target — the restore is to
+      the end of a base backup, and `recoveryTarget.targetTime` on the same property is the next field;
+      (3) clusters the first cut of recover created are objects under the vault's labels and stay
+      standing through the vault's teardown (`deleting-the-vault-leaves-restored-clusters-standing`)
+      with nothing to adopt them.
+  - id: a-restore-without-its-source-guesses-the-size
+    says: >
+      When the protected server is gone — the case a restore exists for —
+      RecoveryVaults.RestoredServerBody takes the PostgreSQL major from the point's own
+      status.majorVersion (#30's review found it guessing 17, which a 16 point cannot start in; a point
+      that records none is refused), and still takes the volume size from the schema's default, 20Gi,
+      because a Backup records no data size. A database larger than that restores into a volume it
+      does not fit and the Cluster never comes up. Closing it is an optional storageSize on recover's
+      request (an addition the compatibility gate allows), or the size recorded on the vault's
+      schedule while the source is alive.
   - id: deleting-the-vault-deletes-its-recovery-points
     says: >
       backupOwnerReference self makes every Backup the schedule made a dependent of the ScheduledBackup,
@@ -225,29 +284,37 @@ owed:
       refuses a nested element), so several policies would be a `vaults/backupPolicies` child type —
       Azure's shape, and a second chart, reconciler and conformance case. Two servers in one vault
       that need two schedules are two vaults today.
-  - id: no-backup-now
+  - id: a-hand-labelled-point-shares-the-controllers-label
     says: >
-      A vault takes its first recovery point when protection begins (immediate: true) and then on the
-      schedule; there is no action that takes one on demand. CloudNativePG's Backup object is exactly
-      that action, and a `backupNow` handler that applied one under the vault's labels — labelled by
-      hand the way the controller labels, so listRecoveryPoints finds it — is the next action this
-      type grows.
+      backupNow (#30, `backup-now-is-a-point-of-the-schedule`) labels its Backup
+      cnpg.io/scheduled-backup with the schedule's name by hand, because that label is the one join
+      listRecoveryPoints, recover and retention select on. CloudNativePG's ScheduledBackup controller
+      reads the same label to find its own children, and nothing in v1.30.0's controller was found to
+      count them — but a later operator that did (a "last scheduled backup" computed from its
+      children) would take an on-demand point for a scheduled one. The robust form is a label of the
+      vault's own beside the controller's, selected on as a union; recorded rather than built because
+      nothing observed misbehaves. The controller's side of the join is asserted against the real
+      operator (`the-round-trip-restores-the-row`): its own Backup is listed and restored.
   - id: the-monthly-test-restore
     says: >
       docs/plan/15 § Backup as a service: "The platform runs an automated monthly restore of a sampled
       protected resource into a scratch resource group, verifies it, reports it on the vault's blade,
-      and deletes it." Nothing here does that; recover is the primitive it would call, and the
-      scheduled pass it needs is the same manager-started pass `retention-is-enforced-on-passes` waits
-      on.
+      and deletes it." Nothing here does that. Since #30 both primitives exist — recover creates a
+      real server resource, and the vault has an hourly manager-started pass — so what remains is the
+      policy itself: which pass of the month samples which item, a scratch group the platform may
+      create in, the verification query, the report on the vault, and the delete. The creator seam is
+      the caller's, and a periodic pass has no caller, so the scratch restore needs a platform
+      principal docs/plan/07 has so far declined — which is the decision this row is waiting on.
   - id: backup-storage-is-not-metered
     says: >
       `storage.backup.gb_month` above is the meter docs/plan/15 § Metering says this row emits —
       "After compression" — and nothing emits it: the provider declares QuotaMeter.Resources and
       nothing else, and nothing samples the server's barman store. The bytes live in the server's
       spec.backup.barmanObjectStore, which is also where charts/managed/postgres's
-      `postgres.backup.gib.hours` would be read from and is not; when the store is real
-      (`the-store-is-the-servers`) the sample is one listing of the destination per protected item
-      per hour, from the vault's side because the vault is what promised a retention over it, into
+      `postgres.backup.gib.hours` would be read from and is not. The store is real since #30
+      (`the-store-is-the-servers`), a bucket per server, so the sample is one listing of that bucket per
+      protected item per hour — the vault's hourly pass is the natural place, because the vault is what
+      promised a retention over it — into
       docs/plan/22's usage pipeline. The same gap charts/managed/feeds records as
       `storage-and-egress-are-not-metered`, one manifest over. ⚠ Until then a vault is billed as one
       resource however many gigabytes its points hold.
@@ -267,16 +334,17 @@ owed:
       The third third of #30, and NOT this type's. docs/plan/15 § The resource model puts
       customer-managed keys on the BUCKET ("customer-managed keys from the tenant's Vault are a bucket
       property (M2)"), and this vault is a backup policy, not a key store — `CyberCloud.KeyVault/vaults`
-      is the type docs/plan/24 § What has landed lists as unpublished, and the word `vault` in this
-      namespace is why the short name here is `backupvault`. STILL OWED, for the two reasons
-      charts/managed/seaweedfs/conformance.yaml § owed, `customer-managed-keys`, states: SeaweedFS
-      encrypts behind `weed volume -encryptVolumeData` and the operator's VolumeServerConfig has no
-      field for it, so platform-managed encryption is not rendered and a customer key would be a key
-      for nothing; and there is no KeyVault resource for a bucket property to reference. The seam
-      that step needed — a bucket resolving a key through `ctx.View` as `resource:{bucket}` — is the
-      one this type is the first to use, so what remains is the upstream field, then KeyVault/vaults,
-      then a new api-version of accounts/buckets. None of the three is started, and this row exists
-      so a reader of #30's three nouns finds the third accounted for beside the second.
+      is that, and the word `vault` in this namespace is why the short name here is `backupvault`.
+      ⚠ CORRECTED 2026-09-23: this row said KeyVault/vaults was unpublished, and it is published now
+      (docs/plan/18 § What landed, and what is owed). STILL OWED, and what remains is
+      charts/managed/seaweedfs/conformance.yaml § owed, `customer-managed-keys`: the engine step
+      (SeaweedFS encrypts behind `weed volume -encryptVolumeData` and the operator's VolumeServerConfig
+      has no field for it), a key-use seam — this row once said the view was that seam, and it is not:
+      `ctx.View` reads, and unwrapKey is an action — then a new api-version of accounts/buckets, then
+      revocation. The vault's own recovery points are CloudNativePG Backups in the server's object
+      store, so a recovery point is encrypted exactly when that store is. None of it is started, and
+      this row exists so a reader of #30's three nouns finds the third accounted for beside the
+      second.
   - id: grafana-dashboard
     says: >
       Piece 6's dashboard half. The vault renders no workload and the operator emits a metric per

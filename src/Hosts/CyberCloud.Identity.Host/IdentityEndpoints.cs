@@ -52,7 +52,8 @@ namespace CyberCloud.Identity.Host;
 ///         top-level navigation that carries the cookie, so any site can sign a person out with a
 ///         link: the standard RP-initiated-logout weakness, closed by a confirmation page or by
 ///         binding <c>id_token_hint</c> and <c>state</c> to the session, neither of which is built.
-///         The device flow and token exchange keep their <c>temporarily_unavailable</c> answers.
+///         Token exchange keeps its refusal; the device flow is served since #43 — the device page's
+///         API is <see cref="MapDevicePage" /> and the invitation page's <see cref="MapInvitationPage" />.
 ///     </para>
 ///     <para>
 ///         <b>What #94 closed on this surface.</b> The consent page has its endpoint
@@ -175,8 +176,10 @@ public static class IdentityEndpoints {
     ///     ⚠ A passthrough with no handler behind it is a <c>404</c>, which is what <c>/token</c>
     ///     answered for as long as nothing mapped it and the reason
     ///     https://github.com/Rikarin/CyberCloud/issues/68's gateway had no token to validate.
-    ///     <c>/device</c> and <c>/device/verify</c> are enabled and unmapped, and their validators
-    ///     refuse before the passthrough is reached; <c>/userinfo</c> is mapped since #94.
+    ///     <c>/device</c> is OpenIddict's own endpoint and needs no passthrough; <c>/device/verify</c>
+    ///     is mapped (<see cref="MapDeviceVerification" />) and redirects to the device page, and
+    ///     <c>/revoke</c> is answered by OpenIddict with <c>DegradedModeHandlers.RevokeTokenSession</c>
+    ///     doing the revoking (#43); <c>/userinfo</c> is mapped since #94.
     ///     <para>
     ///         The <c>/api</c> prefix is what
     ///         <see cref="IdentityHostAuthentication" />'s <c>OnRedirectToLogin</c> keys off to answer
@@ -218,6 +221,9 @@ public static class IdentityEndpoints {
         MapSignIn(app);
         MapSignUp(app);
         MapConsent(app);
+        MapDevicePage(app);
+        MapDeviceVerification(app);
+        MapInvitationPage(app);
         MapAuthorize(app);
         MapToken(app);
         MapUserInfo(app);
@@ -374,18 +380,7 @@ public static class IdentityEndpoints {
     ///     <c>deny</c>. <see cref="MapAuthorize" />'s remarks carry the argument.
     /// </remarks>
     static ConsentDecision? ConsentAnswer(HttpContext context, OpenIddictRequest request, IdentityHostOptions options) {
-        if (!HttpMethods.IsPost(context.Request.Method)) {
-            return null;
-        }
-
-        var origin = context.Request.Headers.Origin.ToString();
-        var own = context.Request.Scheme + "://" + context.Request.Host;
-        var page = Uri.TryCreate(options.SignInPageBaseUri, UriKind.Absolute, out var pageUri)
-            ? pageUri.GetLeftPart(UriPartial.Authority)
-            : own;
-
-        if (!string.Equals(origin, own, StringComparison.Ordinal)
-            && !string.Equals(origin, page, StringComparison.Ordinal)) {
+        if (!HttpMethods.IsPost(context.Request.Method) || !IsFromThePage(context, options)) {
             return null;
         }
 
@@ -415,6 +410,138 @@ public static class IdentityEndpoints {
                 Results.Ok(await api.DescribeAsync(returnUrl, context.User, cancellationToken))
         )
             .RequireAuthorization();
+    }
+
+    // ── The device flow — RFC 8628, #43 ────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Maps what the device page calls: the lookup of a typed code, and the person's answer.
+    /// </summary>
+    /// <param name="app">The host's route builder.</param>
+    /// <remarks>
+    ///     <para>
+    ///         Both in the <c>code-verify</c> bucket, because both take a code a caller could guess
+    ///         at — <see cref="DeviceApi" />'s remarks. The lookup is anonymous so a person can type
+    ///         the code before signing in; the answer reads the cookie and nothing else.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The answer counts only from the page's origin</b> — this host's own or
+    ///         <see cref="IdentityHostOptions.SignInPageBaseUri" />'s, the rule
+    ///         <see cref="ConsentAnswer" /> applies to the consent page's <c>POST</c>, for the same
+    ///         reason: the browser sets <c>Origin</c> on every <c>POST</c> and a page cannot forge
+    ///         it, so a cross-site request that tried to approve somebody else's device with the
+    ///         person's cookie is answered "sign in first" and changes nothing.
+    ///         <c>DeviceFlowOverHttpTests.AnAnswerFromAForeignOriginChangesNothing</c>.
+    ///     </para>
+    /// </remarks>
+    static void MapDevicePage(IEndpointRouteBuilder app) {
+        app.MapPost(
+            "/api/device/lookup",
+            async (DeviceLookupRequest? request, HttpContext context, DeviceApi api, CancellationToken cancellationToken) =>
+                Results.Ok(await api.LookupAsync(request, context.User, cancellationToken))
+        )
+            .RateLimited(IdentityRateLimits.CodeVerify);
+
+        app.MapPost(
+            "/api/device/decision",
+            async (
+                DeviceDecisionRequest? request,
+                HttpContext context,
+                DeviceApi api,
+                IOptions<IdentityHostOptions> options,
+                CancellationToken cancellationToken
+            ) => Results.Ok(
+                await api.DecideAsync(
+                    request,
+                    IsFromThePage(context, options.Value) ? context.User : null,
+                    cancellationToken
+                )
+            )
+        )
+            .RateLimited(IdentityRateLimits.CodeVerify);
+    }
+
+    /// <summary>
+    ///     Maps the end-user verification endpoint's passthrough — the <c>verification_uri</c> a
+    ///     device prints — as a redirect to the identity app's device page.
+    /// </summary>
+    /// <param name="app">The host's route builder.</param>
+    /// <remarks>
+    ///     ⚠ The <c>user_code</c> rides along only once it normalizes, and in its display form: the
+    ///     link is <c>verification_uri_complete</c>, which a device prints and a person may have
+    ///     scanned or had sent to them, so what reaches the page's query is a value this host has
+    ///     already reduced to eight letters from the alphabet — never the caller's string. Nothing is
+    ///     looked up here; <c>DegradedModeHandlers.ValidateEndUserVerificationRequest</c> says why.
+    /// </remarks>
+    static void MapDeviceVerification(IEndpointRouteBuilder app) {
+        app.MapGet(
+            IdentityHostOpenIddict.EndUserVerificationPath,
+            (HttpContext context, IOptions<IdentityHostOptions> options) => {
+                var page = options.Value.SignInPageBaseUri.TrimEnd('/') + DeviceApi.PagePath;
+                var typed = context.Request.Query[DeviceCodes.UserCodeParameter].ToString();
+
+                return Results.Redirect(
+                    DeviceCodes.NormalizeUserCode(typed) is { } userCode
+                        ? page + "?" + DeviceCodes.UserCodeParameter + "=" + DeviceCodes.Display(userCode)
+                        : page
+                );
+            }
+        );
+    }
+
+    /// <summary>
+    ///     Whether a <c>POST</c> came from this host's own origin or the pages' — the rule the consent
+    ///     answer and the device answer share.
+    /// </summary>
+    static bool IsFromThePage(HttpContext context, IdentityHostOptions options) {
+        var origin = context.Request.Headers.Origin.ToString();
+        var own = context.Request.Scheme + "://" + context.Request.Host;
+        var page = Uri.TryCreate(options.SignInPageBaseUri, UriKind.Absolute, out var pageUri)
+            ? pageUri.GetLeftPart(UriPartial.Authority)
+            : own;
+
+        return string.Equals(origin, own, StringComparison.Ordinal)
+            || string.Equals(origin, page, StringComparison.Ordinal);
+    }
+
+    // ── The invitation page — #43, step 7 ──────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     Maps what the invitation page calls: describe the link, and accept it.
+    /// </summary>
+    /// <param name="app">The host's route builder.</param>
+    /// <remarks>
+    ///     Both in the <c>code-verify</c> bucket: the link's secret is a code a caller could guess
+    ///     at, and the rule is every route that takes one. Anonymous, because the person accepting
+    ///     has no session here yet — the accept issues it, through the cookie handler like every
+    ///     other sign-in (<see cref="IssueAsync" />'s remarks).
+    /// </remarks>
+    static void MapInvitationPage(IEndpointRouteBuilder app) {
+        app.MapPost(
+            "/api/invitations/describe",
+            async (InvitationLookupRequest? request, InvitationApi api, CancellationToken cancellationToken) =>
+                Results.Ok(await api.DescribeAsync(request, cancellationToken))
+        )
+            .RateLimited(IdentityRateLimits.CodeVerify);
+
+        app.MapPost(
+            "/api/invitations/accept",
+            async (
+                InvitationAcceptRequest? request,
+                HttpContext context,
+                InvitationApi api,
+                CancellationToken cancellationToken
+            ) => {
+                var result = await api.AcceptAsync(request, Describe(context), cancellationToken);
+
+                if (result.Principal is { } principal) {
+                    await context.SignInAsync(IdentityHostAuthentication.SchemeName, principal);
+                }
+
+                return Results.Ok(result.Body);
+            }
+        )
+            .RateLimited(IdentityRateLimits.CodeVerify);
     }
 
     // ── /token ─────────────────────────────────────────────────────────────────────────────────
@@ -626,7 +753,9 @@ public static class IdentityEndpoints {
 
                 var minted = request.IsRefreshTokenGrantType()
                     ? await api.MintForRefreshAsync(presented, client, cancellationToken)
-                    : await api.MintForCodeAsync(presented, client, Describe(context), cancellationToken);
+                    : request.IsDeviceCodeGrantType()
+                        ? await api.MintForDeviceCodeAsync(request.DeviceCode, client, Describe(context), cancellationToken)
+                        : await api.MintForCodeAsync(presented, client, Describe(context), cancellationToken);
 
                 if (minted.TryGetError(out var refused)) {
                     return OpenIddictError(OpenIddictConstants.Errors.InvalidGrant, refused.Message);

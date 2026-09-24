@@ -257,7 +257,12 @@ static class Program {
             foreach (var action in type.Actions) {
                 actions.Add(
                     new JsonObject {
-                        ["handler"] = action.HandlerType?.FullName,
+                        // ⚠ An entry-point action (ActionRegistration.EntryPoint) is reported under its
+                        // entry point's name: it has a server, and it is not a handler, and the gate
+                        // reads "no handler" as "answers 500" — true of the dispatcher, false of the
+                        // route the gateway sends it down.
+                        ["handler"] = action.HandlerType?.FullName
+                            ?? (action.EntryPoint.Length > 0 ? action.EntryPoint : null),
                         ["longRunning"] = action.LongRunning,
                         ["name"] = action.Name,
                         ["secret"] = action.Secret,

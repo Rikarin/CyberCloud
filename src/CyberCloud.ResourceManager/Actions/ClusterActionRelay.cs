@@ -21,14 +21,21 @@ public interface IClusterActionRelay {
     /// <param name="action">The declared action's name.</param>
     /// <param name="input">The resource as stored.</param>
     /// <param name="body">The validated <c>POST</c> body.</param>
-    /// <param name="caller">Who asked, or <see langword="null" />.</param>
+    /// <param name="caller">Who asked. Empty when the manager had nobody to hand over.</param>
+    /// <param name="parent">The resource's parent with its GUID resolved, or <see langword="null" />.</param>
+    /// <param name="createsAsCaller">
+    ///     Whether the manager handed the action a creator bound to <paramref name="caller" />, which the
+    ///     far side rebuilds — see <see cref="IClusterActionGrain" />.
+    /// </param>
     /// <param name="cancellationToken">Stops the call before it's sent; a sent call runs to its own budget.</param>
     Task<Result<string>> InvokeAsync(
         ResourceId id,
         string action,
         ReconcileInput input,
         JsonElement body,
-        CallerContext? caller,
+        CallerContext caller,
+        ResourceId? parent,
+        bool createsAsCaller,
         CancellationToken cancellationToken = default
     );
 }
@@ -42,7 +49,9 @@ public sealed class GrainClusterActionRelay(IGrainFactory grains) : IClusterActi
         string action,
         ReconcileInput input,
         JsonElement body,
-        CallerContext? caller,
+        CallerContext caller,
+        ResourceId? parent,
+        bool createsAsCaller,
         CancellationToken cancellationToken = default
     ) {
         cancellationToken.ThrowIfCancellationRequested();
@@ -52,7 +61,15 @@ public sealed class GrainClusterActionRelay(IGrainFactory grains) : IClusterActi
         return grains
             .ForTenant(id.TenantId.ToString("D", CultureInfo.InvariantCulture))
             .GetGrain<IClusterActionGrain>(ClusterActionKeys.Worker)
-            .InvokeAsync(id, action, input, body.ValueKind == JsonValueKind.Undefined ? "{}" : body.GetRawText(), caller);
+            .InvokeAsync(
+                id,
+                action,
+                input,
+                body.ValueKind == JsonValueKind.Undefined ? "{}" : body.GetRawText(),
+                caller,
+                parent,
+                createsAsCaller
+            );
     }
 }
 
@@ -74,8 +91,13 @@ public sealed class GrainClusterActionRelay(IGrainFactory grains) : IClusterActi
 /// </remarks>
 /// <param name="registry">The silo's provider registry — the same providers the gateway routed with.</param>
 /// <param name="actions">The silo's dispatcher, holding the silo's cluster connections and handlers.</param>
+/// <param name="manager">
+///     The silo's resource manager, whose write path a relayed action's creator writes through. A
+///     manager that isn't <see cref="ResourceManagerService" /> (a test double) leaves the handler the
+///     refusing creator.
+/// </param>
 [StatelessWorker]
-public sealed class ClusterActionGrain(IProviderRegistry registry, ActionDispatcher actions)
+public sealed class ClusterActionGrain(IProviderRegistry registry, ActionDispatcher actions, IResourceManager manager)
     : Grain, IClusterActionGrain {
     Guid tenantId;
 
@@ -103,9 +125,12 @@ public sealed class ClusterActionGrain(IProviderRegistry registry, ActionDispatc
         string action,
         ReconcileInput input,
         string body,
-        CallerContext? caller
+        CallerContext caller,
+        ResourceId? parent,
+        bool createsAsCaller
     ) {
         ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(caller);
 
         // ⚠ The connection grain trusts this activation's tenant, so a resource from another tenant run
         // here would reach that tenant's cluster as this one. The caller's own tenant isn't compared:
@@ -129,8 +154,16 @@ public sealed class ClusterActionGrain(IProviderRegistry registry, ActionDispatc
             );
         }
 
+        // ⚠ Rebuilt here for the caller the gateway's manager bound it to, never for anybody else. Its
+        // writes go through this silo's manager, so every step of the write path is checked against the
+        // same person the gateway's would have been. CallerResourceCreator's remarks say why no
+        // container may hand one out.
+        var creator = createsAsCaller && manager is ResourceManagerService here
+            ? new CallerResourceCreator(here, id, caller)
+            : null;
+
         using var parsed = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
 
-        return await actions.InvokeHereAsync(id, registration, declared, input, parsed.RootElement, caller);
+        return await actions.InvokeHereAsync(id, registration, declared, input, parsed.RootElement, creator, caller, parent);
     }
 }

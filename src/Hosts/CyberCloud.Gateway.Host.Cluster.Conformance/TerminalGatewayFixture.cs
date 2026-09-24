@@ -1,3 +1,4 @@
+using CyberCloud.Billing.Contracts;
 using CyberCloud.Cluster.Conformance.Infrastructure;
 using CyberCloud.Conformance;
 using CyberCloud.Core.Time;
@@ -141,6 +142,12 @@ public sealed class TerminalGatewayFixture : ClusterConformanceFixture<TerminalG
                 Substitute.For<IScopeManager>(),
                 Substitute.For<IRoleAssignmentManager>(),
                 Substitute.For<IResourceGraphQuery>(),
+                Substitute.For<IDeploymentManager>(),
+                Substitute.For<IInvitationManager>(),
+                Substitute.For<IIdentityAdministration>(),
+                Substitute.For<ICostQuery>(),
+                Substitute.For<IInvoiceReader>(),
+                Substitute.For<IPolicyManager>(),
                 new TenantScopedOperationReader(manager),
                 tickets,
                 options

@@ -143,6 +143,9 @@ public sealed class AlertTestCluster : IAsyncLifetime {
     /// <summary>The sending module's control plane, client-side — what a service is configured through.</summary>
     public ICommunicationControlPlane Communication { get; private set; } = null!;
 
+    /// <summary>The client's grain factory, for the tests that reach a grain without a seam in between.</summary>
+    public IGrainFactory Grains => cluster.GrainFactory;
+
     /// <inheritdoc />
     public async ValueTask InitializeAsync() {
         var builder = new TestClusterBuilder(1);

@@ -305,3 +305,41 @@ describe('treeOf — groups nest by pointer, never by section name', () => {
     expect(Array.isArray(shared)).toBe(true);
   });
 });
+
+describe('toBody — a list of numbers goes back as numbers (#41)', () => {
+  const budget = resourceForms.find(f => f.resourceType === 'CyberCloud.Billing/budgets');
+  if (budget === undefined) throw new Error('the budget form is the one with a list of numbers');
+
+  const thresholds = ['properties', 'thresholds', 'actual'];
+
+  it('holds the chips as text and sends the thresholds as the numbers the schema asks for', () => {
+    const group = buildForm(budget, 'edit', {
+      location: 'eu-central',
+      properties: { amount: 500, thresholds: { actual: [50, 100], forecast: [100] } }
+    });
+
+    expect(group.get(thresholds)?.value).toEqual(['50', '100']);
+    expect((toBody(budget, group)['properties'] as Record<string, unknown>)['thresholds']).toEqual({
+      actual: [50, 100],
+      forecast: [100]
+    });
+  });
+
+  it('refuses a chip that is not a number in the element’s bounds, and says the bounds', () => {
+    const group = buildForm(budget, 'create');
+    const control = group.get(thresholds);
+    const field = budget.fields.find(f => f.jsonPointer === '/properties/thresholds/actual');
+
+    control?.setValue(['50', 'lots']);
+    expect(control?.errors).toHaveProperty('itemNumber');
+    expect(field === undefined ? null : messageFor(field, control?.errors ?? null)).toBe(
+      'Each value in Actual must be a number from 1 to 1000.'
+    );
+
+    control?.setValue(['1001']);
+    expect(control?.errors).toHaveProperty('itemNumber');
+
+    control?.setValue(['80', '100']);
+    expect(control?.errors).toBeNull();
+  });
+});

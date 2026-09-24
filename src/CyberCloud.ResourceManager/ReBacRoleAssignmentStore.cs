@@ -29,7 +29,7 @@ namespace CyberCloud.ResourceManager;
 ///         tuple written straight into the forward index is one the reverse index never learns
 ///         about and does not bump the tenant's relation version, so no consistency token covers it
 ///         and no check cache is invalidated — a grant nobody could see until a silo restarted.
-///         <see cref="IsGrantedAsync" /> does read the forward index directly, and that is the
+///         <see cref="FindAsync" /> does read the forward index directly, and that is the
 ///         permitted direction: it is the authority, and it is the half <c>Check</c> reads.
 ///     </para>
 ///     <para>
@@ -56,13 +56,19 @@ public sealed class ReBacRoleAssignmentStore(IGrainFactory grains, ILogger<ReBac
     public const string GroupUserset = Relations.Member;
 
     /// <inheritdoc />
-    public async Task<Result> GrantAsync(RoleAssignmentId assignment, CancellationToken cancellationToken = default) {
+    public async Task<Result> GrantAsync(
+        RoleAssignmentId assignment,
+        DateTimeOffset? expiresOn,
+        CancellationToken cancellationToken = default
+    ) {
         var built = TupleOf(assignment);
         if (built.TryGetError(out var invalid)) {
             return Result.Failure(invalid);
         }
 
-        var written = await Store(assignment).WriteAsync(built.GetValueOrThrow());
+        // The expiry rides on the tuple and nowhere else — no record beside it, for the reason the
+        // name is the tuple: docs/plan/07 § Time-bounded relations.
+        var written = await Store(assignment).WriteAsync(built.GetValueOrThrow() with { ExpiresOn = expiresOn });
 
         if (written.TryGetError(out var failure)) {
             logger.LogError(
@@ -100,13 +106,13 @@ public sealed class ReBacRoleAssignmentStore(IGrainFactory grains, ILogger<ReBac
     }
 
     /// <inheritdoc />
-    public async Task<Result<bool>> IsGrantedAsync(
+    public async Task<Result<RoleAssignmentGrant>> FindAsync(
         RoleAssignmentId assignment,
         CancellationToken cancellationToken = default
     ) {
         var built = TupleOf(assignment);
         if (built.TryGetError(out var invalid)) {
-            return Result<bool>.Failure(invalid);
+            return Result<RoleAssignmentGrant>.Failure(invalid);
         }
 
         var tuple = built.GetValueOrThrow();
@@ -122,10 +128,18 @@ public sealed class ReBacRoleAssignmentStore(IGrainFactory grains, ILogger<ReBac
             .ReadDurableAsync();
 
         if (snapshot.TryGetError(out var failure)) {
-            return Result<bool>.Failure(failure);
+            return Result<RoleAssignmentGrant>.Failure(failure);
         }
 
-        return Result<bool>.Success(snapshot.GetValueOrThrow().Subjects(tuple.Relation).Contains(tuple.Subject));
+        // The grain has already dropped a tuple whose expiry passed, so "absent" here includes
+        // "expired and not yet swept" — the answer a check gives it too.
+        var relations = snapshot.GetValueOrThrow();
+
+        return Result<RoleAssignmentGrant>.Success(
+            relations.Subjects(tuple.Relation).Contains(tuple.Subject)
+                ? new(true, relations.ExpiryOf(tuple.Relation, tuple.Subject))
+                : RoleAssignmentGrant.Absent
+        );
     }
 
     /// <inheritdoc />
@@ -193,7 +207,8 @@ public sealed class ReBacRoleAssignmentStore(IGrainFactory grains, ILogger<ReBac
                     PrincipalType = principal.Type,
                     PrincipalId = principal.Id,
                     Created = false,
-                    Inherited = assignment.Inherited
+                    Inherited = assignment.Inherited,
+                    ExpiresOn = assignment.ExpiresOn
                 }
             );
         }

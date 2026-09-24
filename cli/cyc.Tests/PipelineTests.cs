@@ -153,6 +153,85 @@ public sealed class PipelineTests {
         root.GetProperty("tags").GetProperty("owner").GetString().ShouldBe("platform");
     }
 
+    /// <summary>
+    ///     ⚠ <b>Policy's verbs, from the generated tree — the review of issue #46.</b> A rule is a tree
+    ///     no flag type flattens, so <c>--policy-rule</c> is a <c>json</c> flag, written into the body as
+    ///     JSON rather than as a string of it — compact, or spread over lines as <c>"$(cat rule.json)"</c>
+    ///     hands it over.
+    /// </summary>
+    [Fact]
+    public async Task APolicyRuleIsSentAsTheJsonItHolds() {
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.Created, "{}"));
+        using var host = TestHost.Create(transport);
+
+        var values = new[] {
+            """{"if":{"field":"/tags/env","exists":false},"then":{"effect":"deny"}}""",
+            """
+            {
+              "if": { "field": "/tags/env", "exists": false },
+              "then": { "effect": "deny" }
+            }
+            """
+        };
+
+        foreach (var value in values) {
+            var code = await host.RunAsync(
+                "policy",
+                "subscription-definitions",
+                "create",
+                "--name",
+                "needs-env",
+                "--subscription",
+                "s",
+                "--tenant",
+                "t",
+                "--policy-rule",
+                value,
+                "--output",
+                "none"
+            );
+
+            code.ShouldBe((int)ExitCode.Ok, host.Stderr);
+        }
+
+        foreach (var request in transport.Requests) {
+            request.Method.ShouldBe(HttpMethod.Put);
+            request.Uri.AbsolutePath.ShouldBe("/tenants/t/subscriptions/s/providers/CyberCloud.Policy/policyDefinitions/needs-env");
+
+            using var body = JsonDocument.Parse(request.Body);
+            var sent = body.RootElement.GetProperty("properties").GetProperty("policyRule");
+
+            sent.ValueKind.ShouldBe(JsonValueKind.Object, "the rule is JSON on the wire, not a string of it");
+            sent.GetProperty("then").GetProperty("effect").GetString().ShouldBe("deny");
+        }
+
+        transport.Requests.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task APolicyRuleThatIsNotJsonIsAUsageErrorAndNothingIsSent() {
+        var transport = new ScriptedTransport(static (_, _) => Responses.Json(HttpStatusCode.Created, "{}"));
+        using var host = TestHost.Create(transport);
+
+        var code = await host.RunAsync(
+            "policy",
+            "management-group-definitions",
+            "create",
+            "--management-group",
+            "platform",
+            "--name",
+            "broken",
+            "--tenant",
+            "t",
+            "--policy-rule",
+            "{oops"
+        );
+
+        code.ShouldBe((int)ExitCode.Usage);
+        host.Stderr.ShouldContain("--policy-rule");
+        transport.Requests.ShouldBeEmpty();
+    }
+
     [Fact]
     public async Task AnErrorTargetIsReportedAsTheFlagThatCarriedIt() {
         using var host = TestHost.Create(

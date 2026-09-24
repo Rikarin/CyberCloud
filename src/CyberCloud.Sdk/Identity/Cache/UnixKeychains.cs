@@ -85,13 +85,14 @@ sealed class MacOsKeychainTokenCache : ITokenCache {
 /// </summary>
 /// <remarks>
 ///     ⚠ <b>Absent rather than fatal when <c>secret-tool</c> is not installed.</b> A container image
-///     has no secret service and never will, and docs/plan/21 § `cyc` forbids the obvious fallback:
-///     <i>"Never a plaintext file — that is how CI credentials leak into container images."</i> So the
-///     cache reports itself unavailable, <see cref="TokenCache.CreatePersistent" /> substitutes
-///     <see cref="TokenCache.None" />, and the credential re-authenticates every process. That is the
-///     correct behaviour in a container: the workload there should be using
-///     <see cref="WorkloadIdentityCredential" />, which caches nothing because it needs to cache
-///     nothing.
+///     or a server over SSH has no secret service, so the cache reports itself unavailable and
+///     <see cref="TokenCache.CreatePersistent" /> falls back to <see cref="FileTokenCache" />, an
+///     owner-only file (docs/plan/21 § Decisions, the token-cache row). ⚠ It fell back to
+///     <see cref="TokenCache.None" /> until #43, under the rule "never a plaintext file", and that
+///     left <c>cyc login --device-code</c> — the sign-in built for this box — persisting nothing. A
+///     workload in a container should still be using <see cref="WorkloadIdentityCredential" />,
+///     which caches nothing because it needs to cache nothing, and CI signs in with a service
+///     principal, whose cache is <see cref="TokenCache.None" />.
 /// </remarks>
 [SupportedOSPlatform("linux")]
 sealed class LibSecretTokenCache : ITokenCache {

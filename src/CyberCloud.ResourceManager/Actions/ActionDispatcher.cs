@@ -84,10 +84,19 @@ public sealed class ActionDispatcher(
     /// <param name="action">The action, which names the handler and the response shape.</param>
     /// <param name="input">The resource as stored — its desired body, api-version and cluster.</param>
     /// <param name="body">The validated <c>POST</c> body.</param>
+    /// <param name="creator">
+    ///     The caller-bound creator a handler may use, or <see langword="null" /> for the refusing
+    ///     default — see <see cref="IResourceCreator" />. ⚠ An action that's relayed doesn't carry
+    ///     this object, which is bound to this process's manager; the silo builds its own for the same
+    ///     caller — see <see cref="IClusterActionGrain" />.
+    /// </param>
     /// <param name="caller">
-    ///     Who asked, handed to the handler as <see cref="ActionContext.Caller" /> — a fact to bind a
-    ///     session to, never a second authorization. <see langword="null" /> when the caller of this
-    ///     dispatcher has none to give.
+    ///     Who invoked it, handed to the handler as <see cref="ActionContext.Caller" />. Empty when the
+    ///     caller of this dispatcher has nobody to give.
+    /// </param>
+    /// <param name="parent">
+    ///     The resource's parent with its GUID resolved, or <see langword="null" /> — see
+    ///     <see cref="ActionContext.Parent" />.
     /// </param>
     /// <param name="cancellationToken">Cancels the invocation.</param>
     /// <returns>The response JSON, or a failure.</returns>
@@ -97,10 +106,12 @@ public sealed class ActionDispatcher(
         ActionRegistration action,
         ReconcileInput input,
         JsonElement body,
+        IResourceCreator? creator = null,
         CallerContext? caller = null,
+        ResourceId? parent = null,
         CancellationToken cancellationToken = default
     ) =>
-        InvokeCoreAsync(id, registration, action, input, body, caller, relay, cancellationToken);
+        InvokeCoreAsync(id, registration, action, input, body, creator, caller, parent, relay, cancellationToken);
 
     /// <summary>
     ///     Runs one action in this process and never relays it, which is what
@@ -111,7 +122,12 @@ public sealed class ActionDispatcher(
     /// <param name="action">The action, which names the handler and the response shape.</param>
     /// <param name="input">The resource as stored.</param>
     /// <param name="body">The validated <c>POST</c> body.</param>
+    /// <param name="creator">
+    ///     The creator the silo built for the relayed action's caller, or <see langword="null" /> for
+    ///     the refusing default.
+    /// </param>
     /// <param name="caller">Who asked, handed to the handler as <see cref="ActionContext.Caller" />.</param>
+    /// <param name="parent">The resource's parent with its GUID resolved, or <see langword="null" />.</param>
     /// <param name="cancellationToken">Cancels the invocation.</param>
     /// <returns>The response JSON, or a failure.</returns>
     public Task<Result<string>> InvokeHereAsync(
@@ -120,10 +136,12 @@ public sealed class ActionDispatcher(
         ActionRegistration action,
         ReconcileInput input,
         JsonElement body,
+        IResourceCreator? creator = null,
         CallerContext? caller = null,
+        ResourceId? parent = null,
         CancellationToken cancellationToken = default
     ) =>
-        InvokeCoreAsync(id, registration, action, input, body, caller, null, cancellationToken);
+        InvokeCoreAsync(id, registration, action, input, body, creator, caller, parent, null, cancellationToken);
 
     async Task<Result<string>> InvokeCoreAsync(
         ResourceId id,
@@ -131,12 +149,27 @@ public sealed class ActionDispatcher(
         ActionRegistration action,
         ReconcileInput input,
         JsonElement body,
+        IResourceCreator? creator,
         CallerContext? caller,
+        ResourceId? parent,
         IClusterActionRelay? elsewhere,
         CancellationToken cancellationToken
     ) {
         ArgumentNullException.ThrowIfNull(registration);
         ArgumentNullException.ThrowIfNull(input);
+
+        if (action.EntryPoint.Length > 0) {
+            // ⚠ Not a gap, and said so rather than reported as one. The gateway routes this action
+            // to its entry point, which runs it as the caller; reaching the dispatcher means
+            // something called IResourceManager.ActionAsync directly, and a handler-less 500 naming
+            // "no handler" would send that caller looking for code that is deliberately not there.
+            return Result<string>.Failure(
+                ErrorCode.InternalError,
+                $"'{id.Type}/{action.Name}' is served by {action.EntryPoint}, which runs it as the "
+                + "caller, and not by an action handler. Call the entry point; the gateway routes "
+                + "the action there."
+            );
+        }
 
         if (action.HandlerType is null) {
             // ⚠ InternalError, a 500, and not a 404 or a 400. The caller did nothing wrong: they
@@ -187,7 +220,20 @@ public sealed class ActionDispatcher(
             // ⚠ The gateway's case. The handler was still resolved and checked above, so a gateway
             // composed without it fails by name here; it then runs on a silo, where the connection is,
             // and the silo's dispatcher checks the response against the declared shape.
-            return await elsewhere.InvokeAsync(id, action.Name, input, body, caller, cancellationToken);
+            // ⚠ THE CREATOR DOESN'T CROSS, AND WHETHER THERE WAS ONE DOES. It's an object bound to this
+            // process's manager; the silo builds its own for the same caller, the same resource and the
+            // same write path. Dropping it instead would hand a relayed `recover` on a RequiresCluster
+            // vault the refusing default, and the restore would fail on the silo by name.
+            return await elsewhere.InvokeAsync(
+                id,
+                action.Name,
+                input,
+                body,
+                caller ?? new(),
+                parent,
+                creator is not null and not RefusingResourceCreator,
+                cancellationToken
+            );
         }
 
         if (registration.RequiresCluster && connection is null) {
@@ -215,7 +261,9 @@ public sealed class ActionDispatcher(
                 // dispatcher that serves no connected cluster.
                 Agents = agents ?? new UnavailableAgentTunnels(),
                 Terminals = terminals ?? new UnavailableTerminalSessions(),
-                Caller = caller
+                Creator = creator ?? new RefusingResourceCreator(),
+                Caller = caller ?? new(),
+                Parent = parent
             };
 
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

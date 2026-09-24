@@ -2,6 +2,7 @@ using CyberCloud.Authorization.Contracts;
 using CyberCloud.Core;
 using CyberCloud.Core.Contracts;
 using CyberCloud.Core.Resources;
+using CyberCloud.Core.Time;
 
 namespace CyberCloud.Authorization.Grains;
 
@@ -17,7 +18,8 @@ namespace CyberCloud.Authorization.Grains;
 /// </remarks>
 public sealed class SubjectRelationsGrain(
     [PersistentState("subjects", StorageTiers.Durable)]
-    IPersistentState<SubjectRelationsState> state
+    IPersistentState<SubjectRelationsState> state,
+    IClock clock
 )
     : Grain, ISubjectRelationsGrain {
     /// <inheritdoc />
@@ -37,11 +39,20 @@ public sealed class SubjectRelationsGrain(
             return Result<bool>.Failure(error);
         }
 
-        if (state.State.Entries.Contains(entry)) {
-            return Result<bool>.Success(false);
+        // Matched by object, relation and subject relation, never by record equality: a rewrite
+        // with a new expiry is the same tuple and replaces the entry rather than adding a second.
+        var index = state.State.Entries.FindIndex(x => x.IsSameEntryAs(entry));
+
+        if (index >= 0) {
+            if (state.State.Entries[index].ExpiresOn == entry.ExpiresOn) {
+                return Result<bool>.Success(false);
+            }
+
+            state.State.Entries[index] = entry;
+        } else {
+            state.State.Entries.Add(entry);
         }
 
-        state.State.Entries.Add(entry);
         await state.WriteStateAsync();
         return Result<bool>.Success(true);
     }
@@ -53,7 +64,7 @@ public sealed class SubjectRelationsGrain(
             return Result<bool>.Failure(error);
         }
 
-        if (!state.State.Entries.Remove(entry)) {
+        if (state.State.Entries.RemoveAll(x => x.IsSameEntryAs(entry)) == 0) {
             return Result<bool>.Success(false);
         }
 
@@ -62,17 +73,21 @@ public sealed class SubjectRelationsGrain(
     }
 
     /// <inheritdoc />
-    public Task<Result<IReadOnlyList<SubjectIndexEntry>>> ListAsync() =>
-        Task.FromResult(
+    public Task<Result<IReadOnlyList<SubjectIndexEntry>>> ListAsync() {
+        var now = clock.UtcNow;
+
+        return Task.FromResult(
             Result<IReadOnlyList<SubjectIndexEntry>>.Success(
                 [
                     .. state.State.Entries
+                        .Where(x => TupleExpiry.IsLive(x.ExpiresOn, now))
                         .OrderBy(static x => x.Object.ToString(), StringComparer.Ordinal)
                         .ThenBy(static x => x.Relation, StringComparer.Ordinal)
                         .ThenBy(static x => x.SubjectRelation, StringComparer.Ordinal)
                 ]
             )
         );
+    }
 
     /// <inheritdoc />
     public Task DeactivateAsync() {

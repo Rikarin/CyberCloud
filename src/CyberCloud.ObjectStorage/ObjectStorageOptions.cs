@@ -63,4 +63,30 @@ public sealed class ObjectStorageOptions {
     /// <summary>Whether the section names an endpoint, a bucket and a credential at all.</summary>
     public bool IsConfigured =>
         Endpoint.Length > 0 && Bucket.Length > 0 && AccessKeyId.Length > 0 && SecretAccessKey.Length > 0;
+
+    /// <summary>
+    ///     The store's IAM API origin — SeaweedFS's <c>weed iam</c>, <c>:8111</c> — where a workload's
+    ///     keys are issued. Empty means this host issues none.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Reachable from the platform and from nothing else.</b> SeaweedFS 3.80's IAM API answered a
+    ///     request signed with a key it had never issued when the spike behind #30's backup work asked
+    ///     it to create a user (the S3 API refused the same key), so the network is the boundary: the
+    ///     endpoint must not be routable from a tenant's pods. Recorded as
+    ///     charts/managed/postgres/conformance.yaml § owed, <c>the-iam-endpoint-is-guarded-by-the-network</c>.
+    /// </remarks>
+    public string IamEndpoint { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     The S3 origin a workload in a tenant's cluster reaches the store at, rendered into what the
+    ///     workload is given. Often not <see cref="Endpoint" />: the platform may reach the store on a
+    ///     management network a tenant's pods have no route to.
+    /// </summary>
+    public string DataPlaneEndpoint { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     Whether this host can make buckets and issue keys for workloads — the object store is
+    ///     configured, and so are both of the endpoints that needs.
+    /// </summary>
+    public bool GrantsConfigured => IsConfigured && IamEndpoint.Length > 0 && DataPlaneEndpoint.Length > 0;
 }

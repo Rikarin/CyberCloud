@@ -242,3 +242,15 @@ owed:
       definitions the platform cannot restore into typed resources would be a tarball nobody could
       use. It is a real gap and it is a third distinct one after charts/managed/nats' (no operator to
       ask) and charts/managed/valkey's (nothing worth backing up).
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.Messaging/rabbitmqClusters. OWED. THE ENGINE STEP: RabbitMQ does not encrypt its
+      message store at rest, so a customer key would have to encrypt the volume — which the bundle's
+      storage class does not. What every family still needs is docs/plan/18 § What customer-managed
+      keys still need: (1) a key-use seam — the grant is expressible today, `keyVaultCryptoUser` with
+      principalType `resource` on a CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by
+      construction and wrapKey/unwrapKey are actions, so no reconciler can call them; (2) an
+      `encryption.keyUri` property on a NEW api-version of this type; (3) revocation — a disabled key
+      taking the data offline, which needs a re-unwrap on a schedule nothing runs. The key's home is
+      no longer the blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row
+      is started.

@@ -28,6 +28,14 @@ namespace CyberCloud.ResourceManager.Contracts;
 ///         as a fact to bind to — the same contract as <see cref="ActionContext.Caller" />.
 ///     </para>
 ///     <para>
+///         ⚠ <b>A handler that creates as its caller gets a creator built on the silo.</b> The manager
+///         hands a synchronous action an <see cref="IResourceCreator" /> bound to the request's caller,
+///         and that object is bound to the gateway's manager and can't cross. So the call says whether
+///         there was one, and the grain builds the silo manager's for the same caller and resource. A
+///         relayed <c>recover</c> on a vault that declares <c>RequiresCluster</c> then creates its
+///         server through the same write path, checked against the same person.
+///     </para>
+///     <para>
 ///         <b>Kind</b> Worker · <b>Tier</b> <b>none</b> · <b>Key</b> <see cref="ClusterActionKeys.Worker" />,
 ///         tenant-qualified.
 ///     </para>
@@ -39,7 +47,16 @@ public interface IClusterActionGrain : IGrainWithStringKey {
     /// <param name="action">The declared action's name.</param>
     /// <param name="input">The resource as stored, which the gateway has already read.</param>
     /// <param name="body">The validated <c>POST</c> body, as JSON text.</param>
-    /// <param name="caller">Who asked, or <see langword="null" /> when the manager had nobody to hand over.</param>
+    /// <param name="caller">Who asked. Empty when the manager had nobody to hand over.</param>
+    /// <param name="parent">
+    ///     The resource's parent with its GUID resolved, or <see langword="null" /> —
+    ///     <see cref="ActionContext.Parent" />.
+    /// </param>
+    /// <param name="createsAsCaller">
+    ///     Whether the manager handed the action a creator bound to <paramref name="caller" />. The grain
+    ///     then builds the silo's own for the same caller; otherwise the handler gets the refusing
+    ///     default, as it would have in the gateway.
+    /// </param>
     /// <returns>
     ///     What the handler answered, checked against the action's declared response. A resource of
     ///     another tenant than the key's is <see cref="ErrorCode.AuthorizationFailed" />.
@@ -50,7 +67,9 @@ public interface IClusterActionGrain : IGrainWithStringKey {
         string action,
         ReconcileInput input,
         string body,
-        CallerContext? caller
+        CallerContext caller,
+        ResourceId? parent,
+        bool createsAsCaller
     );
 }
 

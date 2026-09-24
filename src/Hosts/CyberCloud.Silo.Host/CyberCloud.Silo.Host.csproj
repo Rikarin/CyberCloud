@@ -55,6 +55,15 @@
         -->
         <ProjectReference Include="../../CyberCloud.ResourceGraph/CyberCloud.ResourceGraph.csproj"/>
         <!--
+          docs/plan/18's OpenBao client — ReconcileContext.SecretWriter and .Secrets for every
+          reconciler, and the resolver KeyVaultGrain unseals under. SiloComposition calls
+          AddOpenBaoSecretResolver only when CyberCloud:Vault is configured; without it the refusing
+          seams stay. ⚠ ABSENT UNTIL THE #30 REVIEW, while the gateway had it: the gateway serves a
+          synchronous listKeys, but every mint and every vault's data plane run on a silo, so no
+          deployed vault could have been created and every green run registered OpenBao by hand.
+        -->
+        <ProjectReference Include="../../CyberCloud.Vault/CyberCloud.Vault.csproj"/>
+        <!--
           docs/plan/17's sending domain. Orleans DISCOVERS grains by scanning referenced assemblies,
           so this line is what puts CyberCloud.Communication's seven grain types in the silo; the
           AddCyberCloudCommunication() call in Program.cs is what registers the services their
@@ -62,6 +71,15 @@
           activation rather than at start-up.
         -->
         <ProjectReference Include="../../CyberCloud.Communication/CyberCloud.Communication.csproj"/>
+        <!--
+          docs/plan/22's metering and billing (#38). The same two-part arrangement: these lines put the
+          usage ledger, rollup and sampler, and the billing account, numbering, budget and cost query
+          grains in the silo; AddCyberCloudMetering and AddCyberCloudBilling in SiloComposition register
+          what their constructors ask for. Metering had the grains and no line here until billing needed
+          its ledger — SiloComposition says what that meant.
+        -->
+        <ProjectReference Include="../../CyberCloud.Metering/CyberCloud.Metering.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Billing/CyberCloud.Billing.csproj"/>
         <!--
           docs/plan/11's identity module. The same two-part arrangement as the line above and for the
           same reason: Orleans DISCOVERS grains by scanning referenced assemblies, so this line is
@@ -152,6 +170,7 @@
     -->
     <ItemGroup Label="The provider modules — docs/plan/03 § Providers">
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Analytics/CyberCloud.Providers.Analytics.Application/CyberCloud.Providers.Analytics.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Billing/CyberCloud.Providers.Billing.Application/CyberCloud.Providers.Billing.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Cache/CyberCloud.Providers.Cache.Application/CyberCloud.Providers.Cache.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Communication/CyberCloud.Providers.Communication.Application/CyberCloud.Providers.Communication.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Compute/CyberCloud.Providers.Compute.Application/CyberCloud.Providers.Compute.Application.csproj"/>
@@ -168,6 +187,8 @@
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Search/CyberCloud.Providers.Search.Application/CyberCloud.Providers.Search.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Storage/CyberCloud.Providers.Storage.Application/CyberCloud.Providers.Storage.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Application/CyberCloud.Providers.RecoveryServices.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Resources/CyberCloud.Providers.Resources.Application/CyberCloud.Providers.Resources.Application.csproj"/>
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Application/CyberCloud.Providers.KeyVault.Application.csproj"/>
         <ProjectReference Include="../../Providers/CyberCloud.Providers.Terminal/CyberCloud.Providers.Terminal.Application/CyberCloud.Providers.Terminal.Application.csproj"/>
     </ItemGroup>
 

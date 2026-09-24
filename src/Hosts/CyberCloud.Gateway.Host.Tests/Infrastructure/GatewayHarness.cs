@@ -91,6 +91,24 @@ sealed class GatewayHarness {
     /// </summary>
     public RecordingResourceGraphQuery Graph { get; } = new();
 
+    /// <summary>The recording deployment entry point stage 8 routes a deployment's what-if to.</summary>
+    public RecordingDeploymentManager Deployments { get; } = new();
+
+    /// <summary>The recording invitation manager stage 8 dispatches an invitation to (#43).</summary>
+    public RecordingInvitationManager Invitations { get; } = new();
+
+    /// <summary>The recording identity administration stage 8 dispatches every other identity address to (#41).</summary>
+    public RecordingIdentityAdministration Identity { get; } = new();
+
+    /// <summary>The recording cost query stage 8 dispatches a cost route to.</summary>
+    public RecordingCostQuery Costs { get; } = new();
+
+    /// <summary>The recording invoice reader stage 8 dispatches an invoice route to.</summary>
+    public RecordingInvoiceReader Invoices { get; } = new();
+
+    /// <summary>The recording policy manager stage 8 dispatches a policy route to — issue #46.</summary>
+    public RecordingPolicyManager Policies { get; } = new();
+
     /// <summary>The operation reader, scripted so an LRO poll needs no cluster.</summary>
     public ScriptedOperationReader Operations { get; } = new();
 
@@ -112,7 +130,24 @@ sealed class GatewayHarness {
     ///     the real translator, the real access filter and a real ClickHouse.
     /// </summary>
     /// <param name="graph">The real query service.</param>
-    public GatewayHarness(IResourceGraphQuery graph) : this(graph, "", "", TenantStatus.Active) { }
+    public GatewayHarness(IResourceGraphQuery graph) : this(graph, null, null, [], "", "", TenantStatus.Active) { }
+
+    /// <summary>
+    ///     Composes the pipeline over a real <see cref="IResourceManager" /> and the registry it was
+    ///     built from — the substitution <c>MonitorQueryOverHttpTests</c> undoes, so an action typed at
+    ///     the gateway reaches the real write path, the real action dispatcher and a real handler.
+    /// </summary>
+    /// <param name="manager">The real manager, over a test cluster.</param>
+    /// <param name="registry">
+    ///     The registry that manager serves. ⚠ Stage 6 routes from it, so a harness that kept
+    ///     <see cref="OneTypeRegistry" /> would 404 every path the manager could have answered.
+    /// </param>
+    /// <param name="tenants">
+    ///     The tenants the manager's cluster was seeded with, added to the directory beside
+    ///     <see cref="TenantA" /> and <see cref="TenantB" /> so stage 3 resolves them.
+    /// </param>
+    public GatewayHarness(IResourceManager manager, IProviderRegistry registry, params Guid[] tenants)
+        : this(null, manager, registry, tenants, "", "", TenantStatus.Active) { }
 
     /// <summary>Composes the pipeline.</summary>
     /// <param name="region">This pod's region. Empty means "serve everything here".</param>
@@ -122,10 +157,13 @@ sealed class GatewayHarness {
         string region = "",
         string tenantARegion = "",
         TenantStatus status = TenantStatus.Active
-    ) : this(null, region, tenantARegion, status) { }
+    ) : this(null, null, null, [], region, tenantARegion, status) { }
 
     GatewayHarness(
         IResourceGraphQuery? graph,
+        IResourceManager? manager,
+        IProviderRegistry? registry,
+        Guid[] tenants,
         string region,
         string tenantARegion,
         TenantStatus status
@@ -152,7 +190,14 @@ sealed class GatewayHarness {
                     new() { TenantId = TenantA, Slug = "tenant-a", HomeRegion = tenantARegion, Status = status },
                     new() {
                         TenantId = TenantB, Slug = "tenant-b", HomeRegion = tenantARegion, Status = TenantStatus.Active
-                    }
+                    },
+                    .. tenants.Select(static (x, i) => new TenantDirectoryEntry {
+                            TenantId = x,
+                            Slug = "tenant-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            HomeRegion = "",
+                            Status = TenantStatus.Active
+                        }
+                    )
                 ]
             }
         );
@@ -163,9 +208,9 @@ sealed class GatewayHarness {
             new ResolveTenantStage(directory, NullLogger<ResolveTenantStage>.Instance),
             new RegionRoutingStage(Options, new UnconfiguredRegionProxy()),
             new RateLimitStage(new GatewayRateLimiter(Counters)),
-            new RouteStage(new OneTypeRegistry(), Options),
+            new RouteStage(registry ?? new OneTypeRegistry(), Options),
             new ValidateStage(Options),
-            new DispatchStage(Manager, Scopes, Roles, graph ?? Graph, Operations, Tickets, Options)
+            new DispatchStage(manager ?? Manager, Scopes, Roles, graph ?? Graph, Deployments, Invitations, Identity, Costs, Invoices, Policies, Operations, Tickets, Options)
         ];
 
         pipeline = new(Stages, NullLogger<GatewayPipeline>.Instance);
@@ -193,13 +238,15 @@ sealed class GatewayHarness {
     ///     is the shape docs/plan/06 § Platform administration needs and the reason no request header
     ///     can supply one.
     /// </param>
+    /// <param name="sessionId">The <c>sid</c> claim — the token session, or empty (#41).</param>
     public string Token(
         Guid tenantId,
         string subjectId = "user-1",
         string subjectType = "user",
-        string impersonatedBy = ""
+        string impersonatedBy = "",
+        string sessionId = ""
     ) =>
-        tokens.Issue(new(tenantId, subjectType, subjectId, "", impersonatedBy, Clock.UtcNow.AddMinutes(10)));
+        tokens.Issue(new(tenantId, subjectType, subjectId, "", impersonatedBy, Clock.UtcNow.AddMinutes(10), sessionId));
 
     /// <summary>The scope path of a tenant's <c>prod</c> group — the parent of <see cref="ResourcePath" />.</summary>
     /// <param name="tenantId">Which tenant's path to spell.</param>

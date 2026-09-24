@@ -72,6 +72,13 @@ export const appRoutes: Routes = [
     title: 'Access'
   },
   {
+    // Cost analysis (#41): a literal segment on the two scopes the cost query answers for.
+    path: 'subscriptions/:subscriptionId/cost',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/cost/cost-analysis').then(m => m.CostAnalysis),
+    title: 'Cost analysis'
+  },
+  {
     path: 'subscriptions/:subscriptionId/resourceGroups',
     canActivate: [authGuard],
     loadComponent: () => import('../pages/scopes/resource-groups').then(m => m.ResourceGroups),
@@ -88,6 +95,12 @@ export const appRoutes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
     title: 'Access'
+  },
+  {
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/cost',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/cost/cost-analysis').then(m => m.CostAnalysis),
+    title: 'Cost analysis'
   },
   {
     // The cloud shell — a literal segment beside `resources`, `create` and `access`, so a
@@ -151,6 +164,63 @@ export const appRoutes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('../pages/access/access-blade').then(m => m.AccessBlade),
     title: 'Access'
+  },
+  {
+    // The identity administration area (#41): tenant-wide, so beside `subscriptions` rather than
+    // under one. The three share a tab strip, not a route parameter.
+    path: 'identity/members',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/identity/members').then(m => m.IdentityMembers),
+    title: 'Members'
+  },
+  {
+    path: 'identity/applications',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/identity/applications').then(m => m.IdentityApplications),
+    title: 'Applications'
+  },
+  {
+    path: 'identity/sessions',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/identity/sessions').then(m => m.IdentitySessions),
+    title: 'My sessions'
+  },
+  {
+    // ⚠ The tenant's, so no subscription in the path: the tenant comes from the token, as everywhere.
+    path: 'invoices',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/cost/invoices').then(m => m.Invoices),
+    title: 'Invoices'
+  },
+  {
+    path: 'invoices/:number',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/cost/invoice-view').then(m => m.InvoiceView),
+    title: 'Invoice'
+  },
+  {
+    // ⚠ The explorers (#41) are a Monitor workspace's own pages, so the provider and the type are
+    // literal segments rather than `:provider/:type`: `…/{name}/metrics` on any other type would
+    // be a page over data that type does not have. Four segments after `providers/`, like `edit`
+    // and `access`, and told apart from them by the literal — docs/plan/16 § Querying a workspace.
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/CyberCloud.Monitor/workspaces/:name/metrics',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/monitor/metrics-explorer').then(m => m.MetricsExplorer),
+    title: 'Metrics explorer'
+  },
+  {
+    path: 'subscriptions/:subscriptionId/resourceGroups/:resourceGroup/providers/CyberCloud.Monitor/workspaces/:name/logs',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/monitor/log-search').then(m => m.LogSearch),
+    title: 'Log search'
+  },
+  {
+    // The resource graph is a tenant's, not a subscription's — #54's one address has no scope in it
+    // but the tenant, and the tenant comes from the token.
+    path: 'graph',
+    canActivate: [authGuard],
+    loadComponent: () => import('../pages/graph/graph-explorer').then(m => m.GraphExplorer),
+    title: 'Resource graph'
   },
   {
     path: 'operations/:operationId',

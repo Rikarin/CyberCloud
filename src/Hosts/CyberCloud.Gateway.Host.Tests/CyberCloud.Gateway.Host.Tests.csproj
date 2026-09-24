@@ -37,6 +37,8 @@
       suite in CyberCloud.ResourceGraph.Tests and not a second thing worth proving. Like
       CyberCloud.ObjectStorage.Tests' SeaweedFS suite it needs a Docker daemon and fails without
       one rather than skipping: a gate that goes green when the store is absent is not a gate.
+      ⚠ A SECOND ClickHouse SUITE SINCE #32, MonitorComponentViewsOverHttpTests, on the same terms and
+      on a real socket (OverHttpGateway) — the reference that carries it is explained further down.
     -->
 
     <ItemGroup>
@@ -57,12 +59,53 @@
         <PackageReference Include="Testcontainers"/>
     </ItemGroup>
 
+    <!--
+      ⚠ THE SECOND SUITE THAT STEPS OUTSIDE THE NO-SILO SHAPE, AND WHY. KeyVaultOverTheGatewayTests
+      drives the key vault's data plane (docs/plan/18) over HTTP through the nine stages into the REAL
+      resource manager, the REAL ReBAC schema and the REAL KeyVaultGrain on an in-process silo, with
+      a real OpenBao holding each vault's root. Every other suite here substitutes the manager; this
+      one cannot, because what it asserts is who the real schema lets through — a control-plane owner
+      refused, a data-plane role admitted, another tenant's caller answered 404 — and a substituted
+      manager answers whatever its author believed. It lives here rather than in
+      test/CyberCloud.Isolation because the stages are internal to the gateway and this is the one
+      project they are visible to.
+    -->
+    <ItemGroup Label="An in-process silo and the key vault's independent verifier — see the comment above">
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="BouncyCastle.Cryptography"/>
+        <ProjectReference Include="../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
+    </ItemGroup>
+
     <ItemGroup Label="Global usings">
         <Using Include="Xunit"/>
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="../CyberCloud.Gateway.Host/CyberCloud.Gateway.Host.csproj"/>
+    </ItemGroup>
+
+    <!--
+      ⚠ THE MONITOR PROVIDER'S CONFORMANCE PROJECT, FOR ONE SUITE AND ONE REASON (#41).
+      MonitorQueryOverHttpTests types queryMetrics, listMetricLabels and searchLogs at a real listener
+      and needs them answered by the REAL write path — the action dispatcher, the permission check, the
+      GUID the accountID and the database are derived from — which only an Orleans test cluster with
+      the provider registered has. ProviderTestCluster<MonitorCase> is that cluster, built the way the
+      provider's own conformance suite builds it, so the fixture composes a manager over it rather than
+      a third copy of the harness. It brings a VictoriaMetrics cluster (three containers — the
+      single-node image has no accountID) and a ClickHouse beside the one ResourceGraphQueryEndToEndTests
+      starts; the header's "one container" is three suites now, and still none for the pipeline itself.
+
+      ⚠ AND A SECOND SUITE OVER THE SAME PROJECT (#32). MonitorComponentViewsOverHttpTests (#32) asks whether another tenant's caller can read a
+      component's telemetry over HTTP, and a recording manager cannot answer that: the refusal it must
+      prove is the real manager's step 1 and the real handler never asking the store. The component's
+      Docker-free conformance project carries ProviderTestCluster and the case — real grains, the real
+      ResourceManagerService, the real action dispatcher — so it is referenced rather than rebuilt here.
+      It needs a Docker daemon for its ClickHouse, like ResourceGraphQueryEndToEndTests.
+    -->
+    <ItemGroup Label="The Monitor provider's harness: the explorers' reads and the component views, over a real write path — see above">
+        <ProjectReference Include="../../Providers/CyberCloud.Providers.Monitor/CyberCloud.Providers.Monitor.Conformance/CyberCloud.Providers.Monitor.Conformance.csproj"/>
     </ItemGroup>
 
 </Project>

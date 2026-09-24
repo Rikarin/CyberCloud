@@ -1397,13 +1397,17 @@ declare it again once the platform closed what the measurement found.
   `MonitorReconcilerTests.TwoWorkspacesInTwoTenantsGetTwoAccountIdsAndTwoDatabases` is the hand-written
   test that covers it.
 
-- **⚠ THE `accountID` IS FOLDED RATHER THAN ALLOCATED, WHICH IS WHY THIS TYPE NEEDS NO GRAIN AND IS A
+- **⚠ THE `accountID` IS FOLDED RATHER THAN ALLOCATED, SO NO COUNTER HANDS IT OUT, AND IT IS A
   NAMED LIMIT RATHER THAN A SAFE DERIVATION.** VictoriaMetrics' accountID is a 32-bit integer in a URL
   path, so the resource GUID folded to 32 bits is stable, recomputable anywhere and needs nothing
   remembered — which is the twelfth family to report no grain and the first where the temptation was
   a real allocator. A fold is not a bijection: the birthday bound is a coin-flip around 77 000
-  workspaces, inside target scale, and a collision is two tenants sharing metrics. `accountID:projectID`
-  is accepted by VictoriaMetrics and makes the space 64 bits, which closes it without durable state.
+  workspaces, inside target scale, and a collision is two tenants sharing metrics. ⚠ **So the type
+  grew a grain after all, and not an allocator:** once #41's explorer read under the account, #41's
+  review added `IMonitorAccountGrain`, a null-tenant claim per account that the reconciler takes before
+  it applies anything and the metrics reads check, so the second workspace to fold onto an account
+  fails its create and reads nothing. `accountID:projectID` is accepted by VictoriaMetrics and makes the
+  space 64 bits, which makes a lost fold rarer without making the claim unnecessary.
   `charts/managed/monitor-workspace/conformance.yaml § owed`, `accountid-is-folded-not-allocated`.
 
 - **⚠ THE FIRST PROVIDER-SUPPLIED LABEL IN THE TREE.** ADR-013's seven identify a *resource*; the
@@ -2018,15 +2022,16 @@ M2 · 3.5 EM. Dovecot, Postfix and Rspamd, per tenant, on five core kinds.
   published in DNS now matches nothing, so every message the domain sends fails DKIM at every
   receiver. There is no observation *inside* this system that would catch it. That is why
   `MailDkimTests` exists, and why it was sabotage-tested rather than trusted.
-- **⚠ It is the first type in the catalogue that declares NO ACTION, and the rule made that choice
-  rather than the schedule.** doc 17 names `verify`, `sendTest` and `exportMailbox`.
+- **⚠ It was the first type in the catalogue that declared NO ACTION, and the rule made that choice
+  rather than the schedule** — until issue #34's second pass; see the correction below. doc 17 names `verify`, `sendTest` and `exportMailbox`.
   `actions-without-handlers.txt` permits a handler-less action **only on an already-published
   api-version**; `2026-08-01` of this type is published by the same change that would declare one, so
   its own words apply — *"it is a reason to write the handler or not declare the action"*. `verify`
   cannot be written: it asks whether a domain's records resolve, and **this repository has no DNS
   resolution seam at all**. ⚠ The half that is derivable was derived and put somewhere an action is
   not needed to reach it: `MailDomains.TryRequiredRecords` is a pure function of the domain and the
-  resolved key, so doc 17's *"with the exact records to add"* is answerable today.
+  resolved key, so doc 17's *"with the exact records to add"* is answerable today. (Since renamed
+  `MailDnsRecords.TryRequired`, and seven records rather than four.)
 - **The platform's own coherence checks caught two schema defects at static construction**, which is
   the earliest either could have been caught: a `DefaultJson` of `""` on a property whose pattern
   rejects `""` — a default no body could ever have set — and an array with no `ElementKind`, which
@@ -2041,6 +2046,31 @@ M2 · 3.5 EM. Dovecot, Postfix and Rspamd, per tenant, on five core kinds.
   server stores a `StatefulSet` whose images are imaginary quite happily — so every suite passes over
   a mail domain that cannot start. It is `charts/managed/mail/conformance.yaml § owed`,
   `the-images-do-not-exist`, and it is the reason no green here may be read as "managed mail works".
+- **⚠ CORRECTED 2026-09-23, issue #34's second pass — the two bullets above that said "cannot" were
+  true of the repository and not of the problem.** `verify` needed a DNS seam, so one was written:
+  `IMailDnsResolver`, a hand-written RFC 1035 stub resolver proven against CoreDNS, behind which
+  `dnsRecords` and `verify` are declared with handlers and the sending gate doc 17 requires is
+  rendered into `main.cf` on every pass. And the images: Dovecot and Rspamd publish their own, which
+  the pod now runs by verified tag, and Postfix, which publishes none, is `deploy/images/mail-postfix`
+  — built by the test that needs it and published by nothing, which is the owed row that replaced
+  `the-images-do-not-exist`. ⚠ **Running the pod for the first time found four defects every
+  document-level suite had passed**: the milter on Rspamd's HTTP worker (11333) rather than its proxy
+  (11332), a catch-all in a map a virtual domain never reads, an antivirus socket nothing served, and
+  a DKIM key mounted where Rspamd's user could not read it. And the one trap no document would show:
+  a key *path* that is valid base64 is read by Rspamd as an inline key, so `/etc/mail/secrets/dkimPrivateKey`
+  signed every message `ed25519` under the path's own bytes while reporting `DKIM_SIGNED`.
+  `MailDeliveryOnK3sTests` is the suite that makes "managed mail works" a readable green now; the
+  mailbox type beside it (`domains/mailboxes`) is the second co-writer in the tree, after peerings.
+- **⚠ CORRECTED 2026-09-24 by the #34 review — a green that was not yet secure.** Every suite passed
+  over four defects no document-level or delivery test was written to see: an open gate relayed for a
+  mailbox as *any* sender, and every tenant's SPF includes the same platform include; the inbound
+  seam was Dovecot's LMTP, which skips the alias map and the spam filter; a tenant-spelled vault path
+  with `..` in it passed a `StartsWith` prefix check that the resolver's HTTP client then collapsed
+  into another tenant's path (the same check `Compute/virtualMachines` had, and was copied from); and
+  the Postfix image was named under a Docker Hub organisation somebody else owns. The lesson worth
+  keeping for the next provider: **a check on a string a tenant spells has to be a check on what the
+  consumer will resolve it to**, which for a path means refusing anything that is not already
+  canonical — `SecretRef.IsConfinedTo` is that rule, once, for every type.
 
 ### What the fifteenth provider measured
 
@@ -2214,11 +2244,17 @@ for it (§ Hard rule above). What that measured:
   is *"should be at least 1 chars long"*, a filled-in one is *"missing credentials"* — so **no
   PostgreSQL server with backups on can be created on a real cluster today**, which is now
   `the-default-bucket-is-not-filled-in` on that chart. The fake and every harness stub admit it,
-  which is why no run before this one saw it.
+  which is why no run before this one saw it. *Closed 2026-09-24 (#30): the server's reconciler
+  gives it a bucket on the platform's object store and a vault-held key through `ReconcileContext.Grants`
+  — the first platform seam a provider reaches for a workload's storage rather than its own.*
 - **⚠ `restore` is a reserved action name.** `ProviderBuilder.Action` refuses it — soft delete's own
   dispatch — and the first conformance run found the refusal. The action is `recover`, and the
   restored cluster is a cluster object rather than a `DBforPostgreSQL/servers` resource, because the
   seam has no member that writes and that type has no bootstrap property: `a-restore-is-not-yet-a-resource`.
+  *Closed 2026-09-24 (#30): the server gained `/properties/restore/recoveryPoint`, and `recover` creates
+  one through `ActionContext.Creator` — the caller's own write, which is how an action may create a
+  resource of another family without the provider referencing it (docs/plan/08 § The cross-resource
+  seam).*
 - **⚠ The chart surface cannot carry a per-element format**, so `protectedItems` declares none and the
   reconciler checks the shape — the second sighting of `charts/managed/kafka`'s `cidr-shape-is-unenforced`.
 - **⚠ A second k3s lane installs the operator, in its own process.**
@@ -2325,6 +2361,43 @@ attached to and a child shares its parent's lifetime by construction.
   reader every family owes), container instances (`container-instances-are-not-landed`: a different
   namespace, waiting for a log-streaming path), and `deallocate` (`deallocate-is-stop`: a halted
   KubeVirt machine already holds no compute and keeps every disk).
+
+### What the nineteenth provider measured
+
+`CyberCloud.KeyVault/vaults`, [18 § `CyberCloud.KeyVault/vaults`](../../docs/plan/18-security-vault-and-malware-scan.md),
+M1 · 2.0 EM, 2026-09-23 — the prerequisite #30's customer-managed keys named. Secrets and RSA/EC keys
+behind a data plane of 25 actions through the gateway, sealed under a per-vault root the platform vault
+holds. What it measured:
+
+- **⚠ THE FIRST FAMILY WHOSE ACTIONS CHECK PERMISSIONS NO CONTROL-PLANE ROLE HOLDS, AND THE SCHEMA HAD
+  TO LEARN THEM FIRST.** Every earlier action checks `read`, `write` or a name like `listKeys`; these
+  check six data-plane permissions defined in `CyberCloudSchema` (`SchemaVersion` 4) in terms of four
+  new grantable roles on every scope — `keyVaultSecretsOfficer/User`, `keyVaultCryptoOfficer/User` —
+  and of nothing `owner` reaches. The provider spells the six without referencing the schema
+  (docs/plan/07 § The enforcement seam), so `KeyVaultDeclarationTests.TheSixPermissionsAreTheSchemasAndNoControlPlaneRoleHoldsThem`
+  pins the two spellings and walks each permission's rewrite for a control-plane role, and
+  `KeyVaultOverTheGatewayTests.AControlPlaneRoleIsRefusedEveryDataPlaneAction` drives the refusal over
+  HTTP for `owner`, `contributor` and `reader` across all 25 actions. Widening `readSecrets` to
+  `reader` turned the walk red and all three HTTP rows red (`403` expected, the grain's `404`
+  found). The first pass had seen the same when it widened `readSecrets` to `owner`.
+- **⚠ THE THIRD PROVIDER GRAIN, AND THE FIRST WHOSE STATE IS CIPHERTEXT BY CONSTRUCTION.**
+  `KeyVaultGrain` holds every version of every item AES-256-GCM-sealed under a root minted into
+  OpenBao through `ISecretWriter` and read back through `ISecretResolver` — the platform vault seam,
+  not a second client. `durable-grains.txt` carries the argument; `CC1005` stays on in the assembly and
+  has nothing to say, because no member is named like a secret and none holds one.
+- **⚠ A SOFT DELETE AND A PURGE WERE THE SAME CALL.** Both run `DeleteAsync`, and every earlier type's
+  data plane lived in a cluster, where the manager reclaims what a park kept. A grain-backed vault has
+  nothing the manager can reclaim, so `ReconcileContext.Parking` now carries the operation's own
+  `SoftDelete` flag; setting it to `false` in the driver turned the shared suite's
+  `DeleteTearsDownTheDataPlaneAndTheResourceIsGone` red — the restore never converged, because the park
+  had destroyed the vault it was restoring.
+- **⚠ The world the suite reads is the grain, through `IConvergedModule`**, the Communication family's
+  registration: a seal stands for "removed behind the reconciler's back" and a changed recovery window
+  for "edited", both of which a pass puts back from the body.
+- **⚠ What is owed is in [18 § What landed, and what is owed](../../docs/plan/18-security-vault-and-malware-scan.md)**
+  — certificates, rotation, the caller on the audit line, crypto-shredding the root on purge — and what
+  customer-managed keys still need is one `customer-managed-keys` row per stateful family's
+  `conformance.yaml § owed`, all pointing at the key-use seam `ctx.View` cannot be.
 
 ## Namespaces
 
@@ -2602,8 +2675,16 @@ apply, get and delete and no list member at all**, which is why there was nowher
   incomplete discovery leaves a namespace stuck in `Terminating` with
   `NamespaceDeletionDiscoveryFailure` — so refusing *before* issuing the delete is strictly better
   than issuing one that hangs, and the condition clears on its own when the apiserver comes back.
-  What the platform owes is a refusal that names the group, and
-  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` asserts it.
+  What the platform owes is a refusal that names the group.
+- **⚠ That refusal was proved by a race, and #96 replaced the race with a provocation.** Which arm of
+  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` ran depended on whether
+  metrics-server had come up by the time the suite reached it, and `CyberCloud.Network`'s cluster
+  suite went red and green on one tree for that reason alone. The test k3s recipes now pass
+  `--disable=metrics-server`, as the AppHost's always has (`ClusterInfrastructure.DisableMetricsServer`);
+  the listing there waits for every `APIService` to report `Available` and must succeed; and
+  `NamespaceDiscoveryRefusalTests` registers an `APIService` whose service does not exist, against
+  `CyberCloud.Kubernetes.Tests`' k3s, and asserts the refusal names that group and the namespace —
+  then removes it and asserts the listing succeeds again.
 - **Two smaller repairs fell out.** A list body that would not parse was returned as an *empty page with
   no cursor*, which reads as "this kind holds nothing"; it is now a failure. And an empty
   `labelSelector` was sent as `labelSelector=` rather than omitted, which only mattered once a caller
@@ -2633,6 +2714,21 @@ on the next pass; not forgetting when it was gone costs an hour of failed reconc
   nothing performs.
 - **A cross-silo broadcast** would close the memo from the writing end rather than the reading end.
   Nothing needs it while the `404` channel exists.
+- **The cluster suite's "nothing of it is left" sees only what carries its `resource-id` (#96).**
+  `ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt` scopes its after-teardown check to
+  the resource under test by that label, because every class in a provider's assembly shares one
+  namespace with the harness's ancestors, siblings and companions. An object a controller made from
+  ours without copying the label, such as a `Secret` an operator writes under its own labels, is
+  outside it. (A `Service`'s `EndpointSlice` isn't an example: the EndpointSlice controller copies the
+  `Service`'s labels onto it.) The limit is the test's and not the product's: the real reclaim weighs every occupant
+  and refuses over such an object. Closing it needs `KubeObjectSummary` to carry `ownerReferences`, so
+  the test can follow the chain rather than the label.
+- **A cluster-scoped object that outlives its resource is found by nothing yet (#96).** docs/plan/08
+  § Reclaiming a resource group's namespace leaves such an object out of the reclaim on purpose and
+  calls it an orphan for the drift scan. `DriftScanner`'s diff would name it, but the shipped
+  `IClusterObjectInventory` is `UnavailableClusterObjectInventory`, which refuses, so the scan can't run
+  against a real cluster. A leaked `Vpc` or `Subnet` stays unseen until the informer-backed inventory of
+  docs/plan/09 § Observing lands.
 
 ### Closed: the drift scan no longer calls a namespace an orphan
 

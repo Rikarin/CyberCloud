@@ -184,6 +184,7 @@ static class Corpus {
         yield return GrainKeys.EmailIndex(id.TenantId, id.Name + "@" + id.ResourceGroup + ".example");
         yield return GrainKeys.Operation(id.Id);
         yield return GrainKeys.ClusterConnection(id.Id);
+        yield return GrainKeys.PolicyCatalog(id.TenantId);
     }
 
     /// <summary>

@@ -22,6 +22,12 @@ public sealed record CheckEvaluation {
     public string CapDetail { get; init; } = string.Empty;
 
     /// <summary>
+    ///     The instant the answer may change with no write, or <see langword="null" /> for never —
+    ///     <see cref="CheckResult.ValidUntil" />, before it goes on the wire.
+    /// </summary>
+    public DateTimeOffset? ValidUntil { get; init; }
+
+    /// <summary>
     ///     Whether the answer is safe to cache. ⚠ False for a truncated walk: caching "I gave up"
     ///     would make one unlucky walk permanent.
     /// </summary>
@@ -71,6 +77,41 @@ public sealed record CheckEvaluation {
 ///         non-cyclic result, so in practice it is one recomputation per cycle. Trading that for a
 ///         wrong answer under intersection is not a trade worth making.
 ///     </para>
+///     <para>
+///         <b>Every result also carries the instant it may change with no write</b> — docs/plan/07
+///         § Time-bounded relations. The reader has already dropped every expired tuple, so the
+///         walk never compares a clock; what it does is carry, beside each value, the earliest
+///         expiry of the tuples that value rests on, and the check cache stops serving the answer at
+///         that instant. Time only ever removes tuples, so the rule per node is short:
+///     </para>
+///     <list type="bullet">
+///         <item>
+///             A <b>true</b> is good until the earliest expiry along the derivation that proved it:
+///             the matching tuple, the userset or tupleset tuple a hop crossed, and whatever the hop
+///             itself was good until. A union takes the operand that decided it; an intersection
+///             takes the earliest of all its operands.
+///         </item>
+///         <item>
+///             A <b>false</b> built from falses is good until the earliest of theirs, and a false
+///             with no negation beneath it is good for ever, because a grant can't appear by
+///             expiring. The one false that can flip is <c>A &amp; !B</c> denied by a live <c>B</c>
+///             — a <c>#suspended</c> with an expiry — and an exclusion passes its operand's instant
+///             through for exactly that.
+///         </item>
+///         <item>
+///             An index answer is good for ever, and the tuple that led to it is what bounds it: the
+///             membership index closes over permanent edges only (<c>MembershipIndexMaintainer</c>),
+///             so a membership it confirms can't expire.
+///         </item>
+///     </list>
+///     <para>
+///         ⚠ <b>The instant is a lower bound and is allowed to be early.</b> A union short-circuits
+///         on its first true, so a subject holding a permission two ways is told the grant ends
+///         when the first way it found does; the cache then re-walks at that instant and finds the
+///         second. Being early costs a walk. Being late is a privilege that outlives its grant, and
+///         <c>ExpiryPropertyTests</c> is what holds every instant to "never late" against the
+///         reference evaluator.
+///     </para>
 /// </remarks>
 public sealed class CheckEvaluator {
     readonly AuthorizationSchema schema;
@@ -78,7 +119,7 @@ public sealed class CheckEvaluator {
     readonly AuthorizationLimits limits;
     readonly IMembershipIndex membershipIndex;
 
-    readonly Dictionary<Triple, bool> memo = [];
+    readonly Dictionary<Triple, (bool Value, DateTimeOffset? Until)> memo = [];
     readonly HashSet<Triple> inProgress = [];
     readonly Dictionary<(string Type, string Id), ObjectRelationsSnapshot> snapshots = [];
 
@@ -176,7 +217,8 @@ public sealed class CheckEvaluator {
                 Outcome = outcome,
                 TriplesVisited = triplesVisited,
                 MaxDepthReached = maxDepthReached,
-                CapDetail = outcome is CheckOutcome.Allowed or CheckOutcome.Denied ? string.Empty : capDetail
+                CapDetail = outcome is CheckOutcome.Allowed or CheckOutcome.Denied ? string.Empty : capDetail,
+                ValidUntil = result.Until
             }
         );
     }
@@ -208,14 +250,14 @@ public sealed class CheckEvaluator {
         var triple = new Triple(@object.Type, @object.Id, name, subject.ToString());
 
         if (memo.TryGetValue(triple, out var memoized)) {
-            return new(memoized, false, false);
+            return new(memoized.Value, false, false, memoized.Until);
         }
 
         if (inProgress.Contains(triple)) {
             // docs/plan/07 § Check: "a revisit is a cache hit that returns 'in progress → false for
             // this path', which is the correct semantics for a union". The Cyclic flag is what
             // stops that false from being written down — see the remarks on this class.
-            return new(false, true, false);
+            return new(false, true, false, null);
         }
 
         var member = schema.Member(@object.Type, name);
@@ -241,7 +283,7 @@ public sealed class CheckEvaluator {
         // A false is only written down when nothing under it was cut short and nothing under it
         // leaned on an in-progress marker.
         if (result.Value || result is { Cyclic: false, Truncated: false }) {
-            memo[triple] = result.Value;
+            memo[triple] = (result.Value, result.Until);
         }
 
         return result;
@@ -282,11 +324,13 @@ public sealed class CheckEvaluator {
                     )
                             .ConfigureAwait(false);
 
-                    flags = flags.Merge(operandResult);
                     if (operandResult.Value) {
-                        // docs/plan/07 § Check, step 5: "Short-circuit on the first true."
-                        return flags.WithValue(true);
+                        // docs/plan/07 § Check, step 5: "Short-circuit on the first true." It stays
+                        // true for as long as this operand does, whatever the others would do.
+                        return flags.DecidedBy(operandResult);
                     }
+
+                    flags = flags.Merge(operandResult);
                 }
 
                 return flags.WithValue(false);
@@ -305,12 +349,15 @@ public sealed class CheckEvaluator {
                     )
                             .ConfigureAwait(false);
 
-                    flags = flags.Merge(operandResult);
                     if (!operandResult.Value) {
-                        return flags.WithValue(false);
+                        // False for as long as this operand is, whatever the others would do.
+                        return flags.DecidedBy(operandResult);
                     }
+
+                    flags = flags.Merge(operandResult);
                 }
 
+                // True only while every operand is, so good until the earliest of them.
                 return flags.WithValue(true);
             }
 
@@ -334,6 +381,9 @@ public sealed class CheckEvaluator {
                 // This is reachable in practice even though the negated relation is
                 // direct-only: a tuple on it may name a USERSET subject, and walking that
                 // userset can hit either cap.
+                //
+                // The operand's instant passes through unchanged: the negation flips exactly when
+                // its operand does, and that is how an expiring #suspended un-denies on time.
                 return operandResult.Truncated
                     ? operandResult.WithValue(false)
                     : operandResult.WithValue(!operandResult.Value);
@@ -362,7 +412,7 @@ public sealed class CheckEvaluator {
         // recursion, so it is not charged against the breadth cap — see AuthorizationLimits.
         foreach (var candidate in subjects) {
             if (candidate == subject) {
-                return NodeResult.True;
+                return NodeResult.TrueUntil(snapshot.ExpiryOf(relation, candidate));
             }
         }
 
@@ -386,7 +436,9 @@ public sealed class CheckEvaluator {
 
             if (indexed is not null) {
                 if (indexed.Value) {
-                    return flags.WithValue(true);
+                    // The index closes over permanent edges only, so the membership can't expire;
+                    // the tuple that points at the userset still can.
+                    return flags.DecidedBy(NodeResult.TrueUntil(snapshot.ExpiryOf(relation, candidate)));
                 }
 
                 continue;
@@ -414,14 +466,23 @@ public sealed class CheckEvaluator {
             )
                     .ConfigureAwait(false);
 
-            flags = flags.Merge(nested);
-            if (nested.Value) {
-                return flags.WithValue(true);
+            var hop = Through(nested, snapshot.ExpiryOf(relation, candidate));
+            if (hop.Value) {
+                return flags.DecidedBy(hop);
             }
+
+            flags = flags.Merge(hop);
         }
 
         return flags.WithValue(false);
     }
+
+    /// <summary>
+    ///     A hop's result seen from the node that made it: bounded by the tuple crossed as well as
+    ///     by whatever the far side was good until.
+    /// </summary>
+    static NodeResult Through(NodeResult nested, DateTimeOffset? crossed) =>
+        nested with { Until = TupleExpiry.Earliest(nested.Until, crossed) };
 
     async ValueTask<NodeResult> EvaluateTuplesetAsync(
         ObjectRef @object,
@@ -464,10 +525,12 @@ public sealed class CheckEvaluator {
             )
                     .ConfigureAwait(false);
 
-            flags = flags.Merge(nested);
-            if (nested.Value) {
-                return flags.WithValue(true);
+            var hop = Through(nested, snapshot.ExpiryOf(tupleset.Tupleset, target));
+            if (hop.Value) {
+                return flags.DecidedBy(hop);
             }
+
+            flags = flags.Merge(hop);
         }
 
         return flags.WithValue(false);
@@ -506,15 +569,42 @@ public sealed class CheckEvaluator {
 
     readonly record struct Triple(string Type, string Id, string Name, string Subject);
 
-    readonly record struct NodeResult(bool Value, bool Cyclic, bool Truncated) {
-        public static NodeResult False { get; } = new(false, false, false);
+    /// <summary>One node's answer, and how far it can be trusted.</summary>
+    /// <param name="Value">The answer.</param>
+    /// <param name="Cyclic">Whether it leaned on an in-progress marker — see the remarks on the class.</param>
+    /// <param name="Truncated">Whether a cap cut something beneath it.</param>
+    /// <param name="Until">
+    ///     The instant the value may change with no write, or <see langword="null" /> for never — see
+    ///     the remarks on the class.
+    /// </param>
+    readonly record struct NodeResult(bool Value, bool Cyclic, bool Truncated, DateTimeOffset? Until) {
+        public static NodeResult False { get; } = new(false, false, false, null);
 
-        public static NodeResult True { get; } = new(true, false, false);
+        public static NodeResult Cut { get; } = new(false, false, true, null);
 
-        public static NodeResult Cut { get; } = new(false, false, true);
+        /// <summary>A true proved by one tuple that expires at <paramref name="until" />.</summary>
+        public static NodeResult TrueUntil(DateTimeOffset? until) => new(true, false, false, until);
 
-        public NodeResult Merge(NodeResult other) => new(Value, Cyclic || other.Cyclic, Truncated || other.Truncated);
+        /// <summary>
+        ///     Folds a sibling in: the flags are an OR, and the instant is the earlier of the two,
+        ///     which is what a false made of several falses, or a true that needs every operand, is
+        ///     good until.
+        /// </summary>
+        public NodeResult Merge(NodeResult other) =>
+            new(
+                Value,
+                Cyclic || other.Cyclic,
+                Truncated || other.Truncated,
+                TupleExpiry.Earliest(Until, other.Until)
+            );
 
-        public NodeResult WithValue(bool value) => new(value, Cyclic, Truncated);
+        public NodeResult WithValue(bool value) => this with { Value = value };
+
+        /// <summary>
+        ///     This node's flags with the value and the instant of the one operand that decided it —
+        ///     a union's first true, an intersection's first false.
+        /// </summary>
+        public NodeResult DecidedBy(NodeResult decider) =>
+            new(decider.Value, Cyclic || decider.Cyclic, Truncated || decider.Truncated, decider.Until);
     }
 }

@@ -410,7 +410,7 @@ public sealed class ConsoleReconcilerTests {
             ) {
                 Terminals = sessions ?? new RecordingSessions(),
                 Caller = withoutCaller
-                    ? null
+                    ? new()
                     : caller ?? new CallerContext { TenantId = TenantA, SubjectType = "user", SubjectId = "person-a" }
             },
             TestContext.Current.CancellationToken

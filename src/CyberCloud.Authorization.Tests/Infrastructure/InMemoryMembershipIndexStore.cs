@@ -121,6 +121,7 @@ public sealed class InMemoryMembershipIndexStore : IMembershipIndexStore {
         if (change.Reset) {
             slice.Members.Clear();
             slice.Usersets.Clear();
+            slice.Unclosed.Clear();
         }
 
         foreach (var (relation, members) in change.ReplaceMembers) {
@@ -129,6 +130,17 @@ public sealed class InMemoryMembershipIndexStore : IMembershipIndexStore {
             } else {
                 slice.Members[relation] = [.. members];
             }
+
+            // A replaced closure's mark is replaced with it — MembershipIndexChange.Unclosed.
+            if (change.Unclosed.Contains(relation, StringComparer.Ordinal)) {
+                slice.Unclosed.Add(relation);
+            } else {
+                slice.Unclosed.Remove(relation);
+            }
+        }
+
+        foreach (var relation in change.Unclosed.Where(x => !change.ReplaceMembers.ContainsKey(x))) {
+            slice.Unclosed.Add(relation);
         }
 
         // An empty union creates no entry, as the grain's Add does not — a rebuild names every
@@ -182,12 +194,15 @@ public sealed class InMemoryMembershipIndexStore : IMembershipIndexStore {
                 static x => x.Key,
                 static x => (IReadOnlyList<SubjectRef>)[.. x.Value],
                 StringComparer.Ordinal
-            )
+            ),
+            Unclosed = [.. slice.Unclosed.Order(StringComparer.Ordinal)]
         };
     }
 
     sealed class Slice {
         public int SchemaVersion { get; set; }
+
+        public HashSet<string> Unclosed { get; } = new(StringComparer.Ordinal);
 
         public Dictionary<string, HashSet<SubjectRef>> Members { get; } = new(StringComparer.Ordinal);
 

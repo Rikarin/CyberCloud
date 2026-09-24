@@ -176,10 +176,12 @@ public sealed class CloudConsoleSessionHandler : IResourceActionHandler {
         }
 
         // ⚠ THE SESSION IS BOUND TO WHOEVER CALLED connect, AND A HANDLER WITHOUT A CALLER REFUSES.
-        // The manager hands one over (ActionContext.Caller); a dispatcher composed without one is a
-        // composition bug, and a session with no owner would be a shell anybody holding its id could
-        // type into — the one outcome the grain exists to prevent.
-        if (context.Caller is not { } caller) {
+        // The manager hands one over (ActionContext.Caller); a dispatcher composed without one leaves
+        // it empty, which is a composition bug, and a session with no owner would be a shell anybody
+        // holding its id could type into — the one outcome the grain exists to prevent.
+        var caller = context.Caller;
+
+        if (string.IsNullOrEmpty(caller.SubjectId)) {
             return Result<string>.Failure(
                 ErrorCode.InternalError,
                 $"'{context.Id.Path}' was connected to with no caller on the action context, so the "

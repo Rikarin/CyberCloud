@@ -648,23 +648,18 @@ public sealed class TokenCacheTests {
     }
 
     /// <summary>
-    ///     ⚠ docs/plan/21 § `cyc`:
-    ///     <i>
-    ///         "Never a plaintext file — that is how CI credentials leak into
-    ///         container images."
-    ///     </i> When no keychain is reachable the answer is no persistence, not a
-    ///     file.
+    ///     ⚠ docs/plan/21 § Decisions, the token-cache row: the keychain when the machine has one,
+    ///     and an owner-only file when it has none — never nothing. This test once asserted the
+    ///     opposite, under the rule "never a plaintext file", which left <c>cyc login --device-code</c>
+    ///     persisting nothing on the headless box it exists for (#43). What the file does to stay
+    ///     owner-only is <c>FileTokenCacheTests</c>.
     /// </summary>
     [Fact]
-    public void The_persistent_cache_never_falls_back_to_a_file() {
+    public void The_persistent_cache_is_a_keychain_or_an_owner_only_file() {
         var cache = TokenCache.CreatePersistent();
 
-        // Whatever this machine offers, it is a keychain or it is nothing.
-        cache.ShouldNotBeNull();
-
-        if (!cache.IsAvailable) {
-            cache.ShouldBeSameAs(TokenCache.None);
-        }
+        cache.ShouldNotBeSameAs(TokenCache.None, "a persistent cache that keeps nothing");
+        cache.IsAvailable.ShouldBeTrue("the keychain was unreachable and no file cache was substituted");
     }
 }
 

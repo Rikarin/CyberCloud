@@ -178,7 +178,10 @@ export default tseslint.config(
             'xuiDockContent',
             'xuiPopover',
             // The form renderer's own configuration: `create` or `edit`, a keyword.
-            'mode'
+            'mode',
+            // ⚠ A key the cost pages' specs find a figure by (#41) — `total`, `forecast` — never shown
+            // to anyone. The figure it marks carries the translated text around it.
+            'data-figure'
           ]
         }
       ]

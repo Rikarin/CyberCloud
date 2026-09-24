@@ -1,0 +1,46 @@
+# An application inside a monitor workspace — the configuration surface, once.
+#
+# ⚠ EVERY NON-`@internal` BLOCK BELOW IS GENERATED from MonitorComponents.Schema2026 by
+# `./build.sh Charts`, and so is values.schema.json. Add a field in C#, never here.
+#
+# ⚠ THE WORKSPACE IS NOT A VALUE. A component is a child of its workspace — the address carries the
+# workspace's name — and the reconciler writes it into `platform.workspace` below, which is how the
+# object name and the collector's address are spelled. A tenant-settable workspace would be a
+# connection string into somebody else's tenancy.
+
+## @param collector {string} The name of the collector under the same workspace that the application's SDKs send to. The views read the workspace whichever collector carried the telemetry; this only decides the endpoint the connection string names.
+## @required
+## @length ..63
+## @pattern [a-z0-9]([-a-z0-9]*[a-z0-9])?
+## @example "gateway"
+collector: gateway
+
+## @param protocol {string} Which OTLP protocol the connection string names. The collector must have that receiver on.
+## @enum grpc | http/protobuf
+protocol: http/protobuf
+
+## @param platform {object} Resource identity injected by the reconciler. Not a tenant-facing setting.
+## @internal Written by the reconciler from the resource's own identity. A tenant cannot set it, so it is not part of the resource body.
+platform:
+  ## @param tenantId {string} Tenant GUID, rendered into the cybercloud.io/tenant-id label.
+  tenantId: ""
+  ## @param subscriptionId {string} Subscription GUID, rendered into the cybercloud.io/subscription-id label.
+  subscriptionId: ""
+  ## @param resourceGroup {string} Resource group name, rendered into the cybercloud.io/resource-group label.
+  resourceGroup: ""
+  ## @param resourceId {string} Resource GUID, rendered into the cybercloud.io/resource-id label.
+  resourceId: ""
+  ## @param resourceType {string} Fully qualified resource type, rendered into the cybercloud.io/resource-type label.
+  resourceType: CyberCloud.Monitor/workspaces/components
+  ## @param apiVersion {string} The api-version the resource was last written at, rendered into the cybercloud.io/api-version label.
+  apiVersion: "2026-08-01"
+  ## @param managedBy {string} Value of the cybercloud.io/managed-by label. Constant, and the selector every informer filters on.
+  managedBy: cybercloud
+  ## @param workspace {string} The parent workspace's name — a component of the object name and of the collector's address.
+  workspace: prod
+  ## @param namespace {string} The resource's namespace, which the collector's in-cluster address is spelled with.
+  namespace: ""
+
+## @param nameOverride {string} Replace the component's name. Empty means the release name.
+## @internal Helm plumbing. Nothing about it belongs in a resource body.
+nameOverride: ""

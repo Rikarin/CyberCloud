@@ -158,10 +158,10 @@ public sealed class WritePathTests(ResourceManagerCluster cluster) {
         ResourceManagerCluster.ResetDoubles();
         var address = ResourceManagerCluster.Address("order-policy-deny");
 
-        SwitchablePolicyEvaluator.Next = new(
-            PolicyEffect.Deny,
-            new Error(ErrorCode.PolicyViolation, "the 'no-public-ips' policy refuses this sku.", "/properties/size")
-        );
+        SwitchablePolicyEvaluator.Next = new() {
+            Effect = PolicyEffect.Deny,
+            Error = new Error(ErrorCode.PolicyViolation, "the 'no-public-ips' policy refuses this sku.", "/properties/size")
+        };
 
         var refused = await Write(address);
 

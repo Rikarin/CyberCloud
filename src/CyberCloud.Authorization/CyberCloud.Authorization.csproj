@@ -12,7 +12,8 @@
         * ListObjects and the resource-graph access column             — M2. ISubjectRelationsGrain is
           written now because the write path is two-grain now; the reverse rewrite walk is not.
         * Expand's full tree rendering                                 — M2.
-        * Time-bounded relations (JIT roles) and delegation            — M3.
+        * Delegation                                                   — M3. Time-bounded relations,
+          the other half of that row, are here since issue #49: docs/plan/07 § Time-bounded relations.
   
       ⚠ NO REFERENCE TO CyberCloud.Tenancy, deliberately. Tenancy's PlatformCrossTenantAuthorizer
       declares IPlatformOperatorAuthority precisely so that the platform:root#operator question can be
@@ -32,6 +33,12 @@
     <ItemGroup>
         <!-- Grain implementations and [PersistentState]. -->
         <PackageReference Include="Microsoft.Orleans.Server"/>
+        <!--
+          IRemindable and TickStatus, which Microsoft.Orleans.Server does not carry — see the same
+          reference in CyberCloud.ResourceManager.csproj. The tuple store holds the expiry sweep's
+          reminder (issue #49); which reminder STORAGE backs it is the host's choice.
+        -->
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
         <!-- GetTenantId / GetKeyWithinTenant / ForTenant on the grain and the factory. -->
         <PackageReference Include="Orleans.Multitenant"/>
     </ItemGroup>
