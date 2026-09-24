@@ -349,7 +349,8 @@ public sealed class RecoveryVaultOnOperatorCase : IProviderCaseSource {
 /// <summary>
 ///     #30 end to end, against a real CloudNativePG and a real SeaweedFS: a server is created with a
 ///     row in it, a vault protects it, an on-demand backup completes into the server's own bucket, and
-///     a restore creates a NEW server resource whose database has the row.
+///     a restore creates a NEW server resource whose database has the row — and, once the source is
+///     deleted and purged with its key Secret, a second restore of the same point still does.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -384,6 +385,7 @@ public sealed class RecoveryVaultAgainstCloudNativePg(
     static readonly TimeSpan BetweenPolls = TimeSpan.FromSeconds(5);
     const string VaultName = "nightly";
     const string Restored = "protected-server-restored";
+    const string RestoredAfterPurge = "protected-server-after-purge";
     const string Row = "written-before-the-backup";
 
     [Fact]
@@ -567,6 +569,65 @@ public sealed class RecoveryVaultAgainstCloudNativePg(
         // ── 7. The row is there ─────────────────────────────────────────────────────────────────
         var read = await SqlAsync(harness, ns, Restored + "-1", "select v from cc30;", token);
         read.Trim().ShouldBe(Row, "the restored server's database does not hold the row written before the backup");
+
+        // ⚠ #30's reclaim: the copy read the source's bucket through a Secret of its OWN, and names the
+        // source's {name}-backup-s3 nowhere — so nothing the copy needs is lost when the source goes.
+        var restoredSpec = JsonNode.Parse(
+            (await harness.Connection.GetAsync(PostgresServers.ClusterRef(ns, Restored), token)).GetValueOrThrow().Json
+        )!["spec"]!;
+        restoredSpec["externalClusters"]![0]!["barmanObjectStore"]!["s3Credentials"]!["accessKeyId"]!["name"]!
+            .GetValue<string>()
+            .ShouldBe(PostgresServers.RestoreSecretName(Restored));
+        restoredSpec.ToJsonString().ShouldNotContain(PostgresServers.BackupSecretName(item));
+
+        output?.WriteLine($"first restore (source alive) in {clock.Elapsed.TotalSeconds:F0}s");
+
+        // ── 8. The source, deleted and purged — its key Secret with it ─────────────────────────
+        //
+        // ⚠ THE RESTORE A VAULT EXISTS FOR, AND #30'S RECLAIM. The source's teardown used to leave
+        // {name}-backup-s3 standing because a restore read it through the point's status, and
+        // NamespaceReclaim then refused the resource group forever over that platform-written Secret.
+        // Now the purge removes it, and the restore below must work without it.
+        var sourceWrite = new WriteRequest {
+            Path = RecoveryVaultOnOperatorCase.ProtectedServer.Address().Path,
+            ApiVersion = RecoveryVaults.PostgresServerApiVersion,
+            Caller = ClusterConformanceHarness<RecoveryVaultOnOperatorCase>.Caller()
+        };
+
+        var deleted = await harness.Manager.DeleteAsync(sourceWrite, token);
+        deleted.IsSuccess.ShouldBeTrue(deleted.Error?.Message);
+        var deletion = await DriveAsync(harness, deleted.GetValueOrThrow().OperationId, token);
+        deletion.State.ShouldBe(OperationState.Succeeded, deletion.Error?.Message);
+
+        var purged = await harness.Manager.PurgeAsync(sourceWrite, token);
+        purged.IsSuccess.ShouldBeTrue(purged.Error?.Message);
+        var purge = await DriveAsync(harness, purged.GetValueOrThrow().OperationId, token);
+        purge.State.ShouldBe(OperationState.Succeeded, purge.Error?.Message);
+
+        var gone = await harness.Connection.GetAsync(PostgresServers.BackupSecretRef(ns, item), token);
+        gone.IsSuccess.ShouldBeFalse($"the source was purged and '{PostgresServers.BackupSecretName(item)}' is still in '{ns}'");
+        gone.Error!.Code.ShouldBe(CyberCloud.Core.ErrorCode.ResourceNotFound, gone.Error.Message);
+        output?.WriteLine($"source deleted and purged after {clock.Elapsed.TotalSeconds:F0}s");
+
+        // ── 9. The same point, restored with its source gone ───────────────────────────────────
+        var afterPurge = JsonNode.Parse(
+            await ActionAsync(
+                harness,
+                vault,
+                RecoveryVaults.RecoverAction,
+                new JsonObject { ["recoveryPoint"] = scheduledPoint, ["targetName"] = RestoredAfterPurge },
+                token
+            )
+        )!;
+
+        var restoreAfterPurge = await DriveAsync(harness, Guid.Parse(afterPurge["operationId"]!.GetValue<string>()), token);
+        restoreAfterPurge.State.ShouldBe(OperationState.Succeeded, restoreAfterPurge.Error?.Message);
+
+        await ClusterReadyAsync(harness, ns, RestoredAfterPurge, RestoreReady, token);
+        output?.WriteLine($"restored server (source purged) ready after {clock.Elapsed.TotalSeconds:F0}s");
+
+        var readAfterPurge = await SqlAsync(harness, ns, RestoredAfterPurge + "-1", "select v from cc30;", token);
+        readAfterPurge.Trim().ShouldBe(Row, "a restore of a purged server's point does not hold the row written before the backup");
 
         output?.WriteLine($"end to end in {clock.Elapsed.TotalSeconds:F0}s");
     }

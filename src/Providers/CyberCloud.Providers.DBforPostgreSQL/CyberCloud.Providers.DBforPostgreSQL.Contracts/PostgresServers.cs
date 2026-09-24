@@ -287,6 +287,193 @@ public static class PostgresServers {
             );
     }
 
+    // ── Restores, which read the SOURCE's bucket with the source's key ────────────────────────
+
+    /// <summary>CloudNativePG's <c>Backup</c> — one recovery point, beside the server it was taken of.</summary>
+    public static GroupVersionKind BackupKind { get; } =
+        new() { Group = "postgresql.cnpg.io", Version = "v1", Kind = "Backup", Plural = "backups" };
+
+    /// <summary>The recovery point a restoring server reads its origin off.</summary>
+    /// <param name="ns">The resource's namespace, which is the point's.</param>
+    /// <param name="recoveryPoint">The <c>Backup</c>'s name — <see cref="RecoveryPoint" />.</param>
+    public static ObjectRef BackupRef(string ns, string recoveryPoint) =>
+        new() { Kind = BackupKind, Namespace = ns, Name = recoveryPoint };
+
+    /// <summary>
+    ///     The <c>Secret</c> a restored server's copy of its SOURCE's key is rendered into:
+    ///     <c>{name}-restore-s3</c>.
+    /// </summary>
+    /// <param name="name">The restored server's own name.</param>
+    /// <remarks>
+    ///     ⚠ <b>The restored server's, by name and by label, and never the source's
+    ///     <see cref="BackupSecretName" /></b> — #30's reclaim. A restore used to bootstrap from
+    ///     <c>bootstrap.recovery.backup</c>, and CloudNativePG reads that <c>Backup</c>'s credentials
+    ///     from the Secret its status names, which was the source's <c>{source}-backup-s3</c>. So the
+    ///     source's teardown had to leave that Secret behind, and a resource group that had ever held
+    ///     a backed-up server could never be reclaimed (docs/plan/08, <c>NamespaceReclaim</c> refuses
+    ///     over a platform-written object). Now the key is read from the vault, where the source's
+    ///     teardown leaves it, and written here under the restored server's ownership — and the
+    ///     restored <c>Cluster</c> names this Secret through <c>externalClusters</c>.
+    /// </remarks>
+    public static string RestoreSecretName(string name) => name + "-restore-s3";
+
+    /// <summary>The restore <c>Secret</c> a restored server owns.</summary>
+    /// <param name="ns">The resource's namespace.</param>
+    /// <param name="name">The restored server's own name.</param>
+    public static ObjectRef RestoreSecretRef(string ns, string name) =>
+        new() { Kind = SecretKind, Namespace = ns, Name = RestoreSecretName(name) };
+
+    /// <summary>
+    ///     The <c>externalClusters</c> entry a restored <c>Cluster</c> bootstraps from, and the
+    ///     <c>bootstrap.recovery.source</c> that names it.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ A constant, not the source's name: the source may be gone and a restore may take its
+    ///     name, and CloudNativePG would then read "the folder named after me" off the one name. The
+    ///     folder is <see cref="RestoreOrigin.ServerName" />, rendered as <c>serverName</c>.
+    /// </remarks>
+    public const string RestoreSourceName = "restore-source";
+
+    /// <summary>The keys the restore <c>Secret</c> files the origin's coordinates under, beside the key.</summary>
+    const string OriginDestinationKey = "DESTINATION_PATH";
+
+    const string OriginEndpointKey = "ENDPOINT_URL";
+    const string OriginServerNameKey = "SERVER_NAME";
+    const string OriginBackupIdKey = "BACKUP_ID";
+
+    /// <summary>
+    ///     Where a restore's bytes are: the SOURCE server's bucket, the folder barman archived it
+    ///     under, and the base backup to start from.
+    /// </summary>
+    /// <param name="SourceId">
+    ///     The source server's GUID, off its bucket's name — the one durable reference to it once the
+    ///     source is gone, and what the vault path of its key is named by.
+    /// </param>
+    /// <param name="EndpointUrl">The store's data-plane endpoint, as the point recorded it.</param>
+    /// <param name="ServerName">The folder under the bucket: the source <c>Cluster</c>'s name.</param>
+    /// <param name="BackupId">barman's id of the base backup — the point's <c>status.backupId</c>.</param>
+    /// <remarks>
+    ///     ⚠ <b>Read off the <c>Backup</c> once and kept in the restore <c>Secret</c>.</b> The point is
+    ///     the vault's and retention prunes it; a restored server soft-deleted and brought back after
+    ///     its point expired still has to render the same <c>Cluster</c>, and the Secret — kept by a
+    ///     parking teardown exactly as the claims are — is what still says where it came from.
+    /// </remarks>
+    public sealed record RestoreOrigin(Guid SourceId, string EndpointUrl, string ServerName, string BackupId) {
+        /// <summary>The source's bucket: <c>s3://pg-{sourceId:N}/</c>.</summary>
+        public string DestinationPath => "s3://" + ObjectStoreCredentials.BucketFor(BucketPrefix, SourceId) + "/";
+
+        /// <summary>
+        ///     The origin a <c>Backup</c> CloudNativePG completed records, or <see langword="null" />
+        ///     when it does not record all four — a point not taken of a server on the platform's store.
+        /// </summary>
+        /// <param name="backupJson">The <c>Backup</c>, as the API server returned it.</param>
+        public static RestoreOrigin? FromBackup(string backupJson) {
+            JsonObject? backup;
+            try {
+                backup = JsonNode.Parse(backupJson) as JsonObject;
+            } catch (JsonException) {
+                return null;
+            }
+
+            var status = backup?["status"] as JsonObject;
+            var serverName = Str(status?["serverName"]) is { Length: > 0 } named
+                ? named
+                : Str(((backup?["spec"] as JsonObject)?["cluster"] as JsonObject)?["name"]);
+
+            return Of(Str(status?["destinationPath"]), Str(status?["endpointURL"]), serverName, Str(status?["backupId"]));
+        }
+
+        /// <summary>The origin a restore <c>Secret</c> this platform rendered carries, or <see langword="null" />.</summary>
+        /// <param name="secret">The Secret, as the API server returned it.</param>
+        public static RestoreOrigin? FromSecret(KubeObject secret) {
+            ArgumentNullException.ThrowIfNull(secret);
+
+            string Value(string key) => KubeSecret.Value(secret, key) is { IsSuccess: true } read ? read.GetValueOrThrow() : string.Empty;
+
+            return Of(Value(OriginDestinationKey), Value(OriginEndpointKey), Value(OriginServerNameKey), Value(OriginBackupIdKey));
+        }
+
+        /// <summary>
+        ///     The origin a stored restored <c>Cluster</c> names in its <c>externalClusters</c>, or
+        ///     <see langword="null" /> for a <c>Cluster</c> that is not one — what a teardown's pause
+        ///     re-renders, so the apply keeps the source it pauses over.
+        /// </summary>
+        /// <param name="clusterJson">The <c>Cluster</c>, as the API server returned it.</param>
+        public static RestoreOrigin? FromCluster(string clusterJson) {
+            try {
+                return FromSpec((JsonNode.Parse(clusterJson) as JsonObject)?["spec"] as JsonObject);
+            } catch (JsonException) {
+                return null;
+            }
+        }
+
+        /// <summary><see cref="FromCluster" />, over a <c>spec</c> already parsed.</summary>
+        internal static RestoreOrigin? FromSpec(JsonObject? spec) {
+            var store = (spec?["externalClusters"] as JsonArray)?
+                .OfType<JsonObject>()
+                .FirstOrDefault(static x => Str(x["name"]) == RestoreSourceName)?["barmanObjectStore"] as JsonObject;
+            var backupId = Str(
+                (((spec?["bootstrap"] as JsonObject)?["recovery"] as JsonObject)?["recoveryTarget"] as JsonObject)?["backupID"]
+            );
+
+            return Of(Str(store?["destinationPath"]), Str(store?["endpointURL"]), Str(store?["serverName"]), backupId);
+        }
+
+        /// <summary>
+        ///     ⚠ Only a bucket of this family's exact shape, <c>s3://pg-{32 hex}/</c>, is an origin:
+        ///     the GUID is what names the vault path the key is read from, so a destination of any other
+        ///     shape — a tenant's own, before #30 refused those — has no key here to read.
+        /// </summary>
+        static RestoreOrigin? Of(string destinationPath, string endpointUrl, string serverName, string backupId) {
+            const string Scheme = "s3://" + BucketPrefix + "-";
+
+            if (!destinationPath.StartsWith(Scheme, StringComparison.Ordinal)
+                || serverName.Length == 0
+                || backupId.Length == 0) {
+                return null;
+            }
+
+            var bucket = destinationPath[Scheme.Length..].TrimEnd('/');
+
+            return bucket.Length == 32
+                && bucket.All(static x => char.IsAsciiHexDigitLower(x) || char.IsAsciiDigit(x))
+                && Guid.TryParseExact(bucket, "N", out var sourceId)
+                    ? new(sourceId, endpointUrl, serverName, backupId)
+                    : null;
+        }
+
+        static string Str(JsonNode? node) =>
+            node is JsonValue value && value.TryGetValue<string>(out var text) ? text : string.Empty;
+    }
+
+    /// <summary>
+    ///     The restore <c>Secret</c> document: the source's key, as the vault holds it, and the
+    ///     origin's coordinates beside it.
+    /// </summary>
+    /// <param name="name">The restored server's own name.</param>
+    /// <param name="key">The SOURCE's key. ⚠ A value for the length of the pass that renders it.</param>
+    /// <param name="origin">Where the restore reads from.</param>
+    public static string RestoreSecretJson(string name, ObjectStoreKey key, RestoreOrigin origin) {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(origin);
+
+        static string Encode(string value) => Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
+
+        return new JsonObject {
+            ["metadata"] = new JsonObject { ["name"] = RestoreSecretName(name) },
+            ["type"] = "Opaque",
+            ["data"] = new JsonObject {
+                [AccessKeyIdKey] = Encode(key.AccessKeyId),
+                [SecretAccessKeyKey] = Encode(key.SecretAccessKey),
+                [OriginDestinationKey] = Encode(origin.DestinationPath),
+                [OriginEndpointKey] = Encode(origin.EndpointUrl),
+                [OriginServerNameKey] = Encode(origin.ServerName),
+                [OriginBackupIdKey] = Encode(origin.BackupId)
+            }
+        }.ToJsonString();
+    }
+
     /// <summary>The labels every claim CloudNativePG created for a server carries, and the selector's pairs.</summary>
     /// <param name="name">The resource's own name, which is the <c>Cluster</c>'s.</param>
     public static ImmutableDictionary<string, string> ClaimOwnership(string name) {
@@ -1031,7 +1218,19 @@ public static class PostgresServers {
     ///     while backups are on; <see langword="null" /> is for a teardown's pause, where the object
     ///     is on its way out and nothing reads its backup section again.
     /// </param>
-    public static string ClusterJson(string name, JsonElement desired, BackupStore? store = null) {
+    /// <param name="origin">
+    ///     For a restore, where the point's bytes are — the reconciler reads it off the point and
+    ///     renders the source's key into <see cref="RestoreSecretName" /> before the <c>Cluster</c>.
+    ///     ⚠ <see langword="null" /> for a restore renders the <c>bootstrap.recovery.backup</c> form
+    ///     a restored <c>Cluster</c> carried before #30's reclaim, which is what a teardown's pause over
+    ///     such a <c>Cluster</c> has to keep; the reconciler never creates one that way any more.
+    /// </param>
+    public static string ClusterJson(
+        string name,
+        JsonElement desired,
+        BackupStore? store = null,
+        RestoreOrigin? origin = null
+    ) {
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         var (cpu, memory) = Resources(desired);
@@ -1123,24 +1322,43 @@ public static class PostgresServers {
             storage["storageClass"] = storageClass;
         }
 
-        // ⚠ A RESTORE BOOTSTRAPS FROM A BACKUP OBJECT BESIDE IT, AND NOTHING ELSE ABOUT THE SERVER
-        // CHANGES. `bootstrap.recovery.backup.name` names a CloudNativePG Backup in the same namespace;
-        // the operator reads the destination, the endpoint and the credential Secret off that Backup's
-        // status — the SOURCE server's — so the restore needs no store of its own to read from, and
-        // this server's own backup section below points at its own, empty, bucket. `database` and
-        // `owner` are what the operator writes the `{name}-app` Secret for, so listKeys answers for a
-        // restored server exactly as for a new one. The extensions are not re-created: they came back
-        // with the data.
+        // ⚠ A RESTORE BOOTSTRAPS FROM THE SOURCE'S BUCKET, WITH THE SOURCE'S KEY RENDERED AS THIS
+        // SERVER'S OWN SECRET, AND NOTHING ELSE ABOUT THE SERVER CHANGES. `bootstrap.recovery.source`
+        // names the one `externalClusters` entry: the source's bucket, the folder barman archived it
+        // under (`serverName`), and `{name}-restore-s3`; `recoveryTarget.backupID` picks the point's
+        // base backup out of that catalogue. This server's own backup section below points at its
+        // own, empty, bucket. `database` and `owner` are what the operator writes the `{name}-app`
+        // Secret for, so listKeys answers for a restored server exactly as for a new one. The
+        // extensions are not re-created: they came back with the data.
+        //
+        // ⚠ AND NOT `bootstrap.recovery.backup.name` ANY MORE — #30's reclaim. That form reads the
+        // credentials off the Backup's status, which names the SOURCE's `{source}-backup-s3`, so the
+        // source's teardown had to leave that Secret standing and its resource group could never be
+        // reclaimed. The form is still rendered for a restore with no origin, which is only a
+        // teardown's pause over a Cluster created that way (the parameter's remarks).
         var restoreFrom = RecoveryPoint(desired);
-        var bootstrap = restoreFrom.Length > 0
-            ? new JsonObject {
+        JsonObject bootstrap;
+
+        if (restoreFrom.Length == 0) {
+            bootstrap = new JsonObject { ["initdb"] = initdb };
+        } else if (origin is null) {
+            bootstrap = new JsonObject {
                 ["recovery"] = new JsonObject {
                     ["backup"] = new JsonObject { ["name"] = restoreFrom },
                     ["database"] = Database(desired),
                     ["owner"] = Owner(desired)
                 }
-            }
-            : new JsonObject { ["initdb"] = initdb };
+            };
+        } else {
+            bootstrap = new JsonObject {
+                ["recovery"] = new JsonObject {
+                    ["source"] = RestoreSourceName,
+                    ["recoveryTarget"] = new JsonObject { ["backupID"] = origin.BackupId },
+                    ["database"] = Database(desired),
+                    ["owner"] = Owner(desired)
+                }
+            };
+        }
 
         var spec = new JsonObject {
             ["instances"] = Number(desired, "replicas", 2),
@@ -1150,6 +1368,25 @@ public static class PostgresServers {
             ["storage"] = storage,
             ["monitoring"] = new JsonObject { ["enablePodMonitor"] = Flag(desired, "monitoring", "enabled", true) }
         };
+
+        if (restoreFrom.Length > 0 && origin is not null) {
+            var secret = RestoreSecretName(name);
+
+            spec["externalClusters"] = new JsonArray(
+                new JsonObject {
+                    ["name"] = RestoreSourceName,
+                    ["barmanObjectStore"] = new JsonObject {
+                        ["destinationPath"] = origin.DestinationPath,
+                        ["endpointURL"] = origin.EndpointUrl,
+                        ["serverName"] = origin.ServerName,
+                        ["s3Credentials"] = new JsonObject {
+                            ["accessKeyId"] = new JsonObject { ["name"] = secret, ["key"] = AccessKeyIdKey },
+                            ["secretAccessKey"] = new JsonObject { ["name"] = secret, ["key"] = SecretAccessKeyKey }
+                        }
+                    }
+                }
+            );
+        }
 
         if (cpu.Length > 0 && memory.Length > 0) {
             var quantities = new JsonObject { ["cpu"] = cpu, ["memory"] = memory };
@@ -1249,7 +1486,7 @@ public static class PostgresServers {
         && (spec["storage"] as JsonObject)?["size"]?.GetValue<string>() == Text(desired, "storage", "size", "20Gi")
         && (spec["monitoring"] as JsonObject)?["enablePodMonitor"]?.GetValue<bool>()
         == Flag(desired, "monitoring", "enabled", true)
-        && MatchesBootstrap(spec["bootstrap"] as JsonObject, desired)
+        && MatchesBootstrap(spec, desired)
         // ⚠ A server with backups on is not converged until its Cluster archives somewhere: the store
         // is the reconciler's to choose, so the destination is checked for presence, not for value.
         && (!BackupEnabled(desired)
@@ -1257,12 +1494,23 @@ public static class PostgresServers {
             is { Length: > 0 });
 
     /// <summary>Whether the stored bootstrap is the one the body asks for — a restore's or an initdb's.</summary>
-    static bool MatchesBootstrap(JsonObject? bootstrap, JsonElement desired) {
+    /// <remarks>
+    ///     ⚠ A restore's is either form: the <c>externalClusters</c> one this renderer writes, whose
+    ///     origin was read off the point and so is checked for presence rather than for value, or the
+    ///     <c>backup.name</c> one a restored <c>Cluster</c> created before #30's reclaim still carries.
+    /// </remarks>
+    static bool MatchesBootstrap(JsonObject spec, JsonElement desired) {
+        var bootstrap = spec["bootstrap"] as JsonObject;
         var restoreFrom = RecoveryPoint(desired);
 
-        return restoreFrom.Length > 0
-            ? ((bootstrap?["recovery"] as JsonObject)?["backup"] as JsonObject)?["name"]?.GetValue<string>() == restoreFrom
-            : (bootstrap?["initdb"] as JsonObject)?["database"]?.GetValue<string>() == Database(desired);
+        if (restoreFrom.Length == 0) {
+            return (bootstrap?["initdb"] as JsonObject)?["database"]?.GetValue<string>() == Database(desired);
+        }
+
+        var recovery = bootstrap?["recovery"] as JsonObject;
+
+        return (recovery?["backup"] as JsonObject)?["name"]?.GetValue<string>() == restoreFrom
+            || (recovery?["source"]?.GetValue<string>() == RestoreSourceName && RestoreOrigin.FromSpec(spec) is not null);
     }
 
     static bool MatchesPooler(JsonObject spec, JsonElement desired) =>

@@ -35,7 +35,10 @@ namespace CyberCloud.Providers.DBforPostgreSQL;
 ///         <item>
 ///             <b>Bounded.</b> In the steady state, at most three applies, four reads and one
 ///             conditional delete, all on the caller's token — and, with backups on, one bucket
-///             <c>PUT</c> that answers "already there" and two vault reads; a teardown or a restore adds one
+///             <c>PUT</c> that answers "already there" and two vault reads; a restored server adds one read
+///             of its restore <c>Secret</c> (and of the point, on its first pass), two vault reads and one
+///             apply; a teardown that ends the server adds two deletes and two reads for the key
+///             <c>Secret</c>s; a teardown or a re-creation over retained claims adds one
 ///             list and one read, one ownership change and one read-back per claim, which is a
 ///             handful of small metadata calls rather than a wait. ⚠ There is no wait for the
 ///             cluster to be <i>ready</i> — a
@@ -164,8 +167,22 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             store = provisioned;
         }
 
+        // ── A restore: the source's key, as this server's own Secret, before the Cluster names it ─
+        var restoring = PostgresServers.RecoveryPoint(context.Desired).Length > 0;
+        PostgresServers.RestoreOrigin? origin = null;
+
+        if (restoring) {
+            var (restoreProblem, resolved) = await ProvisionRestoreSourceAsync(context, cluster, cancellationToken);
+
+            if (restoreProblem is not null) {
+                return restoreProblem;
+            }
+
+            origin = resolved;
+        }
+
         // ── The claims a previous life left, handed over before the operator looks ──────────────
-        if (await AdoptRetainedClaimsAsync(context, cluster, store, cancellationToken) is { } custodyProblem) {
+        if (await AdoptRetainedClaimsAsync(context, cluster, store, origin, cancellationToken) is { } custodyProblem) {
             return custodyProblem;
         }
 
@@ -179,7 +196,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             context,
             cluster,
             PostgresServers.ClusterKind,
-            PostgresServers.ClusterJson(name, context.Desired, store),
+            PostgresServers.ClusterJson(name, context.Desired, store, origin),
             cancellationToken
         );
 
@@ -210,7 +227,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         }
 
         // ── Clause 4. Everything above this line is a claim; this is the reading. ───────────────
-        foreach (var target in Targets(context.Namespace, name, pooling, backups)) {
+        foreach (var target in Targets(context.Namespace, name, pooling, backups, restoring)) {
             var read = await cluster.GetAsync(target, cancellationToken);
 
             if (read.TryGetError(out var readError)) {
@@ -305,7 +322,75 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         // ⚠ Converged once the objects are GONE, read back — not once the deletes were issued. Same
         // clause, other direction: believing a delete is how a resource stops being billed while its
         // pods are still running.
-        foreach (var target in Targets(context.Namespace, name, true, false)) {
+        if (await GoneAsync(cluster, Targets(context.Namespace, name, true, false, false), cancellationToken) is { } standing) {
+            return standing;
+        }
+
+        // ── The key Secrets: kept by a park, removed by every teardown that ends the server ──────
+        //
+        // ⚠ #30'S RECLAIM. These used to stay on EVERY teardown, because a restore bootstrapped from
+        // `bootstrap.recovery.backup` and CloudNativePG reads that point's credentials from the Secret
+        // its status names — this server's {name}-backup-s3. So a hard-deleted or purged server left
+        // a platform-written object in its namespace, and NamespaceReclaim (docs/plan/08) refused its
+        // resource group forever. A restore now reads the source's key from the VAULT, where this
+        // teardown leaves it, and renders it as the restored server's own Secret — so nothing a
+        // restore needs lives here any more. What still outlives the server — the bucket, the store
+        // identity, the vault path — is charts/managed/postgres/conformance.yaml § owed,
+        // `the-backups-outlive-the-server-and-nothing-reclaims-them`.
+        //
+        // ⚠ A PARKING PASS KEEPS THEM, for the reason it keeps the claims: the soft delete's window
+        // brings back the server as it was, and the restored Cluster names both. The purge drives
+        // this teardown again with Parking false, which is the pass that removes them.
+        //
+        // ⚠ AFTER THE CLUSTER READS AS GONE, NOT BESIDE IT. An instance shutting down may still be
+        // archiving its last segments; the recovery points are complete without them — a base backup
+        // waits for its own WAL — so this is order for tidiness, not a wait on the pods.
+        if (!context.Parking) {
+            foreach (var secret in KeySecrets(context.Namespace, name)) {
+                var deleted = await KubeCommand.For(cluster)
+                    .WithTenantId(context.Id.TenantId)
+                    .WithResourceId(context.Id)
+                    .InNamespace(context.Namespace)
+                    .WithKind(PostgresServers.SecretKind)
+                    .WithApiVersion(context.ApiVersion)
+                    .ObjectJson(new JsonObject { ["metadata"] = new JsonObject { ["name"] = secret.Name } }.ToJsonString())
+                    .DeleteAsync(CascadePolicy.Background, cancellationToken);
+
+                if (deleted.TryGetError(out var deleteError) && deleteError.Code != ErrorCode.ResourceNotFound) {
+                    return ReconcileOutcome.FromFailure(deleteError);
+                }
+            }
+
+            if (await GoneAsync(cluster, KeySecrets(context.Namespace, name), cancellationToken) is { } secretStanding) {
+                return secretStanding;
+            }
+        }
+
+        // ⚠ AND THE DATA STAYS, BECAUSE THE CLAIMS WERE DETACHED BEFORE THE CLUSTER WENT. This used
+        // to say the opposite — that CloudNativePG's owner references took the claims with the
+        // Cluster and there was therefore nothing for RetainedVolumesAsync to name — and that was
+        // true, and it was issue #69: the same teardown runs on a soft delete, so the window's
+        // restore came back to an initdb. DetachRetainedClaimsAsync above is what changed.
+        context.Log.Report("deleted", $"the CloudNativePG objects of '{name}' are gone", 100);
+        return ReconcileOutcome.Converged;
+    }
+
+    /// <summary>The two Secrets a server's keys are rendered into — its own, and a restore's copy of its source's.</summary>
+    static IEnumerable<ObjectRef> KeySecrets(string ns, string name) {
+        yield return PostgresServers.BackupSecretRef(ns, name);
+        yield return PostgresServers.RestoreSecretRef(ns, name);
+    }
+
+    /// <summary>
+    ///     Reads each target back and answers <see langword="null" /> once every one is gone, or the
+    ///     outcome to return from the pass.
+    /// </summary>
+    static async Task<ReconcileOutcome?> GoneAsync(
+        IKubeClusterConnection cluster,
+        IEnumerable<ObjectRef> targets,
+        CancellationToken cancellationToken
+    ) {
+        foreach (var target in targets) {
             var read = await cluster.GetAsync(target, cancellationToken);
 
             if (read.IsSuccess) {
@@ -317,13 +402,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             }
         }
 
-        // ⚠ AND THE DATA STAYS, BECAUSE THE CLAIMS WERE DETACHED BEFORE THE CLUSTER WENT. This used
-        // to say the opposite — that CloudNativePG's owner references took the claims with the
-        // Cluster and there was therefore nothing for RetainedVolumesAsync to name — and that was
-        // true, and it was issue #69: the same teardown runs on a soft delete, so the window's
-        // restore came back to an initdb. DetachRetainedClaimsAsync above is what changed.
-        context.Log.Report("deleted", $"the CloudNativePG objects of '{name}' are gone", 100);
-        return ReconcileOutcome.Converged;
+        return null;
     }
 
     /// <inheritdoc />
@@ -450,17 +529,23 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             return readError.Code == ErrorCode.ResourceNotFound ? null : ReconcileOutcome.FromFailure(readError);
         }
 
-        if (!PostgresServers.IsPaused(existing.GetValueOrThrow().Json)) {
+        var stored = existing.GetValueOrThrow().Json;
+
+        if (!PostgresServers.IsPaused(stored)) {
             context.Log.Report(
                 "pausing",
                 $"asking CloudNativePG to leave '{name}' alone while its claims change hands"
             );
 
+            // ⚠ A restored Cluster is paused over the origin it already names. The pause is a whole
+            // server-side apply, and one that dropped `externalClusters` while `bootstrap.recovery.source`
+            // still named the entry is one CloudNativePG's webhook refuses — a teardown the tenant could
+            // not perform. The stored spec is the one place the origin is sure to be.
             var (problem, result) = await ApplyAsync(
                 context,
                 cluster,
                 PostgresServers.ClusterKind,
-                PostgresServers.ClusterJson(name, context.Desired),
+                PostgresServers.ClusterJson(name, context.Desired, null, PostgresServers.RestoreOrigin.FromCluster(stored)),
                 true,
                 cancellationToken
             );
@@ -531,6 +616,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
         ReconcileContext context,
         IKubeClusterConnection cluster,
         PostgresServers.BackupStore? store,
+        PostgresServers.RestoreOrigin? origin,
         CancellationToken cancellationToken
     ) {
         var name = context.Id.Name;
@@ -569,7 +655,7 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             context,
             cluster,
             PostgresServers.ClusterKind,
-            PostgresServers.ClusterJson(name, context.Desired, store),
+            PostgresServers.ClusterJson(name, context.Desired, store, origin),
             true,
             cancellationToken
         );
@@ -802,9 +888,13 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
     }
 
     /// <summary>The objects a body implies, in apply order.</summary>
-    static IEnumerable<ObjectRef> Targets(string ns, string name, bool pooling, bool backups) {
+    static IEnumerable<ObjectRef> Targets(string ns, string name, bool pooling, bool backups, bool restoring) {
         if (backups) {
             yield return PostgresServers.BackupSecretRef(ns, name);
+        }
+
+        if (restoring) {
+            yield return PostgresServers.RestoreSecretRef(ns, name);
         }
 
         yield return PostgresServers.ClusterRef(ns, name);
@@ -899,4 +989,146 @@ public sealed class PostgresServerReconciler(IClock clock) : IResourceReconciler
             ? (secret, null)
             : (null, PostgresServers.BackupStore.For(context.Id.Id, name, context.Grants.DataPlaneEndpoint));
     }
+
+    /// <summary>
+    ///     For a server restored from a recovery point: finds where the point's bytes are and renders
+    ///     the SOURCE's key, read from the vault, into this server's own <c>{name}-restore-s3</c>.
+    /// </summary>
+    /// <returns>
+    ///     The outcome to return from the pass, or <see langword="null" /> and the origin to render.
+    /// </returns>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The source may be gone, and that is the restore a vault exists for — #30's reclaim.</b>
+    ///         A restore used to read the source's <c>{source}-backup-s3</c> through the point's
+    ///         status, so the source's teardown left that Secret behind and its resource group could
+    ///         never be reclaimed. Now nothing here reads the source's Secret or the source's
+    ///         resource: the point names the bucket (<c>pg-{sourceId}</c>, the one durable reference to
+    ///         a server that no longer exists), and the bucket's GUID names the vault path the key is
+    ///         held at, which the source's teardown leaves in place.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The origin is read off the point once and kept in the Secret.</b> The point is the
+    ///         vault's and its retention prunes it; the Secret is this server's, kept by a parking
+    ///         teardown, so a restored server brought back from its own soft delete after its point
+    ///         expired still renders the <c>Cluster</c> it was created as. For the same reason a vault
+    ///         path that has gone — a purge of the source, once one reclaims it — keeps the copy
+    ///         already rendered rather than failing a server whose bootstrap is long finished.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Bounded to this tenant and this type by construction.</b> The vault path is built from
+    ///         this resource's own tenant and type and only the GUID comes from the point, and the
+    ///         point is one <c>recover</c> checked belongs to the caller's vault — the only way in,
+    ///         since <c>restore.recoveryPoint</c> is set only by an action.
+    ///     </para>
+    /// </remarks>
+    static async Task<(ReconcileOutcome? Problem, PostgresServers.RestoreOrigin? Origin)> ProvisionRestoreSourceAsync(
+        ReconcileContext context,
+        IKubeClusterConnection cluster,
+        CancellationToken cancellationToken
+    ) {
+        var name = context.Id.Name;
+        var recoveryPoint = PostgresServers.RecoveryPoint(context.Desired);
+
+        // ── Where from: the copy this server already holds, or the point ────────────────────────
+        var rendered = await cluster.GetAsync(PostgresServers.RestoreSecretRef(context.Namespace, name), cancellationToken);
+
+        if (rendered.TryGetError(out var renderedError) && renderedError.Code != ErrorCode.ResourceNotFound) {
+            return (ReconcileOutcome.FromFailure(renderedError), null);
+        }
+
+        var origin = rendered.IsSuccess ? PostgresServers.RestoreOrigin.FromSecret(rendered.GetValueOrThrow()) : null;
+
+        if (origin is null) {
+            var point = await cluster.GetAsync(PostgresServers.BackupRef(context.Namespace, recoveryPoint), cancellationToken);
+
+            if (point.TryGetError(out var pointError)) {
+                return pointError.Code == ErrorCode.ResourceNotFound
+                    ? (Refused(
+                        ErrorCode.ResourceNotFound,
+                        $"Recovery point '{recoveryPoint}' is gone and this server was never bootstrapped from it, so "
+                        + "there is nothing to restore. A vault's retention prunes its points; restore from one "
+                        + "listRecoveryPoints still lists."
+                    ), null)
+                    : (ReconcileOutcome.FromFailure(pointError), null);
+            }
+
+            origin = PostgresServers.RestoreOrigin.FromBackup(point.GetValueOrThrow().Json);
+
+            if (origin is null) {
+                return (Refused(
+                    ErrorCode.PreconditionFailed,
+                    $"Recovery point '{recoveryPoint}' does not record a base backup in a PostgreSQL server's bucket "
+                    + "on the platform's store (status.destinationPath s3://pg-{id}/, status.serverName and "
+                    + "status.backupId), so there is no source this server can be restored from."
+                ), null);
+            }
+
+            if (origin.EndpointUrl.Length == 0) {
+                origin = origin with { EndpointUrl = context.Grants.DataPlaneEndpoint };
+            }
+
+            if (origin.EndpointUrl.Length == 0) {
+                return (Refused(
+                    ErrorCode.PreconditionFailed,
+                    $"Recovery point '{recoveryPoint}' records no store endpoint and this deployment has no platform "
+                    + "object store configured, so the source's bucket cannot be reached."
+                ), null);
+            }
+        }
+
+        // ── The source's key, as the vault holds it ─────────────────────────────────────────────
+        var source = new ResourceId(
+            context.Id.TenantId,
+            context.Id.SubscriptionId,
+            context.Id.ResourceGroup,
+            context.Id.Type,
+            origin.ServerName,
+            origin.SourceId
+        );
+
+        var key = await ObjectStoreCredentials.HeldAsync(
+            context.Secrets,
+            ObjectStoreCredentials.VaultPathFor(source),
+            cancellationToken
+        );
+
+        if (key.TryGetError(out var keyError)) {
+            if (keyError.Code != ErrorCode.ResourceNotFound) {
+                return (ReconcileOutcome.FromFailure(keyError), null);
+            }
+
+            if (rendered.IsSuccess) {
+                return (null, origin);
+            }
+
+            return (Refused(
+                ErrorCode.ResourceNotFound,
+                $"The vault holds no key to recovery point '{recoveryPoint}''s bucket "
+                + $"'{ObjectStoreCredentials.BucketFor(PostgresServers.BucketPrefix, origin.SourceId)}', so the point "
+                + "cannot be read. The key outlives its server until a purge reclaims the bucket; one that has gone "
+                + "took the point's bytes with it."
+            ), null);
+        }
+
+        context.Log.Report(
+            "restore-source",
+            $"rendering the key to '{origin.ServerName}''s bucket into '{PostgresServers.RestoreSecretName(name)}'",
+            15
+        );
+
+        var applied = await Apply(
+            context,
+            cluster,
+            PostgresServers.SecretKind,
+            PostgresServers.RestoreSecretJson(name, key.GetValueOrThrow(), origin),
+            cancellationToken
+        );
+
+        return applied is not null ? (applied, null) : (null, origin);
+    }
+
+    /// <summary>A terminal refusal at the restore's own property: waiting will not bring a point back.</summary>
+    static ReconcileOutcome Refused(ErrorCode code, string message) =>
+        ReconcileOutcome.Failed(new Error(code, message, PostgresServers.RecoveryPointPointer), false);
 }

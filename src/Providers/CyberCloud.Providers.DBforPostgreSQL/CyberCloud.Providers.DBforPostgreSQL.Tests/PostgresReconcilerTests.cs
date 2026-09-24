@@ -223,21 +223,154 @@ public sealed class PostgresReconcilerTests {
 
         torn.IsConverged.ShouldBeTrue();
 
-        // ⚠ THE BACKUP KEY'S SECRET STAYS, ON PURPOSE (#30). A server's recovery points outlive it —
-        // the vault's schedules own them — and CloudNativePG restores from a Backup by reading the
-        // credential Secret its status names, which is this one. Removing it with the Cluster would
-        // make the restore a vault exists for, the one after the server is gone, impossible. What
-        // reclaims it is owed: charts/managed/postgres/conformance.yaml § owed,
-        // `the-backups-outlive-the-server-and-nothing-reclaims-them`.
-        connection.Objects.Keys.ShouldBe(
-            [RecordingConnection.Key(PostgresServers.BackupSecretRef(ReconcileDriver.NamespaceFor(Address("observed", TenantA, SubscriptionA)), "observed"))]
-        );
+        // ⚠ NOTHING STAYS, AND UNTIL #30'S RECLAIM THE BACKUP KEY'S SECRET DID. A restore read the
+        // point's credentials from the Secret its status named — this one — so every teardown left it,
+        // and NamespaceReclaim refused the server's resource group forever over a platform-written
+        // object. A restore now reads the source's key from the vault, so a teardown that ends the
+        // server — a hard delete, a purge, a cancelled create: Parking false — removes it.
+        connection.Objects.Keys.ShouldBeEmpty();
 
         // ⚠ The Pooler goes first. It references the Cluster by name, so removing the referent first
         // leaves the operator reconciling a Pooler whose cluster is gone — noise in the tenant's own
-        // event stream for as long as the two deletes are apart.
-        connection.Deleted[0].Kind.Kind.ShouldBe("Pooler");
-        connection.Deleted[1].Kind.Kind.ShouldBe("Cluster");
+        // event stream for as long as the two deletes are apart. The key Secret goes after the Cluster
+        // reads as gone, never before an instance that might still archive with it.
+        connection.Deleted.Select(static x => x.Kind.Kind + "/" + x.Name)
+            .ShouldBe(["Pooler/observed-pooler", "Cluster/observed", "Secret/observed-backup-s3"]);
+
+        // And the key itself is still in the vault — the half a restore of this server's points reads.
+        (await Vault.ResolveAsync(
+                new() {
+                    Path = ObjectStoreCredentials.VaultPathFor(Address("observed", TenantA, SubscriptionA)),
+                    Field = ObjectStoreCredentials.AccessKeyIdField
+                },
+                TestContext.Current.CancellationToken
+            ))
+            .IsSuccess.ShouldBeTrue("the teardown took the key out of the vault, and a restore of this server's points reads it there");
+    }
+
+    [Fact]
+    public async Task AParkingTeardownKeepsTheKeySecretsAndThePurgeRemovesThem() {
+        // ⚠ The soft delete's window brings the server back as it was, and the Cluster it re-creates
+        // names {name}-backup-s3 — so the park keeps it exactly as it keeps the claims. The purge is
+        // the same teardown with Parking false (OperationGrain drives it again), and that pass removes it.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+        var context = Context(connection, desired.RootElement);
+        var secret = RecordingConnection.Key(PostgresServers.BackupSecretRef(context.Namespace, "observed"));
+
+        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+
+        var reconciler = new PostgresServerReconciler(new FixedClock());
+        var parked = await reconciler.DeleteAsync(context with { Parking = true }, TestContext.Current.CancellationToken);
+
+        parked.IsConverged.ShouldBeTrue(parked.ToString());
+        connection.Objects.Keys.ShouldBe([secret], "a park removed the key Secret the window's restore names");
+        connection.Deleted.Select(static x => x.Kind.Kind).ShouldBe(["Pooler", "Cluster"]);
+
+        var purged = await reconciler.DeleteAsync(context, TestContext.Current.CancellationToken);
+
+        purged.IsConverged.ShouldBeTrue(purged.ToString());
+        connection.Objects.Keys.ShouldBeEmpty("the purge left the key Secret, and the group's namespace can never be reclaimed");
+    }
+
+    [Fact]
+    public async Task ATeardownIsNotConvergedWhileTheKeySecretIsStillReadable() {
+        // Clause 4, for the Secrets as for the CRs: a delete issued is not a delete done.
+        var connection = new RecordingConnection();
+        using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+        var context = Context(connection, desired.RootElement);
+
+        (await Reconcile(connection, desired.RootElement)).IsConverged.ShouldBeTrue();
+        connection.IgnoreDeletesOf = "Secret";
+
+        var torn = await new PostgresServerReconciler(new FixedClock()).DeleteAsync(context, TestContext.Current.CancellationToken);
+
+        torn.Kind.ShouldBe(ReconcileOutcomeKind.InProgress);
+        torn.Reason.ShouldContain("observed-backup-s3");
+    }
+
+    [Fact]
+    public async Task ARestoreReadsTheSourcesKeyFromTheVaultAfterTheSourceAndItsSecretAreGone() {
+        // ⚠ #30'S RECLAIM, THE HALF THAT MAKES THE TEARDOWN ABOVE SAFE. The source is created, backed
+        // up, and torn down for good — its {source}-backup-s3 goes with it — and only then is a server
+        // restored from its point. The restored Cluster must not name the source's Secret anywhere:
+        // it names its own {name}-restore-s3, holding the key the VAULT still holds for the source's
+        // bucket, and reads the source's bucket through externalClusters.
+        var connection = new RecordingConnection();
+        var reconciler = new PostgresServerReconciler(new FixedClock());
+        var token = TestContext.Current.CancellationToken;
+        var source = Address("source", TenantA, SubscriptionA) with { Id = Guid.Parse("66666666-6666-4666-8666-666666666666") };
+        var ns = ReconcileDriver.NamespaceFor(source);
+        using var sourceBody = JsonDocument.Parse(PostgresServers.Body(ClusterId));
+
+        (await Pass(reconciler, connection, source, sourceBody.RootElement)).IsConverged.ShouldBeTrue();
+
+        var sourceKey = (await ObjectStoreCredentials.HeldAsync(Vault, ObjectStoreCredentials.VaultPathFor(source), token))
+            .GetValueOrThrow();
+        var sourceBucket = ObjectStoreCredentials.BucketFor(PostgresServers.BucketPrefix, source.Id);
+
+        (await reconciler.DeleteAsync(SourceContext(connection, source, sourceBody.RootElement), token))
+            .IsConverged.ShouldBeTrue();
+        connection.Objects.ContainsKey(RecordingConnection.Key(PostgresServers.BackupSecretRef(ns, "source")))
+            .ShouldBeFalse("the source's hard delete left its key Secret");
+
+        const string point = "nightly-source-20260924010000";
+        connection.Plant(PostgresServers.BackupRef(ns, point), CompletedBackupJson(ns, point, "source", sourceBucket));
+
+        var restoredAddress = Address("restored", TenantA, SubscriptionA) with { Id = Guid.Parse("77777777-7777-4777-8777-777777777777") };
+        using var restoredBody = JsonDocument.Parse(PostgresServers.Body(ClusterId, recoveryPoint: point));
+
+        var outcome = await Pass(reconciler, connection, restoredAddress, restoredBody.RootElement);
+        outcome.IsConverged.ShouldBeTrue(outcome.ToString());
+
+        // The Secret: the restored server's name, the source's key.
+        var restoreSecret = connection.Objects[RecordingConnection.Key(PostgresServers.RestoreSecretRef(ns, "restored"))];
+        var data = JsonNode.Parse(restoreSecret)!["data"]!.AsObject();
+        Encoding.UTF8.GetString(Convert.FromBase64String(data[PostgresServers.AccessKeyIdKey]!.GetValue<string>()))
+            .ShouldBe(sourceKey.AccessKeyId);
+
+        var restoreApply = connection.Applied.Single(x => x.Target == PostgresServers.RestoreSecretRef(ns, "restored"));
+        restoreApply.Labels[KubeLabels.ResourceId].ShouldBe(KubeLabels.GuidValue(restoredAddress.Id), "the copy is the RESTORED server's, so its teardown removes it");
+
+        // The Cluster: bootstraps from the source's bucket through its own Secret.
+        var spec = Spec(connection.Objects[RecordingConnection.Key(PostgresServers.ClusterRef(ns, "restored"))]);
+        spec["bootstrap"]!["recovery"]!["source"]!.GetValue<string>().ShouldBe(PostgresServers.RestoreSourceName);
+        spec["bootstrap"]!["recovery"]!["recoveryTarget"]!["backupID"]!.GetValue<string>().ShouldBe("20260924T010000");
+        spec["bootstrap"]!["recovery"]!.AsObject().ContainsKey("backup").ShouldBeFalse("the Backup form reads the source's own Secret");
+
+        var external = spec["externalClusters"]!.AsArray().Single()!["barmanObjectStore"]!.AsObject();
+        external["destinationPath"]!.GetValue<string>().ShouldBe("s3://" + sourceBucket + "/");
+        external["serverName"]!.GetValue<string>().ShouldBe("source");
+        external["s3Credentials"]!["accessKeyId"]!["name"]!.GetValue<string>().ShouldBe("restored-restore-s3");
+        spec.ToJsonString().ShouldNotContain("source-backup-s3");
+
+        // Its own archive still goes to its own bucket.
+        spec["backup"]!["barmanObjectStore"]!["destinationPath"]!.GetValue<string>()
+            .ShouldBe("s3://" + ObjectStoreCredentials.BucketFor(PostgresServers.BucketPrefix, restoredAddress.Id) + "/");
+
+        // ⚠ The point pruned by retention does not strand the restored server: the origin is in its Secret.
+        connection.Objects.TryRemove(RecordingConnection.Key(PostgresServers.BackupRef(ns, point)), out _);
+        var later = await Pass(reconciler, connection, restoredAddress, restoredBody.RootElement);
+        later.IsConverged.ShouldBeTrue(later.ToString());
+
+        // And its own teardown takes both of its Secrets.
+        (await reconciler.DeleteAsync(SourceContext(connection, restoredAddress, restoredBody.RootElement), token))
+            .IsConverged.ShouldBeTrue();
+        connection.Objects.Keys.Where(static x => x.StartsWith("Secret/", StringComparison.Ordinal)).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task ARestoreWhosePointIsGoneBeforeItsFirstPassIsRefusedAtThePropertyAndAppliesNothing() {
+        var connection = new RecordingConnection();
+        var restoredAddress = Address("orphan", TenantA, SubscriptionA) with { Id = Guid.Parse("88888888-8888-4888-8888-888888888888") };
+        using var body = JsonDocument.Parse(PostgresServers.Body(ClusterId, recoveryPoint: "pruned-20260101010000"));
+
+        var outcome = await Pass(new PostgresServerReconciler(new FixedClock()), connection, restoredAddress, body.RootElement);
+
+        outcome.Kind.ShouldBe(ReconcileOutcomeKind.Failed);
+        outcome.Retryable.ShouldBeFalse("waiting does not bring a pruned point back");
+        outcome.Error!.Target.ShouldBe(PostgresServers.RecoveryPointPointer);
+        connection.Rendered.ShouldBeEmpty("a Cluster was applied for a restore with nothing to restore from");
     }
 
     [Fact]
@@ -597,22 +730,50 @@ public sealed class PostgresReconcilerTests {
     public void ARestoreBootstrapsFromTheRecoveryPointAndStillArchivesToItsOwnBucket() {
         using var desired = JsonDocument.Parse(PostgresServers.Body(ClusterId, recoveryPoint: "observed-20260924-0100"));
         var store = PostgresServers.BackupStore.For(Guid.NewGuid(), "restored", InMemoryObjectStoreGrants.Endpoint);
+        var origin = new PostgresServers.RestoreOrigin(Guid.NewGuid(), InMemoryObjectStoreGrants.Endpoint, "observed", "20260924T010000");
 
-        var spec = Spec(PostgresServers.ClusterJson("restored", desired.RootElement, store));
+        var spec = Spec(PostgresServers.ClusterJson("restored", desired.RootElement, store, origin));
 
         var bootstrap = spec["bootstrap"]!.AsObject();
         bootstrap.ContainsKey("initdb").ShouldBeFalse("a restore that also ran initdb would be two bootstraps");
-        bootstrap["recovery"]!["backup"]!["name"]!.GetValue<string>().ShouldBe("observed-20260924-0100");
+        bootstrap["recovery"]!["source"]!.GetValue<string>().ShouldBe(PostgresServers.RestoreSourceName);
+        bootstrap["recovery"]!["recoveryTarget"]!["backupID"]!.GetValue<string>().ShouldBe("20260924T010000");
         bootstrap["recovery"]!["database"]!.GetValue<string>().ShouldBe("app");
+        spec["externalClusters"]![0]!["barmanObjectStore"]!["destinationPath"]!.GetValue<string>().ShouldBe(origin.DestinationPath);
         spec["backup"]!["barmanObjectStore"]!["destinationPath"]!.GetValue<string>().ShouldBe(store.DestinationPath);
 
-        var rendered = JsonNode.Parse(PostgresServers.ClusterJson("restored", desired.RootElement, store))!.AsObject();
+        var rendered = JsonNode.Parse(PostgresServers.ClusterJson("restored", desired.RootElement, store, origin))!.AsObject();
         rendered["kind"] = "Cluster";
         PostgresServers.Matches(rendered.ToJsonString(), desired.RootElement).ShouldBeTrue();
+        PostgresServers.RestoreOrigin.FromCluster(rendered.ToJsonString()).ShouldBe(origin, "a teardown's pause re-renders the origin off the stored Cluster");
+
+        // ⚠ A Cluster restored before #30's reclaim carries the Backup form, and still matches: the
+        // pause over it re-renders that form rather than dropping its bootstrap.
+        var legacy = JsonNode.Parse(PostgresServers.ClusterJson("restored", desired.RootElement, store))!.AsObject();
+        legacy["kind"] = "Cluster";
+        legacy["spec"]!["bootstrap"]!["recovery"]!["backup"]!["name"]!.GetValue<string>().ShouldBe("observed-20260924-0100");
+        PostgresServers.Matches(legacy.ToJsonString(), desired.RootElement).ShouldBeTrue();
 
         using var fresh = JsonDocument.Parse(PostgresServers.Body(ClusterId));
         PostgresServers.Matches(rendered.ToJsonString(), fresh.RootElement)
             .ShouldBeFalse("a Cluster restored from a point is not the Cluster a new server's body describes");
+    }
+
+    [Theory]
+    [InlineData("s3://pg-66666666666646668666666666666666/", true)]
+    [InlineData("s3://pg-66666666666646668666666666666666", true)]
+    [InlineData("s3://tenant-bucket/pg/", false)]
+    [InlineData("s3://pg-66666666-6666-4666-8666-666666666666/", false)]
+    [InlineData("s3://pg-6666666666664666866666666666666G/", false)]
+    public void OnlyABucketOfThisFamilysShapeIsARestoreOrigin(string destinationPath, bool isOne) {
+        // ⚠ The bucket's GUID names the vault path a restore reads the key from; any other shape has
+        // no key here to read, and guessing one would read a path nothing wrote.
+        var backup = new JsonObject {
+            ["spec"] = new JsonObject { ["cluster"] = new JsonObject { ["name"] = "source" } },
+            ["status"] = new JsonObject { ["destinationPath"] = destinationPath, ["backupId"] = "20260924T010000" }
+        }.ToJsonString();
+
+        (PostgresServers.RestoreOrigin.FromBackup(backup) is not null).ShouldBe(isOne);
     }
 
     [Fact]
@@ -767,7 +928,8 @@ public sealed class PostgresReconcilerTests {
         connection.Events.Take(firstDelete)
             .Count(static x => x.StartsWith("detach:", StringComparison.Ordinal))
             .ShouldBe(4);
-        connection.Events.Skip(firstDelete).ShouldBe(["delete:Pooler/observed-pooler", "delete:Cluster/observed"]);
+        connection.Events.Skip(firstDelete)
+            .ShouldBe(["delete:Pooler/observed-pooler", "delete:Cluster/observed", "delete:Secret/observed-backup-s3"]);
 
         foreach (var claim in claims) {
             connection.Objects.ContainsKey(RecordingConnection.Key(claim)).ShouldBeTrue($"'{claim}' is gone");
@@ -857,7 +1019,7 @@ public sealed class PostgresReconcilerTests {
 
         torn.IsConverged.ShouldBeTrue(torn.ToString());
         connection.ControllerOf(claim).ShouldBeNull();
-        connection.Deleted.Select(static x => x.Kind.Kind).ShouldBe(["Pooler", "Cluster"]);
+        connection.Deleted.Select(static x => x.Kind.Kind).ShouldBe(["Pooler", "Cluster", "Secret"]);
     }
 
     [Fact]
@@ -1043,6 +1205,35 @@ public sealed class PostgresReconcilerTests {
         };
     }
 
+    /// <summary>A hard-delete context for any address — <see cref="ReconcileContext.Parking" /> left false.</summary>
+    static ReconcileContext SourceContext(IKubeClusterConnection connection, ResourceId address, JsonElement desired) =>
+        new(address, PostgresServers.V2026, desired, null, ReconcileDriver.NamespaceFor(address), connection, Vault, new NullLog()) {
+            SecretWriter = Vault,
+            Grants = Grants
+        };
+
+    /// <summary>
+    ///     A completed <c>Backup</c> as CloudNativePG 1.30 leaves one: the status fields a restore reads
+    ///     its origin off — the bucket, the endpoint, the folder and barman's id of the base backup.
+    /// </summary>
+    static string CompletedBackupJson(string ns, string name, string cluster, string bucket) =>
+        new JsonObject {
+            ["apiVersion"] = PostgresServers.BackupKind.ApiVersion,
+            ["kind"] = PostgresServers.BackupKind.Kind,
+            ["metadata"] = new JsonObject { ["name"] = name, ["namespace"] = ns },
+            ["spec"] = new JsonObject { ["cluster"] = new JsonObject { ["name"] = cluster } },
+            ["status"] = new JsonObject {
+                ["phase"] = "completed",
+                ["backupId"] = "20260924T010000",
+                ["destinationPath"] = "s3://" + bucket + "/",
+                ["endpointURL"] = InMemoryObjectStoreGrants.Endpoint,
+                ["serverName"] = cluster,
+                ["s3Credentials"] = new JsonObject {
+                    ["accessKeyId"] = new JsonObject { ["name"] = PostgresServers.BackupSecretName(cluster), ["key"] = PostgresServers.AccessKeyIdKey }
+                }
+            }
+        }.ToJsonString();
+
     /// <summary>
     ///     The vault every hand-built context reads and mints through. ⚠ Shared across the class: the
     ///     paths are per resource GUID, and a server whose key was minted by an earlier test reads it
@@ -1092,6 +1283,9 @@ sealed class RecordingConnection : IKubeClusterConnection {
 
     /// <summary>Every object deleted, in order.</summary>
     public List<ObjectRef> Deleted { get; } = [];
+
+    /// <summary>A kind whose deletes answer success and remove nothing, or empty.</summary>
+    public string IgnoreDeletesOf { get; set; } = string.Empty;
 
     /// <summary>Whether every apply answers <c>Suspended</c>.</summary>
     public bool Suspend { get; init; }
@@ -1197,6 +1391,11 @@ sealed class RecordingConnection : IKubeClusterConnection {
         CancellationToken cancellationToken = default
     ) {
         ArgumentNullException.ThrowIfNull(command);
+
+        if (command.Target.Kind.Kind == IgnoreDeletesOf) {
+            // Accepted and not carried out — an object a finalizer or a slow API server still serves.
+            return Task.FromResult(Result.Success);
+        }
 
         var removed = Objects.TryRemove(Key(command.Target), out _);
 

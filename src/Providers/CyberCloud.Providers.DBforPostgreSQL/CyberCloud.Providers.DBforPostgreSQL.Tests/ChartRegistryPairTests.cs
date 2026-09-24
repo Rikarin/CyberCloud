@@ -227,6 +227,35 @@ public sealed partial class ChartRegistryPairTests {
     }
 
     [Fact]
+    public void TheChartRestoresThroughTheRestoredServersOwnSecretAsTheReconcilerDoes() {
+        // ⚠ #30'S RECLAIM, THE TEMPLATE HALF of PostgresReconcilerTests.ARestoreReadsTheSourcesKeyFromTheVaultAfterTheSourceAndItsSecretAreGone.
+        // The restore reads the source's bucket through `externalClusters`, whose entry is named what
+        // `bootstrap.recovery.source` names and whose credentials are this server's {name}-restore-s3 —
+        // never the source's {source}-backup-s3, which the source's teardown now removes.
+        var cluster = Embedded("postgres.cluster.yaml");
+
+        Regex.IsMatch(
+            cluster,
+            $"""\n    recovery:\n      source: {PostgresServers.RestoreSourceName}\n      recoveryTarget:\n        backupID: """,
+            RegexOptions.None,
+            TimeSpan.FromSeconds(5)
+        )
+            .ShouldBeTrue("the chart's restore does not bootstrap from the externalClusters entry PostgresServers.RestoreSourceName names");
+
+        var external = Regex.Match(
+            cluster,
+            """\n  externalClusters:\n(?<block>(?:    .*\n)+)""",
+            RegexOptions.None,
+            TimeSpan.FromSeconds(5)
+        );
+
+        external.Success.ShouldBeTrue("the chart renders no externalClusters block for a restore");
+        external.Groups["block"].Value.ShouldContain($"- name: {PostgresServers.RestoreSourceName}");
+        external.Groups["block"].Value.ShouldContain("""name: {{ include "postgres.name" . }}-restore-s3""");
+        external.Groups["block"].Value.ShouldNotContain("-backup-s3");
+    }
+
+    [Fact]
     public void TheExtensionCatalogueIsTheChartsExtensionCatalogue() {
         // ⚠ THE SECOND LOOKUP TABLE THIS PAIR CARRIES TWICE, and it is the one whose drift is
         // invisible from either side. PostgresServers.ExtensionCatalogue and the `$catalogue` dict at

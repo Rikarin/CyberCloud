@@ -491,16 +491,32 @@ owed:
       are fixed and the host is shared.
   - id: the-backups-outlive-the-server-and-nothing-reclaims-them
     says: >
-      A server's teardown deletes its Pooler and Cluster and deliberately leaves {name}-backup-s3:
-      recovery points outlive the server (the vault's schedule owns them), and a restore from a Backup
-      reads the credential Secret its status names, so removing it would make the restore a vault
-      exists for — the one after the server is gone — impossible. Nothing reclaims the Secret, the
-      bucket, the store identity or the vault path after a purge either: RetainedVolumesAsync names
-      claims and has no member for a bucket. Closing it is a reclaim step on the purge that empties
-      and removes pg-{id} once no vault still lists a point of it, withdraws the principal and deletes
-      the vault path — and until then the store accumulates one bucket per server ever created, which
-      nothing meters (charts/managed/recovery-vault/conformance.yaml § owed,
-      `backup-storage-is-not-metered`).
+      Recovery points outlive the server — the vault's schedule owns them — so what they are made of
+      outlives it too: the bucket pg-{id}, the store identity the key was issued to, and the vault path
+      platform/{type}/{tenant}/{id}/objectstore holding the key. Nothing reclaims any of the three after
+      a purge: RetainedVolumesAsync names claims and has no member for a bucket, a principal or a vault
+      path. Closing it is a reclaim step on the purge that empties and removes pg-{id} once no vault
+      still lists a point of it, withdraws the principal and deletes the vault path — and until then
+      the store accumulates one bucket per server ever created, which nothing meters
+      (charts/managed/recovery-vault/conformance.yaml § owed, `backup-storage-is-not-metered`). ⚠ That
+      step has to wait for the points and not only for the server: a restored server reads its source's
+      key from the vault path on its first pass, and keeps the copy it rendered after that.
+      ✅ WHAT IS NO LONGER OWED (2026-09-24, #30's reclaim): the {name}-backup-s3 Secret. The teardown
+      used to leave it on every delete, because a restore bootstrapped from `bootstrap.recovery.backup`
+      and CloudNativePG reads that Backup's credentials from the Secret its status names — the
+      source's. #96 made the reclaim assertion honest, and ClusterConformanceTests.
+      ARealNamespaceHoldsWhatKubernetesPutsThereAndTheReclaimSeesIt found it: a purged server left
+      "1 written by this platform … Secret/real-reclaim-backup-s3", which NamespaceReclaim refuses a
+      resource group over, so in production a group that had ever held a backed-up server could never
+      be reclaimed. Now the teardown removes {name}-backup-s3 and a restore's {name}-restore-s3 unless
+      the pass is parking a soft delete (ReconcileContext.Parking) — the purge's pass removes them —
+      and a restore reads the SOURCE's key from the vault (ObjectStoreCredentials.HeldAsync), renders
+      it as the restored server's own {name}-restore-s3, and bootstraps through `externalClusters`
+      with `recoveryTarget.backupID`, so it never reads the source's Secret. PostgresReconcilerTests.
+      ARestoreReadsTheSourcesKeyFromTheVaultAfterTheSourceAndItsSecretAreGone and
+      AParkingTeardownKeepsTheKeySecretsAndThePurgeRemovesThem; RecoverThroughTheWritePathTests
+      through the manager; against a real operator, RecoveryVaultAgainstCloudNativePg deletes and
+      purges the source and restores the same point again.
   - id: customer-managed-keys
     says: >
       CyberCloud.DBforPostgreSQL/servers. OWED. THE ENGINE STEP: PostgreSQL as CloudNativePG runs it

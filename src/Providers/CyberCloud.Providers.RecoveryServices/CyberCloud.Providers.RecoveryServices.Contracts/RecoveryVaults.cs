@@ -1249,6 +1249,14 @@ public static class RecoveryVaults {
     ///     The PostgreSQL major CloudNativePG 1.30 records in <c>status.majorVersion</c>, or zero to
     ///     record none.
     /// </param>
+    /// <param name="destinationPath">
+    ///     The store the point was archived to, as the operator copies it from the source
+    ///     <c>Cluster</c> into <c>status.destinationPath</c> — the source server's own bucket — or empty
+    ///     to record none. ⚠ What a restored server reads its origin off (#30's reclaim), together
+    ///     with <paramref name="backupId" /> and <paramref name="endpointUrl" />.
+    /// </param>
+    /// <param name="backupId">barman's id of the base backup, <c>status.backupId</c>, or empty.</param>
+    /// <param name="endpointUrl">The store's endpoint, <c>status.endpointURL</c>, or empty.</param>
     /// <remarks>
     ///     ⚠ Labelled the way the operator labels — <see cref="ParentScheduledBackupLabel" /> and
     ///     <see cref="ClusterLabel" /> — and carrying <b>none</b> of the platform's seven, which is the
@@ -1264,7 +1272,10 @@ public static class RecoveryVaults {
         DateTimeOffset? stoppedAt,
         string? ownerUid = null,
         string error = "",
-        int majorVersion = 17
+        int majorVersion = 17,
+        string destinationPath = "",
+        string backupId = "",
+        string endpointUrl = ""
     ) {
         var metadata = new JsonObject {
             ["name"] = name,
@@ -1302,6 +1313,19 @@ public static class RecoveryVaults {
 
         if (majorVersion > 0) {
             status["majorVersion"] = majorVersion;
+        }
+
+        if (destinationPath.Length > 0) {
+            status["destinationPath"] = destinationPath;
+            status["serverName"] = cluster;
+        }
+
+        if (backupId.Length > 0) {
+            status["backupId"] = backupId;
+        }
+
+        if (endpointUrl.Length > 0) {
+            status["endpointURL"] = endpointUrl;
         }
 
         return new JsonObject {

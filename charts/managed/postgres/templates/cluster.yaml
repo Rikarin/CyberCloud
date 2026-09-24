@@ -91,12 +91,28 @@ spec:
     {{- end }}
 
   bootstrap:
-    {{- if .Values.restore.recoveryPoint }}
+    {{- if and .Values.restore.recoveryPoint .Values.platform.restoreBucket }}
     {{/*
-      ⚠ A restore bootstraps from a CloudNativePG Backup beside it. The operator reads the destination,
-      the endpoint and the credential Secret off that Backup's status — the source server's — so this
-      server's own backup section below points at its own, empty, bucket. PostgresServers.ClusterJson
-      renders the same block.
+      ⚠ A restore bootstraps from the SOURCE's bucket through a Secret of this server's own —
+      {name}-restore-s3, the source's key as the vault holds it — named by the one externalClusters
+      entry below; recoveryTarget.backupID picks the recovery point's base backup. This server's own
+      backup section below points at its own, empty, bucket. PostgresServers.ClusterJson renders the
+      same block.
+      ⚠ Not the Backup form any more (#30's reclaim): that one reads the credentials off the Backup's
+      status, which names the SOURCE's {source}-backup-s3, so the source's teardown had to leave that
+      Secret and its resource group could never be reclaimed.
+    */}}
+    recovery:
+      source: restore-source
+      recoveryTarget:
+        backupID: {{ .Values.platform.restoreBackupId | quote }}
+      database: {{ .Values.bootstrap.database | quote }}
+      owner: {{ .Values.bootstrap.owner | quote }}
+    {{- else if .Values.restore.recoveryPoint }}
+    {{/*
+      The Backup form, which a restored Cluster created before #30's reclaim still carries and a
+      render with no origin falls back to: the operator reads the destination, the endpoint and the
+      credential Secret off the Backup's status.
     */}}
     recovery:
       backup:
@@ -130,6 +146,22 @@ spec:
         {{- end }}
       {{- end }}
     {{- end }}
+
+  {{- if and .Values.restore.recoveryPoint .Values.platform.restoreBucket }}
+  externalClusters:
+    - name: restore-source
+      barmanObjectStore:
+        destinationPath: {{ printf "s3://%s/" .Values.platform.restoreBucket | quote }}
+        endpointURL: {{ .Values.platform.restoreEndpoint | default .Values.platform.backupEndpoint | quote }}
+        serverName: {{ .Values.platform.restoreServerName | quote }}
+        s3Credentials:
+          accessKeyId:
+            name: {{ include "postgres.name" . }}-restore-s3
+            key: ACCESS_KEY_ID
+          secretAccessKey:
+            name: {{ include "postgres.name" . }}-restore-s3
+            key: ACCESS_SECRET_KEY
+  {{- end }}
 
   storage:
     size: {{ .Values.storage.size | quote }}

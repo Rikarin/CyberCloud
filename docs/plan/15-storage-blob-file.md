@@ -277,6 +277,18 @@ retrieval latency in the object's metadata**, so an application can decide rathe
 > server, completes a `backupNow` point into the server's bucket, `recover`s it into a new server
 > and reads the row back. One copy, one store, one failure domain: the off-site second copy is
 > `the-store-is-the-servers`, rewritten to say so.
+>
+> ⚠ **Corrected 2026-09-24 (#30's reclaim): a restore no longer reads its source's Secret, so the
+> source's teardown removes it.** The copy above bootstrapped from the point's `Backup` object, and
+> CloudNativePG reads that object's credentials from the Secret its status names — the *source's*
+> `{name}-backup-s3` — so every teardown left that Secret behind, and `NamespaceReclaim`
+> ([08](08-resource-manager.md)) refused the resource group forever over a platform-written object.
+> A restore now reads the source's key from the vault, where the source's teardown leaves it,
+> renders it as the copy's own `{name}-restore-s3`, and bootstraps through `externalClusters` with the
+> point's `backupID`; a teardown that ends a server (not one parking a soft delete) removes both
+> Secrets. The CloudNativePG lane now deletes and purges the source and restores the same point a
+> second time. What still outlives a server — the bucket, the store identity, the vault path — is
+> `charts/managed/postgres/conformance.yaml § owed`, `the-backups-outlive-the-server-and-nothing-reclaims-them`.
 
 Not a storage type; a *policy* resource that binds protected resources to schedules and retention.
 
