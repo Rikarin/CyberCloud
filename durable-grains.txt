@@ -155,7 +155,7 @@ CyberCloud.Metering.Grains.UsageLedgerGrain
 # only because the dedup above is durable.
 
 # ── Providers — docs/plan/03 § Providers ───────────────────────────────────────────────────────
-# TWO, since #32 and #29 — and for fifteen families before them NOTHING, an absence that was the
+# THREE, since #32, #29 and the key vault — and for fifteen families before them NOTHING, an absence that was the
 # reviewed decision rather than an omission.
 #
 # CyberCloud.Providers.Sample is the first provider (docs/plan/24 § Phase 1, exit criterion 1) and
@@ -209,6 +209,28 @@ CyberCloud.Providers.Monitor.Alerting.AlertEvaluatorGrain
 # every feed of every tenant is exactly the operation that is impossible during the incident where
 # you need it.
 CyberCloud.Providers.ContainerRegistry.FeedGrain
+#
+# ⚠ THE THIRD PROVIDER GRAIN, AND THE MANAGER IS MISSING NOTHING HERE EITHER. KeyVaultGrain holds what
+# a tenant put INTO a CyberCloud.KeyVault/vaults through its data plane (docs/plan/18 § The resource
+# model): every version of every secret and key, their enabled/expiry attributes, and which are
+# soft-deleted until when. ResourceGrain holds the vault's declared intent — its purge protection and
+# its description — and nothing else; a secret's value in a desired body would be a secret handed to
+# every `read` holder and written into every backup of ResourceGrain.
+#
+# ⚠ DURABLE, AND THE TEST ANSWERS IN THE SHARPEST DIRECTION OF ANY LINE IN THIS FILE. "Can this be
+# rebuilt" — no, from anywhere: a generated key's private half exists nowhere else by design, so losing
+# this state is losing the key, and every ciphertext and signature made with it becomes unopenable and
+# unverifiable. docs/plan/18 § The resource model calls a deleted signing key "a business-ending
+# event"; a flushed one is the same event without the seven days. And the soft-deleted half is a
+# promise with a date on it: an item inside its recovery window must still be recoverable after an
+# incident.
+#
+# ⚠ AND NOTHING IN IT IS A SECRET IN CC1005'S SENSE, WHICH IS WHY IT MAY BE HERE AT ALL. Every value and
+# every private key is AES-256-GCM ciphertext under a per-vault root that lives in OpenBao, minted by the
+# reconciler through ISecretWriter and never written to any grain; a backup of this tier opens nothing
+# without the platform vault. KeyVaultGrainTests.TheDurableStateHoldsNoValueAndNoKeyMaterial reads the
+# stored state back and searches it for the plaintext.
+CyberCloud.Providers.KeyVault.KeyVaultGrain
 #
 # ⚠ The measurement docs/plan/25 § R1 asks for is still being taken, and this line is part of it:
 # what the feeds provider added to the platform was not a grain the manager should have held but a

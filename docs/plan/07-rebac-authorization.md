@@ -135,6 +135,19 @@ ask, because a grant to a principal since deprovisioned must remain removable. T
 `N`-form GUID a token carries as `sub` — any other spelling names a subject no token presents and is
 refused rather than folded. `RoleAssignmentTests` drives all of it through the real grains.
 
+**Four more grantable roles are data-plane roles, and no control-plane role implies them (2026-09-23,
+`SchemaVersion` 4).** `CyberCloud.KeyVault/vaults` ([18](18-security-vault-and-malware-scan.md))
+needed Azure's split between managing a vault and reading what is in it: `keyVaultSecretsOfficer`,
+`keyVaultSecretsUser`, `keyVaultCryptoOfficer` and `keyVaultCryptoUser` are roles on every scope type,
+inherited `From(parent, …)` like the three, each Officer implying its User, and none rewritten from
+`owner`, `contributor` or `reader`. The vault's actions check six permissions defined on `resource`
+in terms of them — `readSecrets`, `writeSecrets`, `purgeSecrets`, `useKeys`, `writeKeys`,
+`purgeKeys`, the two purges carrying the `!suspended` deny — so the tenant's owner is answered `403`
+on every data-plane action until a data-plane role is granted, which `assignRole` lets the owner do.
+`RoleAssignmentService.GrantableRoles` is seven, and `ReBacResourceRelationWriter.DirectRoles` drops
+all seven on a soft delete. Where this section says "the schema's three" below, it means the three
+control-plane roles.
+
 **A resource is a fifth principal type, and it is not a subject type (issue #90).** `SubjectTypes`
 stays closed at `user`, `servicePrincipal` and `managedIdentity` — what a token can carry, what can
 sign in. `principalType: "resource"` with the resource's own `N`-form GUID is what a tenant grants
@@ -194,6 +207,20 @@ that do not reference each other (`CyberCloud.ResourceManager.Contracts` does no
 **every purge test in the repository ran against a doubled authorizer** — which answers whatever its
 author believed about a permission name. `test/CyberCloud.Isolation` is what drove one through this
 schema and found it, which is the second defect that project has caught in the same way.
+
+⚠ **Owed, `action-permissions-are-undeclared`: the same defect stands for five more permissions.**
+`listKeys` (eleven types: the data services, the caches, the brokers, search, storage accounts and
+monitor workspaces), `listCredentials` (`ContainerRegistry/registries`,
+`ContainerService/managedClusters`), `listInstallCommand` (`ContainerService/connectedClusters`),
+`connect` (`Terminal/consoles`' `connect` and `terminate`) and `url` (`Dashboard/grafanas`) are each
+checked by an action, and `CyberCloudSchema` declares none of them. So on a real silo every one of
+those actions answers the canonical `404`, to every caller, the owner included. The first three
+were found by reading during #30, and the last two by the test below when it was written. None is
+fixed there. Declaring them is a `SchemaVersion` bump, and it needs a decision about which role holds
+each: Azure puts `listKeys` in Contributor, and [12](12-managed-data-services.md) wants it audited
+on every call. `HostCompositionTests.EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed`
+reads every permission the gateway's composed registry checks and pins the undeclared set to exactly
+these five, so a sixth fails the build and so does fixing one without updating the test.
 
 **Decided: `resource.purge` is `Rel("owner") & !Rel("suspended")`, and that is deliberately less
 separation than [08](08-resource-manager.md) § Soft delete describes.** That section wants *"a role

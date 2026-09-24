@@ -572,7 +572,11 @@ purge-protection pointer. Two declines stand and are decisions rather than omiss
 and a window would charge a tenant for a recovery nobody asked for; and
 `CyberCloud.ContainerService/managedClusters`, whose own refusal reads *"a soft-deleted cluster whose
 worker VMs are gone is not a cluster anybody can be handed back."* `CyberCloud.KeyVault/vaults` is
-the strongest case in the catalogue and does not exist yet.
+the strongest case in the catalogue, and ⚠ **it exists now (2026-09-23) and declares the window with a
+purge-protection pointer** — the sixth type, and the first clusterless one. It is also the first
+whose data plane is a grain rather than a cluster, which cost the driver one fact: a soft delete and a
+purge both run `DeleteAsync`, and `ReconcileContext.Parking` is what lets the reconciler seal on the
+first and destroy on the second ([18 § What landed, and what is owed](18-security-vault-and-malware-scan.md)).
 
 **Decided: a soft-deleted resource stops resolving at its address. It does not move to a new one,
 because this platform has no address for it to move to.**
@@ -1546,6 +1550,15 @@ another — and the first two types that could not were a backup vault
 and a customer-managed key ([18](18-security-vault-and-malware-scan.md)), which every provider that
 persists has to resolve. Nothing in `ReconcileContext` let a reconciler see a resource it did not
 own. The choice was between a seam above the provider and a hole in the rule.
+
+⚠ **The second of those two is only half served by this seam, measured when the key's home was
+built (2026-09-23).** `CyberCloud.KeyVault/vaults` exists now, and a consumer can *read* a vault
+through the view — but using a key is `wrapKey`/`unwrapKey`, which are actions, and the view has no
+member that could invoke one (the read-only property below is deliberate). A customer-managed key
+therefore needs a second, narrower seam beside the view — wrap and unwrap only, bound to the pass's
+resource and checked with the gateway's authorizer against the `useKeys` permission a
+`keyVaultCryptoUser` grant to `resource:{consumer}` carries.
+[18 § What customer-managed keys still need](18-security-vault-and-malware-scan.md) records it.
 
 **The seam.** `ReconcileContext` carries two new members, both bound by `ReconcileDriver` to the
 resource the pass is for and rebindable by nothing a reconciler can call:

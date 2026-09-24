@@ -91,8 +91,10 @@ framework we live inside.**
 | `Microsoft.CodeAnalysis.Analyzers` | 5.6.0 — the RS1xxx analyzer-authoring rules |
 | `Microsoft.CodeAnalysis.CSharp.Analyzer.Testing` | 1.1.4 — the analyzer test harness |
 | `Microsoft.CodeAnalysis.CSharp.Workspaces` | 5.6.0 — **transitive pin only**, see below |
+| `SSH.NET` | 2026.0.0 — **transitive pin only**, lifting Testcontainers 4.13.0's 2025.1.0 past two High advisories (GHSA-q939-rpr3-3284, GHSA-mggc-4xg6-vcxf). Nothing here opens an SSH connection; delete the pin when Testcontainers asks for 2026.0.0 itself |
+| `BouncyCastle.Cryptography` | 2.7.0 — **test projects only** (`CyberCloud.Providers.KeyVault.Tests`, `CyberCloud.Gateway.Host.Tests`), MIT: the independent implementation a key vault's signatures and ciphertexts are checked against. The vault itself uses `System.Security.Cryptography` and nothing else ([18 § What landed, and what is owed](18-security-vault-and-malware-scan.md)). 2.7.0 because the SSH.NET pin already resolves it in every Testcontainers suite |
 
-⚠ **These four rows were missing, and their absence was a real gap rather than an oversight in
+⚠ **The four `Microsoft.CodeAnalysis.*` rows were missing, and their absence was a real gap rather than an oversight in
 transcription.** Four documents assert "analyzer-enforced" — [00 § Coding standards](00-vision-and-principles.md),
 [00 § Non-negotiables](00-vision-and-principles.md), ADR-002 below, and
 [04 § Failure and upgrade](04-orleans-topology.md) — and this register listed no
@@ -117,6 +119,11 @@ produces four `NU1701` warnings — which `MSBuildTreatWarningsAsErrors` makes f
 
 ⚠ **Not `…Analyzer.Testing.XUnit`.** That variant binds to xUnit v2 and ADR-018 makes this
 repository `xunit.v3`. The base package ships `DefaultVerifier`, which needs no test framework.
+
+⚠ **The `SSH.NET` and `BouncyCastle.Cryptography` rows were added by the #30 review**, which found
+BouncyCastle pinned in `Directory.Packages.props` with no row here, and SSH.NET missing before it.
+Neither ships in a host, so neither needs an ADR. They're recorded because the sentence at the top
+of this section says anything not here does.
 
 ### Rejected / reference-only
 

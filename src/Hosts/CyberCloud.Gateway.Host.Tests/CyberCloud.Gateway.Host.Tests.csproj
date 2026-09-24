@@ -57,6 +57,25 @@
         <PackageReference Include="Testcontainers"/>
     </ItemGroup>
 
+    <!--
+      ⚠ THE SECOND SUITE THAT STEPS OUTSIDE THE NO-SILO SHAPE, AND WHY. KeyVaultOverTheGatewayTests
+      drives the key vault's data plane (docs/plan/18) over HTTP through the nine stages into the REAL
+      resource manager, the REAL ReBAC schema and the REAL KeyVaultGrain on an in-process silo, with
+      a real OpenBao holding each vault's root. Every other suite here substitutes the manager; this
+      one cannot, because what it asserts is who the real schema lets through — a control-plane owner
+      refused, a data-plane role admitted, another tenant's caller answered 404 — and a substituted
+      manager answers whatever its author believed. It lives here rather than in
+      test/CyberCloud.Isolation because the stages are internal to the gateway and this is the one
+      project they are visible to.
+    -->
+    <ItemGroup Label="An in-process silo and the key vault's independent verifier — see the comment above">
+        <PackageReference Include="Microsoft.Orleans.TestingHost"/>
+        <PackageReference Include="Microsoft.Orleans.Reminders"/>
+        <PackageReference Include="BouncyCastle.Cryptography"/>
+        <ProjectReference Include="../../CyberCloud.Authorization/CyberCloud.Authorization.csproj"/>
+        <ProjectReference Include="../../CyberCloud.Identity/CyberCloud.Identity.csproj"/>
+    </ItemGroup>
+
     <ItemGroup Label="Global usings">
         <Using Include="Xunit"/>
     </ItemGroup>

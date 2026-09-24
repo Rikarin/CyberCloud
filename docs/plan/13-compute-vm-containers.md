@@ -99,7 +99,14 @@ tree where a vault path a *tenant* spelled is resolved, by a resolver holding on
 token, into a Secret the tenant's own guest mounts; the reconciler now refuses any path outside
 `tenants/{tenantId}/` before the vault is asked (`VirtualMachines.TenantVaultPrefix`), which is the
 scoping [18 § Shape](18-security-vault-and-malware-scan.md)'s namespace-per-tenant topology
-would give and this platform's single namespace does not. And the two nouns of #28 this row does
+would give and this platform's single namespace does not. ⚠ The prefix binds the other way too:
+anything under it is something the tenant can have a guest read, so platform-held material that
+belongs to a tenant is minted outside it. A key vault's root was first minted under
+`tenants/{tenantId}/` and #30's second review moved it to `platform/CyberCloud.KeyVault/vaults/`
+([18 § What landed, and what is owed](18-security-vault-and-malware-scan.md)). The mail family's
+DKIM key and Dovecot master password are still inside it, which is owed
+(`charts/managed/mail/conformance.yaml § owed`,
+`the-credentials-sit-inside-the-tenant-vault-prefix`). And the two nouns of #28 this row does
 not land are recorded with what each waits for at `charts/managed/virtual-machine/conformance.yaml
 § owed` — scale sets are this row's (`scale-sets-are-not-landed`); container instances are the next
 row's, a provider namespace of their own.

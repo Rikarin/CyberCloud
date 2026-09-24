@@ -133,7 +133,7 @@ built on an unfinished manager is twenty copies of the manager's missing half.
 | Managed identity + token exchange | 1.2 | [11](11-identity.md) | ⚠ **Not shipped, and the type list says so rather than staying silent:** [01](01-azure-parity-catalogue.md) names `CyberCloud.ManagedIdentity/*` and nothing under it is among the 32. ⚠ **The one row that drifts the other way:** the catalogue verdicts managed identities **M2**, so this row is scheduled a phase *earlier* than the catalogue asks rather than having landed a phase early |
 | Gateway: pipeline, auth, rate limits, region proxy, SignalR hubs, LRO endpoints | 4.2 | [10](10-gateway-and-api.md) | — no resource type. ⚠ #68 is an open **blocker**: the deployed gateway registers no `ICallerContextResolver` and 500s on every request, which is a different failure from "not written" and a worse one to read a green table over |
 | **Managed Kubernetes** (CAPI + Kamaji + KubeVirt) + node pools + credentials | 4.0 | [09](09-kubernetes-fabric.md), [13](13-compute-vm-containers.md) | ◐ `ContainerService/managedClusters` and `…/agentPools` both published; **the third noun in this row is the one that is owed.** The descriptor writes `kube-secret://{namespace}/{cluster}-kubeconfig#value` and nothing resolves that scheme, so the first call through an attached connection fails on the credential — `charts/managed/kubernetes/conformance.yaml` § `the-cluster-this-creates-is-not-connectable`. #24 is open behind it: no bootable node image for a Kubernetes minor worth offering |
-| Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ⚠ **Not shipped, and here the type list says so positively rather than saying nothing:** [01](01-azure-parity-catalogue.md) names `CyberCloud.KeyVault/vaults` as an M1 type at this row's 2.0 EM, and it is not one of the 40 |
+| Vault (OpenBao) | 2.0 | [18](18-security-vault-and-malware-scan.md) | ◐ `KeyVault/vaults` published (#30's prerequisite, 2026-09-23): secrets with versions, content type, enabled/validity and a seven-day soft delete under purge protection; RSA and EC keys generated or imported, with wrap/unwrap, encrypt/decrypt and sign/verify — all as data-plane actions through the gateway, authorized by four ReBAC data-plane roles no control-plane role implies, each item sealed under a per-vault root the platform vault (`CyberCloud.Vault`, OpenBao) holds. ⚠ **It runs only where a silo is configured with `CyberCloud:Vault`, and no topology is yet:** the silo host opts in since the #30 review, the AppHost has no OpenBao, and there a vault opens and then refuses every sealing call (`openbao-on-the-platform-topology`). ⚠ **Half of the row's noun and not its topology:** [18 § Shape](18-security-vault-and-malware-scan.md)'s namespace per tenant, `transit` engine, PKI and JWT auth are not built, certificates are not a type, and the owed list is at [18 § What landed, and what is owed](18-security-vault-and-malware-scan.md) |
 | Postgres · Valkey · NATS providers | 3.0 | [12](12-managed-data-services.md) | ✅ all three — `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`. ⚠ #69 (the seven-day recovery window came back to an `initdb`) closed 2026-09-15 by taking the claims into the platform's custody across the soft delete; the operator re-electing a primary over reattached claims is the half only a cluster with CloudNativePG installed can show — `charts/managed/postgres/conformance.yaml § owed` |
 | Container registry (Harbor) | 1.5 | [13](13-compute-vm-containers.md) | ✅ `ContainerRegistry/registries` |
 | Network: VPC, subnets, security groups, public IPs, DNS, L4 LB, WireGuard | 6.3 | [14](14-networking.md) | ◐ **3.3 shipped, 3.0 ⛔ blocked outside this repository (#23).** The split is below, and it is the row this reconciliation was asked for by name |
@@ -247,7 +247,7 @@ other — see [§ Running total](#running-total), which is where the consequence
 production behind NAT; the first managed mail domain sending with a clean reputation for 30 days;
 median time-to-add-a-managed-service measured and ≤ 2 engineer-weeks.
 
-⚠ **On "28 resource types": there are 40 today**, and twenty-two of them are this phase's — the `Data`
+⚠ **On "28 resource types": there are 41 today**, and twenty-two of them are this phase's — the `Data`
 row's four, `Mail/domains`, the `Communication` row's four, `Monitor/workspaces/alertRules`, the
 four that merged on 2026-09-15 from four branches that each counted only itself
 (`Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`,
@@ -436,7 +436,7 @@ test could match and the check would quietly become a check of nothing.
 | Phase | Published types | Count |
 |---|---|---|
 | 1 — the deliberately trivial provider of exit criterion 1 | `Sample/widgets` | 1 |
-| 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles` | 15 |
+| 2 — M1 | `ContainerService/managedClusters`, `ContainerService/managedClusters/agentPools`, `DBforPostgreSQL/servers`, `Cache/redis`, `Messaging/natsClusters`, `ContainerRegistry/registries`, `Network/virtualNetworks`, `Network/virtualNetworks/subnets`, `Network/virtualNetworks/securityGroups`, `Network/virtualNetworks/loadBalancers`, `Network/publicIpAddresses`, `Storage/accounts`, `Storage/accounts/buckets`, `Monitor/workspaces`, `Terminal/consoles`, `KeyVault/vaults` | 16 |
 | 3 — M2 | `DocumentDB/accounts`, `Messaging/rabbitmqClusters`, `Messaging/kafkaClusters`, `Analytics/clickhouseClusters`, `Mail/domains`, `Communication/services`, `Communication/services/channels`, `Communication/services/templates`, `Communication/services/suppressions`, `Monitor/workspaces/alertRules`, `Storage/accounts/fileShares`, `Network/virtualNetworks/natGateways`, `ContainerService/connectedClusters`, `ContainerRegistry/feeds`, `Network/virtualNetworks/peerings`, `RecoveryServices/vaults`, `Monitor/workspaces/collectors`, `Dashboard/grafanas`, `Compute/virtualMachines`, `Compute/disks`, `Compute/images`, `Resources/deployments` | 22 |
 | 4 — M3 | `DBforMySQL/servers`, `Search/services` | 2 |
 | **Total** | | **40** |
@@ -449,12 +449,13 @@ rather than resolved, since resolving it is a catalogue change.
 
 ### What the type list cannot say
 
-⚠ **Eight of phase 2's fifteen rows have no published type, and that is not one fact but two.** The
+⚠ **Seven of phase 2's fifteen rows have no published type, and that is not one fact but two.** The
 distinction matters because one half is an absence of evidence and the other half is evidence.
 
-- **Two name a type the catalogue has and this tree has not published** — Vault
-  (`CyberCloud.KeyVault/vaults`, M1, 2.0 EM) and managed identity (`CyberCloud.ManagedIdentity/*`).
-  For those the list *says something*, and what it says is **not shipped**. Neither is marked —.
+- **One names a type the catalogue has and this tree has not published** — managed identity
+  (`CyberCloud.ManagedIdentity/*`). For it the list *says something*, and what it says is **not
+  shipped**. It is not marked —. The Vault row was the second until `CyberCloud.KeyVault/vaults`
+  was published on 2026-09-23, and is ◐ rather than ✅ for the reasons its own row gives.
 - **Six name no resource type anywhere in [01](01-azure-parity-catalogue.md) and never will** —
   identity, the gateway, metering and quota, the portal subset, `cyc`/SDK packaging and platform
   hardening. A published type is positive evidence; the absence of one, for a row that was never going

@@ -38,6 +38,7 @@ type Client struct {
 	DBforPostgreSQL   *DBforPostgreSQLProvider
 	Dashboard         *DashboardProvider
 	DocumentDB        *DocumentDBProvider
+	KeyVault          *KeyVaultProvider
 	Mail              *MailProvider
 	Messaging         *MessagingProvider
 	Monitor           *MonitorProvider
@@ -68,6 +69,7 @@ func NewClient(transport Transport) *Client {
 		DBforPostgreSQL:   newDBforPostgreSQLProvider(transport),
 		Dashboard:         newDashboardProvider(transport),
 		DocumentDB:        newDocumentDBProvider(transport),
+		KeyVault:          newKeyVaultProvider(transport),
 		Mail:              newMailProvider(transport),
 		Messaging:         newMessagingProvider(transport),
 		Monitor:           newMonitorProvider(transport),
@@ -1252,6 +1254,319 @@ func (c *DocumentDatabaseAccountClient) ListKeys(ctx context.Context, tenantID, 
 	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.DocumentDB/accounts/" + segment(resourceName) + "/listKeys"
 	var result DocumentDatabaseAccountListKeysResult
 	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// KeyVaultProvider holds the resource types of CyberCloud.KeyVault.
+type KeyVaultProvider struct {
+	Vaults *KeyVaultClient
+}
+
+// newKeyVaultProvider builds the group's clients over one transport.
+func newKeyVaultProvider(transport Transport) *KeyVaultProvider {
+	return &KeyVaultProvider{
+		Vaults: &KeyVaultClient{transport: transport},
+	}
+}
+
+// KeyVaultClient is key vaults — CyberCloud.KeyVault/vaults. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.
+type KeyVaultClient struct {
+	transport Transport
+}
+
+// Get reads one Key vault.
+func (c *KeyVaultClient) Get(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultResource, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	var result KeyVaultResource
+	if err := call(ctx, c.transport, "GET", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginCreateOrUpdate creates or replaces one Key vault. ⚠ Long-running: Wait on the result.
+func (c *KeyVaultClient) BeginCreateOrUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data KeyVaultData) (*Operation[KeyVaultResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	return begin[KeyVaultResource](ctx, c.transport, "PUT", path, data, path)
+}
+
+// BeginUpdate amends one Key vault. A merge patch: what is not set is not changed.
+func (c *KeyVaultClient) BeginUpdate(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, data KeyVaultData) (*Operation[KeyVaultResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	return begin[KeyVaultResource](ctx, c.transport, "PATCH", path, data, path)
+}
+
+// BeginDelete deletes one Key vault. ⚠ Recoverable for 7 day(s).
+func (c *KeyVaultClient) BeginDelete(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	return begin[struct{}](ctx, c.transport, "DELETE", path, nil, "")
+}
+
+// List pages through the Key vaults in a resource group. ⚠ A short page never means "that is all there is".
+func (c *KeyVaultClient) List(tenantID, subscriptionID, resourceGroupName string, options *ListOptions) *Pager[KeyVaultResource] {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults"
+	return newPager[KeyVaultResource](c.transport, path, options)
+}
+
+// CreateKey runs createKey — permission 'writeKeys'.
+func (c *KeyVaultClient) CreateKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultCreateKeyContent) (*KeyVaultCreateKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/createKey"
+	var result KeyVaultCreateKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Decrypt runs decrypt — permission 'useKeys'. ⚠ The response carries secret material.
+func (c *KeyVaultClient) Decrypt(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultDecryptContent) (*KeyVaultDecryptResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/decrypt"
+	var result KeyVaultDecryptResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteKey runs deleteKey — permission 'writeKeys'.
+func (c *KeyVaultClient) DeleteKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultDeleteKeyContent) (*KeyVaultDeleteKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/deleteKey"
+	var result KeyVaultDeleteKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteSecret runs deleteSecret — permission 'writeSecrets'.
+func (c *KeyVaultClient) DeleteSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultDeleteSecretContent) (*KeyVaultDeleteSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/deleteSecret"
+	var result KeyVaultDeleteSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Encrypt runs encrypt — permission 'useKeys'.
+func (c *KeyVaultClient) Encrypt(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultEncryptContent) (*KeyVaultEncryptResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/encrypt"
+	var result KeyVaultEncryptResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetKey runs getKey — permission 'useKeys'.
+func (c *KeyVaultClient) GetKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultGetKeyContent) (*KeyVaultGetKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/getKey"
+	var result KeyVaultGetKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetSecret runs getSecret — permission 'readSecrets'. ⚠ The response carries secret material.
+func (c *KeyVaultClient) GetSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultGetSecretContent) (*KeyVaultGetSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/getSecret"
+	var result KeyVaultGetSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ImportKey runs importKey — permission 'writeKeys'.
+func (c *KeyVaultClient) ImportKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultImportKeyContent) (*KeyVaultImportKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/importKey"
+	var result KeyVaultImportKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListDeletedKeys runs listDeletedKeys — permission 'useKeys'.
+func (c *KeyVaultClient) ListDeletedKeys(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultListDeletedKeysResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listDeletedKeys"
+	var result KeyVaultListDeletedKeysResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListDeletedSecrets runs listDeletedSecrets — permission 'readSecrets'.
+func (c *KeyVaultClient) ListDeletedSecrets(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultListDeletedSecretsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listDeletedSecrets"
+	var result KeyVaultListDeletedSecretsResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListKeyVersions runs listKeyVersions — permission 'useKeys'.
+func (c *KeyVaultClient) ListKeyVersions(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultListKeyVersionsContent) (*KeyVaultListKeyVersionsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listKeyVersions"
+	var result KeyVaultListKeyVersionsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListKeys runs listKeys — permission 'useKeys'.
+func (c *KeyVaultClient) ListKeys(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultListKeysResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listKeys"
+	var result KeyVaultListKeysResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListSecretVersions runs listSecretVersions — permission 'readSecrets'.
+func (c *KeyVaultClient) ListSecretVersions(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultListSecretVersionsContent) (*KeyVaultListSecretVersionsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listSecretVersions"
+	var result KeyVaultListSecretVersionsResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ListSecrets runs listSecrets — permission 'readSecrets'.
+func (c *KeyVaultClient) ListSecrets(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*KeyVaultListSecretsResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/listSecrets"
+	var result KeyVaultListSecretsResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginPurge runs purge — permission 'purge'. ⚠ Long-running, and it removes the resource: Wait reads nothing afterwards, because there is nothing left to read.
+func (c *KeyVaultClient) BeginPurge(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[struct{}], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/purge"
+	return begin[struct{}](ctx, c.transport, "POST", path, nil, "")
+}
+
+// PurgeDeletedKey runs purgeDeletedKey — permission 'purgeKeys'.
+func (c *KeyVaultClient) PurgeDeletedKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultPurgeDeletedKeyContent) (*KeyVaultPurgeDeletedKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/purgeDeletedKey"
+	var result KeyVaultPurgeDeletedKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// PurgeDeletedSecret runs purgeDeletedSecret — permission 'purgeSecrets'.
+func (c *KeyVaultClient) PurgeDeletedSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultPurgeDeletedSecretContent) (*KeyVaultPurgeDeletedSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/purgeDeletedSecret"
+	var result KeyVaultPurgeDeletedSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RecoverDeletedKey runs recoverDeletedKey — permission 'writeKeys'.
+func (c *KeyVaultClient) RecoverDeletedKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultRecoverDeletedKeyContent) (*KeyVaultRecoverDeletedKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/recoverDeletedKey"
+	var result KeyVaultRecoverDeletedKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// RecoverDeletedSecret runs recoverDeletedSecret — permission 'writeSecrets'.
+func (c *KeyVaultClient) RecoverDeletedSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultRecoverDeletedSecretContent) (*KeyVaultRecoverDeletedSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/recoverDeletedSecret"
+	var result KeyVaultRecoverDeletedSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// BeginRestore runs restore — permission 'write'. ⚠ Long-running: Wait resolves to the resource afterwards.
+func (c *KeyVaultClient) BeginRestore(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*Operation[KeyVaultResource], error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName)
+	return begin[KeyVaultResource](ctx, c.transport, "POST", path+"/restore", nil, path)
+}
+
+// SetSecret runs setSecret — permission 'writeSecrets'.
+func (c *KeyVaultClient) SetSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultSetSecretContent) (*KeyVaultSetSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/setSecret"
+	var result KeyVaultSetSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Sign runs sign — permission 'useKeys'.
+func (c *KeyVaultClient) Sign(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultSignContent) (*KeyVaultSignResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/sign"
+	var result KeyVaultSignResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UnwrapKey runs unwrapKey — permission 'useKeys'. ⚠ The response carries secret material.
+func (c *KeyVaultClient) UnwrapKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultUnwrapKeyContent) (*KeyVaultUnwrapKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/unwrapKey"
+	var result KeyVaultUnwrapKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateKey runs updateKey — permission 'writeKeys'.
+func (c *KeyVaultClient) UpdateKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultUpdateKeyContent) (*KeyVaultUpdateKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/updateKey"
+	var result KeyVaultUpdateKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// UpdateSecret runs updateSecret — permission 'writeSecrets'.
+func (c *KeyVaultClient) UpdateSecret(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultUpdateSecretContent) (*KeyVaultUpdateSecretResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/updateSecret"
+	var result KeyVaultUpdateSecretResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// Verify runs verify — permission 'useKeys'.
+func (c *KeyVaultClient) Verify(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultVerifyContent) (*KeyVaultVerifyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/verify"
+	var result KeyVaultVerifyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// WrapKey runs wrapKey — permission 'useKeys'.
+func (c *KeyVaultClient) WrapKey(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string, content KeyVaultWrapKeyContent) (*KeyVaultWrapKeyResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.KeyVault/vaults/" + segment(resourceName) + "/wrapKey"
+	var result KeyVaultWrapKeyResult
+	if err := call(ctx, c.transport, "POST", path, content, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil

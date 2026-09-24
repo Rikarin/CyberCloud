@@ -116,19 +116,31 @@ public sealed class RoleAssignmentService(
 )
     : IRoleAssignmentManager {
     /// <summary>
-    ///     The three relations a tenant may grant — docs/plan/07 § Azure RBAC, expressed in it's
-    ///     <c>Owner</c>, <c>Contributor</c> and <c>Reader</c>.
+    ///     The seven relations a tenant may grant — docs/plan/07 § Azure RBAC, expressed in it's
+    ///     <c>Owner</c>, <c>Contributor</c> and <c>Reader</c>, and the four key-vault data-plane
+    ///     roles of docs/plan/18 § <c>CyberCloud.KeyVault/vaults</c>.
     /// </summary>
     /// <remarks>
-    ///     ⚠ <b>A closed set here, over and above the schema's own check.</b> <c>TupleStoreGrain</c>
-    ///     refuses a relation the type does not declare, but it accepts every relation it does —
-    ///     <c>parent</c>, <c>suspended</c>, <c>member</c> — and each of those written through this
-    ///     path would be something other than a role assignment wearing its address. A deny
-    ///     assignment is Azure's <c>denyAssignments</c>, a different resource type, and it is not
-    ///     built; a parent edge is the scope path's and nobody else's.
+    ///     <para>
+    ///         ⚠ <b>A closed set here, over and above the schema's own check.</b> <c>TupleStoreGrain</c>
+    ///         refuses a relation the type does not declare, but it accepts every relation it does —
+    ///         <c>parent</c>, <c>suspended</c>, <c>member</c> — and each of those written through this
+    ///         path would be something other than a role assignment wearing its address. A deny
+    ///         assignment is Azure's <c>denyAssignments</c>, a different resource type, and it is not
+    ///         built; a parent edge is the scope path's and nobody else's.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The four data-plane roles are grantable at every scope, as Azure's are</b> — a
+    ///         Secrets User on a resource group reads every vault in it — and granting one needs
+    ///         <c>assignRole</c> like any other, so a vault's owner is the person who decides who
+    ///         reads its secrets without being, by that fact, one of them.
+    ///     </para>
     /// </remarks>
     public static FrozenSet<string> GrantableRoles { get; } =
-        new[] { Relations.Owner, Relations.Contributor, Relations.Reader }.ToFrozenSet(StringComparer.Ordinal);
+        new[] {
+            Relations.Owner, Relations.Contributor, Relations.Reader, Relations.KeyVaultSecretsOfficer,
+            Relations.KeyVaultSecretsUser, Relations.KeyVaultCryptoOfficer, Relations.KeyVaultCryptoUser
+        }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
     ///     The principal types an assignment may name: the three subject types, <c>group</c>, which

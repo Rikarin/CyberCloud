@@ -202,14 +202,18 @@ public sealed class ReBacResourceRelationWriter(IGrainFactory grains, ILogger<Re
     ///     drops.
     /// </summary>
     /// <remarks>
-    ///     ⚠ Exactly the three <c>CyberCloudSchema</c> marks as roles on
-    ///     <see cref="ReBacResourceAuthorizer.ResourceObjectType" />. It is a list rather than a query
-    ///     because the schema is not addressable from this assembly, and it is short enough that
-    ///     <c>ParentEdgeStepTests</c> can assert it against the schema's own role set rather than
-    ///     trusting it.
+    ///     ⚠ Exactly the seven <c>CyberCloudSchema</c> marks as roles on
+    ///     <see cref="ReBacResourceAuthorizer.ResourceObjectType" />: the three control-plane roles and
+    ///     the four key-vault data-plane roles. It is a list rather than a query because the schema is
+    ///     not addressable from this assembly, and it is short enough that <c>ParentEdgeStepTests</c>
+    ///     can assert it against the schema's own role set rather than trusting it. ⚠ A data-plane
+    ///     role left off this list would survive a vault's soft delete as a direct grant, and come
+    ///     back with the restore to a principal the tenant may have meant to lose it.
     /// </remarks>
-    public static ImmutableArray<string> DirectRoles { get; } =
-        [Relations.Owner, Relations.Contributor, Relations.Reader];
+    public static ImmutableArray<string> DirectRoles { get; } = [
+        Relations.Owner, Relations.Contributor, Relations.Reader, Relations.KeyVaultSecretsOfficer,
+        Relations.KeyVaultSecretsUser, Relations.KeyVaultCryptoOfficer, Relations.KeyVaultCryptoUser
+    ];
 
     /// <summary>
     ///     Moves the <c>parent</c> edge between the resource's ordinary parent and its subscription.

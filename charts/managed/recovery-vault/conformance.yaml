@@ -334,16 +334,17 @@ owed:
       The third third of #30, and NOT this type's. docs/plan/15 § The resource model puts
       customer-managed keys on the BUCKET ("customer-managed keys from the tenant's Vault are a bucket
       property (M2)"), and this vault is a backup policy, not a key store — `CyberCloud.KeyVault/vaults`
-      is the type docs/plan/24 § What has landed lists as unpublished, and the word `vault` in this
-      namespace is why the short name here is `backupvault`. STILL OWED, for the two reasons
-      charts/managed/seaweedfs/conformance.yaml § owed, `customer-managed-keys`, states: SeaweedFS
-      encrypts behind `weed volume -encryptVolumeData` and the operator's VolumeServerConfig has no
-      field for it, so platform-managed encryption is not rendered and a customer key would be a key
-      for nothing; and there is no KeyVault resource for a bucket property to reference. The seam
-      that step needed — a bucket resolving a key through `ctx.View` as `resource:{bucket}` — is the
-      one this type is the first to use, so what remains is the upstream field, then KeyVault/vaults,
-      then a new api-version of accounts/buckets. None of the three is started, and this row exists
-      so a reader of #30's three nouns finds the third accounted for beside the second.
+      is that, and the word `vault` in this namespace is why the short name here is `backupvault`.
+      ⚠ CORRECTED 2026-09-23: this row said KeyVault/vaults was unpublished, and it is published now
+      (docs/plan/18 § What landed, and what is owed). STILL OWED, and what remains is
+      charts/managed/seaweedfs/conformance.yaml § owed, `customer-managed-keys`: the engine step
+      (SeaweedFS encrypts behind `weed volume -encryptVolumeData` and the operator's VolumeServerConfig
+      has no field for it), a key-use seam — this row once said the view was that seam, and it is not:
+      `ctx.View` reads, and unwrapKey is an action — then a new api-version of accounts/buckets, then
+      revocation. The vault's own recovery points are CloudNativePG Backups in the server's object
+      store, so a recovery point is encrypted exactly when that store is. None of it is started, and
+      this row exists so a reader of #30's three nouns finds the third accounted for beside the
+      second.
   - id: grafana-dashboard
     says: >
       Piece 6's dashboard half. The vault renders no workload and the operator emits a metric per

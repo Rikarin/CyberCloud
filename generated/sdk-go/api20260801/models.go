@@ -1929,6 +1929,794 @@ type DocumentDatabaseAccountListKeysResult struct {
 	Username string `json:"username"`
 }
 
+// KeyVaultData is Key vault: the body a caller writes. Secrets and RSA/EC keys for your workloads, sealed under a platform-held root, with a seven-day recovery window and optional purge protection.
+type KeyVaultData struct {
+	// The region the vault is billed in and served from.
+	Location string `json:"location"`
+	// The vault's own settings.
+	Properties *KeyVaultProperties `json:"properties,omitempty"`
+	// Key/value tags, at most 50 pairs — docs/plan/06 § Tags, locks. Values are strings; the cap applies to the merged set, so a PATCH that adds one tag to a full bag is refused.
+	Tags map[string]string `json:"tags,omitempty"`
+}
+
+// KeyVaultProperties is The vault's own settings.
+type KeyVaultProperties struct {
+	// What the vault is for, shown in the portal beside its name.
+	Description *string `json:"description,omitempty"`
+	// Whether a deleted vault, secret or key may be purged before its seven-day recovery window ends. Once true it stays true: a write that sets it false is refused, and so is every purge until the window is out.
+	EnablePurgeProtection *bool `json:"enablePurgeProtection,omitempty"`
+}
+
+// KeyVaultResource is one Key vault, as the API returns it: the Resource envelope, then the body. ⚠ Read, never written.
+type KeyVaultResource struct {
+	Resource
+	// The body, as the caller wrote it and the manager holds it.
+	Data KeyVaultData
+}
+
+// UnmarshalJSON reads the envelope and the body off one object.
+func (r *KeyVaultResource) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &r.Resource); err != nil {
+		return err
+	}
+	return json.Unmarshal(data, &r.Data)
+}
+
+// KeyVaultCreateKeyContentCurve is the values /curve accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultCreateKeyContentCurve string
+
+const (
+	KeyVaultCreateKeyContentCurveP256 KeyVaultCreateKeyContentCurve = "P-256"
+	KeyVaultCreateKeyContentCurveP384 KeyVaultCreateKeyContentCurve = "P-384"
+	KeyVaultCreateKeyContentCurveP521 KeyVaultCreateKeyContentCurve = "P-521"
+)
+
+// KeyVaultCreateKeyContentKeyOps is the values /keyOps accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultCreateKeyContentKeyOps string
+
+const (
+	KeyVaultCreateKeyContentKeyOpsEncrypt   KeyVaultCreateKeyContentKeyOps = "encrypt"
+	KeyVaultCreateKeyContentKeyOpsDecrypt   KeyVaultCreateKeyContentKeyOps = "decrypt"
+	KeyVaultCreateKeyContentKeyOpsSign      KeyVaultCreateKeyContentKeyOps = "sign"
+	KeyVaultCreateKeyContentKeyOpsVerify    KeyVaultCreateKeyContentKeyOps = "verify"
+	KeyVaultCreateKeyContentKeyOpsWrapKey   KeyVaultCreateKeyContentKeyOps = "wrapKey"
+	KeyVaultCreateKeyContentKeyOpsUnwrapKey KeyVaultCreateKeyContentKeyOps = "unwrapKey"
+)
+
+// KeyVaultCreateKeyContentKty is the values /kty accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultCreateKeyContentKty string
+
+const (
+	KeyVaultCreateKeyContentKtyRSA KeyVaultCreateKeyContentKty = "RSA"
+	KeyVaultCreateKeyContentKtyEC  KeyVaultCreateKeyContentKty = "EC"
+)
+
+// KeyVaultCreateKeyContent is the parameters of createKey.
+type KeyVaultCreateKeyContent struct {
+	// An EC key's curve. P-256 when omitted; refused on an RSA key.
+	Curve *KeyVaultCreateKeyContentCurve `json:"curve,omitempty"`
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.
+	KeyOps []KeyVaultCreateKeyContentKeyOps `json:"keyOps,omitempty"`
+	// An RSA key's modulus in bits: 2048, 3072 or 4096. 2048 when omitted; refused on an EC key.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty KeyVaultCreateKeyContentKty `json:"kty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+}
+
+// KeyVaultCreateKeyResult is what createKey returns.
+type KeyVaultCreateKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultDecryptContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultDecryptContentAlg string
+
+const (
+	KeyVaultDecryptContentAlgRSAOAEP    KeyVaultDecryptContentAlg = "RSA-OAEP"
+	KeyVaultDecryptContentAlgRSAOAEP256 KeyVaultDecryptContentAlg = "RSA-OAEP-256"
+)
+
+// KeyVaultDecryptContent is the parameters of decrypt.
+type KeyVaultDecryptContent struct {
+	// RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+	Alg KeyVaultDecryptContentAlg `json:"alg"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The ciphertext or wrapped key, base64url without padding.
+	Value string `json:"value"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultDecryptResult is what decrypt returns. ⚠ Secret material — never log or persist this.
+type KeyVaultDecryptResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The plaintext, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultDeleteKeyContent is the parameters of deleteKey.
+type KeyVaultDeleteKeyContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+}
+
+// KeyVaultDeleteKeyResult is what deleteKey returns.
+type KeyVaultDeleteKeyResult struct {
+	// When the item was deleted.
+	DeletedOn string `json:"deletedOn"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// When the item is purged unless it is recovered first.
+	ScheduledPurgeDate string `json:"scheduledPurgeDate"`
+}
+
+// KeyVaultDeleteSecretContent is the parameters of deleteSecret.
+type KeyVaultDeleteSecretContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+}
+
+// KeyVaultDeleteSecretResult is what deleteSecret returns.
+type KeyVaultDeleteSecretResult struct {
+	// When the item was deleted.
+	DeletedOn string `json:"deletedOn"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// When the item is purged unless it is recovered first.
+	ScheduledPurgeDate string `json:"scheduledPurgeDate"`
+}
+
+// KeyVaultEncryptContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultEncryptContentAlg string
+
+const (
+	KeyVaultEncryptContentAlgRSAOAEP    KeyVaultEncryptContentAlg = "RSA-OAEP"
+	KeyVaultEncryptContentAlgRSAOAEP256 KeyVaultEncryptContentAlg = "RSA-OAEP-256"
+)
+
+// KeyVaultEncryptContent is the parameters of encrypt.
+type KeyVaultEncryptContent struct {
+	// RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+	Alg KeyVaultEncryptContentAlg `json:"alg"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The plaintext to encrypt or the key to wrap, base64url without padding.
+	Value string `json:"value"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultEncryptResult is what encrypt returns.
+type KeyVaultEncryptResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The result, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultGetKeyContent is the parameters of getKey.
+type KeyVaultGetKeyContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultGetKeyResult is what getKey returns.
+type KeyVaultGetKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultGetSecretContent is the parameters of getSecret.
+type KeyVaultGetSecretContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultGetSecretResult is what getSecret returns. ⚠ Secret material — never log or persist this.
+type KeyVaultGetSecretResult struct {
+	// What the value is. Absent when unset.
+	ContentType *string `json:"contentType,omitempty"`
+	// When the version was created.
+	Created string `json:"created"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The secret's value.
+	Value string `json:"value"`
+	// The version this response is about.
+	Version string `json:"version"`
+}
+
+// KeyVaultImportKeyContentKeyOps is the values /keyOps accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultImportKeyContentKeyOps string
+
+const (
+	KeyVaultImportKeyContentKeyOpsEncrypt   KeyVaultImportKeyContentKeyOps = "encrypt"
+	KeyVaultImportKeyContentKeyOpsDecrypt   KeyVaultImportKeyContentKeyOps = "decrypt"
+	KeyVaultImportKeyContentKeyOpsSign      KeyVaultImportKeyContentKeyOps = "sign"
+	KeyVaultImportKeyContentKeyOpsVerify    KeyVaultImportKeyContentKeyOps = "verify"
+	KeyVaultImportKeyContentKeyOpsWrapKey   KeyVaultImportKeyContentKeyOps = "wrapKey"
+	KeyVaultImportKeyContentKeyOpsUnwrapKey KeyVaultImportKeyContentKeyOps = "unwrapKey"
+)
+
+// KeyVaultImportKeyContent is the parameters of importKey.
+type KeyVaultImportKeyContent struct {
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.
+	KeyOps []KeyVaultImportKeyContentKeyOps `json:"keyOps,omitempty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// The private key as unencrypted PKCS#8 DER, in standard base64. RSA of 2048, 3072 or 4096 bits, or EC on P-256, P-384 or P-521. Sealed on arrival and never returned.
+	Pkcs8 string `json:"pkcs8"`
+}
+
+// KeyVaultImportKeyResult is what importKey returns.
+type KeyVaultImportKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultListDeletedKeysResult is what listDeletedKeys returns.
+type KeyVaultListDeletedKeysResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListDeletedSecretsResult is what listDeletedSecrets returns.
+type KeyVaultListDeletedSecretsResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListKeyVersionsContent is the parameters of listKeyVersions.
+type KeyVaultListKeyVersionsContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+}
+
+// KeyVaultListKeyVersionsResult is what listKeyVersions returns.
+type KeyVaultListKeyVersionsResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListKeysResult is what listKeys returns.
+type KeyVaultListKeysResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListSecretVersionsContent is the parameters of listSecretVersions.
+type KeyVaultListSecretVersionsContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+}
+
+// KeyVaultListSecretVersionsResult is what listSecretVersions returns.
+type KeyVaultListSecretVersionsResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultListSecretsResult is what listSecrets returns.
+type KeyVaultListSecretsResult struct {
+	// How many lines follow.
+	Count int64 `json:"count"`
+	// One line per item, ordered by name — or per version, newest first: '{name} {version} {enabled|disabled} created {created} expires {expiresOn|never}'. A deleted item's line is '{name} deleted {deletedOn} purges {scheduledPurgeDate}'.
+	Items []string `json:"items"`
+}
+
+// KeyVaultPurgeDeletedKeyContent is the parameters of purgeDeletedKey.
+type KeyVaultPurgeDeletedKeyContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+}
+
+// KeyVaultPurgeDeletedKeyResult is what purgeDeletedKey returns.
+type KeyVaultPurgeDeletedKeyResult struct {
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// True: the item and every version of it are gone.
+	Purged bool `json:"purged"`
+}
+
+// KeyVaultPurgeDeletedSecretContent is the parameters of purgeDeletedSecret.
+type KeyVaultPurgeDeletedSecretContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+}
+
+// KeyVaultPurgeDeletedSecretResult is what purgeDeletedSecret returns.
+type KeyVaultPurgeDeletedSecretResult struct {
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// True: the item and every version of it are gone.
+	Purged bool `json:"purged"`
+}
+
+// KeyVaultRecoverDeletedKeyContent is the parameters of recoverDeletedKey.
+type KeyVaultRecoverDeletedKeyContent struct {
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+}
+
+// KeyVaultRecoverDeletedKeyResult is what recoverDeletedKey returns.
+type KeyVaultRecoverDeletedKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultRecoverDeletedSecretContent is the parameters of recoverDeletedSecret.
+type KeyVaultRecoverDeletedSecretContent struct {
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+}
+
+// KeyVaultRecoverDeletedSecretResult is what recoverDeletedSecret returns.
+type KeyVaultRecoverDeletedSecretResult struct {
+	// What the value is. Absent when unset.
+	ContentType *string `json:"contentType,omitempty"`
+	// When the version was created.
+	Created string `json:"created"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+}
+
+// KeyVaultSetSecretContent is the parameters of setSecret.
+type KeyVaultSetSecretContent struct {
+	// What the value is, for the consumer — for example text/plain. Not interpreted.
+	ContentType *string `json:"contentType,omitempty"`
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+	// The secret's value. Sealed under the vault's root before it is stored.
+	Value string `json:"value"`
+}
+
+// KeyVaultSetSecretResult is what setSecret returns.
+type KeyVaultSetSecretResult struct {
+	// What the value is. Absent when unset.
+	ContentType *string `json:"contentType,omitempty"`
+	// When the version was created.
+	Created string `json:"created"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+}
+
+// KeyVaultSignContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultSignContentAlg string
+
+const (
+	KeyVaultSignContentAlgRS256 KeyVaultSignContentAlg = "RS256"
+	KeyVaultSignContentAlgRS384 KeyVaultSignContentAlg = "RS384"
+	KeyVaultSignContentAlgRS512 KeyVaultSignContentAlg = "RS512"
+	KeyVaultSignContentAlgPS256 KeyVaultSignContentAlg = "PS256"
+	KeyVaultSignContentAlgPS384 KeyVaultSignContentAlg = "PS384"
+	KeyVaultSignContentAlgPS512 KeyVaultSignContentAlg = "PS512"
+	KeyVaultSignContentAlgES256 KeyVaultSignContentAlg = "ES256"
+	KeyVaultSignContentAlgES384 KeyVaultSignContentAlg = "ES384"
+	KeyVaultSignContentAlgES512 KeyVaultSignContentAlg = "ES512"
+)
+
+// KeyVaultSignContent is the parameters of sign.
+type KeyVaultSignContent struct {
+	// A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.
+	Alg KeyVaultSignContentAlg `json:"alg"`
+	// The digest to sign, base64url. Its length must be the algorithm's hash length.
+	Digest string `json:"digest"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultSignResult is what sign returns.
+type KeyVaultSignResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The result, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultUnwrapKeyContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultUnwrapKeyContentAlg string
+
+const (
+	KeyVaultUnwrapKeyContentAlgRSAOAEP    KeyVaultUnwrapKeyContentAlg = "RSA-OAEP"
+	KeyVaultUnwrapKeyContentAlgRSAOAEP256 KeyVaultUnwrapKeyContentAlg = "RSA-OAEP-256"
+)
+
+// KeyVaultUnwrapKeyContent is the parameters of unwrapKey.
+type KeyVaultUnwrapKeyContent struct {
+	// RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+	Alg KeyVaultUnwrapKeyContentAlg `json:"alg"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The ciphertext or wrapped key, base64url without padding.
+	Value string `json:"value"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultUnwrapKeyResult is what unwrapKey returns. ⚠ Secret material — never log or persist this.
+type KeyVaultUnwrapKeyResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The plaintext, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultUpdateKeyContentKeyOps is the values /keyOps accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultUpdateKeyContentKeyOps string
+
+const (
+	KeyVaultUpdateKeyContentKeyOpsEncrypt   KeyVaultUpdateKeyContentKeyOps = "encrypt"
+	KeyVaultUpdateKeyContentKeyOpsDecrypt   KeyVaultUpdateKeyContentKeyOps = "decrypt"
+	KeyVaultUpdateKeyContentKeyOpsSign      KeyVaultUpdateKeyContentKeyOps = "sign"
+	KeyVaultUpdateKeyContentKeyOpsVerify    KeyVaultUpdateKeyContentKeyOps = "verify"
+	KeyVaultUpdateKeyContentKeyOpsWrapKey   KeyVaultUpdateKeyContentKeyOps = "wrapKey"
+	KeyVaultUpdateKeyContentKeyOpsUnwrapKey KeyVaultUpdateKeyContentKeyOps = "unwrapKey"
+)
+
+// KeyVaultUpdateKeyContent is the parameters of updateKey.
+type KeyVaultUpdateKeyContent struct {
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The operations the key permits. Omit it for every operation its type supports; an EC key signs and verifies only.
+	KeyOps []KeyVaultUpdateKeyContentKeyOps `json:"keyOps,omitempty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultUpdateKeyResult is what updateKey returns.
+type KeyVaultUpdateKeyResult struct {
+	// When the version was created.
+	Created string `json:"created"`
+	// An EC key's curve.
+	Crv *string `json:"crv,omitempty"`
+	// An RSA key's public exponent, base64url.
+	E *string `json:"e,omitempty"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// Whether the key was imported rather than generated here.
+	Imported bool `json:"imported"`
+	// The operations the key permits.
+	KeyOps []string `json:"keyOps"`
+	// An RSA key's modulus in bits.
+	KeySize *int64 `json:"keySize,omitempty"`
+	// RSA or EC.
+	Kty string `json:"kty"`
+	// An RSA key's modulus, base64url.
+	N *string `json:"n,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+	// An EC key's x coordinate, base64url.
+	X *string `json:"x,omitempty"`
+	// An EC key's y coordinate, base64url.
+	Y *string `json:"y,omitempty"`
+}
+
+// KeyVaultUpdateSecretContent is the parameters of updateSecret.
+type KeyVaultUpdateSecretContent struct {
+	// What the value is, for the consumer — for example text/plain. Not interpreted.
+	ContentType *string `json:"contentType,omitempty"`
+	// Whether the version may be used. A disabled version is refused, not hidden.
+	Enabled *bool `json:"enabled,omitempty"`
+	// The version is refused from this time on.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The version is refused before this time.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// The secret's name: 1–127 letters, digits and dashes.
+	SecretName string `json:"secretName"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultUpdateSecretResult is what updateSecret returns.
+type KeyVaultUpdateSecretResult struct {
+	// What the value is. Absent when unset.
+	ContentType *string `json:"contentType,omitempty"`
+	// When the version was created.
+	Created string `json:"created"`
+	// Whether the version may be used.
+	Enabled bool `json:"enabled"`
+	// Refused from this time on. Absent when unset.
+	ExpiresOn *string `json:"expiresOn,omitempty"`
+	// The secret's or key's name.
+	Name string `json:"name"`
+	// Refused before this time. Absent when unset.
+	NotBefore *string `json:"notBefore,omitempty"`
+	// When the version's attributes last changed.
+	Updated string `json:"updated"`
+	// The version this response is about.
+	Version string `json:"version"`
+}
+
+// KeyVaultVerifyContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultVerifyContentAlg string
+
+const (
+	KeyVaultVerifyContentAlgRS256 KeyVaultVerifyContentAlg = "RS256"
+	KeyVaultVerifyContentAlgRS384 KeyVaultVerifyContentAlg = "RS384"
+	KeyVaultVerifyContentAlgRS512 KeyVaultVerifyContentAlg = "RS512"
+	KeyVaultVerifyContentAlgPS256 KeyVaultVerifyContentAlg = "PS256"
+	KeyVaultVerifyContentAlgPS384 KeyVaultVerifyContentAlg = "PS384"
+	KeyVaultVerifyContentAlgPS512 KeyVaultVerifyContentAlg = "PS512"
+	KeyVaultVerifyContentAlgES256 KeyVaultVerifyContentAlg = "ES256"
+	KeyVaultVerifyContentAlgES384 KeyVaultVerifyContentAlg = "ES384"
+	KeyVaultVerifyContentAlgES512 KeyVaultVerifyContentAlg = "ES512"
+)
+
+// KeyVaultVerifyContent is the parameters of verify.
+type KeyVaultVerifyContent struct {
+	// A JWA signature algorithm. RS* and PS* need an RSA key, ES256/ES384/ES512 an EC key on P-256/P-384/P-521.
+	Alg KeyVaultVerifyContentAlg `json:"alg"`
+	// The digest to sign, base64url. Its length must be the algorithm's hash length.
+	Digest string `json:"digest"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The signature, base64url. An EC signature is r‖s, as JWS spells it.
+	Signature string `json:"signature"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultVerifyResult is what verify returns.
+type KeyVaultVerifyResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// Whether the signature is valid.
+	Value bool `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
+// KeyVaultWrapKeyContentAlg is the values /alg accepts. ⚠ Closed: the write path refuses anything else.
+type KeyVaultWrapKeyContentAlg string
+
+const (
+	KeyVaultWrapKeyContentAlgRSAOAEP    KeyVaultWrapKeyContentAlg = "RSA-OAEP"
+	KeyVaultWrapKeyContentAlgRSAOAEP256 KeyVaultWrapKeyContentAlg = "RSA-OAEP-256"
+)
+
+// KeyVaultWrapKeyContent is the parameters of wrapKey.
+type KeyVaultWrapKeyContent struct {
+	// RSA-OAEP (SHA-1) or RSA-OAEP-256 (SHA-256).
+	Alg KeyVaultWrapKeyContentAlg `json:"alg"`
+	// The key's name: 1–127 letters, digits and dashes.
+	KeyName string `json:"keyName"`
+	// The plaintext to encrypt or the key to wrap, base64url without padding.
+	Value string `json:"value"`
+	// A version, as 32 hex digits. Omit it for the newest.
+	Version *string `json:"version,omitempty"`
+}
+
+// KeyVaultWrapKeyResult is what wrapKey returns.
+type KeyVaultWrapKeyResult struct {
+	// The algorithm used.
+	Alg string `json:"alg"`
+	// The key that did the work.
+	Name string `json:"name"`
+	// The result, base64url.
+	Value string `json:"value"`
+	// The key version that did the work.
+	Version string `json:"version"`
+}
+
 // MailDomainPreset is the values /properties/sizing/preset accepts. ⚠ Closed: the write path refuses anything else.
 type MailDomainPreset string
 

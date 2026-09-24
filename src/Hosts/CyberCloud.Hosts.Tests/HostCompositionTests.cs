@@ -56,7 +56,8 @@ public sealed class HostCompositionTests {
     ///         fifteen, <c>CyberCloud.Communication</c> made it sixteen, <c>CyberCloud.RecoveryServices</c>
     ///         seventeen, and <c>CyberCloud.Dashboard</c> eighteen — from seventeen modules, because
     ///         the Monitor module registers two. The summary then said "seventeen" over nineteen until
-    ///         <c>CyberCloud.Resources</c> (#39) made it twenty, from nineteen modules.
+    ///         <c>CyberCloud.KeyVault</c> (#30) and <c>CyberCloud.Resources</c> (#39) made it twenty-one,
+    ///         from twenty modules.
     ///     </b> The list is what the test reads and the list was right; the number beside it
     ///     was three behind, which is the ordinary fate of a count written next to the thing it
     ///     counts. It is corrected rather than deleted because a reader who sees a number can tell at
@@ -83,6 +84,7 @@ public sealed class HostCompositionTests {
         // the two DBfor… rows, because the comparison is ordinal and `B` sorts before `a`.
         "CyberCloud.Dashboard",
         "CyberCloud.DocumentDB",
+        "CyberCloud.KeyVault",
         "CyberCloud.Mail",
         "CyberCloud.Messaging",
         "CyberCloud.Monitor",
@@ -198,6 +200,63 @@ public sealed class HostCompositionTests {
                 "Stage 6 resolves a request path against this registry. A namespace missing here is "
                 + "every path under it answering the canonical 404, which is the same answer a caller "
                 + "gets for a type that does not exist."
+            );
+    }
+
+    /// <summary>
+    ///     ⚠ Every permission the gateway's registry checks is one <c>CyberCloudSchema</c> declares
+    ///     on <c>resource</c>, except the five owed ones, which are pinned by name.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>A permission the schema does not declare can only evaluate false, and the
+    ///         enforcement seam turns a false into the canonical 404</b> — to every caller, the owner
+    ///         included. That is how <c>purge</c> shipped broken (docs/plan/07 § Azure RBAC, expressed
+    ///         in it). A provider spells its permissions without referencing the schema, so nothing
+    ///         in the compiler sees the drift. This host is where every provider and the schema meet.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>The five names below are a known defect, pinned rather than fixed.</b>
+    ///         <c>listKeys</c>, <c>listCredentials</c>, <c>listInstallCommand</c>, the cloud console's
+    ///         <c>connect</c> and Grafana's <c>url</c> are checked by other types' actions and declared
+    ///         nowhere, so every one of those actions answers 404 on a real silo. Declaring them is a
+    ///         <c>SchemaVersion</c> bump and a decision about which role holds each, which is not
+    ///         #30's. docs/plan/07 records it as owed row <c>action-permissions-are-undeclared</c>. The
+    ///         list is exact in both directions: a sixth undeclared name fails here, and so does
+    ///         declaring one of the five without removing it from this list.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task EveryPermissionTheRegistryChecksIsDeclaredOrIsOneOfTheFiveOwed() {
+        await using var gateway = await BuildGatewayAsync();
+
+        var registry = gateway.Services.GetRequiredService<IProviderRegistry>();
+        var resource = CyberCloud.Authorization.CyberCloudSchema.Instance.Type(CyberCloud.Authorization.Contracts.ObjectTypes.Resource)
+            .ShouldNotBeNull();
+
+        var checkedBy = registry.Types
+            .SelectMany(static type => new[] {
+                        (type.ReadPermission, $"{type.Type} read"), (type.WritePermission, $"{type.Type} write"),
+                        (type.DeletePermission, $"{type.Type} delete"), (type.PurgePermission, $"{type.Type} purge")
+                    }
+                    .Concat(type.Actions.Select(action => (action.Permission, $"{type.Type}/{action.Name}")))
+            )
+            .Where(static x => x.Item1.Length > 0)
+            .ToList();
+
+        checkedBy.Count.ShouldBeGreaterThan(100, "the registry lost its providers, so this test would pass vacuously");
+
+        var undeclared = checkedBy
+            .Where(x => resource.Member(x.Item1) is not { IsPermission: true })
+            .GroupBy(static x => x.Item1, StringComparer.Ordinal)
+            .OrderBy(static x => x.Key, StringComparer.Ordinal)
+            .ToList();
+
+        undeclared.Select(static x => x.Key)
+            .ShouldBe(
+                ["connect", "listCredentials", "listInstallCommand", "listKeys", "url"],
+                "undeclared, and so answering 404 to everybody: "
+                + string.Join("; ", undeclared.Select(static x => $"{x.Key} ← {string.Join(", ", x.Select(static y => y.Item2))}"))
             );
     }
 
@@ -1005,6 +1064,82 @@ public sealed class HostCompositionTests {
         silo.Services.GetRequiredService<IObjectStore>().GetType().Name.ShouldBe("S3ObjectStore");
         feeds.Services.GetRequiredService<IObjectStore>().GetType().Name.ShouldBe("S3ObjectStore");
     }
+
+    /// <summary>
+    ///     ⚠ The silo wires the OpenBao writer and resolver when <c>CyberCloud:Vault</c> is
+    ///     configured, as the gateway does, and both keep the refusing seams when it is not.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             The silo half is the half that was missing, and the #30 review found it.
+    ///         </b> Only the gateway called <c>AddOpenBaoSecretResolver</c>. But
+    ///         <c>ReconcileDriver</c> hands every reconciler the <i>silo's</i> <c>ISecretWriter</c>,
+    ///         and <c>KeyVaultGrain</c> resolves its root through the <i>silo's</i>
+    ///         <c>ISecretResolver</c>. So no configuration could have let a deployed silo mint a
+    ///         vault's root, a Valkey password or a mail domain's key. Every green key-vault run
+    ///         registered the OpenBao pair inside its own <c>TestCluster</c>.
+    ///     </para>
+    ///     <para>
+    ///         By type name, as the object-store test above does. Nothing connects to the address,
+    ///         because composition builds the client and does not call it.
+    ///     </para>
+    /// </remarks>
+    [Fact]
+    public async Task BothHostsThatReachOpenBaoWireItOnlyWhenTheVaultIsConfigured() {
+        await using var bareSilo = await BuildSiloAsync();
+        await using var bareGateway = await BuildGatewayAsync();
+
+        bareSilo.Services.GetRequiredService<ISecretWriter>().ShouldBeOfType<UnavailableSecretWriter>();
+        bareSilo.Services.GetRequiredService<ISecretResolver>().ShouldBeOfType<UnavailableSecretResolver>();
+        bareGateway.Services.GetRequiredService<ISecretResolver>().ShouldBeOfType<UnavailableSecretResolver>();
+
+        await using var silo = await SiloComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostSiloPort={FreePort()}",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                .. VaultArguments
+            ]
+        );
+
+        await using var gateway = await GatewayComposition.BuildAsync(
+            [
+                "--environment", "Development",
+                "--urls", "http://127.0.0.1:0",
+                $"--{CyberCloudClusterOptions.SectionName}:LocalhostGatewayPort={FreePort()}",
+                IssuerArgument,
+                .. VaultArguments
+            ]
+        );
+
+        silo.Services.GetRequiredService<ISecretWriter>()
+            .GetType()
+            .Name.ShouldBe(
+                "OpenBaoSecretWriter",
+                "a silo with CyberCloud:Vault configured must mint through OpenBao — every reconciler's "
+                + "ReconcileContext.SecretWriter is this registration"
+            );
+
+        silo.Services.GetRequiredService<ISecretResolver>()
+            .GetType()
+            .Name.ShouldBe(
+                "OpenBaoSecretResolver",
+                "a silo with CyberCloud:Vault configured must resolve through OpenBao — KeyVaultGrain "
+                + "unseals under this registration"
+            );
+
+        gateway.Services.GetRequiredService<ISecretResolver>().GetType().Name.ShouldBe("OpenBaoSecretResolver");
+    }
+
+    /// <summary>A vault section both hosts accept: an address, a role, and plaintext allowed for a test.</summary>
+    static readonly string[] VaultArguments = [
+        "--CyberCloud:Vault:Address=http://127.0.0.1:1",
+        "--CyberCloud:Vault:Role=cc-silo",
+        "--CyberCloud:Vault:AllowInsecureTransport=true"
+    ];
 
     /// <summary>
     ///     ⚠ The silo wires the email carrier — and, in Development, routes the platform's own codes

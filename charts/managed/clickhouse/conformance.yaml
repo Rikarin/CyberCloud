@@ -219,3 +219,16 @@ owed:
       here are databases and tables, and docs/plan/12 forbids them in as many words: "Schema is the
       tenant's problem and the resource does not manage tables." Recorded so that the next author
       finds a refusal with a reason rather than an absence that looks like the other four.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.Analytics/clickhouseClusters. OWED. THE ENGINE STEP, AND IT EXISTS IN THE ENGINE:
+      ClickHouse has an encrypted virtual disk whose key is server configuration. ⚠ The same trade as
+      charts/managed/nats: the reconciler would unwrap a data key into a Secret the pod reads, so the
+      unwrapped key lives in the tenant's cluster. The chart renders no encrypted disk today. What
+      every family still needs is docs/plan/18 § What customer-managed keys still need: (1) a key-use
+      seam — the grant is expressible today, `keyVaultCryptoUser` with principalType `resource` on a
+      CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and wrapKey/unwrapKey
+      are actions, so no reconciler can call them; (2) an `encryption.keyUri` property on a NEW
+      api-version of this type; (3) revocation — a disabled key taking the data offline, which needs a
+      re-unwrap on a schedule nothing runs. The key's home is no longer the blocker:
+      CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.

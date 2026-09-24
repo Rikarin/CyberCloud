@@ -582,6 +582,23 @@
         <Project Path="src/Providers/CyberCloud.Providers.RecoveryServices/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance/CyberCloud.Providers.RecoveryServices.Cnpg.Cluster.Conformance.csproj" />
 
         <!--
+          The nineteenth provider family — CyberCloud.KeyVault/vaults, docs/plan/18
+          § CyberCloud.KeyVault/vaults: secrets and RSA/EC keys behind a data plane of actions through
+          the gateway, sealed under a per-vault root the platform vault (CyberCloud.Vault) holds, and
+          authorized by four ReBAC data-plane roles no control-plane role implies. The prerequisite
+          #30's customer-managed keys named.
+
+          ⚠ CLUSTERLESS, AND NO .Cluster.Conformance PROJECT: a vault is a grain and a path in the
+          platform vault, so the k3s lane has nothing to apply — the same answer the Communication
+          family gives.
+        -->
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Contracts/CyberCloud.Providers.KeyVault.Contracts.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Application/CyberCloud.Providers.KeyVault.Application.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Tests/CyberCloud.Providers.KeyVault.Tests.csproj" />
+        <Project Path="src/Providers/CyberCloud.Providers.KeyVault/CyberCloud.Providers.KeyVault.Conformance/CyberCloud.Providers.KeyVault.Conformance.csproj" />
+
+        <!--
           The eighteenth provider family — CyberCloud.Compute/virtualMachines, disks and images, on
           KubeVirt and CDI. docs/plan/13 § Virtual Machines, "M2 · 3.0 EM"; the core of #28, whose scale
           sets and container instances are recorded as owed in

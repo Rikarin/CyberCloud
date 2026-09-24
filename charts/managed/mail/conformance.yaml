@@ -210,9 +210,40 @@ owed:
       selectors live at once — publish the new record, switch the signer, retire the old — and this
       platform cannot hold two live credentials for one resource, which is the same constraint that
       keeps regenerateKeys undeclared across the whole catalogue.
+  - id: the-credentials-sit-inside-the-tenant-vault-prefix
+    says: >
+      MailDomains.SecretPath is tenants/{tenantId}/CyberCloud.Mail/domains/{id}, and neither field
+      filed there is tenant-visible — the DKIM private key and the Dovecot master password, which
+      opens every mailbox on the domain. But VirtualMachines.ParseCloudInitRef accepts any
+      cloudInit.userData handle under tenants/{tenantId}/ and the VM reconciler resolves it with the
+      platform's token into a Secret the guest mounts. So a Contributor on the domain's subscription
+      who knew its GUID could put the master password into a machine they own and read mail they
+      hold no mailbox for. Found by #30's second review, which moved the key vault's root to
+      platform/ for the same reason (docs/plan/18 § What landed, and what is owed). The fix is the
+      same move, platform/CyberCloud.Mail/domains/{tenantId}/{id}, with a test beside
+      KeyVaultRootIsOutsideTheTenantPrefixTests; it was not made in #30 because it changes where a
+      family #30 does not own keeps the only copy of its DKIM key.
   - id: version-pins-are-unverified
     says: >
       Every version in MailDomains — the Dovecot minors and the three image tags — was written from
       docs/plan/17 and upstream release naming rather than from an API query on the day it was
       written. CyberCloud.ContainerService established the discipline after two of its pins turned
       out not to exist. These must be checked before the row ships.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.Mail/domains. OWED, AND ADDED BY THE #30 REVIEW, which found this family missing
+      from the thirteen. THE ENGINE STEP: the mailbox store is Dovecot's mdbox on the StatefulSet's
+      volumeClaimTemplate (templates/statefulset.yaml), and `mail-store-survives-delete` above keeps
+      it past a delete, so the mail at rest outlives the resource. Two places a customer key could
+      sit, neither built: Dovecot's mail_crypt plugin, whose global key pair would be the thing the
+      customer's key wraps, or the volume below the claim, which is charts/managed/disk's row. Which
+      of the two is unread against the pinned Dovecot, and `the-images-do-not-exist` above comes
+      first either way. The DKIM private key is a minted credential in the platform vault, not mail,
+      and is not this row's.
+      What every family still needs is docs/plan/18 § What customer-managed keys still need: (1) a
+      key-use seam — the grant is expressible today, `keyVaultCryptoUser` with principalType
+      `resource` on a CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and
+      wrapKey/unwrapKey are actions, so no reconciler can call them; (2) an `encryption.keyUri`
+      property on a NEW api-version of this type; (3) revocation — a disabled key taking the data
+      offline, which needs a re-unwrap on a schedule nothing runs. The key's home is no longer the
+      blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.

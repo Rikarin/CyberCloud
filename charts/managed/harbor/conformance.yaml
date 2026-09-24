@@ -334,3 +334,17 @@ owed:
       against SeaweedFS), which is the same store `storage-backend-is-not-the-tenants-bucket` above
       says Harbor should be using and is not. What that row owes — the proxy, retention, the storage
       and egress meters — is charts/managed/feeds/conformance.yaml § owed's to carry, not this one's.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.ContainerRegistry/registries. OWED. THE ENGINE STEP: Harbor stores images on the
+      volume this chart claims (not the tenant's bucket — `storage-backend-is-not-the-tenants-bucket`
+      above), and neither the registry nor its database encrypts at rest, so a customer key would have
+      to encrypt the volume — or, once the backend is the tenant's bucket, inherit
+      charts/managed/seaweedfs § owed, `customer-managed-keys`. What every family still needs is
+      docs/plan/18 § What customer-managed keys still need: (1) a key-use seam — the grant is
+      expressible today, `keyVaultCryptoUser` with principalType `resource` on a
+      CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and wrapKey/unwrapKey
+      are actions, so no reconciler can call them; (2) an `encryption.keyUri` property on a NEW
+      api-version of this type; (3) revocation — a disabled key taking the data offline, which needs a
+      re-unwrap on a schedule nothing runs. The key's home is no longer the blocker:
+      CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.

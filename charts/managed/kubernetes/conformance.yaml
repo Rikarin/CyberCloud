@@ -413,3 +413,21 @@ owed:
       a tenant actually wants to see — node pressure, pod scheduling, workload health — is inside the
       cluster this platform cannot reach, which needs the monitoring agent that
       `addons-need-a-connection-to-the-new-cluster` blocks.
+  - id: customer-managed-keys
+    says: >
+      CyberCloud.ContainerService/managedClusters. OWED, AND ADDED BY THE #30 REVIEW. THE ENGINE
+      STEP is AKS's own CMK case: Kubernetes Secrets encrypted at rest by the tenant API server
+      through an EncryptionConfiguration with a KMS v2 provider, the provider being a plugin that
+      calls the vault's wrapKey/unwrapKey. Nothing renders one. The KamajiControlPlane this chart
+      applies sets no encryption provider, and whether it can mount an EncryptionConfiguration
+      and a KMS socket into the API server pod is unread in the pinned Kamaji. ⚠ It matters more here
+      than elsewhere because of `datastore-is-shared-and-adr-009-says-it-should-not-be` above:
+      every tenant's Secrets sit in one shared etcd, readable to anybody holding that DataStore.
+      The node disks are charts/managed/kubernetes-agentpool's row.
+      What every family still needs is docs/plan/18 § What customer-managed keys still need: (1) a
+      key-use seam — the grant is expressible today, `keyVaultCryptoUser` with principalType
+      `resource` on a CyberCloud.KeyVault/vaults, but `ctx.View` is read-only by construction and
+      wrapKey/unwrapKey are actions, so no reconciler can call them; (2) an `encryption.keyUri`
+      property on a NEW api-version of this type; (3) revocation — a disabled key taking the data
+      offline, which needs a re-unwrap on a schedule nothing runs. The key's home is no longer the
+      blocker: CyberCloud.KeyVault/vaults was published on 2026-09-23. None of this row is started.

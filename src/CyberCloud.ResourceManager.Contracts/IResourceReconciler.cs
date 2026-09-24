@@ -161,6 +161,37 @@ public readonly record struct ReconcileContext(
     public IObjectStoreGrants Grants { get; init; } = new RefusingObjectStoreGrants();
 
     /// <summary>
+    ///     Whether this teardown pass parks the resource for a soft delete, rather than ending it —
+    ///     a hard delete, a purge or a cancelled create.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠
+    ///         <b>
+    ///             A soft delete and a purge both call <c>DeleteAsync</c>, and until this member a
+    ///             reconciler could not tell them apart.
+    ///         </b> <c>OperationGrain.DriveAsync</c> runs the teardown for both
+    ///         (docs/plan/08 § Soft delete: the window keeps the name, the body, the quota and the
+    ///         volumes, not the running data plane), and the manager destroys what a teardown kept —
+    ///         claims, through <see cref="IResourceReconciler.RetainedVolumesAsync" /> — only for
+    ///         data that lives in a cluster. A clusterless type whose data plane is a grain has
+    ///         nothing the manager can reclaim, so it has to destroy its own contents on the purge
+    ///         and keep them on the park, and this is the one fact it needs to do so.
+    ///         <c>CyberCloud.KeyVault/vaults</c> is the first type that asked: a vault's secrets are
+    ///         exactly what its seven days exist to hand back.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>False by default, which is the destructive reading, deliberately.</b> Every
+    ///         hand-built context — a test, the conformance harness's four-clause check — gets false,
+    ///         and every type that existed before this member already treats each teardown as
+    ///         final. Only <c>ReconcileDriver</c> sets it, from the operation's own
+    ///         <c>SoftDelete</c> flag, so a reconciler cannot talk itself into keeping data a purge
+    ///         asked it to remove.
+    ///     </para>
+    /// </remarks>
+    public bool Parking { get; init; }
+
+    /// <summary>
     ///     Where a pass that produced a reachable cluster says so. ⚠ Reported, not attached — the
     ///     driver performs the write, and only after the pass converges.
     /// </summary>
