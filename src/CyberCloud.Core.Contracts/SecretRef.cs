@@ -78,7 +78,6 @@ public sealed record SecretRef {
     public bool IsCanonical => IsCanonicalPath(Path);
 
     /// <summary>
-    /// <summary>
     ///     Whether a tenant-spelled vault path is inside <paramref name="prefix" />: canonical, under it,
     ///     and naming something below it rather than the prefix itself.
     /// </summary>
