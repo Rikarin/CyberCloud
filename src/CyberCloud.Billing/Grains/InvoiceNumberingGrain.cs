@@ -13,12 +13,45 @@ namespace CyberCloud.Billing.Grains;
 ///     sequence gap-free. This class holds to them in one place each: <see cref="AllocateAsync" />
 ///     answers a known document from <see cref="NumberSeriesState.ByDocument" /> before it touches the
 ///     counter, and the counter moves and the allocation is recorded in one state write.
+///     <para>
+///         ⚠ <b>A number is answered only once it's on disk, and a call that threw leaves memory
+///         suspect.</b> The first version moved the counter in memory, wrote, and let a failed write
+///         propagate with memory one ahead of storage. The retry was then answered from
+///         <see cref="NumberSeriesState.ByDocument" /> with a number no storage held, and an
+///         activation reloaded after that gave the same number to the next tenant: two invoices, one
+///         number. <see cref="Invoke" /> now re-reads the state before the first call after one that
+///         threw. ⚠ Re-read, not rolled back: a write that reports failure may have committed (a
+///         connection lost after the commit), and only storage knows which. Rolling memory back over
+///         a committed write would give that number out a second time as well.
+///         <c>InvoicingTests.ANumberWhoseWriteFailedIsNeverAnsweredFromMemory</c> and
+///         <c>InvoicingTests.AWriteThatCommittedBeforeItFailedKeepsItsNumber</c> fail the write each way.
+///     </para>
 /// </remarks>
 public sealed class InvoiceNumberingGrain(
     [PersistentState("invoice-numbering", StorageTiers.Durable)]
     IPersistentState<InvoiceNumberingState> state
 )
-    : Grain, IInvoiceNumberingGrain {
+    : Grain, IInvoiceNumberingGrain, IIncomingGrainCallFilter {
+    bool suspect;
+
+    /// <summary>Re-reads the state before the first call after one that threw, then runs the call.</summary>
+    /// <param name="context">The call.</param>
+    public async Task Invoke(IIncomingGrainCallContext context) {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (suspect) {
+            await state.ReadStateAsync();
+            suspect = false;
+        }
+
+        try {
+            await context.Invoke();
+        } catch {
+            suspect = true;
+            throw;
+        }
+    }
+
     /// <inheritdoc />
     public override Task OnActivateAsync(CancellationToken cancellationToken) {
         // ⚠ A second copy of this grain qualified with a tenant would be a second counter — two
@@ -83,22 +116,30 @@ public sealed class InvoiceNumberingGrain(
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    ///     ⚠ <b>Confirming forgets the document's key.</b> A retry of a written document never reaches
+    ///     this grain again: the account answers a finalized month, and a repeated credit-note request,
+    ///     from its own state first. So only an unconfirmed allocation needs its key, and the state this
+    ///     singleton rewrites on every call stays the size of what's in flight rather than of every
+    ///     document the platform has issued.
+    /// </remarks>
     public async Task<Result> ConfirmAsync(string issuerCode, DocumentSeries series, string number) {
         var sequence = Series(issuerCode, series);
 
-        if (!sequence.ByDocument.ContainsValue(number)) {
-            return Result.Failure(
+        if (sequence.Unconfirmed.Remove(number, out var documentKey)) {
+            sequence.ByDocument.Remove(documentKey);
+            await state.WriteStateAsync();
+            return Result.Success;
+        }
+
+        // Confirmed already, or never handed out. Once the key is gone, only the counter tells them apart.
+        return sequence.ByDocument.ContainsValue(number) || IsIssued(number, sequence.Allocated)
+            ? Result.Success
+            : Result.Failure(
                 ErrorCode.ResourceNotFound,
                 $"'{number}' was never allocated in {issuerCode}'s {series} series. Only a number this grain handed "
                 + "out can be confirmed."
             );
-        }
-
-        if (sequence.Unconfirmed.Remove(number)) {
-            await state.WriteStateAsync();
-        }
-
-        return Result.Success;
     }
 
     /// <inheritdoc />
@@ -130,6 +171,12 @@ public sealed class InvoiceNumberingGrain(
             CultureInfo.InvariantCulture,
             $"{prefix}-{(series == DocumentSeries.CreditNote ? "CN" : "INV")}-{value:D8}"
         );
+
+    /// <summary>Whether a number's sequence value is one the series has already reached.</summary>
+    static bool IsIssued(string number, long allocated) =>
+        long.TryParse(number.AsSpan(number.LastIndexOf('-') + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+        && value >= 1
+        && value <= allocated;
 
     NumberSeriesState Series(string issuerCode, DocumentSeries series) {
         var key = Key(issuerCode, series);

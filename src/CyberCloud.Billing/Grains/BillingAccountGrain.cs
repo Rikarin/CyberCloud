@@ -17,6 +17,10 @@ namespace CyberCloud.Billing.Grains;
 ///     the only places they could be broken: <see cref="FinalizeAsync" /> and
 ///     <see cref="IssueCreditNoteAsync" /> are the only writers of <c>Invoices</c> and
 ///     <c>CreditNotes</c>, and both call <c>Add</c> and nothing else.
+///     ⚠ Every call that throws leaves memory suspect, and <see cref="Invoke" /> re-reads the state
+///     before the next one—the rule <c>InvoiceNumberingGrain</c> gives the reason for. Here, an
+///     invoice added before a write that failed would otherwise be answered to the retry as finalized
+///     while no storage held it.
 /// </remarks>
 public sealed class BillingAccountGrain(
     [PersistentState("billing-account", StorageTiers.Durable)]
@@ -28,11 +32,30 @@ public sealed class BillingAccountGrain(
     IClock clock,
     ILogger<BillingAccountGrain> logger
 )
-    : Grain, IBillingAccountGrain, IRemindable {
+    : Grain, IBillingAccountGrain, IRemindable, IIncomingGrainCallFilter {
     /// <summary>The month-close reminder's name.</summary>
     public const string MonthCloseReminder = "close-months";
 
     Guid tenantId;
+    bool suspect;
+
+    /// <summary>Re-reads the state before the first call after one that threw, then runs the call.</summary>
+    /// <param name="context">The call.</param>
+    public async Task Invoke(IIncomingGrainCallContext context) {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (suspect) {
+            await state.ReadStateAsync();
+            suspect = false;
+        }
+
+        try {
+            await context.Invoke();
+        } catch {
+            suspect = true;
+            throw;
+        }
+    }
 
     /// <inheritdoc />
     public override Task OnActivateAsync(CancellationToken cancellationToken) {
@@ -139,6 +162,10 @@ public sealed class BillingAccountGrain(
             return Result<Invoice>.Success(already);
         }
 
+        if (OutOfOrder(periodStart) is { } refusal) {
+            return Result<Invoice>.Failure(ErrorCode.Conflict, refusal);
+        }
+
         var closesAt = periodStart.AddMonths(1) + IBillingAccountGrain.LateUsageWindow;
         var now = clock.UtcNow;
 
@@ -185,9 +212,7 @@ public sealed class BillingAccountGrain(
         state.State.Invoices.Add(invoice);
         await state.WriteStateAsync();
 
-        // ⚠ A confirmation that fails leaves the number listed as unconfirmed in the audit, which is a
-        // false alarm and not a gap: the invoice is written. It is not a reason to fail the call.
-        _ = await numbering.ConfirmAsync(options.Issuer.Code, DocumentSeries.Invoice, invoice.Number);
+        await ConfirmAsync(numbering, options.Issuer.Code, DocumentSeries.Invoice, invoice.Number);
 
         return Result<Invoice>.Success(invoice);
     }
@@ -208,7 +233,8 @@ public sealed class BillingAccountGrain(
 
             // ⚠ STOPS AT THE FIRST REFUSAL rather than skipping to the next month. Every refusal
             // FinalizeAsync has—no profile, no issuer, a currency—holds for the next month too, and
-            // finalizing past a gap would number a later month before an earlier one.
+            // finalizing past a gap would number a later month before an earlier one, which
+            // FinalizeAsync refuses as well (OutOfOrder).
             var finalized = await FinalizeAsync(month);
             if (finalized.TryGetError(out var error)) {
                 return Result<ImmutableArray<Invoice>>.Failure(error);
@@ -411,7 +437,7 @@ public sealed class BillingAccountGrain(
         state.State.CreditNotes.Add(note);
         await state.WriteStateAsync();
 
-        _ = await numbering.ConfirmAsync(invoice.Issuer.Code, DocumentSeries.CreditNote, note.Number);
+        await ConfirmAsync(numbering, invoice.Issuer.Code, DocumentSeries.CreditNote, note.Number);
 
         return Result<CreditNote>.Success(note);
     }
@@ -493,6 +519,52 @@ public sealed class BillingAccountGrain(
             }
         } catch (Exception error) when (error is not OperationCanceledException) {
             logger.LogWarning(error, "Tenant {Tenant}'s billing account could not arm its month close", tenantId);
+        }
+    }
+
+    /// <summary>Why a month can't be finalized yet without breaking number order, or null when it can.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Numbers follow months, and this is where that's enforced.</b> A number is allocated at
+    ///     finalization, so finalizing a month after a later one, or past an unfinalized month since
+    ///     the first attach, prints a later month with an earlier number. <see cref="CloseMonthsAsync" />
+    ///     goes oldest first and never asks out of order; a caller naming a month does.
+    ///     <see cref="BillingAccountState.FirstMonth" /> doesn't bound the past: a month before it can
+    ///     be finalized by name, as long as no later month already is.
+    /// </remarks>
+    string? OutOfOrder(DateTimeOffset periodStart) {
+        if (state.State.Invoices.LastOrDefault(x => x.PeriodStart > periodStart)?.PeriodStart is { } later) {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{later:yyyy-MM} is already finalized, so {periodStart:yyyy-MM} can't be: its number would be later than a later month's."
+            );
+        }
+
+        var previous = periodStart.AddMonths(-1);
+        if (state.State.FirstMonth is { } first && previous >= first && Finalized(previous) is null) {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{previous:yyyy-MM} isn't finalized yet, so {periodStart:yyyy-MM} can't be. Months since the first attach are numbered in order—finalize {previous:yyyy-MM} first."
+            );
+        }
+
+        return null;
+    }
+
+    /// <summary>Tells the numbering grain the document is written, and logs rather than fails if it can't.</summary>
+    /// <remarks>
+    ///     ⚠ The document is written by now, so a confirmation that's refused or throws isn't a reason
+    ///     to fail the call: its number is already on disk in the numbering grain and can't be given
+    ///     out again. What's left is a false alarm in the audit's unconfirmed list, and the warning
+    ///     says which number to clear.
+    /// </remarks>
+    async Task ConfirmAsync(IInvoiceNumberingGrain numbering, string issuerCode, DocumentSeries series, string number) {
+        try {
+            var confirmed = await numbering.ConfirmAsync(issuerCode, series, number);
+            if (confirmed.TryGetError(out var error)) {
+                logger.LogWarning("Tenant {Tenant}'s {Number} is written but was not confirmed: {Reason}", tenantId, number, error.Message);
+            }
+        } catch (Exception error) when (error is not OperationCanceledException) {
+            logger.LogWarning(error, "Tenant {Tenant}'s {Number} is written but was not confirmed", tenantId, number);
         }
     }
 

@@ -97,6 +97,7 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
         // ── 3. Groups, then resources, when the subscription said no. ─────────────────────────
         var visible = inScope;
         var mayReadSomething = wholeSubscription;
+        var mayReadWholeScope = wholeSubscription;
 
         if (!wholeSubscription) {
             var readableGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -121,6 +122,7 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
                 .. inScope.Where(x => readableGroups.Contains(x.ResourceGroup) || readableResources.Contains(x.ResourceId))
             ];
             mayReadSomething = readableGroups.Count > 0 || readableResources.Count > 0;
+            mayReadWholeScope = scope.Kind == ScopeKind.ResourceGroup && readableGroups.Contains(request.ResourceGroup);
         }
 
         // ⚠ The same answer an absent scope gets. A caller who can see nothing here learns nothing —
@@ -129,7 +131,11 @@ public sealed class CostQueryGrain(IGrainFactory grains, UsagePricing pricing) :
             return NotFound(scope);
         }
 
-        return Answer(request.Grouping, from, to, visible, visible.Count < inScope.Count);
+        // ⚠ FILTERED IS ABOUT THE CALLER, NOT ABOUT THE USAGE. It first said whether any row was
+        // withheld, which told a reader of one group whether the others had usage in the period—ask
+        // day by day and it drew their activity. It now says whether the caller's access covers less
+        // than the scope, which is the same answer whatever anyone else used.
+        return Answer(request.Grouping, from, to, visible, !mayReadWholeScope);
     }
 
     // ── The answer ───────────────────────────────────────────────────────────────────────────────

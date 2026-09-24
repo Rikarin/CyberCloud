@@ -159,7 +159,7 @@ public static class Budgets {
                     SchemaKind.Text,
                     true,
                     Description: "The CyberCloud.Communication/services resource the alert is sent through, as "
-                    + "its full resource id path. It must be in this tenant."
+                    + "its full resource id path. It must be in this budget's resource group."
                 ) {
                     Format = SchemaFormat.ResourceId,
                     MaxLength = 512,
@@ -240,13 +240,16 @@ public static class Budgets {
     /// <param name="desired">The validated desired body.</param>
     /// <returns>
     ///     <see cref="ErrorCode.InvalidRequestBody" />, targeting the pointer, for what the schema cannot
-    ///     refuse: a service path in another tenant or of another type, no threshold or too many, a
-    ///     recipient count outside 1–20, and a vocabulary word only reachable past the schema.
+    ///     refuse: a service path in another tenant, another resource group or of another type, no
+    ///     threshold or too many, a recipient count outside 1–20, and a vocabulary word only reachable
+    ///     past the schema.
     /// </returns>
     /// <remarks>
-    ///     ⚠ <b>The tenant check is the one that matters.</b> A budget in tenant A naming tenant B's
-    ///     service would send through B's channels and spend B's limits — the argument
-    ///     <c>MonitorAlertRules.ToSpec</c> makes, and <c>BudgetGrain</c> checks it again where it sends.
+    ///     ⚠ <b>The tenant and group checks are the ones that matter.</b> A budget in tenant A naming
+    ///     tenant B's service would send through B's channels and spend B's limits — the argument
+    ///     <c>MonitorAlertRules.ToSpec</c> makes. The same holds between two groups of one tenant, which
+    ///     that argument stopped short of; <see cref="InSameGroup" /> says why the group is the line.
+    ///     <c>BudgetGrain</c> checks both again where it sends.
     /// </remarks>
     public static Result<BudgetSpec> ToSpec(ResourceId id, JsonElement desired) {
         var period = Text(Property(desired, "period"), "monthly") switch {
@@ -296,6 +299,15 @@ public static class Budgets {
             return Refuse(
                 $"The notification's service belongs to tenant {service.TenantId:D} and this budget to tenant "
                 + $"{id.TenantId:D}. A budget sends through its own tenant's services only.",
+                "/properties/notification/service"
+            );
+        }
+
+        if (!InSameGroup(service, id.SubscriptionId, id.ResourceGroup)) {
+            return Refuse(
+                $"The notification's service is in resource group '{service.ResourceGroup}' of subscription "
+                + $"{service.SubscriptionId:D}, and this budget is in '{id.ResourceGroup}' of {id.SubscriptionId:D}. "
+                + "A budget sends through a service in its own resource group only.",
                 "/properties/notification/service"
             );
         }
@@ -363,6 +375,25 @@ public static class Budgets {
             }
         );
     }
+
+    /// <summary>Whether a sending service is in the budget's own resource group.</summary>
+    /// <param name="service">The service named by the notification.</param>
+    /// <param name="subscriptionId">The budget's subscription.</param>
+    /// <param name="resourceGroup">The budget's resource group.</param>
+    /// <remarks>
+    ///     ⚠ <b>The stand-in for asking whether the budget's author may use the service.</b> Nothing on
+    ///     the write path checks a <see cref="SchemaFormat.ResourceId" /> reference against its author,
+    ///     so a budget naming any service in its tenant let a writer in one group send through another
+    ///     group's service, to recipients of their choosing, on that service's spend limits. Creating a
+    ///     budget takes <c>write</c> on its group, which creates and configures services there too, so
+    ///     confining the reference to the group gives a budget's creator no service they couldn't
+    ///     already use. ⚠ Not closed: a contributor on one existing budget, and on nothing else in its
+    ///     group, can still point it at a service in that group. That half, and a service elsewhere with
+    ///     a grant from its owner, is docs/plan/22 § What is owed, <c>budget-service-grant</c>.
+    /// </remarks>
+    public static bool InSameGroup(ResourceId service, Guid subscriptionId, string resourceGroup) =>
+        service.SubscriptionId == subscriptionId
+        && string.Equals(service.ResourceGroup, resourceGroup, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Whether what the grain holds is what the body asks for.</summary>
     /// <param name="held">The budget as its grain holds it.</param>

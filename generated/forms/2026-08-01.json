@@ -435,7 +435,7 @@
           "type": "string",
           "required": true,
           "section": "notification",
-          "hint": "The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant.",
+          "hint": "The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group.",
           "maxLength": 512,
           "format": "cybercloud-resource-id",
           "placeholder": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Communication/services/alerts"

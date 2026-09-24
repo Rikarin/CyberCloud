@@ -83,7 +83,8 @@ public interface IBillingAccountGrain : IGrainWithStringKey {
     ///     invoice unchanged, which is what makes a retry after a timeout safe — and a retry that
     ///     reaches the numbering grain again gets the number it was already given, so a crash between
     ///     allocation and write costs no gap. Refused with <see cref="ErrorCode.Conflict" /> before the
-    ///     late-usage window has passed.
+    ///     late-usage window has passed, and out of order—when a later month is already finalized, or
+    ///     the month before, since the first attach, isn't—because numbers follow months.
     /// </returns>
     Task<Result<Invoice>> FinalizeAsync(DateTimeOffset periodStart);
 
@@ -171,7 +172,8 @@ public interface IInvoiceNumberingGrain : IGrainWithStringKey {
     /// <param name="documentKey">
     ///     What the number is for — <c>{tenant:N}/{yyyy-MM}</c> for an invoice, and
     ///     <c>{tenant:N}/{request id}</c> for a credit note, so a retried request gets the number its
-    ///     first attempt was given. The same key always answers the same number.
+    ///     first attempt was given. The same key answers the same number until the document confirms;
+    ///     after that the account answers a retry from its own state and never asks again.
     /// </param>
     Task<Result<string>> AllocateAsync(InvoiceIssuer issuer, DocumentSeries series, string documentKey);
 

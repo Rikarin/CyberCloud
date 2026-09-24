@@ -10,6 +10,7 @@ using CyberCloud.Metering;
 using CyberCloud.Tenancy.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.Multitenant;
+using Orleans.Storage;
 using Orleans.TestingHost;
 using System.Globalization;
 
@@ -66,6 +67,10 @@ public sealed class BillingCluster : IAsyncLifetime {
 
     /// <summary>The silo's own container — where its <c>IReminderTable</c> is a singleton.</summary>
     public IServiceProvider SiloServices => ((InProcessSiloHandle)cluster.Primary).SiloHost.Services;
+
+    /// <summary>The Durable tier the silo writes to, with a write that can be made to fail.</summary>
+    public FaultInjectingGrainStorage Durable =>
+        (FaultInjectingGrainStorage)SiloServices.GetRequiredKeyedService<IGrainStorage>(StorageTiers.Durable);
 
     /// <summary>The cluster's grain factory. ⚠ Tenant-unaware — a client.</summary>
     public IGrainFactory Grains => cluster.GrainFactory;
@@ -205,9 +210,10 @@ public sealed class BillingCluster : IAsyncLifetime {
     /// <param name="tenant">The tenant.</param>
     /// <param name="subscription">The subscription.</param>
     /// <param name="name">The service's name.</param>
+    /// <param name="group">The resource group it's in.</param>
     /// <returns>The service's path and its grain id.</returns>
-    public async Task<(string Path, Guid Id)> SendingServiceAsync(Guid tenant, Guid subscription, string name) {
-        var path = PathOf(tenant, subscription, "prod", name, "CyberCloud.Communication/services");
+    public async Task<(string Path, Guid Id)> SendingServiceAsync(Guid tenant, Guid subscription, string name, string group = "prod") {
+        var path = PathOf(tenant, subscription, group, name, "CyberCloud.Communication/services");
         ResourceId.TryParsePath(path, out var service).ShouldBeTrue();
         var id = CommunicationGrainKeys.ResourceIdFor(tenant, service.CanonicalPath);
 
@@ -268,6 +274,7 @@ public sealed class BillingCluster : IAsyncLifetime {
             silo.ConfigureServices(static services => {
                     services.AddSingleton<IClock>(TestClock.Instance);
                     services.AddSingleton<IChannelProvider>(Carriers.Email);
+                    FaultInjectingGrainStorage.Decorate(services, StorageTiers.Durable);
                 }
             );
 

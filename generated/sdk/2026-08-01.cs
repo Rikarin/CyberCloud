@@ -433,7 +433,7 @@ public sealed partial class BudgetData {
             [JsonPropertyName("recipients")]
             public IList<string> Recipients { get; set; } = new List<string>();
 
-            /// <summary>The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant.</summary>
+            /// <summary>The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group.</summary>
             /// <remarks>Required on a create.</remarks>
             [JsonPropertyName("service")]
             public required string Service { get; set; }

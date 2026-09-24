@@ -246,7 +246,7 @@ export interface BillingBudgetsData {
       channel: BillingBudgetsChannel;
       /** Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20. */
       recipients: string[];
-      /** The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant. */
+      /** The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group. */
       service: string;
     };
     /** How long a period is. Periods are calendar-aligned in UTC: a month, a quarter from January, April, July or October, or a year. */

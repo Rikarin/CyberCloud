@@ -135,6 +135,122 @@ public sealed class InvoicingTests(BillingCluster cluster) : IAsyncLifetime {
             .ShouldBe(Enumerable.Range(1, 10).Select(x => before + x));
     }
 
+    // ── A write that fails ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     ⚠ The review's finding. The numbering grain moved its counter in memory and let a failed write
+    ///     propagate, so the retry was answered from memory with a number no storage held — and the
+    ///     next activation gave it to someone else.
+    /// </summary>
+    [Fact]
+    public async Task ANumberWhoseWriteFailedIsNeverAnsweredFromMemory() {
+        var key = $"{Guid.NewGuid():N}/2026-08";
+        cluster.Durable.FailNextWrite(cluster.Numbering.GetGrainId(), StorageFault.BeforeWrite);
+
+        await Should.ThrowAsync<OrleansException>(() => cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key));
+        var retried = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key)).GetValueOrThrow();
+
+        var stored = (await StoredNumberingAsync()).Series[$"{BillingCluster.Issuer.Code}|{DocumentSeries.Invoice}"];
+        stored.ByDocument.ShouldContainKeyAndValue(key, retried, "the number the retry was answered with is the one storage holds");
+        stored.Allocated.ShouldBe(Sequence(retried), "the failed write took no number with it");
+
+        (await cluster.Numbering.ConfirmAsync(BillingCluster.Issuer.Code, DocumentSeries.Invoice, retried)).IsSuccess.ShouldBeTrue();
+    }
+
+    /// <summary>
+    ///     ⚠ Why the grain re-reads rather than rolls back: this write reached storage and then failed,
+    ///     and a grain that rolled memory back would give its number to the next document too.
+    /// </summary>
+    [Fact]
+    public async Task AWriteThatCommittedBeforeItFailedKeepsItsNumber() {
+        var key = $"{Guid.NewGuid():N}/2026-08";
+        cluster.Durable.FailNextWrite(cluster.Numbering.GetGrainId(), StorageFault.AfterWrite);
+
+        await Should.ThrowAsync<OrleansException>(() => cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key));
+        var committed = (await StoredNumberingAsync()).Series[$"{BillingCluster.Issuer.Code}|{DocumentSeries.Invoice}"].ByDocument[key];
+
+        var next = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, $"{Guid.NewGuid():N}/2026-08")).GetValueOrThrow();
+        var retried = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, key)).GetValueOrThrow();
+
+        retried.ShouldBe(committed);
+        Sequence(next).ShouldBe(Sequence(committed) + 1, "the next document gets the next number, not the committed one again");
+
+        foreach (var number in new[] { committed, next }) {
+            (await cluster.Numbering.ConfirmAsync(BillingCluster.Issuer.Code, DocumentSeries.Invoice, number)).IsSuccess.ShouldBeTrue();
+        }
+    }
+
+    /// <summary>
+    ///     ⚠ The other half of the review's scenario: the invoice is written and its confirmation fails.
+    ///     The finalization succeeds, the audit shows a false alarm, and the next tenant's number is
+    ///     the next one.
+    /// </summary>
+    [Fact]
+    public async Task AFinalizationWhoseConfirmationFailsIsStillFinalizedAndItsNumberIsNotReused() {
+        var (tenant, _) = await ConfiguredAsync(Czech);
+        var (other, _) = await ConfiguredAsync(Czech);
+
+        // Allocated ahead, so the finalization's one write to the numbering grain is its confirmation.
+        var number = (await cluster.Numbering.AllocateAsync(BillingCluster.Issuer, DocumentSeries.Invoice, $"{tenant:N}/2026-08")).GetValueOrThrow();
+        cluster.Durable.FailNextWrite(cluster.Numbering.GetGrainId(), StorageFault.BeforeWrite);
+
+        var invoice = (await cluster.Account(tenant).FinalizeAsync(August)).GetValueOrThrow();
+        var audit = (await cluster.Numbering.AuditAsync(BillingCluster.Issuer.Code, DocumentSeries.Invoice)).GetValueOrThrow();
+        var next = (await cluster.Account(other).FinalizeAsync(August)).GetValueOrThrow();
+
+        invoice.Number.ShouldBe(number);
+        audit.Unconfirmed.ShouldContain(number, "unconfirmed is a false alarm here, and not a gap");
+        Sequence(next.Number).ShouldBe(Sequence(number) + 1);
+
+        (await cluster.Numbering.ConfirmAsync(BillingCluster.Issuer.Code, DocumentSeries.Invoice, number)).IsSuccess.ShouldBeTrue();
+        (await cluster.Numbering.ConfirmAsync(BillingCluster.Issuer.Code, DocumentSeries.Invoice, number))
+            .IsSuccess.ShouldBeTrue("confirming twice is still a success, though the key is gone");
+    }
+
+    /// <summary>The same rule in the account: an invoice whose write failed isn't answered as finalized.</summary>
+    [Fact]
+    public async Task AnInvoiceWhoseWriteFailedIsNotAnsweredAsFinalized() {
+        var (tenant, _) = await ConfiguredAsync(Czech);
+        var account = cluster.Account(tenant);
+        var before = (await cluster.Numbering.AuditAsync(BillingCluster.Issuer.Code, DocumentSeries.Invoice)).GetValueOrThrow().Allocated;
+        cluster.Durable.FailNextWrite(account.GetGrainId(), StorageFault.BeforeWrite);
+
+        await Should.ThrowAsync<OrleansException>(() => account.FinalizeAsync(August));
+        var listed = (await account.ListInvoicesAsync()).GetValueOrThrow();
+        var retried = (await account.FinalizeAsync(August)).GetValueOrThrow();
+        var stored = await cluster.Durable.ReadAsync<BillingAccountState>("billing-account", account.GetGrainId());
+
+        listed.ShouldBeEmpty("storage holds no invoice, so neither does the answer");
+        Sequence(retried.Number).ShouldBe(before + 1, "the retry gets the number the failed attempt was given");
+        stored.Invoices.ShouldHaveSingleItem().Number.ShouldBe(retried.Number);
+    }
+
+    // ── Months in order ───────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AMonthIsNotFinalizedPastAnUnfinalizedOneOrAfterALaterOne() {
+        // Attached on 2026-09-10, so September is the first month the close owns.
+        var (tenant, _) = await ConfiguredAsync(Czech);
+        var account = cluster.Account(tenant);
+        var october = September.AddMonths(1);
+        TestClock.Instance.Set(october.AddMonths(1) + IBillingAccountGrain.LateUsageWindow);
+        var before = (await cluster.Numbering.AuditAsync(BillingCluster.Issuer.Code, DocumentSeries.Invoice)).GetValueOrThrow().Allocated;
+
+        var skipped = await account.FinalizeAsync(october);
+        var afterSkip = (await cluster.Numbering.AuditAsync(BillingCluster.Issuer.Code, DocumentSeries.Invoice)).GetValueOrThrow().Allocated;
+
+        skipped.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        skipped.Error.Message.ShouldContain("2026-09 isn't finalized yet");
+        afterSkip.ShouldBe(before, "a refusal takes no number");
+
+        (await account.FinalizeAsync(September)).IsSuccess.ShouldBeTrue();
+        (await account.FinalizeAsync(october)).IsSuccess.ShouldBeTrue();
+
+        var late = await account.FinalizeAsync(August);
+        late.Error!.Code.ShouldBe(ErrorCode.Conflict);
+        late.Error.Message.ShouldContain("2026-10 is already finalized");
+    }
+
     [Fact]
     public async Task AReverseChargedInvoiceSaysSoAndChargesNoVat() {
         var (tenant, subscription) = await ConfiguredAsync(
@@ -418,6 +534,9 @@ public sealed class InvoicingTests(BillingCluster cluster) : IAsyncLifetime {
             ApprovedBy = "billing@cybercloud.test",
             RequestId = requestId
         };
+
+    Task<InvoiceNumberingState> StoredNumberingAsync() =>
+        cluster.Durable.ReadAsync<InvoiceNumberingState>("invoice-numbering", cluster.Numbering.GetGrainId());
 
     static long Sequence(string number) => long.Parse(number[^8..], System.Globalization.CultureInfo.InvariantCulture);
 }

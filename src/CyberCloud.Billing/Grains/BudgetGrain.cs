@@ -339,11 +339,15 @@ public sealed class BudgetGrain(
             return $"not sent: '{spec.Notification.Channel}' is not a channel the sending module has";
         }
 
-        // ⚠ The tenant check a second time, here, because this is the one place that sends. The
-        // reconciler refuses a path in another tenant (Budgets.ToSpec), and a spec that reached the grain
-        // some other way would otherwise send through — and spend the limits of — another tenant's service.
-        if (!ResourceId.TryParsePath(spec.Notification.ServicePath, out var service) || service.TenantId != tenantId) {
-            return $"not sent: '{spec.Notification.ServicePath}' is not a sending service in this budget's tenant";
+        // ⚠ The tenant and group checks a second time, here, because this is the one place that sends.
+        // The reconciler refuses a path in another tenant or group (Budgets.ToSpec, and
+        // Budgets.InSameGroup for why the group), and a spec that reached the grain some other way would
+        // otherwise send through — and spend the limits of — a service its author may not use.
+        if (!ResourceId.TryParsePath(spec.Notification.ServicePath, out var service)
+            || service.TenantId != tenantId
+            || service.SubscriptionId != spec.SubscriptionId
+            || !string.Equals(service.ResourceGroup, spec.ResourceGroup, StringComparison.OrdinalIgnoreCase)) {
+            return $"not sent: '{spec.Notification.ServicePath}' is not a sending service in this budget's resource group";
         }
 
         var serviceId = CommunicationGrainKeys.ResourceIdFor(service.TenantId, service.CanonicalPath);

@@ -269,6 +269,7 @@ public static class SiloComposition {
                 //
                 // ⚠ The issuer is bound from CyberCloud:Billing:Issuer and has no default: a silo
                 // without it prices costs and budgets and refuses an invoice, draft or final — BillingOptions.
+                // Nothing deployed sets it yet: docs/plan/22 § What is owed, issuer-configuration.
                 .AddCyberCloudMetering()
                 .AddCyberCloudBilling(BillingOptions.Bind(silo.Configuration))
                 // ── The first tenant's prerequisites — docs/plan/05 § The shard map, docs/plan/06 ─────

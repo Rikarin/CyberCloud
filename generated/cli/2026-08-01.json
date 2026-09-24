@@ -711,7 +711,7 @@
                   "name": "--service",
                   "type": "string",
                   "required": true,
-                  "summary": "The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant.",
+                  "summary": "The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group.",
                   "jsonPointer": "/properties/notification/service",
                   "example": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Communication/services/alerts"
                 },
@@ -1007,7 +1007,7 @@
                   "name": "--service",
                   "type": "string",
                   "required": false,
-                  "summary": "The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant.",
+                  "summary": "The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group.",
                   "jsonPointer": "/properties/notification/service",
                   "example": "/tenants/11111111-1111-4111-8111-111111111111/subscriptions/33333333-3333-4333-8333-333333333333/resourceGroups/prod/providers/CyberCloud.Communication/services/alerts"
                 },

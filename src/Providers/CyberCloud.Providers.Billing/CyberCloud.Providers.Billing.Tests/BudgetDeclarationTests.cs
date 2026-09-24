@@ -71,6 +71,22 @@ public sealed class BudgetDeclarationTests {
         refused.Error.Message.ShouldContain("its own tenant's services only");
     }
 
+    /// <summary>
+    ///     ⚠ The review's finding: a writer in one group made another group's service send, to recipients
+    ///     they chose, on that service's limits. The group is the line — <see cref="Budgets.InSameGroup" />.
+    /// </summary>
+    [Theory]
+    [InlineData("resourceGroups/prod/", "resourceGroups/finance/")]
+    [InlineData("subscriptions/33333333-3333-4333-8333-333333333333/", "subscriptions/44444444-4444-4444-8444-444444444444/")]
+    public void AServiceInAnotherGroupOfTheSameTenantIsRefusedByItsPointer(string from, string to) {
+        var elsewhere = Service.Replace(from, to, StringComparison.Ordinal);
+
+        var refused = ToSpec(Budgets.Body(elsewhere, ["a@example.com"]));
+
+        refused.Error!.Target.ShouldBe("/properties/notification/service");
+        refused.Error.Message.ShouldContain("in its own resource group only");
+    }
+
     [Fact]
     public void AServiceThatIsNotASendingServiceIsRefused() {
         var widget = $"/tenants/{Tenant:D}/subscriptions/{Subscription:D}/resourceGroups/prod/providers/CyberCloud.Sample/widgets/a";

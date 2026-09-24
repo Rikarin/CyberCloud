@@ -44,13 +44,32 @@ public sealed class CostVisibilityTests(BillingCluster cluster) {
 
         whole.Rows.ShouldHaveSingleItem().Name.ShouldBe(world.Prod);
         whole.Total.ShouldBe(2.50m, "dev's 0.25 is not in the total either");
-        whole.Filtered.ShouldBeTrue("something was withheld, and the answer says so without saying what");
+        whole.Filtered.ShouldBeTrue("bob reads less than the subscription, and the answer says so without saying what it left out");
 
         var theirGroup = (await world.QueryAsync("bob", CostGrouping.Meter, group: "prod")).GetValueOrThrow();
         theirGroup.Rows.ShouldHaveSingleItem().Quantity.ShouldBe(100m);
 
         var otherGroup = await world.QueryAsync("bob", CostGrouping.Meter, group: "dev");
         otherGroup.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound);
+    }
+
+    /// <summary>
+    ///     ⚠ The review's finding: the flag once said whether any row was withheld, so a reader of prod
+    ///     asking day by day learned which days dev had usage. It now says what bob may read.
+    /// </summary>
+    [Fact]
+    public async Task TheFilteredFlagSaysWhatTheCallerMayReadNotWhetherOthersHadUsage() {
+        var world = await WorldAsync();
+        await world.GrantGroupAsync("prod", "bob");
+
+        // dev's usage starts on the 2nd, so on the 1st only prod has any.
+        var onlyProdUsed = (await world.QueryAsync("bob", CostGrouping.ResourceGroup, from: August, to: August.AddDays(1))).GetValueOrThrow();
+        var devUsedToo = (await world.QueryAsync("bob", CostGrouping.ResourceGroup, from: August.AddDays(1), to: August.AddDays(2))).GetValueOrThrow();
+        var theirGroup = (await world.QueryAsync("bob", CostGrouping.ResourceGroup, group: "prod")).GetValueOrThrow();
+
+        onlyProdUsed.Filtered.ShouldBeTrue("bob reads one group of three, whether or not the others used anything");
+        devUsedToo.Filtered.ShouldBe(onlyProdUsed.Filtered, "a flag that moved with dev's usage would report it");
+        theirGroup.Filtered.ShouldBeFalse("bob reads the whole of prod");
     }
 
     [Fact]

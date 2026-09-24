@@ -176,6 +176,22 @@ public sealed class BudgetTests(BillingCluster cluster) : IAsyncLifetime {
         budget.Sent().Count.ShouldBe(2);
     }
 
+    /// <summary>
+    ///     ⚠ The review's finding, at the one place that sends: a spec that reached the grain without
+    ///     <c>Budgets.ToSpec</c>, naming a working service in another group, fires and sends nothing.
+    /// </summary>
+    [Fact]
+    public async Task AServiceInAnotherGroupIsNeverSentThrough() {
+        TestClock.Instance.Reset();
+        var budget = await BudgetAsync(10m, [Actual(50m)], serviceGroup: "dev");
+        await budget.UseAsync("prod", 200m);
+
+        (await budget.EvaluateAsync()).Fired.ShouldBe(1, "the threshold is crossed either way");
+
+        budget.Sent().ShouldBeEmpty("dev's service is configured and enabled, and a prod budget may not use it");
+        (await budget.HeldAsync()).Alerts.ShouldHaveSingleItem().Notification.ShouldContain("not a sending service in this budget's resource group");
+    }
+
     [Fact]
     public async Task AnEnabledBudgetIsArmedAndADisabledOneIsNeitherArmedNorEvaluated() {
         TestClock.Instance.Reset();
@@ -211,9 +227,14 @@ public sealed class BudgetTests(BillingCluster cluster) : IAsyncLifetime {
 
     static BudgetThreshold Forecast(decimal percent) => new() { Percent = percent, Kind = ThresholdKind.Forecast };
 
-    async Task<Budget> BudgetAsync(decimal amount, BudgetThreshold[] thresholds, BudgetScope scope = BudgetScope.ResourceGroup) {
+    async Task<Budget> BudgetAsync(
+        decimal amount,
+        BudgetThreshold[] thresholds,
+        BudgetScope scope = BudgetScope.ResourceGroup,
+        string serviceGroup = "prod"
+    ) {
         var (tenant, subscription) = await cluster.NewSubscriptionAsync("prod", "dev");
-        var (servicePath, _) = await cluster.SendingServiceAsync(tenant, subscription, "alerts");
+        var (servicePath, _) = await cluster.SendingServiceAsync(tenant, subscription, "alerts", serviceGroup);
         var recipient = $"finance-{Guid.NewGuid():N}@example.com";
         var id = Guid.NewGuid();
 

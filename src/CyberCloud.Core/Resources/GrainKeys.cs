@@ -774,6 +774,9 @@ public static class GrainKeys {
     ///     O(tenants per month) and arrives in the 48 hours after the 1st. That is still far inside
     ///     one activation's reach, and it has to be one activation: a gap-free sequence per issuer is
     ///     a single counter, and two counters for one issuer are two invoices with one number.
+    ///     ⚠ The rate is two writes per document (allocate, confirm), each rewriting the whole state.
+    ///     The state stays small only because confirming forgets the document's key: it holds the
+    ///     counters and what's in flight, not every document ever numbered.
     ///     ⚠ No formatter of its own, deliberately — CC1006's null-tenant allowance recognises
     ///     <see cref="PlatformSingleton" /> by name, and a new formatter would be flagged at every
     ///     correct call site until the analyzer learned it.

@@ -59,7 +59,10 @@ public sealed class NumberSeriesState {
     [Id(0)]
     public long Allocated { get; set; }
 
-    /// <summary>The number each document was given, by the document it was given to.</summary>
+    /// <summary>
+    ///     The number each unconfirmed document was given, by the document it was given to. Confirming
+    ///     removes the entry, so this holds what's in flight and not every document ever numbered.
+    /// </summary>
     [Id(1)]
     public Dictionary<string, string> ByDocument { get; set; } = new(StringComparer.Ordinal);
 

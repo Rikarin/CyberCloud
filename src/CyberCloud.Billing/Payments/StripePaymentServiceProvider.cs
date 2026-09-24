@@ -103,13 +103,31 @@ public sealed class StripePaymentServiceProvider : IPaymentServiceProvider {
                 new("email", email),
                 new("metadata[tenant_id]", tenantId.ToString("D", CultureInfo.InvariantCulture))
             ],
-            idempotencyKey: string.Create(CultureInfo.InvariantCulture, $"customer-{tenantId:N}"),
+            idempotencyKey: CustomerIdempotencyKey(tenantId, legalName, email),
             cancellationToken
         );
 
         return answer.TryGetError(out var error)
             ? Result<PspCustomer>.Failure(error)
             : Result<PspCustomer>.Success(new(Text(answer.GetValueOrThrow(), "id"), Text(answer.GetValueOrThrow(), "email")));
+    }
+
+    /// <summary>The idempotency key a customer creation is sent with: the tenant and a digest of what's sent.</summary>
+    /// <param name="tenantId">The billing account.</param>
+    /// <param name="legalName">The name sent.</param>
+    /// <param name="email">The email sent.</param>
+    /// <remarks>
+    ///     ⚠ <b>The parameters are in the key because Stripe compares them.</b> A key reused with
+    ///     different parameters inside Stripe's 24 hours is refused, so the first version's
+    ///     <c>customer-{tenant}</c> turned a corrected email into an error for a day. A retry of the same
+    ///     request still collapses. ⚠ Neither key stops a second customer for one tenant past the
+    ///     24 hours: that takes storing the id this returns and never creating again, which is the host
+    ///     wiring docs/plan/22 § What is owed lists as <c>psp-host-wiring-and-webhook-endpoint</c>.
+    ///     stripe-mock is stateless and can't show either case.
+    /// </remarks>
+    public static string CustomerIdempotencyKey(Guid tenantId, string legalName, string email) {
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(legalName + "\n" + email));
+        return string.Create(CultureInfo.InvariantCulture, $"customer-{tenantId:N}-{Convert.ToHexStringLower(digest.AsSpan(0, 8))}");
     }
 
     /// <inheritdoc />

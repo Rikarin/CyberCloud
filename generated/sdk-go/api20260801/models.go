@@ -330,7 +330,7 @@ type BudgetPropertiesNotification struct {
 	Channel BudgetChannel `json:"channel"`
 	// Where it goes — addresses or E.164 numbers, one send each, every one checked against the service's suppression list. At least one and at most 20.
 	Recipients []string `json:"recipients"`
-	// The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this tenant.
+	// The CyberCloud.Communication/services resource the alert is sent through, as its full resource id path. It must be in this budget's resource group.
 	Service string `json:"service"`
 }
 

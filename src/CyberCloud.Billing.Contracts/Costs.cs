@@ -93,8 +93,9 @@ public sealed record CostQueryResult {
     public decimal Total { get; init; }
 
     /// <summary>
-    ///     Whether any usage in the scope was withheld because the caller may not read it. ⚠ Says that
-    ///     something was hidden and nothing about what — a count or a sum would be the oracle.
+    ///     Whether the caller may read less than the whole scope, so the answer may leave usage out.
+    ///     ⚠ A statement about the caller's access and never about the usage: it doesn't change with
+    ///     whether anything outside what they read was used, or it would report exactly that.
     /// </summary>
     [Id(6)]
     public bool Filtered { get; init; }
