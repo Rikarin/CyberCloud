@@ -25,6 +25,7 @@ from .models import (
     BucketStatsResult,
     BudgetData,
     BudgetResource,
+    BudgetShowStatusResult,
     ClickHouseClusterData,
     ClickHouseClusterListKeysResult,
     ClickHouseClusterResource,
@@ -340,6 +341,12 @@ class BudgetClient:
     def list(self, tenant_id: str, subscription_id: str, resource_group_name: str, *, top: Optional[int] = None) -> Pager[BudgetResource]:
         """Lists the Budgets in a resource group, page by page. ⚠ A short page never means "that is all there is"."""
         return Pager(self._transport, f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Billing/budgets", top, BudgetResource.from_wire)
+
+    def show_status(self, tenant_id: str, subscription_id: str, resource_group_name: str, resource_name: str) -> BudgetShowStatusResult:
+        """showStatus — permission 'read'."""
+        response = self._transport.send(Request("POST", f"/tenants/{_segment(tenant_id)}/subscriptions/{_segment(subscription_id)}/resourceGroups/{_segment(resource_group_name)}/providers/CyberCloud.Billing/budgets/{_segment(resource_name)}/showStatus"))
+        raise_for_status(response)
+        return BudgetShowStatusResult.from_wire(wire_of(response))
 
 
 class BillingProvider:

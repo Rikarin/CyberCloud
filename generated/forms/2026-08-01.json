@@ -505,6 +505,11 @@
           "required": false,
           "section": "thresholds",
           "hint": "Percentages of the amount the period's cost so far is compared with — 50, 80 and 100 is the usual set. At least one threshold across both lists and at most 10; a body outside that is refused when the budget is reconciled.",
+          "items": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000
+          },
           "placeholder": [
             50,
             80,
@@ -520,6 +525,11 @@
           "required": false,
           "section": "thresholds",
           "hint": "Percentages of the amount the forecast is compared with. The forecast is linear on the trailing seven days, and an alert on it says it is an estimate.",
+          "items": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 1000
+          },
           "placeholder": [
             100
           ]
@@ -536,7 +546,17 @@
           "maxProperties": 50
         }
       ],
-      "actions": []
+      "actions": [
+        {
+          "name": "showStatus",
+          "label": "Show status",
+          "permission": "read",
+          "longRunning": false,
+          "secret": false,
+          "fields": [],
+          "confirmOnly": true
+        }
+      ]
     },
     "CyberCloud.Cache/redis": {
       "resourceType": "CyberCloud.Cache/redis",

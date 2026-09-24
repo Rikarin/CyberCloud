@@ -616,6 +616,74 @@ class BudgetResource:
         )
 
 
+@dataclass
+class BudgetShowStatusResult:
+    """What showStatus returns."""
+
+    # What the period has cost so far, rounded to the currency, as of the last evaluation.
+    actual: float
+    # Every alert the budget has fired, oldest first, one line each: '{firedAt} {actual|forecast} {percent}% at {figure}: {notification}'.
+    alerts: List[str]
+    # The amount for one period, from the budget's body.
+    amount: float
+    # The currency the figures are in. Empty until evaluated.
+    currency: str
+    # Whether the budget has been evaluated in its current period. False until the first hourly evaluation, and for a disabled budget.
+    evaluated: bool
+    # The thresholds on the actual cost that have fired this period, as percentages.
+    fired_actual: List[float]
+    # The thresholds on the forecast that have fired this period, as percentages.
+    fired_forecast: List[float]
+    # What the period will cost at the trailing seven days' rate, rounded. An estimate.
+    forecast: float
+    # Why the last evaluation could not run, or empty. A subscription budget not yet granted reader on its subscription says so here.
+    last_error: str
+    # When the figures were computed. Absent until evaluated.
+    last_evaluated_at: Optional[str] = None
+    # The first instant of the next period. Absent until evaluated.
+    period_end: Optional[str] = None
+    # The first instant of the period the figures are for. Absent until evaluated.
+    period_start: Optional[str] = None
+
+    @classmethod
+    def from_wire(cls, wire: Wire) -> BudgetShowStatusResult:
+        """Reads one off the wire. Unknown members are ignored."""
+        return cls(
+            actual=wire["actual"],
+            alerts=wire["alerts"],
+            amount=wire["amount"],
+            currency=wire["currency"],
+            evaluated=wire["evaluated"],
+            fired_actual=wire["firedActual"],
+            fired_forecast=wire["firedForecast"],
+            forecast=wire["forecast"],
+            last_error=wire["lastError"],
+            last_evaluated_at=wire.get("lastEvaluatedAt"),
+            period_end=wire.get("periodEnd"),
+            period_start=wire.get("periodStart"),
+        )
+
+    def to_wire(self) -> Wire:
+        """Writes the members that are set. ⚠ A read-only member is never written: the write path refuses it."""
+        wire: Wire = {}
+        wire["actual"] = self.actual
+        wire["alerts"] = self.alerts
+        wire["amount"] = self.amount
+        wire["currency"] = self.currency
+        wire["evaluated"] = self.evaluated
+        wire["firedActual"] = self.fired_actual
+        wire["firedForecast"] = self.fired_forecast
+        wire["forecast"] = self.forecast
+        wire["lastError"] = self.last_error
+        if self.last_evaluated_at is not None:
+            wire["lastEvaluatedAt"] = self.last_evaluated_at
+        if self.period_end is not None:
+            wire["periodEnd"] = self.period_end
+        if self.period_start is not None:
+            wire["periodStart"] = self.period_start
+        return wire
+
+
 ValkeyCacheMaxmemoryPolicy = Literal["noeviction", "allkeys-lru", "allkeys-lfu", "allkeys-random", "volatile-lru", "volatile-lfu", "volatile-random", "volatile-ttl"]
 """The values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else."""
 
@@ -8856,6 +8924,7 @@ __all__ = [
     "BudgetScope",
     "BudgetData",
     "BudgetResource",
+    "BudgetShowStatusResult",
     "ValkeyCacheMaxmemoryPolicy",
     "ValkeyCacheMode",
     "ValkeyCacheFsync",

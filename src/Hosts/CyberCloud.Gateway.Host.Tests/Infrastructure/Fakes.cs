@@ -1,6 +1,7 @@
 using CyberCloud.Billing.Contracts;
 using CyberCloud.Core.Time;
 using CyberCloud.Gateway.Host.Operations;
+using CyberCloud.Metering.Contracts;
 using CyberCloud.ResourceManager;
 using CyberCloud.ResourceManager.Contracts.Registry;
 using System.Collections.Concurrent;
@@ -773,5 +774,63 @@ sealed class RecordingCostQuery : ICostQuery {
         ArgumentNullException.ThrowIfNull(request);
         Calls.Enqueue((tenantId, request));
         return Task.FromResult(OnQuery(request));
+    }
+}
+
+/// <summary>An invoice reader that records what stage 8 asked and answers from a script.</summary>
+/// <remarks>
+///     ⚠ It stands in for <c>GrainInvoiceReader</c>, whose grain — the <c>read</c> check on the tenant —
+///     is driven against the real engine in <c>CyberCloud.Billing.Tests.InvoiceVisibilityTests</c> and
+///     across the real hosts in <c>CyberCloud.Hosts.Tests</c>. Here the assertion is about the gateway.
+/// </remarks>
+sealed class RecordingInvoiceReader : IInvoiceReader {
+    /// <summary>One finalized invoice with one line — what the default script answers.</summary>
+    public static Invoice August { get; } = new() {
+        InvoiceId = Guid.Parse("5d7e1c0a-3f2b-4a19-9c6d-8e4f2a1b0c9d"),
+        Number = "CC-INV-00000042",
+        Status = InvoiceStatus.Finalized,
+        TenantId = GatewayHarness.TenantA,
+        PeriodStart = new(2026, 8, 1, 0, 0, 0, TimeSpan.Zero),
+        PeriodEnd = new(2026, 9, 1, 0, 0, 0, TimeSpan.Zero),
+        Issuer = new() { Code = "cc", LegalName = "Cyber Cloud s.r.o.", Country = "CZ", VatId = "CZ00000001", NumberPrefix = "CC" },
+        Customer = new() { LegalName = "Firma s.r.o.", Country = "CZ", Currency = "EUR" },
+        Currency = "EUR",
+        Lines = [
+            new() {
+                SubscriptionId = GatewayHarness.Subscription,
+                Meter = BillingMeter.VCpuHours,
+                Unit = "vCPU-hour",
+                Quantity = 100m,
+                Amount = 2.50m,
+                Description = "Virtual CPU"
+            }
+        ],
+        Subtotal = 2.50m,
+        Tax = new() { Treatment = TaxTreatment.Standard, RatePercent = 21m, Base = 2.50m, Amount = 0.53m, Country = "CZ" },
+        Total = 3.03m,
+        FinalizedAt = new(2026, 9, 3, 1, 0, 0, TimeSpan.Zero)
+    };
+
+    /// <summary>Every call, in order: the tenant, the caller, and the number or empty for the list.</summary>
+    public ConcurrentQueue<(Guid Tenant, CostCaller Caller, string Number)> Calls { get; } = new();
+
+    /// <summary>What <see cref="ListAsync" /> answers. Default: <see cref="August" />.</summary>
+    public Func<Result<ImmutableArray<Invoice>>> OnList { get; set; } = static () => Result<ImmutableArray<Invoice>>.Success([August]);
+
+    /// <inheritdoc />
+    public Task<Result<ImmutableArray<Invoice>>> ListAsync(Guid tenantId, CostCaller caller, CancellationToken cancellationToken = default) {
+        Calls.Enqueue((tenantId, caller, string.Empty));
+        return Task.FromResult(OnList());
+    }
+
+    /// <inheritdoc />
+    public Task<Result<Invoice>> GetAsync(Guid tenantId, CostCaller caller, string number, CancellationToken cancellationToken = default) {
+        Calls.Enqueue((tenantId, caller, number));
+
+        return Task.FromResult(
+            number == August.Number
+                ? Result<Invoice>.Success(August)
+                : Result<Invoice>.Failure(ErrorCode.ResourceNotFound, $"'{new InvoiceAddress(tenantId, number).Path}' does not exist.")
+        );
     }
 }

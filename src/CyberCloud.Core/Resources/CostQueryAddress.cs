@@ -14,7 +14,7 @@ namespace CyberCloud.Core.Resources;
 ///         <c>providers</c> seventh, which is exactly a resource collection of the type
 ///         <c>CyberCloud.CostManagement/query</c>. <c>ProviderRegistry.Build</c> refuses a provider
 ///         that claims <see cref="ProviderNamespace" />, and under the namespace the router asks this
-///         one grammar and nothing else.
+///         grammar and <see cref="InvoiceAddress" />'s and nothing else.
 ///     </para>
 ///     <para>
 ///         ⚠
@@ -67,9 +67,10 @@ public readonly record struct CostQueryAddress(ScopeId Scope) {
             || path.Length <= Suffix.Length
             || !path.EndsWith(Suffix, StringComparison.OrdinalIgnoreCase)) {
             return Invalid(
-                $"'{path}' is not the cost query's address. The only address under '{ProviderNamespace}' "
-                + $"is '{{scope}}{Suffix}' on a subscription or a resource group, and a query is a POST "
-                + "to it — docs/plan/22 § Cost visibility."
+                $"'{path}' is not the cost query's address. The addresses under '{ProviderNamespace}' "
+                + $"are '{{scope}}{Suffix}' on a subscription or a resource group, where a query is a POST, "
+                + $"and '/tenants/{{t}}{InvoiceAddress.Suffix}' with an optional invoice number, which is a GET "
+                + "— docs/plan/22 § Cost visibility."
             );
         }
 

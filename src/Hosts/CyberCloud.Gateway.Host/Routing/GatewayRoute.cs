@@ -156,6 +156,21 @@ enum RouteKind {
     /// </remarks>
     CostQuery,
 
+    /// <summary>
+    ///     A tenant's finalized invoices, or one by number —
+    ///     <c>GET /tenants/{t}/providers/CyberCloud.CostManagement/invoices[/{number}]</c>. docs/plan/22
+    ///     § What is owed, <c>billing-http-surface</c>, issue #41.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>Under the cost query's reserved namespace, asked before the cost query's grammar</b>, so
+    ///     that the cost query keeps the namespace's catch-all refusal. The two are disjoint by scope —
+    ///     an invoice address is on a tenant, which the cost query refuses — so the order decides only
+    ///     which grammar a malformed path is refused by. <c>InvoiceRoutingTests</c> pins the shapes and
+    ///     the verb. Dispatched to <c>IInvoiceReader</c>, whose grain holds the <c>read</c> check on the
+    ///     tenant.
+    /// </remarks>
+    Invoice,
+
     /// <summary>A <c>POST</c> action on an existing resource — <c>restart</c>, <c>rotateKeys</c>.</summary>
     Action,
 
@@ -279,6 +294,10 @@ enum RouteKind {
 ///     The cost query's address, for <see cref="RouteKind.CostQuery" />. ⚠ Its tenant is the
 ///     <i>token's</i> too — <c>CostQueryAddress.WithTenant</c> rebuilds it.
 /// </param>
+/// <param name="Invoice">
+///     The invoices' address, for <see cref="RouteKind.Invoice" />. ⚠ Its tenant is the
+///     <i>token's</i> too — <c>InvoiceAddress.WithTenant</c> rebuilds it.
+/// </param>
 readonly record struct GatewayRoute(
     RouteKind Kind,
     ResourceId Resource,
@@ -291,7 +310,8 @@ readonly record struct GatewayRoute(
     RoleAssignmentCollectionId RoleAssignments = default,
     ScopeCollectionId Scopes = default,
     ResourceGraphAddress ResourceGraph = default,
-    CostQueryAddress CostQuery = default
+    CostQueryAddress CostQuery = default,
+    InvoiceAddress Invoice = default
 ) {
     /// <summary>Nothing matched.</summary>
     public static GatewayRoute None { get; } = new(RouteKind.Unknown, default, "", Guid.Empty, "");
@@ -551,6 +571,22 @@ static class GatewayRouter {
         // a provider that claims the namespace, and CostQueryAddressTests sweeps the other direction.
         // POST only; a GET is the 405 dispatch answers, for the reason the graph's is.
         if (CostQueryAddress.IsUnderNamespace(path)) {
+            // ⚠ The invoices first (#41): on a tenant, which the cost query's grammar refuses, so the
+            // order changes only which refusal a malformed path gets — and the cost query's names both.
+            if (InvoiceAddress.TryParsePath(path, out var invoices)) {
+                return Result<GatewayRoute>.Success(
+                    new(
+                        RouteKind.Invoice,
+                        default,
+                        "",
+                        Guid.Empty,
+                        "",
+                        // NAMED, for the reason every other optional address kind is; the token's tenant.
+                        Invoice: invoices.WithTenant(tenantId)
+                    )
+                );
+            }
+
             var costs = CostQueryAddress.ParsePath(path);
 
             if (costs.TryGetError(out var costsError)) {

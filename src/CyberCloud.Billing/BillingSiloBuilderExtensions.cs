@@ -39,15 +39,17 @@ public static class BillingSiloBuilderExtensions {
     }
 
     /// <summary>
-    ///     Registers the two client-side seams over a host's grain factory — <see cref="ICostQuery" />
-    ///     for the gateway's dispatch stage, <see cref="IBudgetControlPlane" /> for the budget
-    ///     reconciler, which a synchronous path in the gateway builds as well as the silo.
+    ///     Registers the client-side seams over a host's grain factory — <see cref="ICostQuery" /> and
+    ///     <see cref="IInvoiceReader" /> for the gateway's dispatch stage, <see cref="IBudgetControlPlane" />
+    ///     for the budget reconciler and the budget's <c>status</c> action, which the gateway builds as
+    ///     well as the silo.
     /// </summary>
     /// <param name="services">The container. Must already hold an <c>IGrainFactory</c>.</param>
     public static IServiceCollection AddCyberCloudBillingClient(this IServiceCollection services) {
         ArgumentNullException.ThrowIfNull(services);
 
         services.TryAddSingleton<ICostQuery, GrainCostQuery>();
+        services.TryAddSingleton<IInvoiceReader, GrainInvoiceReader>();
         services.TryAddSingleton<IBudgetControlPlane, GrainBudgetControlPlane>();
 
         return services;

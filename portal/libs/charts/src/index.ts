@@ -1,30 +1,32 @@
 /**
- * `libs/charts` — metric and log views over `@xui/echarts`. **A stub at M1**, holding the contract
- * and no components.
+ * `libs/charts` — metric, log and cost views over `@xui/echarts`. docs/plan/03 § `portal/` gives this
+ * library its job; the pages are docs/plan/20 § The pages that are not generated.
  *
- * docs/plan/03 § `portal/` gives this library its job. Everything that would live in it is on
- * docs/plan/20 § The pages that are not generated and is explicitly outside the M1 shell:
+ * | Page | State |
+ * |---|---|
+ * | Cost analysis | ✅ **Landed (#41)** — `pages/cost` draws its daily breakdown with {@link stackByDay} and {@link stackedBarOption}, through {@link provideCharts} |
+ * | Metrics explorer | A query builder over the hot-tier pre-aggregates (docs/plan/16), plus pinning to dashboards, which needs dashboards to exist |
+ * | Log search | `@xui/code-block` and a results grid over ClickHouse. ⚠ docs/plan/20: "Needs a query cost preview or someone will run a 400-day scan" — the preview is a server-side estimate this library cannot fake |
+ * | Network topology | `@xui/node-graph` over the VPC/subnet/peering graph from docs/plan/14. Not a chart library problem; the data shape is the work |
  *
- * | Page | What it needs before it can be built | EM |
- * |---|---|---|
- * | Cost analysis | The billing aggregates from docs/plan/22 — breakdowns by tag, resource group, service and day, plus forecast and budget models. Charts are the easy half | 0.6 |
- * | Metrics explorer | A query builder over the hot-tier pre-aggregates (docs/plan/16), plus pinning to dashboards, which needs dashboards to exist | 0.6 |
- * | Log search | `@xui/code-block` and a results grid over ClickHouse. ⚠ docs/plan/20: "Needs a query cost preview or someone will run a 400-day scan" — the preview is a server-side estimate this library cannot fake | 0.6 |
- * | Network topology | `@xui/node-graph` over the VPC/subnet/peering graph from docs/plan/14. Not a chart library problem; the data shape is the work | 0.5 |
+ * ⚠ **`echarts` is a dependency now, and it is never in a route chunk.** It arrived with the first
+ * chart (#41) as `echarts@6.1.0` beside `@xui/echarts@3.0.0`, whose peer range `^5.5.0 || ^6.0.0` it
+ * satisfies. The full package is several times the 120 KB route budget in docs/plan/20 § Performance
+ * budget, so the portal ships a tree-shaken build (`lib/echarts-build.ts`: bar, grid, legend,
+ * tooltip, canvas) that only `import()` reaches — {@link CHART_ENGINE}'s default — and that
+ * `scripts/bundle-budget.mjs` measures as a chunk of its own. `portal/pnpm-workspace.yaml` says why
+ * `tslib` is overridden to one version for it.
  *
  * ⚠ One dependency note that is a decision, not a detail. `@xui/echarts@2.2.x` peered
  * `"@angular/cdk": "22.0.6"` — an exact version, where most `@xui/*` packages peer the `22` major
- * range. That is why `portal/package.json` pinned `@angular/cdk` to `22.0.6` rather than the 22.x
- * head, even though nothing in the M1 shell imports `@xui/echarts` yet: discovering the pin when
- * the first chart lands would have meant moving the CDK underneath a working shell. At
- * `@xui/echarts@3.0.0` that peer is `"22"` (measured 2026-09-15), so the CDK pin is no longer
- * forced by this package; it moved to 22.1.4 with the rest of the framework (#87) for the reason
- * portal/README.md § The Angular pin gives, and the first chart no longer has to move anything.
- *
- * `echarts` itself is deliberately *not* a dependency yet. It is ~350 KB and would have to be
- * lazily loaded from a route chunk anyway to stay inside the 120 KB route budget in docs/plan/20
- * § Performance budget; adding it now would only put it in the lockfile with nothing importing it.
+ * range. At `@xui/echarts@3.0.0` that peer is `"22"` (measured 2026-09-15), so the CDK moved to
+ * 22.1.4 with the rest of the framework (#87) for the reason portal/README.md § The Angular pin
+ * gives, and the first chart moved nothing.
  */
+
+export { CHART_ENGINE, provideCharts } from './lib/chart-engine';
+export { MAX_KEYS, OTHER, daysBetween, stackByDay, stackedBarOption } from './lib/stacked';
+export type { DailyAmount, StackedDays } from './lib/stacked';
 
 /** A metric series as the hot tier returns it — docs/plan/16. */
 export interface MetricSeries {
@@ -35,5 +37,3 @@ export interface MetricSeries {
   readonly values: readonly (number | null)[];
   readonly unit: string;
 }
-
-export {};

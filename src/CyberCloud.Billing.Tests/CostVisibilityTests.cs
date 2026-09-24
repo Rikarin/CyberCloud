@@ -132,6 +132,34 @@ public sealed class CostVisibilityTests(BillingCluster cluster) {
         meters.Rows.Single(static x => x.Name == "PublicIpHours").Quantity.ShouldBe(62.5m);
     }
 
+    /// <summary>
+    ///     ⚠ The chart's axis (#41): one row per day and group, days in order, and the total still the
+    ///     unrounded sum rounded once.
+    /// </summary>
+    [Fact]
+    public async Task DailyGranularitySplitsEachGroupByDay() {
+        var world = await WorldAsync();
+        await world.GrantSubscriptionAsync("alice");
+
+        var answer = (await world.QueryAsync("alice", CostGrouping.ResourceGroup, granularity: CostGranularity.Daily)).GetValueOrThrow();
+
+        answer.Granularity.ShouldBe(CostGranularity.Daily);
+        answer.Rows.Select(static x => (x.Day, x.Name))
+            .ShouldBe([("2026-08-01", "prod"), ("2026-08-02", "dev"), ("2026-08-02", "prod"), ("2026-08-03", "dev"), ("2026-08-04", "dev")], "days in order, the most expensive first within a day: dev's 0.12 before prod's last hour, 0.10");
+
+        // 24 of prod's 25 hours are on the 1st: 96 vCPU-hours at 0.025.
+        answer.Rows[0].Amount.ShouldBe(2.40m);
+        answer.Rows.Where(static x => x.Name == "prod").Sum(static x => x.Amount).ShouldBe(2.50m);
+        answer.Total.ShouldBe(2.75m);
+
+        await world.GrantGroupAsync("dev", "bob");
+        var filtered = (await world.QueryAsync("bob", CostGrouping.Resource, granularity: CostGranularity.Daily)).GetValueOrThrow();
+        filtered.Rows.ShouldAllBe(x => x.Name == world.Dev, "the ReBAC filter holds on the daily axis too");
+        filtered.Filtered.ShouldBeTrue();
+
+        (await world.QueryAsync("alice", CostGrouping.Day, granularity: CostGranularity.Daily)).Error!.Target.ShouldBe("/granularity");
+    }
+
     [Fact]
     public async Task APeriodIsWidenedToWholeHoursAndBoundedToAYear() {
         var world = await WorldAsync();
@@ -214,7 +242,8 @@ public sealed class CostVisibilityTests(BillingCluster cluster) {
             CostGrouping grouping,
             string group = "",
             DateTimeOffset? from = null,
-            DateTimeOffset? to = null
+            DateTimeOffset? to = null,
+            CostGranularity granularity = CostGranularity.None
         ) =>
             Cluster.Costs.QueryAsync(
                 Tenant,
@@ -224,7 +253,8 @@ public sealed class CostVisibilityTests(BillingCluster cluster) {
                     ResourceGroup = group,
                     From = from ?? August,
                     To = to ?? September,
-                    Grouping = grouping
+                    Grouping = grouping,
+                    Granularity = granularity
                 }
             );
     }

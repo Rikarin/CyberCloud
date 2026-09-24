@@ -270,6 +270,34 @@ export interface BillingBudgetsResource extends Resource, BillingBudgetsData {
   readonly type: 'CyberCloud.Billing/budgets';
 }
 
+/** What showStatus returns. */
+export interface BillingBudgetsShowStatusResult {
+  /** What the period has cost so far, rounded to the currency, as of the last evaluation. */
+  actual: number;
+  /** Every alert the budget has fired, oldest first, one line each: '{firedAt} {actual|forecast} {percent}% at {figure}: {notification}'. */
+  alerts: string[];
+  /** The amount for one period, from the budget's body. */
+  amount: number;
+  /** The currency the figures are in. Empty until evaluated. */
+  currency: string;
+  /** Whether the budget has been evaluated in its current period. False until the first hourly evaluation, and for a disabled budget. */
+  evaluated: boolean;
+  /** The thresholds on the actual cost that have fired this period, as percentages. */
+  firedActual: number[];
+  /** The thresholds on the forecast that have fired this period, as percentages. */
+  firedForecast: number[];
+  /** What the period will cost at the trailing seven days' rate, rounded. An estimate. */
+  forecast: number;
+  /** Why the last evaluation could not run, or empty. A subscription budget not yet granted reader on its subscription says so here. */
+  lastError: string;
+  /** When the figures were computed. Absent until evaluated. */
+  lastEvaluatedAt?: string;
+  /** The first instant of the next period. Absent until evaluated. */
+  periodEnd?: string;
+  /** The first instant of the period the figures are for. Absent until evaluated. */
+  periodStart?: string;
+}
+
 /** The values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else. */
 export type CacheRedisMaxmemoryPolicy =
   | 'noeviction'

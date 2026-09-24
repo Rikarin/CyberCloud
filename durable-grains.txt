@@ -178,7 +178,8 @@ CyberCloud.Billing.Grains.InvoiceNumberingGrain
 CyberCloud.Billing.Grains.BudgetGrain
 #
 # ⚠ NOT CostQueryGrain, which holds nothing: it is a stateless worker over the ledger and the check
-# grains, and has no [PersistentState] to bind.
+# grains, and has no [PersistentState] to bind. Nor InvoiceQueryGrain (#41), a stateless worker over
+# the billing account and one check grain, for the same reason.
 
 # ── Providers — docs/plan/03 § Providers ───────────────────────────────────────────────────────
 # TWO, since #32 and #29 — and for fifteen families before them NOTHING, an absence that was the

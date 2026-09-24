@@ -34,8 +34,8 @@ namespace CyberCloud.Hosts.Tests;
 ///         manifest, so an unaliased wire type or a generic invokable would pass there and fail here.
 ///         Both hosts are composed by their own <c>BuildAsync</c> — the call <c>Program.cs</c> makes — and
 ///         every call below goes gateway → silo: the cost query the dispatch stage makes, a budget the
-///         reconciler would write, and an invoice draft, each carrying decimals, immutable arrays and
-///         nested records across.
+///         reconciler would write, an invoice draft, and the finalized invoices the invoices address
+///         reads (#41), each carrying decimals, immutable arrays and nested records across.
 ///     </para>
 ///     <para>
 ///         ⚠ <b>In one OS process, and that is the limit of what it proves.</b> Two hosts with two
@@ -213,6 +213,23 @@ public sealed class BillingAcrossTheHostsTests : IAsyncLifetime {
 
         finalized.Number.ShouldStartWith("HT-INV-");
         finalized.Lines.ShouldBeEmpty();
+
+        // ── 4b. The invoices, through the reader the dispatch stage holds (#41) ─────────────────────
+        //
+        // A new invokable on a new stateless grain, and the invoice document coming back across: a tenant
+        // reader lists it, and alice — a subscription reader — gets the address's 404.
+        var tenantReader = RelationTuple.Create(ObjectRef.Of(ObjectTypes.Tenant, tenant), Relations.Reader, SubjectRef.Of(ObjectTypes.User, "tina"))
+            .GetValueOrThrow();
+        (await grains.GetGrain<ITupleStoreGrain>(GrainKeys.TupleStore(tenant)).WriteAsync(tenantReader)).IsSuccess.ShouldBeTrue();
+
+        var invoices = gateway.Services.GetRequiredService<IInvoiceReader>();
+
+        var listed = await invoices.ListAsync(tenant, new() { SubjectType = "user", SubjectId = "tina" }, ct);
+        listed.IsSuccess.ShouldBeTrue(listed.Error?.Message);
+        listed.GetValueOrThrow().ShouldHaveSingleItem().ShouldBeEquivalentTo(finalized);
+
+        var notTheirs = await invoices.GetAsync(tenant, new() { SubjectType = "user", SubjectId = "alice" }, finalized.Number, ct);
+        notTheirs.Error!.Code.ShouldBe(ErrorCode.ResourceNotFound, "reading a subscription is not reading the tenant's invoices");
 
         // ── 5. The month close: armed in the silo's Redis reminder table, and callable across ────────
         //

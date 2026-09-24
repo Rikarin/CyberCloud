@@ -5,6 +5,7 @@
  *
  *   Initial JS (shell, gzipped)   < 250 KB
  *   Route chunk                   < 120 KB
+ *   Chart library (ECharts)       < 180 KB — deferred, one chunk, added with the cost page (#41)
  *
  * ⚠ Angular's own `budgets` in angular.json are a first line of defence but not sufficient on their
  * own: they measure the initial set and named bundles, and their "estimated transfer size" is a
@@ -15,6 +16,14 @@
  * "Route-level code splitting is mandatory" — with 100 resource types, a generated form renderer
  * that pulled every schema into one chunk would blow the 120 KB ceiling long before it blew the
  * 250 KB initial one. A chunk over budget is the symptom this catches.
+ *
+ * ⚠ The chart library is the one lazy chunk measured against its own ceiling, and it is found by what
+ * it contains rather than by name: `_echarts_instance_` is the attribute ECharts stamps on every
+ * chart's element, so it is in the library and in nothing else. ECharts' core and canvas renderer
+ * alone are 129.3 KB here (measured 2026-09-24), so no ECharts build fits the route ceiling; the
+ * cost page renders its totals and table without it and the chart fills in when it arrives —
+ * docs/plan/20 § Performance budget. ⚠ Exactly one chunk may match. Two would mean the library was
+ * split or copied into a route chunk, and the route ceiling is the one that must then hold.
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -27,8 +36,12 @@ const KB = 1024;
 /** docs/plan/20 § Performance budget. */
 const BUDGET = {
   initialJsGzip: 250 * KB,
-  routeChunkGzip: 120 * KB
+  routeChunkGzip: 120 * KB,
+  chartLibraryGzip: 180 * KB
 };
+
+/** What only the ECharts chunk contains — the attribute it stamps on a chart's element. */
+const CHART_LIBRARY_MARKER = '_echarts_instance_';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const browserDir = join(here, '..', 'dist', 'portal', 'browser');
@@ -67,7 +80,10 @@ function initialScripts() {
 
 const initial = initialScripts();
 const allJs = readdirSync(browserDir).filter(f => f.endsWith('.js'));
-const lazy = allJs.filter(f => !initial.has(f));
+const chartLibrary = allJs.filter(
+  f => !initial.has(f) && readFileSync(join(browserDir, f), 'utf8').includes(CHART_LIBRARY_MARKER)
+);
+const lazy = allJs.filter(f => !initial.has(f) && !(chartLibrary.length === 1 && chartLibrary[0] === f));
 
 const initialTotal = [...initial].reduce((sum, f) => sum + gzipOf(f), 0);
 const failures = [];
@@ -103,6 +119,37 @@ for (const f of lazy.sort()) {
 
   if (size >= BUDGET.routeChunkGzip) {
     failures.push(`route chunk ${f} is ${fmt(size)} gzipped, over the ${fmt(BUDGET.routeChunkGzip)} budget`);
+  }
+}
+
+console.log('\n  Chart library (gzipped)');
+
+if (chartLibrary.length > 1) {
+  failures.push(
+    `the chart library is in ${chartLibrary.length} chunks (${chartLibrary.join(', ')}); it must be one, loaded by import()`
+  );
+}
+
+if (
+  initial.size > 0 &&
+  allJs.some(f => initial.has(f) && readFileSync(join(browserDir, f), 'utf8').includes(CHART_LIBRARY_MARKER))
+) {
+  failures.push('the chart library is in the initial set; it must only be reached through import()');
+}
+
+if (chartLibrary.length === 0) {
+  console.log('    (none — no page draws a chart)');
+} else if (chartLibrary.length === 1) {
+  const size = gzipOf(chartLibrary[0]);
+  const verdict = size < BUDGET.chartLibraryGzip ? 'pass' : 'FAIL';
+  console.log(
+    `    ${chartLibrary[0].padEnd(44)} ${fmt(size).padStart(10)}  / ${fmt(BUDGET.chartLibraryGzip)}  ${verdict}`
+  );
+
+  if (size >= BUDGET.chartLibraryGzip) {
+    failures.push(
+      `the chart library ${chartLibrary[0]} is ${fmt(size)} gzipped, over the ${fmt(BUDGET.chartLibraryGzip)} budget`
+    );
   }
 }
 

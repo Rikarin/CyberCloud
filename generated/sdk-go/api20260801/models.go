@@ -357,6 +357,34 @@ func (r *BudgetResource) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &r.Data)
 }
 
+// BudgetShowStatusResult is what showStatus returns.
+type BudgetShowStatusResult struct {
+	// What the period has cost so far, rounded to the currency, as of the last evaluation.
+	Actual float64 `json:"actual"`
+	// Every alert the budget has fired, oldest first, one line each: '{firedAt} {actual|forecast} {percent}% at {figure}: {notification}'.
+	Alerts []string `json:"alerts"`
+	// The amount for one period, from the budget's body.
+	Amount float64 `json:"amount"`
+	// The currency the figures are in. Empty until evaluated.
+	Currency string `json:"currency"`
+	// Whether the budget has been evaluated in its current period. False until the first hourly evaluation, and for a disabled budget.
+	Evaluated bool `json:"evaluated"`
+	// The thresholds on the actual cost that have fired this period, as percentages.
+	FiredActual []float64 `json:"firedActual"`
+	// The thresholds on the forecast that have fired this period, as percentages.
+	FiredForecast []float64 `json:"firedForecast"`
+	// What the period will cost at the trailing seven days' rate, rounded. An estimate.
+	Forecast float64 `json:"forecast"`
+	// Why the last evaluation could not run, or empty. A subscription budget not yet granted reader on its subscription says so here.
+	LastError string `json:"lastError"`
+	// When the figures were computed. Absent until evaluated.
+	LastEvaluatedAt *string `json:"lastEvaluatedAt,omitempty"`
+	// The first instant of the next period. Absent until evaluated.
+	PeriodEnd *string `json:"periodEnd,omitempty"`
+	// The first instant of the period the figures are for. Absent until evaluated.
+	PeriodStart *string `json:"periodStart,omitempty"`
+}
+
 // ValkeyCacheMaxmemoryPolicy is the values /properties/maxmemoryPolicy accepts. ⚠ Closed: the write path refuses anything else.
 type ValkeyCacheMaxmemoryPolicy string
 

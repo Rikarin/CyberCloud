@@ -114,6 +114,9 @@ public sealed class BudgetSilo : IAsyncLifetime {
     /// <summary>The control plane over the cluster client, as a reconciler's host holds it.</summary>
     public IBudgetControlPlane Plane { get; private set; } = null!;
 
+    /// <summary>The cluster's client, tenant-unaware — for the usage ledger a budget prices.</summary>
+    public IGrainFactory Grains => cluster.GrainFactory;
+
     /// <summary>The reconciler under test, built over <see cref="Plane" />.</summary>
     public BudgetReconciler Reconciler { get; private set; } = null!;
 

@@ -181,10 +181,11 @@ public sealed class HostCompositionTests {
     }
 
     /// <summary>
-    ///     ⚠ Both hosts hold the two billing seams, and the silo holds what the billing grains take.
+    ///     ⚠ Both hosts hold the three billing seams, and the silo holds what the billing grains take.
     /// </summary>
     /// <remarks>
-    ///     The gateway dispatches the cost query to <c>ICostQuery</c> and builds the budget reconciler in
+    ///     The gateway dispatches the cost query to <c>ICostQuery</c>, the invoices to <c>IInvoiceReader</c>
+    ///     (#41), and builds the budget reconciler in
     ///     its registry's container; the silo activates the grains behind both, which take the rating
     ///     path, the tax service and the sending module. A host that lost
     ///     <c>AddCyberCloudBillingClient</c> or <c>AddCyberCloudBilling</c> would fail on the first
@@ -197,6 +198,7 @@ public sealed class HostCompositionTests {
 
         foreach (var host in new[] { gateway.Services, silo.Services }) {
             host.GetService<CyberCloud.Billing.Contracts.ICostQuery>().ShouldNotBeNull("a host with no ICostQuery cannot answer a cost query");
+            host.GetService<CyberCloud.Billing.Contracts.IInvoiceReader>().ShouldNotBeNull("a host with no IInvoiceReader cannot list invoices");
             host.GetService<CyberCloud.Billing.Contracts.IBudgetControlPlane>()
                 .ShouldNotBeNull("a host with no IBudgetControlPlane cannot construct the budget reconciler");
         }
@@ -226,6 +228,7 @@ public sealed class HostCompositionTests {
                      typeof(CyberCloud.Billing.Grains.InvoiceNumberingGrain),
                      typeof(CyberCloud.Billing.Grains.BudgetGrain),
                      typeof(CyberCloud.Billing.Grains.CostQueryGrain),
+                     typeof(CyberCloud.Billing.Grains.InvoiceQueryGrain),
                      typeof(CyberCloud.Metering.Grains.UsageLedgerGrain),
                      typeof(CyberCloud.Metering.Grains.UsageRollupGrain)
                  }) {

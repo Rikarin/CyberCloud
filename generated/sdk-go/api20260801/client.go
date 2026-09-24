@@ -319,6 +319,16 @@ func (c *BudgetClient) List(tenantID, subscriptionID, resourceGroupName string, 
 	return newPager[BudgetResource](c.transport, path, options)
 }
 
+// ShowStatus runs showStatus — permission 'read'.
+func (c *BudgetClient) ShowStatus(ctx context.Context, tenantID, subscriptionID, resourceGroupName, resourceName string) (*BudgetShowStatusResult, error) {
+	path := "/tenants/" + segment(tenantID) + "/subscriptions/" + segment(subscriptionID) + "/resourceGroups/" + segment(resourceGroupName) + "/providers/CyberCloud.Billing/budgets/" + segment(resourceName) + "/showStatus"
+	var result BudgetShowStatusResult
+	if err := call(ctx, c.transport, "POST", path, nil, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 // CacheProvider holds the resource types of CyberCloud.Cache.
 type CacheProvider struct {
 	Redis *ValkeyCacheClient

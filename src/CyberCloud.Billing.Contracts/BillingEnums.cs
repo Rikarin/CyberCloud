@@ -120,3 +120,19 @@ public enum CostGrouping {
     /// <summary>One row per UTC day, keyed <c>yyyy-MM-dd</c>.</summary>
     Day = 5
 }
+
+/// <summary>Whether a cost query's rows are also split by day — the time axis of a cost chart.</summary>
+/// <remarks>
+///     ⚠ <b>A second axis, not a sixth grouping</b> (issue #41). <see cref="CostGrouping.Day" /> answers one row
+///     per day; a chart of cost over time <i>by</i> resource group needs a row per (day, group), and the
+///     alternative was one query per day or per group from the portal — thirty round trips for a month,
+///     each re-reading the ledger.
+/// </remarks>
+[Alias("CyberCloud.Billing.CostGranularity")]
+public enum CostGranularity {
+    /// <summary>One row per key for the whole period. The default.</summary>
+    None = 0,
+
+    /// <summary>One row per UTC day and key, each carrying its day.</summary>
+    Daily = 1
+}

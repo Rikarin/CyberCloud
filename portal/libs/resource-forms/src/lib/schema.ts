@@ -67,6 +67,11 @@ export interface FormField {
   readonly format?: string;
   readonly choices?: readonly FieldChoice[];
   readonly nullable?: boolean;
+  /**
+   * For a list of numbers only: the element type and bounds. ⚠ Absent on a list of text, which is
+   * every other list — `FormsEmitter.NumericItems` says why the member exists (#41).
+   */
+  readonly items?: { readonly type: 'integer' | 'number'; readonly minimum?: number; readonly maximum?: number };
 }
 
 /** One POST action a type offers beside the CRUD verbs. Rendered by the blade, not by the form. */

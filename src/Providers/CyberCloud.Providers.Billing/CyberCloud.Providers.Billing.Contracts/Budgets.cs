@@ -189,6 +189,150 @@ public static class Budgets {
             ]
         );
 
+    // ── The status action ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    ///     <c>POST …/budgets/{name}/showStatus</c> — the budget's figures and which thresholds have
+    ///     fired, as its grain holds them. Issue #41.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>An action because nothing else carries a budget's state to a caller.</b> The resource
+    ///         envelope has no status member, and <c>BudgetReconciler.ObserveAsync</c>'s figures are what
+    ///         the drift scan compares, refreshed at a reconcile rather than at each hourly evaluation. A
+    ///         portal page that showed them would show a number an hour or a day stale with nothing to say
+    ///         so. The <c>showAllocation</c> shape the public IP established: a read permission, no body.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>It reads and never evaluates.</b> An evaluation fires thresholds, and a threshold
+    ///         firing sends a message; a <c>read</c> that paged finance would be a write behind a read
+    ///         permission. The figures are the last hourly evaluation's, and <c>/lastEvaluatedAt</c> says
+    ///         when that was.
+    ///     </para>
+    /// </remarks>
+    public const string StatusAction = "showStatus";
+
+    /// <summary>What <see cref="StatusAction" /> returns.</summary>
+    /// <remarks>
+    ///     ⚠ <b>The fired thresholds are two arrays of percentages</b>, the way the body's thresholds are
+    ///     and for the same reason: the schema has no array of objects. The alert history is text lines,
+    ///     the <c>listSuppressions</c> shape, rendered by <see cref="AlertLine" />.
+    /// </remarks>
+    public static ResourceSchema StatusResponse { get; } =
+        ResourceSchema.Of(
+            [
+                new(
+                    "/evaluated",
+                    SchemaKind.Boolean,
+                    true,
+                    Description: "Whether the budget has been evaluated in its current period. False until the first "
+                    + "hourly evaluation, and for a disabled budget."
+                ),
+                new("/currency", SchemaKind.Text, true, Description: "The currency the figures are in. Empty until evaluated."),
+                new("/amount", SchemaKind.Number, true, Description: "The amount for one period, from the budget's body."),
+                new(
+                    "/actual",
+                    SchemaKind.Number,
+                    true,
+                    Description: "What the period has cost so far, rounded to the currency, as of the last evaluation."
+                ),
+                new(
+                    "/forecast",
+                    SchemaKind.Number,
+                    true,
+                    Description: "What the period will cost at the trailing seven days' rate, rounded. An estimate."
+                ),
+                new(
+                    "/periodStart",
+                    SchemaKind.Text,
+                    Description: "The first instant of the period the figures are for. Absent until evaluated."
+                ) { Format = SchemaFormat.DateTime },
+                new(
+                    "/periodEnd",
+                    SchemaKind.Text,
+                    Description: "The first instant of the next period. Absent until evaluated."
+                ) { Format = SchemaFormat.DateTime },
+                new(
+                    "/lastEvaluatedAt",
+                    SchemaKind.Text,
+                    Description: "When the figures were computed. Absent until evaluated."
+                ) { Format = SchemaFormat.DateTime },
+                new(
+                    "/lastError",
+                    SchemaKind.Text,
+                    true,
+                    Description: "Why the last evaluation could not run, or empty. A subscription budget not yet "
+                    + "granted reader on its subscription says so here."
+                ),
+                new(
+                    "/firedActual",
+                    SchemaKind.Array,
+                    true,
+                    Description: "The thresholds on the actual cost that have fired this period, as percentages."
+                ) { ElementKind = SchemaKind.Number },
+                new(
+                    "/firedForecast",
+                    SchemaKind.Array,
+                    true,
+                    Description: "The thresholds on the forecast that have fired this period, as percentages."
+                ) { ElementKind = SchemaKind.Number },
+                new(
+                    "/alerts",
+                    SchemaKind.Array,
+                    true,
+                    Description: "Every alert the budget has fired, oldest first, one line each: "
+                    + "'{firedAt} {actual|forecast} {percent}% at {figure}: {notification}'."
+                ) { ElementKind = SchemaKind.Text }
+            ]
+        );
+
+    /// <summary>The <see cref="StatusAction" /> body for what the budget's grain holds.</summary>
+    /// <param name="held">The budget as its grain holds it.</param>
+    public static string StatusJson(BudgetSnapshot held) {
+        ArgumentNullException.ThrowIfNull(held);
+
+        var evaluated = held.LastEvaluatedAt is not null && held.Spec.Enabled;
+        var alerts = held.Alerts.IsDefault ? [] : held.Alerts;
+        var thisPeriod = alerts.Where(x => evaluated && x.PeriodStart == held.PeriodStart).ToList();
+
+        var body = new JsonObject {
+            ["evaluated"] = evaluated,
+            ["currency"] = held.Currency,
+            ["amount"] = held.Spec.Amount,
+            ["actual"] = held.Actual,
+            ["forecast"] = held.Forecast
+        };
+
+        if (held.LastEvaluatedAt is { } at) {
+            body["periodStart"] = Stamp(held.PeriodStart);
+            body["periodEnd"] = Stamp(held.PeriodEnd);
+            body["lastEvaluatedAt"] = Stamp(at);
+        }
+
+        body["lastError"] = held.LastError;
+        body["firedActual"] = Percentages(thisPeriod, ThresholdKind.Actual);
+        body["firedForecast"] = Percentages(thisPeriod, ThresholdKind.Forecast);
+        body["alerts"] = new JsonArray([.. alerts.Select(static x => JsonValue.Create(AlertLine(x)))]);
+
+        return body.ToJsonString();
+
+        static JsonArray Percentages(IEnumerable<BudgetAlert> fired, ThresholdKind kind) =>
+            new([.. fired.Where(x => x.Kind == kind).Select(static x => x.Percent).Order().Select(static x => JsonValue.Create(x))]);
+    }
+
+    /// <summary>One alert as a line of <see cref="StatusResponse" />'s <c>/alerts</c>.</summary>
+    /// <param name="alert">An alert the budget fired.</param>
+    public static string AlertLine(BudgetAlert alert) {
+        ArgumentNullException.ThrowIfNull(alert);
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{Stamp(alert.FiredAt)} {(alert.Kind == ThresholdKind.Forecast ? "forecast" : "actual")} {alert.Percent}% at {alert.Figure}: {alert.Notification}"
+        );
+    }
+
+    static string Stamp(DateTimeOffset at) => at.ToString("O", CultureInfo.InvariantCulture);
+
     // ── A body, for tests and the conformance case ───────────────────────────────────────────
 
     /// <summary>A valid body at <see cref="V2026" />.</summary>

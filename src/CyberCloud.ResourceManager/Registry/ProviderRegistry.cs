@@ -161,7 +161,8 @@ public sealed class ProviderRegistry : IProviderRegistry {
             // ⚠ RESERVED FOR THE COST QUERY, FOR THE RESOURCE GRAPH'S ROUTING REASON (#38). It is served at
             // {scope}/providers/CyberCloud.CostManagement/query (CostQueryAddress), which on a
             // resource group is a nine-segment resource collection path, and the gateway routes the
-            // whole namespace to the cost query before it looks at the registry.
+            // whole namespace to the cost query — or, on a tenant, to its invoices (InvoiceAddress,
+            // #41) — before it looks at the registry.
             if (string.Equals(
                     provider.ProviderNamespace,
                     CostQueryAddress.ProviderNamespace,
@@ -169,8 +170,8 @@ public sealed class ProviderRegistry : IProviderRegistry {
                 )) {
                 throw new InvalidOperationException(
                     $"Provider '{provider.ProviderNamespace}' declares the reserved namespace "
-                    + $"'{CostQueryAddress.ProviderNamespace}'. The one address under it is the cost query "
-                    + "— docs/plan/22 § Cost visibility — and the gateway routes it before it looks at the "
+                    + $"'{CostQueryAddress.ProviderNamespace}'. The addresses under it are the cost query and "
+                    + "the tenant's invoices — docs/plan/22 § Cost visibility — and the gateway routes them before it looks at the "
                     + "registry, so no type this provider declared could ever be reached. See "
                     + "CostQueryAddress.ProviderNamespace."
                 );

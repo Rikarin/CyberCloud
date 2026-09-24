@@ -41,6 +41,7 @@ sealed class DispatchStage(
     IRoleAssignmentManager roles,
     IResourceGraphQuery graph,
     ICostQuery costs,
+    IInvoiceReader invoices,
     IOperationReader operations,
     IHubTicketStore tickets,
     GatewayOptions options
@@ -67,6 +68,7 @@ sealed class DispatchStage(
             RouteKind.RoleAssignmentCollection => await RoleAssignmentCollectionAsync(context, path, cancellationToken),
             RouteKind.ResourceGraphQuery => await ResourceGraphQueryAsync(context, path, cancellationToken),
             RouteKind.CostQuery => await CostQueryAsync(context, path, cancellationToken),
+            RouteKind.Invoice => await InvoiceAsync(context, path, cancellationToken),
             RouteKind.Collection => await CollectionAsync(context, path, cancellationToken),
             RouteKind.Action => await ActionAsync(context, path, cancellationToken),
             // A hub request leaves the pipeline here and is served by SignalR's own middleware; the
@@ -593,7 +595,8 @@ sealed class DispatchStage(
                 ResourceGroup = scope.Kind == ScopeKind.ResourceGroup ? scope.ResourceGroup : string.Empty,
                 From = body.From,
                 To = body.To,
-                Grouping = body.Grouping
+                Grouping = body.Grouping,
+                Granularity = body.Granularity
             },
             cancellationToken
         );
@@ -601,6 +604,50 @@ sealed class DispatchStage(
         return answered.TryGetError(out var error)
             ? ResultShaper.Shape(error, path)
             : new() { StatusCode = StatusCodes.Status200OK, Json = CostQueryBody.Render(answered.GetValueOrThrow()) };
+    }
+
+    /// <summary>
+    ///     The invoices <c>GET</c> — the tenant's finalized invoices, or one by number, from
+    ///     <see cref="IInvoiceReader" />. docs/plan/22 § What is owed, <c>billing-http-surface</c>.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ <b>No check here</b>, for the cost query's reason: the grain behind the reader asks the
+    ///     ReBAC engine whether the caller may read the tenant, and a no is the grain's <c>404</c>.
+    ///     A read, so anything but <c>GET</c> is a <c>405</c> — an invoice is issued by the month close
+    ///     and corrected by a credit note, never written through this address.
+    /// </remarks>
+    async Task<GatewayOutcome> InvoiceAsync(
+        GatewayRequestContext context,
+        string path,
+        CancellationToken cancellationToken
+    ) {
+        if (!HttpMethods.IsGet(context.Http.Request.Method)) {
+            return new GatewayOutcome {
+                StatusCode = StatusCodes.Status405MethodNotAllowed,
+                Error = new(
+                    ErrorCode.InvalidRequestBody,
+                    $"{context.Http.Request.Method} is not supported on invoices. An invoice is read with a GET; it is "
+                    + "issued when its month closes and corrected by a credit note — docs/plan/22 § Invoicing and payment."
+                )
+            }.WithHeader(GatewayHeaders.Allow, "GET");
+        }
+
+        var address = context.Route.Invoice;
+        var caller = new CostCaller { SubjectType = context.Caller.SubjectType, SubjectId = context.Caller.SubjectId };
+
+        if (address.IsCollection) {
+            var listed = await invoices.ListAsync(context.Caller.TenantId, caller, cancellationToken);
+
+            return listed.TryGetError(out var listError)
+                ? ResultShaper.Shape(listError, path)
+                : new() { StatusCode = StatusCodes.Status200OK, Json = InvoiceBody.RenderList(listed.GetValueOrThrow()) };
+        }
+
+        var read = await invoices.GetAsync(context.Caller.TenantId, caller, address.Number, cancellationToken);
+
+        return read.TryGetError(out var error)
+            ? ResultShaper.Shape(error, path)
+            : new() { StatusCode = StatusCodes.Status200OK, Json = InvoiceBody.Render(read.GetValueOrThrow()) };
     }
 
     /// <summary>
